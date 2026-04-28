@@ -182,7 +182,6 @@ const Prospects = () => {
       p.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
       p.pocName?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    if (statusFilter === "Available") return matchesSearch && !p.salesRepId;
     if (statusFilter === "Assigned") return matchesSearch && p.salesRepId && !p.organizationId;
     if (statusFilter === "Org Created") return matchesSearch && p.organizationId && !p.leadId;
     if (statusFilter === "Lead Generated") return matchesSearch && p.leadId;
@@ -266,7 +265,6 @@ const Prospects = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="All">All Status</option>
-              <option value="Available">Available (In Bucket)</option>
               <option value="Assigned">Assigned</option>
               <option value="Org Created">Created Org</option>
               <option value="Lead Generated">Lead Generated</option>

@@ -18,6 +18,7 @@ const LeadCard = ({ lead }) => {
 
   const getStatusStyles = (status) => {
     switch (status) {
+
       case 'Feasibility': return 'bg-white text-purple-600 border-purple-500/20';
       case 'Follow-up Scheduled': return 'bg-white text-orange-600 border-orange-500/20';
       case 'Closed': return 'bg-white text-emerald-600 border-emerald-500/20';
@@ -139,7 +140,7 @@ const LeadGeneration = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
-  const statuses = ['All', 'New', 'Feasibility', 'Follow-up Scheduled', 'Closed'];
+  const statuses = ['All', 'Feasibility', 'Follow-up Scheduled', 'Closed'];
 
   // Identify if this prospect was already converted
   const prospectData = location.state?.prospect;
@@ -157,41 +158,31 @@ const LeadGeneration = () => {
   const API_BASE_URL = "http://192.168.1.5:5000";
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
-      
-      const [orgRes, leadRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/leads`, { headers }),
-        axios.get(`${API_BASE_URL}/api/lead-generation`, { headers })
-      ]);
+  setLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
+    
+    const [orgRes, leadRes] = await Promise.all([
+      // HIT THE ORGS ENDPOINT, NOT LEADS
+      axios.get(`${API_BASE_URL}/api/orgs`, { headers }), 
+      axios.get(`${API_BASE_URL}/api/lead-generation`, { headers })
+    ]);
 
-      // FIX 1: Enhanced Data Extraction logic
-      // This ensures that even if the backend wraps data in 'leads', 'organizations', or 'data', it gets caught.
-      let orgData = [];
-  
-      if (orgRes.data) {
-        // console.log("---------->  "+orgRes.data)
-        if (Array.isArray(orgRes.data)) {
-          orgData = orgRes.data;
-        } else {
-          orgData = orgRes.data.leads || orgRes.data.organizations || orgRes.data.data || [];
-        }
-      }
+    // Extracting Organization Data
+    const rawOrgs = orgRes.data?.organizations || orgRes.data?.data || orgRes.data || [];
+    setOrgs(Array.isArray(rawOrgs) ? rawOrgs : []);
 
-      // console.log("Verified Org Data for Dropdown:", orgData);
-      setOrgs(orgData);
+    // Extracting Lead Data
+    const rawLeads = leadRes.data?.leads || leadRes.data?.data || leadRes.data || [];
+    setGeneratedLeads(Array.isArray(rawLeads) ? rawLeads : []);
 
-      const leadData = Array.isArray(leadRes.data) ? leadRes.data : (leadRes.data.leads || []);
-      setGeneratedLeads(leadData);
-
-    } catch (err) {
-      console.error("Error fetching data", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [API_BASE_URL]);
+  } catch (err) {
+    console.error("Error fetching data", err);
+  } finally {
+    setLoading(false);
+  }
+}, [API_BASE_URL]);
 
   useEffect(() => { 
     fetchData(); 
@@ -478,7 +469,7 @@ const LeadGeneration = () => {
                       orgs.map(org => (
                         <option key={org._id} value={org._id}>
                           {/* Use Optional Chaining and fallback for company name */}
-                          {org.organizationId.companyName || org.name || "Unknown Company"}
+                          {org.name || org.companyName || org.organizationId?.companyName || "Unknown Organization"}
                         </option>
                       ))
                     ) : (
