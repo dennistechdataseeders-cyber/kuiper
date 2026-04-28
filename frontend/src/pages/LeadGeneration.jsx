@@ -18,11 +18,10 @@ const LeadCard = ({ lead }) => {
 
   const getStatusStyles = (status) => {
     switch (status) {
-
       case 'Feasibility': return 'bg-white text-purple-600 border-purple-500/20';
-      case 'Follow-up Scheduled': return 'bg-white text-orange-600 border-orange-500/20';
-      case 'Closed': return 'bg-white text-emerald-600 border-emerald-500/20';
-      default: return 'bg-blue-300 text-blue-600 border-blue-500/20';
+      case 'Follow-up Scheduled': return 'bg-orange-100 text-orange-600 border-orange-500/20';
+      case 'Closed': return 'bg-emerald-100 text-emerald-600 border-emerald-500/20';
+      default: return 'bg-blue-100 text-blue-600 border-blue-500/20';
     }
   };
 

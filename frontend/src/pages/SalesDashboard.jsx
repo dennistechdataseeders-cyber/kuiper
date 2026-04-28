@@ -341,15 +341,31 @@ useEffect(() => {
         }
       };
 
-  const handleCloseLead = async () => {
+ const handleCloseLead = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`/api/lead-generation/${selectedLead._id}/action`, {
+      
+      // Ensure we are sending a payload that the backend expects
+      const payload = {
         status: closingData.reason === 'won' ? 'Converted' : 'Closed',
-        lastInteractionDesc: closingData.description
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      fetchData(); closeModal();
-    } catch (err) { alert("Failed to close lead"); }
+        lastInteractionDesc: closingData.description || 'No description provided',
+        // Adding a null PM ID might prevent backend "undefined" errors if it's 
+        // shared logic with the Production Ready flow
+        projectManagerId: null 
+      };
+
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
+        payload, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      toast.success(`Lead marked as ${payload.status}`);
+      fetchData(); 
+      closeModal();
+    } catch (err) { 
+      console.error("Close Lead Error:", err.response?.data);
+      alert(err.response?.data?.error || "Failed to close lead"); 
+    }
   };
 
   const closeModal = () => {
