@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { 
   FolderPlus, Activity, X, Plus, Hash, Edit3, Settings2, 
-  Globe, Briefcase, Send, ChevronDown, ChevronUp, ShoppingBag, LayoutGrid 
+  Globe, Briefcase, Send, ChevronDown, ChevronUp, ShoppingBag, LayoutGrid,
+  ChevronLeft, ChevronRight
 } from 'lucide-react';
 import countryList from 'react-select-country-list';
 import CreatableSelect from 'react-select/creatable';
@@ -15,8 +16,12 @@ const ProjectManagement = () => {
   const [developers, setDevelopers] = useState([]);
   const [projectManagers, setProjectManagers] = useState([]);
   
+  // --- Pagination State ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const projectsPerPage = 6; // Set items per page
+
   // --- Filter State ---
-  const [activeFilter, setActiveFilter] = useState('All'); // Options: 'All', 'Assigned', 'Unassigned'
+  const [activeFilter, setActiveFilter] = useState('All'); 
 
   // --- UI State ---
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -46,7 +51,6 @@ const ProjectManagement = () => {
     { label: "Energy", value: "Energy" },
     { label: "Media", value: "Media" },
     { label: "ECOM", value: "ECOM" },
-
     { label: "Logistics", value: "Logistics" }
   ], []);
 
@@ -85,14 +89,26 @@ const ProjectManagement = () => {
 
   // --- Logic Helpers ---
   const filteredProjects = useMemo(() => {
+    let result = projects;
     if (activeFilter === 'Unassigned') {
-      return projects.filter(p => p.projectCustomId?.startsWith('PRJ-'));
+      result = projects.filter(p => p.projectCustomId?.startsWith('PRJ-'));
+    } else if (activeFilter === 'Assigned') {
+      result = projects.filter(p => p.projectCustomId?.startsWith('TDS-'));
     }
-    if (activeFilter === 'Assigned') {
-      return projects.filter(p => p.projectCustomId?.startsWith('TDS-'));
-    }
-    return projects;
+    // Reset to page 1 whenever filter changes
+    return result;
   }, [projects, activeFilter]);
+
+  // Reset page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter]);
+
+  // --- Pagination Logic ---
+  const indexOfLastProject = currentPage * projectsPerPage;
+  const indexOfFirstProject = indexOfLastProject - projectsPerPage;
+  const currentProjectSlice = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
+  const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
 
   const toggleExpand = (projectId) => {
     setExpandedProjects(prev => ({ ...prev, [projectId]: !prev[projectId] }));
@@ -204,7 +220,7 @@ const ProjectManagement = () => {
   };
 
   return (
-    <div className="ml-64 p-10 bg-[#F4F7FE] min-h-screen font-sans text-slate-900">
+    <div className="ml-64 p-10 bg-blue-100 min-h-screen font-sans text-slate-900">
       {/* Header & Filter Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
@@ -232,7 +248,7 @@ const ProjectManagement = () => {
                 onClick={() => { setIsEditing(false); setShowProjectModal(true); }} 
                 className="bg-[#111C44] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
             >
-                <FolderPlus size={16} /> New Hub
+                <FolderPlus size={16} /> New Project
             </button>
         </div>
       </div>
@@ -264,7 +280,7 @@ const ProjectManagement = () => {
 
       {/* Project Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        {filteredProjects.map((project) => {
+        {currentProjectSlice.map((project) => {
           const isExpanded = expandedProjects[project._id];
           const isFromSales = project.projectCustomId?.startsWith('PRJ-');
 
@@ -273,7 +289,6 @@ const ProjectManagement = () => {
               key={project._id} 
               className={`bg-white rounded-[2rem] border border-slate-100 shadow-sm transition-all duration-300 hover:shadow-xl hover:-translate-y-1 overflow-hidden relative ${isExpanded ? 'ring-2 ring-blue-500/20' : ''}`}
             >
-              {/* Card Corner Decoration */}
               <div className={`absolute top-0 right-0 w-32 h-32 opacity-10 rounded-full -mr-16 -mt-16 ${isFromSales ? 'bg-amber-500' : 'bg-blue-500'}`} />
 
               <div className="p-7">
@@ -318,7 +333,6 @@ const ProjectManagement = () => {
                 </div>
               </div>
 
-              {/* Action Strip */}
               <div className="px-7 py-4 bg-[#F8FAFC] border-t border-slate-50 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="flex -space-x-2.5">
@@ -328,7 +342,7 @@ const ProjectManagement = () => {
                       </div>
                     ))}
                   </div>
-                  <span className="text-[10px] font-bold text-slate-400">{project.clients?.length || 0} Clients Linked</span>
+                  <span className="text-[10px] font-bold text-slate-400">{project.clients?.length || 0} Clients</span>
                 </div>
                 
                 <button 
@@ -340,7 +354,6 @@ const ProjectManagement = () => {
                 </button>
               </div>
 
-              {/* Expanded Section */}
               {isExpanded && (
                 <div className="px-7 pb-7 bg-white animate-in slide-in-from-top-4 duration-500">
                   <div className="pt-6 border-t border-slate-100 space-y-3">
@@ -389,9 +402,44 @@ const ProjectManagement = () => {
         })}
       </div>
 
-      {/* --- MODALS --- */}
+      {/* --- PAGINATION CONTROLS --- */}
+      {totalPages > 1 && (
+        <div className="mt-12 flex justify-center items-center gap-3">
+          <button 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => prev - 1)}
+            className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            <ChevronLeft size={20} />
+          </button>
+          
+          <div className="flex gap-2 bg-white p-1.5 rounded-[1.5rem] border border-slate-100 shadow-sm">
+            {[...Array(totalPages)].map((_, i) => (
+              <button
+                key={i + 1}
+                onClick={() => setCurrentPage(i + 1)}
+                className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${
+                  currentPage === i + 1 
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-100' 
+                  : 'text-slate-400 hover:bg-slate-50'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
 
-      {/* Project Modal */}
+          <button 
+            disabled={currentPage === totalPages}
+            onClick={() => setCurrentPage(prev => prev + 1)}
+            className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-blue-600 hover:border-blue-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      )}
+
+      {/* --- MODALS --- */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
@@ -433,7 +481,6 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* Feed Modal */}
       {showFeedModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[110] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-10">
@@ -469,7 +516,6 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* Task Modal */}
       {showTaskModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[120] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 border border-white/20">
@@ -497,4 +543,4 @@ const ProjectManagement = () => {
   );
 };
 
-export default ProjectManagement; 
+export default ProjectManagement;

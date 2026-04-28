@@ -251,16 +251,20 @@ const [selectedPM, setSelectedPM] = useState('');
 useEffect(() => {
     const fetchPMs = async () => {
         try {
-            const res = await axios.get(`${API_BASE_URL}/api/admin/users?role=Project Manager`, {
+            const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
-            setProjectManagers(res.data);
+
+            // Filter the results to only include users with the role "Project Manager"
+            const onlyPMs = res.data.filter(user => user.role === 'Project Manager');
+            
+            setProjectManagers(onlyPMs);
         } catch (err) {
             console.error("Error fetching PMs", err);
         }
     };
     fetchPMs();
-}, []);
+}, []); // Ensure the dependency array is here
   const handleFollowUpSubmit = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -441,14 +445,14 @@ useEffect(() => {
           
 
           {/* NEW LEADS (Slim) */}
-        <div className="bg-blue-200 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
+        <div className="bg-blue-500 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
                 hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
           <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
             <Briefcase size={20} />
           </div>
           <div>
-            <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest leading-none mb-1">Today's Leads</p>
-            <h3 className="text-xl font-black text-slate-900 leading-none">{generatedLeads.length}</h3>
+            <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Today's Leads</p>
+            <h3 className="text-xl font-black text-slate-100 leading-none">{generatedLeads.length}</h3>
           </div>
         </div>
 
@@ -569,7 +573,7 @@ useEffect(() => {
             {/* SCHEDULED FOR TODAY SECTION */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
   {/* FOLLOW-UPS LIST */}
-  <div className="bg-blue-200 rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
+  <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
     <div>
       <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
         <Clock size={20} className="text-orange-600"/> Follow-ups Today
@@ -578,7 +582,7 @@ useEffect(() => {
         {followUps.length === 0 ? (
           <p className="text-slate-400 text-sm italic text-center py-6">No follow-ups today.</p>
         ) : currentFollowUps.map((lead) => (
-          <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-400 flex items-center justify-between group hover:border-orange-200 transition-all">
+          <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-orange-200 transition-all">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
                 {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
@@ -617,7 +621,7 @@ useEffect(() => {
   </div>
 
       {/* FEASIBILITY TODAY LIST */}
-      <div className="bg-blue-200 rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
+      <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
         <div>
           <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
             <FileText size={20} className="text-purple-600"/> Feasibility Today
@@ -626,7 +630,7 @@ useEffect(() => {
             {feasibilityTasks.length === 0 ? (
               <p className="text-slate-400 text-sm italic text-center py-6">No feasibility tasks for today.</p>
             ) : currentFeasibility.map((lead) => (
-              <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-400 flex items-center justify-between group hover:border-purple-200 transition-all">
+              <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all">
                 <div className="flex items-center gap-4">
                   <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
                     <Briefcase size={18}/>
@@ -675,12 +679,12 @@ useEffect(() => {
         <div className="xl:col-span-1 space-y-6 ">
           
             {/* LEADS OVERVIEW SELECTOR */}
-            <div className="bg-blue-200 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out 
+            <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out 
                 hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h3 className="text-lg font-black text-slate-800">Overview</h3>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Lead Volume</p>
+                  <p className="text-[10px] text-slate-900 font-bold uppercase tracking-tight">Lead Volume</p>
                 </div>
                 {/* TOGGLE FILTER */}
                 <div className="flex bg-slate-100 p-1 rounded-xl">
@@ -699,7 +703,7 @@ useEffect(() => {
                 </div>
               </div>
               
-              <div className="relative group p-4 bg-slate-50 rounded-[2rem] border border-slate-100 transition-all hover:bg-white hover:shadow-xl hover:shadow-blue-50">
+              <div className="relative group p-4 bg-slate-50 rounded-[2rem] border border-slate-100 transition-all ">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                     Total Leads (Last {overviewRange} Days)
@@ -816,19 +820,7 @@ useEffect(() => {
                     <ChevronRight size={18} className="text-slate-300" />
                   </button>
 
-                  {/* Production Ready (New Flow) */}
-                  <button
-                    onClick={() => setActionStep(4)}
-                    className="group relative w-full flex flex-col items-center gap-3 p-6 rounded-[2.5rem] bg-emerald-50 hover:bg-emerald-600 transition-all duration-500 border-2 border-emerald-100 hover:border-emerald-400 hover:shadow-2xl hover:shadow-emerald-200 text-left"
-                  >
-                    <div className="p-4 bg-white rounded-2xl text-emerald-600 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-sm">
-                      <CheckCircle size={28} />
-                    </div>
-                    <div className="text-center">
-                      <span className="block text-xs font-black text-emerald-900 group-hover:text-white uppercase tracking-widest">Production Ready</span>
-                      <span className="text-[10px] font-bold text-emerald-500 group-hover:text-emerald-100 italic">Assign PM & Convert</span>
-                    </div>
-                  </button>
+                 
 
                   {/* Close Lead */}
                   <button 
@@ -839,6 +831,24 @@ useEffect(() => {
                       <X size={20} /> Close Lead
                     </div>
                     <ChevronRight size={18} />
+                  </button>
+                   {/* Production Ready (New Flow) */}
+                  <button
+                    onClick={() => setActionStep(4)}
+                    className="group relative w-full flex flex-col items-center gap-2 p-3 rounded-[1.5rem] bg-emerald-50 hover:bg-emerald-600 transition-all duration-500 border border-emerald-100 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-200 text-left"
+                  >
+                    {/* Icon container: Reduced padding and icon size */}
+                    <div className="p-1.5 bg-white rounded-xl text-emerald-600 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-sm">
+                      <CheckCircle size={16} />
+                    </div>
+
+                    <div className="text-center">
+                      {/* Main text: Reduced from text-xs to text-[10px] */}
+                      <span className="block text-[10px] font-black text-emerald-900 group-hover:text-white uppercase tracking-wider">
+                        Production Ready
+                      </span>
+                      {/* Subtext: Reduced from text-[10px] to text-[8px] */}
+                    </div>
                   </button>
                 </div>
               </div>

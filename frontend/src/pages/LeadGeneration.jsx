@@ -327,8 +327,8 @@ const LeadGeneration = () => {
               className={`px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
                 filterStatus === status 
                 ? 'bg-slate-900 text-white shadow-md' 
-                : 'bg-white text-slate-400 border border-slate-100 hover:border-blue-200 hover:text-blue-600'
-              }`}
+                : 'bg-white text-slate-900 border border-slate-100 hover:border-blue-200 hover:text-blue-600'
+              }`} 
             >
               {status}
             </button>
