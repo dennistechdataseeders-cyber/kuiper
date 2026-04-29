@@ -7,3 +7,24 @@ body {
   -webkit-font-smoothing: antialiased;
   @apply bg-slate-50 text-slate-900;
 }
+@keyframes asteroid-drift {
+  0% {
+    transform: translateX(-10vw) translateY(0) rotate(0deg) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.3;
+  }
+  80% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateX(120vw) translateY(10vh) rotate(360deg) scale(1.2);
+    opacity: 0;
+  }
+}
+
+.animate-asteroid {
+  animation: asteroid-drift linear infinite;
+  will-change: transform;
+}

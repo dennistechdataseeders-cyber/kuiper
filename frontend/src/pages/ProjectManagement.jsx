@@ -88,16 +88,27 @@ const ProjectManagement = () => {
   };
 
   // --- Logic Helpers ---
+// --- Logic Helpers ---
   const filteredProjects = useMemo(() => {
     let result = projects;
-    if (activeFilter === 'Unassigned') {
-      result = projects.filter(p => p.projectCustomId?.startsWith('PRJ-'));
-    } else if (activeFilter === 'Assigned') {
-      result = projects.filter(p => p.projectCustomId?.startsWith('TDS-'));
+
+    // 1. First, filter by Project Manager (Access Control)
+    result = result.filter(p => 
+      p.projectManager?._id === currentUserId || p.projectManager === currentUserId
+    );
+
+    // 2. Apply the UI Filters based on Country presence
+    if (activeFilter === 'Assigned') {
+      // Show ONLY projects that HAVE a country specified
+      result = result.filter(p => p.country && p.country.trim() !== "" && p.country !== 'Not Specified');
+    } else if (activeFilter === 'Unassigned') {
+      // Show ONLY projects that DO NOT have a country
+      result = result.filter(p => !p.country || p.country.trim() === "" || p.country === 'Not Specified');
     }
-    // Reset to page 1 whenever filter changes
+    
+    // Note: If activeFilter is 'All', no additional filtering is applied
     return result;
-  }, [projects, activeFilter]);
+  }, [projects, activeFilter, currentUserId]);
 
   // Reset page when filter changes
   useEffect(() => {
@@ -115,26 +126,58 @@ const ProjectManagement = () => {
   };
 
   // --- Project Handlers ---
-  const handleProjectSubmit = async (e) => {
-    e.preventDefault();
-    const shortName = projectForm.name.substring(0, 3).toUpperCase();
-    const countryCode = projectForm.country.substring(0, 3).toUpperCase();
-    const customId = `TDS-${projectForm.industry.toUpperCase()}-${countryCode}-${shortName}`;
-    const finalData = { ...projectForm, projectCustomId: customId, adminId: currentUserId };
+const handleProjectSubmit = async (e) => {
+  e.preventDefault();
+  
+  let customId = projectForm.projectCustomId; 
+  let finalName = projectForm.name;
 
-    try {
-      if (isEditing) {
-        await axios.put(`${ADMIN_BASE}/projects/${activeProjectId}`, finalData, authHeader);
-      } else {
-        await axios.post(`${ADMIN_BASE}/projects`, finalData, authHeader);
-      }
-      closeProjectModal();
-      fetchInitialData();
-    } catch (err) { 
-      alert(err.response?.data?.error || "Project save failed"); 
-    }
+  if (isEditing || projectForm.name.includes('PRJ')) { 
+    // 1. Extract the number from the existing name (e.g., "TDS0002" -> "0002")
+    // This regex looks for 4 digits immediately following "TDS"
+    const sequenceMatch = projectForm.name.match(/TDS(\d{4})/);
+    const sequence = sequenceMatch ? sequenceMatch[1] : "0000"; 
+
+    // 2. Format the codes
+    // Get 2-letter country code (e.g., India -> IN)
+    const countryCode = (projectForm.country || 'XX').substring(0, 2).toUpperCase();
+    // Get 4-letter industry code (e.g., Retail -> RETA)
+    const industryCode = (projectForm.industry || 'GEN').toUpperCase().substring(0, 4);
+    
+    // 3. Extract the Company Name
+    // We split by '|' and take the last part to ensure we don't keep the old codes
+    const nameParts = projectForm.name.split('|');
+    const companyName = nameParts.length > 1 
+      ? nameParts[nameParts.length - 1].trim() 
+      : projectForm.name;
+
+    // 4. Reconstruct the full string
+    const updatedFormattedString = `TDS${sequence}-${industryCode} | ${countryCode} | ${companyName}`;
+    
+    customId = updatedFormattedString;
+    finalName = updatedFormattedString;
+  }
+
+  const finalData = { 
+    ...projectForm, 
+    name: finalName,
+    projectCustomId: customId, 
+    projectManager: projectForm.projectManager || currentUserId,
+    adminId: currentUserId 
   };
 
+  try {
+    if (isEditing) {
+      await axios.put(`${ADMIN_BASE}/projects/${activeProjectId}`, finalData, authHeader);
+    } else {
+      await axios.post(`${ADMIN_BASE}/projects`, finalData, authHeader);
+    }
+    closeProjectModal();
+    fetchInitialData();
+  } catch (err) { 
+    alert(err.response?.data?.error || "Project save failed"); 
+  }
+};
   const closeProjectModal = () => {
     setShowProjectModal(false);
     setIsEditing(false);
@@ -220,7 +263,7 @@ const ProjectManagement = () => {
   };
 
   return (
-    <div className="ml-64 p-10 bg-blue-100 min-h-screen font-sans text-slate-900">
+    <div className="ml-64 p-10 bg-[#F4F7FE] min-h-screen font-sans text-slate-900">
       {/* Header & Filter Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
@@ -248,7 +291,7 @@ const ProjectManagement = () => {
                 onClick={() => { setIsEditing(false); setShowProjectModal(true); }} 
                 className="bg-[#111C44] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
             >
-                <FolderPlus size={16} /> New Project
+                <FolderPlus size={16} /> New Hub
             </button>
         </div>
       </div>

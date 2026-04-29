@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserPlus, Edit2, Trash2, ShieldCheck, X } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, ShieldCheck, X,Eye,EyeOff } from 'lucide-react';
 import API_BASE_URL from '../config';
 
 const UserManagement = () => {
@@ -8,7 +8,7 @@ const UserManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
-  
+  const [showPassword, setShowPassword] = useState(false);
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
@@ -95,10 +95,11 @@ const UserManagement = () => {
     }
   };
 
-  const closeModal = () => {
+ const closeModal = () => {
     setShowModal(false);
     setIsEditing(false);
     setCurrentUserId(null);
+    setShowPassword(false); // Reset eye toggle here
     setFormData({ 
         name: '', 
         email: '', 
@@ -202,16 +203,28 @@ const UserManagement = () => {
                 />
               </div>
               
-              {!isEditing && (
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Temporary Password</label>
+            {!isEditing && (
+              <div className="space-y-1">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Temporary Password</label>
+                <div className="relative"> {/* Added relative container */}
                   <input 
-                    type="password" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
-                    value={formData.password} onChange={(e) => setFormData({...formData, password: e.target.value})}
+                    type={showPassword ? "text" : "password"} // Dynamic type
+                    required 
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 pr-12"
+                    value={formData.password} 
+                    onChange={(e) => setFormData({...formData, password: e.target.value})}
                   />
+                  {/* Eye Toggle Button */}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
-              )}
-
+              </div>
+            )}
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role</label>
                 <select 

@@ -151,15 +151,26 @@ router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), 
       const existingProject = await Project.findOne({ leadId: lead._id });
       
       if (!existingProject) {
+        // Generate the correct project ID format: TDS0011-ECOM | AE | ProjectName
+        const projectCount = await Project.countDocuments();
+        const sequence = String(projectCount + 1).padStart(4, '0');
+        const upperIndustry = (lead.organizationId?.industry || 'General').toUpperCase();
+        const countryCode = (lead.organizationId?.country || lead.country || 'XX').substring(0, 2).toUpperCase();
+        const companyName = lead.organizationId?.companyName || `Project - ${lead.pocName}`;
+        
+        // Full formatted name: TDS0011-FOOD | AN | CompanyName
+        const fullName = `PRJ${sequence}-${upperIndustry} | ${countryCode} | ${companyName}`;
+
         const newProject = await Project.create({
-          name: lead.organizationId?.companyName || `Project - ${lead.pocName}`,
+          name: fullName,  // Store full formatted name
           clients: lead.organizationId ? [lead.organizationId._id] : [],
           projectManager: projectManagerId,
-          country: lead.organizationId?.country || 'Not Specified',
-          industry: lead.organizationId?.industry || 'General',
+          country: lead.organizationId?.country || lead.country || 'Not Specified',
+          industry: lead.organizationId?.industry || lead.industry || 'General',
           leadId: lead._id,
-          projectCustomId: `PRJ-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-          description: lastInteractionDesc || 'Converted from Lead Generation'
+          projectCustomId: fullName,  // Same value
+          description: lastInteractionDesc || 'Converted from Lead Generation',
+          adminId: req.user._id
         });
 
         updateData.projectId = newProject._id;

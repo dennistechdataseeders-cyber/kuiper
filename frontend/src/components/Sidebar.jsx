@@ -50,10 +50,18 @@ const Sidebar = () => {
       </button>
 
       <div className={`flex items-center gap-3 mb-10 px-2 transition-all ${!isExpanded && 'justify-center'}`}>
-        <img src="/images/org_logo.png" alt="logo" className="w-10 h-10 object-cover rounded-lg shrink-0" />
-        {isExpanded && <span className="text-white font-black text-xl tracking-tighter whitespace-nowrap"><span className="text-blue-500">KUI</span>PER</span>}
-      </div>
-
+          {/* Changed object-cover to object-contain and added a small padding (p-1) */}
+          <img 
+            src="/images/org_logo_2.PNG" 
+            alt="logo" 
+            className="w-10 h-10 object-contain p-1 shrink-0" 
+          />
+          {isExpanded && (
+            <span className="text-white font-black text-xl tracking-tighter whitespace-nowrap">
+              <span className="text-blue-500">KUI</span>PER
+            </span>
+          )}
+        </div>
       <div className={`mb-8 px-2 overflow-hidden transition-all ${isExpanded ? 'opacity-100' : 'opacity-0 h-0 mb-0'}`}>
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Account</p>
         <p className="text-white font-bold truncate">{userName}</p>

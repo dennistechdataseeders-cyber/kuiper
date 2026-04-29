@@ -412,13 +412,12 @@ useEffect(() => {
         const token = localStorage.getItem('token');
         await axios.patch(`${API_BASE_URL}/api/leads/${leadId}/action`, {
           status,
-          ...extraData
+          ...extraData // This will now spread { projectManagerId: null }
         }, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        toast.success("Lead converted to Project successfully!");
-
+        toast.success(extraData.projectManagerId ? "Project Assigned!" : "Project moved to Unassigned bucket");
         // --- CHANGE THIS LINE ---
         // If your function is named something else (e.g., fetchLeads), change it here:
         if (typeof fetchLeads === 'function') {
@@ -928,11 +927,13 @@ useEffect(() => {
               </div>
             )}
 
-            {/* STEP 4: PM Selection (Production Ready) */}
+            {/* STEP 4: PM Selection (Production Ready) */}          
             {actionStep === 4 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Assign Project</h2>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select a Project Manager to lead this</p>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">
+                  Select a Project Manager or leave blank to keep Unassigned
+                </p>
                 
                 <div className="space-y-4">
                   <div>
@@ -942,7 +943,7 @@ useEffect(() => {
                       onChange={(e) => setSelectedPM(e.target.value)}
                       className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
                     >
-                      <option value="">Choose a PM...</option>
+                      <option value="">Stay Unassigned (Move to Bucket)</option>
                       {projectManagers.map(pm => (
                         <option key={pm._id} value={pm._id}>{pm.name}</option>
                       ))}
@@ -952,11 +953,13 @@ useEffect(() => {
                   <div className="flex gap-3 pt-4">
                     <button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
                     <button 
-                      onClick={() => handleStatusUpdate(selectedLead._id, 'Production Ready', { projectManagerId: selectedPM })} 
-                      disabled={!selectedPM}
-                      className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200 disabled:opacity-50 disabled:shadow-none"
+                      onClick={() => handleStatusUpdate(selectedLead._id, 'Production Ready', { 
+                        // Send null if selectedPM is an empty string
+                        projectManagerId: selectedPM || null 
+                      })} 
+                      className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200"
                     >
-                      Confirm Conversion
+                      {selectedPM ? "Assign & Convert" : "Move to Unassigned"}
                     </button>
                   </div>
                 </div>
