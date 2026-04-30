@@ -60,20 +60,19 @@ const Login = () => {
       toast.success(`Welcome back, ${user.name}!`);
       
       // 2. Routing Logic - Matches App.jsx Landing Paths exactly
-      const role = user.role;
+     // Replace the current routing logic in handleLogin
+      const role = user.role.toLowerCase();
       let targetRoute = '/login';
 
-      if (role === 'Admin') {
-        targetRoute = '/admin';
-      } else if (role === 'Sales Manager') {
-        targetRoute = '/sales-manager';
-      } else if (role === 'Sales') {
-        targetRoute = '/sales';
-      } else if (role === 'Project Manager') {
-        targetRoute = '/admin/projects';
-      } else if (role === 'Developer') {
-        targetRoute = '/developer';
-      }
+      if (role === 'admin') targetRoute = '/admin';
+      else if (role === 'sales manager') targetRoute = '/sales-manager';
+      else if (role === 'sales') targetRoute = '/sales';
+      else if (role === 'project manager') targetRoute = '/admin/projects';
+      else if (role === 'developer') targetRoute = '/developer';
+
+      setTimeout(() => {
+        navigate(targetRoute, { replace: true });
+      }, 100);
 
       // Small delay to allow the toast to be seen and localStorage to settle
       setTimeout(() => {
