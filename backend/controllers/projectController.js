@@ -7,7 +7,7 @@ exports.getAllProjects = async (req, res) => {
   try {
     let query = {};
     // If the user is a PM, only show projects assigned to them
-    if (req.user.role === 'Project Manager') {
+    if (req.user.role === 'Project Manager' ) {
       query = { projectManager: req.user.id };
     }
 

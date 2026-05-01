@@ -1,3 +1,6 @@
+body{
+  background-color: #dbeafe; /* This is the hex for tailwind's bg-blue-100 */
+}
 .counter {
   font-size: 16px;
   padding: 5px 10px;

@@ -23,7 +23,10 @@ const Prospects = () => {
   
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-
+  const formatId = (num, prefix = "LEAD") => {
+    if (!num) return `${prefix}---`;
+    return `${prefix}${String(num).padStart(4, '0')}`;
+  };
   const userRole = localStorage.getItem('role');
   const isSM = userRole === 'Sales Manager' || userRole === 'Admin';
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -283,6 +286,7 @@ const Prospects = () => {
           <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Contact Info</th>
           {isSM && <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Assignee</th>}
           <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100 text-center">Status</th>
+          <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Lead ID</th>
         </tr>
       </thead>
       <tbody className="divide-y divide-slate-50">
@@ -327,68 +331,68 @@ const Prospects = () => {
               </td>
 
             {/* Contact Column */}
-<td className="px-8 py-6">
-  <div className="flex flex-col gap-2">
-    {/* POC Name - Primary focus */}
-    <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-      <User size={14} className="text-blue-500" />
-      {item.pocName || 'Unknown POC'}
-    </div>
+            <td className="px-8 py-6">
+              <div className="flex flex-col gap-2">
+                {/* POC Name - Primary focus */}
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
+                  <User size={14} className="text-blue-500" />
+                  {item.pocName || 'Unknown POC'}
+                </div>
 
-    {/* Contact Details - Structured list */}
-    <div className="space-y-1.5">
-      {/* Email Row */}
-      {item.pocEmail ? (
-        <a 
-          href={`mailto:${item.pocEmail}`} 
-          className="flex items-center gap-2 text-[12px] text-slate-500 hover:text-blue-600 transition-colors group/link"
-        >
-          <div className="p-1 bg-slate-100 rounded group-hover/link:bg-blue-100 transition-colors">
-            <Mail size={12} className="text-slate-400 group-hover/link:text-blue-600" />
-          </div>
-          <span className="truncate max-w-[180px]">{item.pocEmail}</span>
-        </a>
-      ) : (
-        <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
-          <Mail size={10} /> No Email
-        </span>
-      )}
+                {/* Contact Details - Structured list */}
+                <div className="space-y-1.5">
+                  {/* Email Row */}
+                  {item.pocEmail ? (
+                    <a 
+                      href={`mailto:${item.pocEmail}`} 
+                      className="flex items-center gap-2 text-[12px] text-slate-500 hover:text-blue-600 transition-colors group/link"
+                    >
+                      <div className="p-1 bg-slate-100 rounded group-hover/link:bg-blue-100 transition-colors">
+                        <Mail size={12} className="text-slate-400 group-hover/link:text-blue-600" />
+                      </div>
+                      <span className="truncate max-w-[180px]">{item.pocEmail}</span>
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
+                      <Mail size={10} /> No Email
+                    </span>
+                  )}
 
-      {/* NEW: Phone/Contact Row */}
-      {item.pocPhone ? (
-        <div className="flex items-center gap-2 text-[12px] text-slate-500">
-          <div className="p-1 bg-slate-100 rounded">
-            <Phone size={12} className="text-slate-400" />
-          </div>
-          <span>{item.pocPhone}</span>
-        </div>
-      ) : (
-        <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
-          <Phone size={10} /> No Phone
-        </span>
-      )}
-      
-      {/* NEW: LinkedIn Row */}
-      {item.linkedin ? (
-        <a 
-          href={item.linkedin} 
-          target="_blank" 
-          rel="noopener noreferrer" 
-          className="flex items-center gap-2 text-[12px] text-slate-500 hover:text-blue-700 transition-colors group/link"
-        >
-          <div className="p-1 bg-slate-100 rounded group-hover/link:bg-blue-100">
-            <ExternalLink size={12} className="text-slate-400 group-hover/link:text-blue-700" />
-          </div>
-          <span className="font-medium underline decoration-slate-200 underline-offset-2">{item.linkedin}</span>
-        </a>
-      ) : (
-        <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
-          <ExternalLink size={10} /> No LinkedIn
-        </span>
-      )}
-    </div>
-  </div>
-</td>
+                  {/* NEW: Phone/Contact Row */}
+                  {item.pocPhone ? (
+                    <div className="flex items-center gap-2 text-[12px] text-slate-500">
+                      <div className="p-1 bg-slate-100 rounded">
+                        <Phone size={12} className="text-slate-400" />
+                      </div>
+                      <span>{item.pocPhone}</span>
+                    </div>
+                  ) : (
+                    <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
+                      <Phone size={10} /> No Phone
+                    </span>
+                  )}
+                  
+                  {/* NEW: LinkedIn Row */}
+                  {item.linkedin ? (
+                    <a 
+                      href={item.linkedin} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className="flex items-center gap-2 text-[12px] text-slate-500 hover:text-blue-700 transition-colors group/link"
+                    >
+                      <div className="p-1 bg-slate-100 rounded group-hover/link:bg-blue-100">
+                        <ExternalLink size={12} className="text-slate-400 group-hover/link:text-blue-700" />
+                      </div>
+                      <span className="font-medium underline decoration-slate-200 underline-offset-2">{item.linkedin}</span>
+                    </a>
+                  ) : (
+                    <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
+                      <ExternalLink size={10} /> No LinkedIn
+                    </span>
+                  )}
+                </div>
+              </div>
+            </td>
 
               {/* Assignee Column (SM only) */}
               {isSM && (
@@ -412,44 +416,60 @@ const Prospects = () => {
               </td>
 
               {/* Action Column */}
-         {/* Action Column */}
-<td className="px-8 py-6 text-right">
-  {isSM ? (
-    <div className="w-10" /> // Admin/SM just monitors
-  ) : (
-    <div className="flex justify-end">
-      {item.leadId ? (
-        /* STAGE 3: Lead already exists */
-        <div className="flex items-center gap-2 text-emerald-500 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
-          <UserCheck size={16} />
-          <span className="text-xs font-black uppercase tracking-widest">Lead Gen Done</span>
-        </div>
-      ) : item.organizationId ? (
-        /* STAGE 2: Org exists, need to generate Lead */
-        <button 
-          onClick={() => navigate('/sales/lead_generation', { 
-            state: { prospect: item } 
-          })}
-          className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 active:scale-95"
-        >
-          Generate Lead
-          <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-        </button>
-      ) : (
-        /* STAGE 1: Raw Prospect, need to convert to Org first */
-        <button 
-          onClick={() => navigate('/sales/add_org', { 
-            state: { convertedLead: item } 
-          })}
-          className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200 active:scale-95"
-        >
-          Convert to Org
-          <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-        </button>
-      )}
-    </div>
-  )}
-</td>
+              {/* Add this <td> inside your currentItems.map row */}
+              <td className="px-8 py-6">
+                {item.leadId ? (
+                  <div className="flex flex-col">
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md border border-blue-100 inline-block w-fit">
+                      {formatId(item.leadId.leadNumber)}
+                    </span>
+                    {/* Optional: Show date or source if available */}
+                    <span className="text-[9px] text-slate-400 font-medium mt-1 ml-1 uppercase"></span>
+                  </div>
+                ) : (
+                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest ml-2">
+                    Not Linked
+                  </span>
+                )}
+              </td>
+                      {/* Action Column */}
+              <td className="px-8 py-6 text-right">
+                {isSM ? (
+                  <div className="w-10" /> // Admin/SM just monitors
+                ) : (
+                  <div className="flex justify-end">
+                    {item.leadId ? (
+                      /* STAGE 3: Lead already exists */
+                      <div className="flex items-center gap-2 text-emerald-500 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
+                        <UserCheck size={16} />
+                        <span className="text-xs font-black uppercase tracking-widest">Lead Gen Done</span>
+                      </div>
+                    ) : item.organizationId ? (
+                      /* STAGE 2: Org exists, need to generate Lead */
+                      <button 
+                        onClick={() => navigate('/sales/lead_generation', { 
+                          state: { prospect: item } 
+                        })}
+                        className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 active:scale-95"
+                      >
+                        Generate Lead
+                        <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
+                      </button>
+                    ) : (
+                      /* STAGE 1: Raw Prospect, need to convert to Org first */
+                      <button 
+                        onClick={() => navigate('/sales/add_org', { 
+                          state: { convertedLead: item } 
+                        })}
+                        className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200 active:scale-95"
+                      >
+                        Convert to Org
+                        <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </td>
             </tr>
           );
         })}

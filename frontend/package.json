@@ -10,6 +10,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
     "@tailwindcss/postcss": "^4.2.2",
     "axios": "^1.14.0",
     "lucide-react": "^1.7.0",
@@ -19,6 +21,7 @@
     "react-router-dom": "^7.14.0",
     "react-select": "^5.10.2",
     "react-select-country-list": "^2.2.3",
+    "three-stdlib": "^2.36.1",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

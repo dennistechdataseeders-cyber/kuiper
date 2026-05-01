@@ -50,7 +50,7 @@ const AdminDashboard = () => {
   );
 
   return (
-    <div className="min-h-screen bg-[#f8fafc]">
+    <div className="min-h-screen bg-blue-100">
       {/* LAYOUT FIX: 
          lg:ml-64 matches your Sidebar width. 
          lg:w-[calc(100%-16rem)] ensures the dashboard doesn't overflow horizontally.
@@ -67,24 +67,30 @@ const AdminDashboard = () => {
         </header>
         
         {/* STATS GRID */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8 mb-10">
-          <StatCard 
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4 mb-6">
+            <StatCard 
             title="Active Projects" 
             value={stats.projects} 
             color="bg-blue-600" 
             icon={<Layout size={24} />} 
+            size="sm"
+
           />
           <StatCard 
             title="Total Users" 
             value={stats.users} 
             color="bg-slate-900" 
             icon={<Users size={24} />} 
+            size="sm"
+
           />
           <StatCard 
             title="System Logs" 
             value={stats.totalLogsCount} 
             color="bg-indigo-600" 
             icon={<Zap size={24} />} 
+            size="sm"
+
           />
         </div>
 
@@ -127,14 +133,42 @@ const AdminDashboard = () => {
   );
 };
 
-const StatCard = ({ title, value, color, icon }) => (
-  <div className={`${color} p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem] text-white shadow-2xl shadow-slate-200 transition-all hover:scale-[1.02] relative overflow-hidden group`}>
-    <div className="absolute right-6 top-6 opacity-20 group-hover:scale-125 group-hover:rotate-12 transition-transform duration-500">
+const StatCard = ({ title, value, color, icon, size = "md" }) => {
+  const isSmall = size === "sm";
+
+  return (
+    <div
+      className={`${color} 
+      ${isSmall ? "p-4 rounded-2xl" : "p-8 md:p-10 rounded-[2.5rem] md:rounded-[3rem]"} 
+      text-white shadow-lg transition-all hover:scale-[1.02] 
+      relative overflow-hidden group`}
+    >
+      
+      {/* Icon */}
+      <div
+        className={`absolute opacity-20 transition-transform duration-500 
+        ${isSmall ? "right-3 top-3 scale-75" : "right-6 top-6 group-hover:scale-125 group-hover:rotate-12"}`}
+      >
         {icon}
+      </div>
+
+      {/* Title */}
+      <p
+        className={`${isSmall ? "text-[9px] tracking-wider" : "text-[10px] tracking-[0.2em]"} 
+        font-black uppercase opacity-70 mb-1`}
+      >
+        {title}
+      </p>
+
+      {/* Value */}
+      <h3
+        className={`${isSmall ? "text-2xl" : "text-5xl md:text-6xl"} 
+        font-black tracking-tight leading-none`}
+      >
+        {value}
+      </h3>
     </div>
-    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60 mb-2">{title}</p>
-    <h3 className="text-5xl md:text-6xl font-black tracking-tighter leading-none">{value}</h3>
-  </div>
-);
+  );
+};
 
 export default AdminDashboard;

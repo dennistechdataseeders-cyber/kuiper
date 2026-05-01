@@ -291,7 +291,7 @@ const handleProjectSubmit = async (e) => {
                 onClick={() => { setIsEditing(false); setShowProjectModal(true); }} 
                 className="bg-[#111C44] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
             >
-                <FolderPlus size={16} /> New Hub
+                <FolderPlus size={16} /> New Project
             </button>
         </div>
       </div>
@@ -354,9 +354,10 @@ const handleProjectSubmit = async (e) => {
 
                 <div className="relative z-10">
                   <div className="flex items-center gap-3 mb-1">
-                    <h3 className="text-2xl font-black text-[#1B2559] tracking-tight truncate max-w-[70%]">
-                        {project.projectCustomId || 'NO_ID'}
+                    <h3 className="text-lg font-semibold text-[#1B2559] tracking-tight truncate max-w-[70%]">
+                      {project.projectCustomId || 'NO_ID'}
                     </h3>
+
                     {isFromSales && (
                         <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-1 rounded-lg tracking-widest border border-amber-200">
                             Sales
@@ -494,7 +495,7 @@ const handleProjectSubmit = async (e) => {
             </div>
             <form onSubmit={handleProjectSubmit} className="space-y-6">
               <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Workspace Title</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Title</label>
                   <input type="text" placeholder="Title" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold" value={projectForm.name} onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-6">
@@ -517,7 +518,7 @@ const handleProjectSubmit = async (e) => {
                 ))}
               </div>
               <button type="submit" className="w-full py-5 bg-[#111C44] text-white font-black rounded-2xl hover:bg-blue-600 transition-all uppercase text-xs tracking-widest shadow-xl">
-                {isEditing ? 'Save Changes' : 'Initialize Workspace'}
+                {isEditing ? 'Save Changes' : 'Create Project'}
               </button>
             </form>
           </div>

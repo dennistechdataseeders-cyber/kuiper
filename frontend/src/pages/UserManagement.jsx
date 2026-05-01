@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserPlus, Edit2, Trash2, ShieldCheck, X,Eye,EyeOff } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff } from 'lucide-react';
 import API_BASE_URL from '../config';
 
 const UserManagement = () => {
@@ -23,10 +23,6 @@ const UserManagement = () => {
   const API_BASE = `${API_BASE_URL}/api/admin`;
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-  // --- FILTER LOGIC ---
-  // Admin: Sees everyone
-  // Project Manager: Sees Clients
-  // Sales Manager: Sees Sales Reps
   const filteredUsers = users.filter(user => {
     if (userRole === 'Sales Manager') return user.role === 'Sales';
     if (userRole === 'Project Manager') return user.role === 'Client';
@@ -34,9 +30,6 @@ const UserManagement = () => {
   });
 
   useEffect(() => {
-    if (!storedId) {
-      console.warn("ADMIN ID MISSING: Activity logging will fail. Please re-login.");
-    }
     fetchUsers();
   }, []);
 
@@ -55,7 +48,7 @@ const UserManagement = () => {
     setFormData({
       name: user.name,
       email: user.email,
-      password: '', 
+      password: '', // Keep empty; only update if they type a new one
       role: user.role
     });
     setShowModal(true);
@@ -75,31 +68,33 @@ const UserManagement = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
+      const payload = {
+        ...formData,
+        performerId: storedId 
+      };
+
       if (isEditing) {
-        await axios.put(`${API_BASE}/users/${currentUserId}`, formData, authHeader);
+        // If editing and password is empty, remove it from payload so it doesn't overwrite with blank
+        if (!payload.password) delete payload.password;
+        await axios.put(`${API_BASE}/users/${currentUserId}`, payload, authHeader);
       } else {
-        const payload = {
-          ...formData,
-          password: String(formData.password || "123456"),
-          adminId: storedId,       
-          performerId: storedId    
-        };
+        payload.password = String(formData.password || "123456");
+        payload.adminId = storedId;
         await axios.post(`${API_BASE}/users`, payload, authHeader);
       }
       
       closeModal();
       fetchUsers();
     } catch (err) {
-      console.error("Submission Error Details:", err.response?.data);
       alert("Error: " + (err.response?.data?.error || "Check backend console"));
     }
   };
 
- const closeModal = () => {
+  const closeModal = () => {
     setShowModal(false);
     setIsEditing(false);
     setCurrentUserId(null);
-    setShowPassword(false); // Reset eye toggle here
+    setShowPassword(false);
     setFormData({ 
         name: '', 
         email: '', 
@@ -110,6 +105,7 @@ const UserManagement = () => {
 
   return (
     <div className="ml-20 lg:ml-64 p-4 lg:p-8 bg-blue-100 min-h-screen transition-all">
+      {/* Header and Add Button */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black text-slate-800 tracking-tight">
@@ -127,6 +123,7 @@ const UserManagement = () => {
         </button>
       </div>
 
+      {/* Table Section */}
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
@@ -156,7 +153,7 @@ const UserManagement = () => {
                     </span>
                   </td>
                   <td className="p-5 text-right">
-                    <div className="flex justify-end gap-2 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                    <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                       <button onClick={() => handleEditClick(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm">
                         <Edit2 size={16}/>
                       </button>
@@ -168,7 +165,7 @@ const UserManagement = () => {
                 </tr>
               )) : (
                 <tr>
-                  <td colSpan="4" className="p-10 text-center text-slate-400 font-medium">No users found in this category.</td>
+                  <td colSpan="4" className="p-10 text-center text-slate-400 font-medium">No users found.</td>
                 </tr>
               )}
             </tbody>
@@ -176,6 +173,7 @@ const UserManagement = () => {
         </div>
       </div>
 
+      {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex justify-center items-center z-50 p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative">
@@ -195,6 +193,7 @@ const UserManagement = () => {
                   value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
                 />
               </div>
+              
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Email Address</label>
                 <input 
@@ -203,18 +202,19 @@ const UserManagement = () => {
                 />
               </div>
               
-            {!isEditing && (
+              {/* Password Field (Visible in both New and Edit modes) */}
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Temporary Password</label>
-                <div className="relative"> {/* Added relative container */}
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">
+                  {isEditing ? 'New Password (Leave blank to keep current)' : 'Temporary Password'}
+                </label>
+                <div className="relative">
                   <input 
-                    type={showPassword ? "text" : "password"} // Dynamic type
-                    required 
+                    type={showPassword ? "text" : "password"} 
+                    required={!isEditing} // Required only for new accounts
                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 pr-12"
                     value={formData.password} 
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                   />
-                  {/* Eye Toggle Button */}
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
@@ -224,7 +224,7 @@ const UserManagement = () => {
                   </button>
                 </div>
               </div>
-            )}
+
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role</label>
                 <select 
