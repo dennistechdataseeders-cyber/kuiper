@@ -16,8 +16,12 @@ const Sidebar = () => {
   const userName = localStorage.getItem('userName') || 'User';
 
   const handleLogout = () => {
-    localStorage.clear(); 
-    navigate('/login');
+    // Clear only auth-related items to prevent component crashes
+    const itemsToClear = ['token', 'role', 'userName', 'userId', 'lastActive'];
+    itemsToClear.forEach(item => localStorage.removeItem(item));
+    
+    // Force a window location change if navigate('/') isn't cleaning up the state
+    window.location.href = '/login'; 
   };
 
   const allMenuItems = [
@@ -39,11 +43,11 @@ const Sidebar = () => {
   return (
     <>
       {/* Sidebar Container */}
-      <div className={`h-screen bg-slate-900 text-slate-400 fixed left-0 top-0 flex flex-col border-r border-slate-800 transition-all duration-300 z-50 ${isExpanded ? 'w-64 p-6' : 'w-20 p-4 items-center'}`}>
+      <div className={`h-screen bg-black text-slate-400 fixed left-0 top-0 flex flex-col border-r border-slate-800 transition-all duration-300 z-50 ${isExpanded ? 'w-64 p-6' : 'w-20 p-4 items-center'}`}>
         <button onClick={() => setIsExpanded(!isExpanded)} className="absolute -right-3 top-10 bg-blue-600 text-white rounded-full p-1 border-4 border-slate-900 hover:bg-blue-500 transition-colors">
           {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
         </button>
-<KuiperLogo isExpanded={isExpanded} />
+        <KuiperLogo isExpanded={isExpanded} />
 
         <div className={`px-4 py-4 mb-8 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_0_30px_rgba(59,130,246,0.08)] transition-all duration-500 ease-in-out ${isExpanded ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 h-0 overflow-hidden p-0 mb-0"}`}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 mb-2">User : {userName}</p>

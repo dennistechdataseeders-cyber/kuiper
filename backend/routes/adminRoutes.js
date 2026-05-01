@@ -11,7 +11,7 @@ const Prospect = require('../models/Prospect');
 const LeadGen = require('../models/LeadGen');
 // --- MIDDLEWARE ---
 const { authorize } = require('../middleware/roleCheck');
-
+const getWelcomeTemplate = require('../templates/welcomeEmail');
 // --- USER MANAGEMENT ROUTES ---
 
 router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager','Sales'), async (req, res) => {
@@ -51,30 +51,67 @@ router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager','Sale
   }
 });
 
+// Add this at the very top of your adminRoutes.js file
+const nodemailer = require('nodemailer');
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS, 
+  },
+  tls: {
+    rejectUnauthorized: false
+  }
+});
+
+// --- UPDATED POST METHOD ---
 router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
-
     let finalRole = role;
-    
+
     // Authorization Logic for Role Creation
     if (req.user.role === 'Sales Manager') {
-      finalRole = 'Sales'; // Sales Managers can only create Sales Reps
+      finalRole = 'Sales'; 
     } else if (req.user.role === 'Project Manager') {
-      finalRole = 'Client'; // PMs can only create Clients
+      finalRole = 'Client'; 
     }
-    // Only Admin can create Sales Managers or Project Managers
 
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ error: "Email already in use" });
 
+    // Use provided password or default to "123456"
     const cleanPassword = String(password || "123456");
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(cleanPassword, salt);
 
-    const newUser = new User({ name, email, password: hashedPassword, role: finalRole });
-    await newUser.save();
+    const newUser = new User({ 
+      name, 
+      email, 
+      password: hashedPassword, 
+      role: finalRole 
+    });
 
+    await newUser.save();
+    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole);
+    // --- BACKGROUND EMAIL LOGIC ---
+    // We do NOT "await" this so the frontend gets a response immediately
+    const mailOptions = {
+      from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Your System Access Credentials',
+      html:emailHtml
+    };
+
+    transporter.sendMail(mailOptions)
+      .then(info => console.log("✅ Email sent successfully:", info.messageId))
+      .catch(err => console.error("❌ Email failed to send:", err.message));
+
+    // --- LOGGING ---
     try {
       await Log.create({
         actionType: 'USER_CREATED',
@@ -88,6 +125,7 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
 
     res.status(201).json(newUser);
   } catch (err) {
+    console.error("Error creating user:", err);
     res.status(400).json({ error: err.message });
   }
 });

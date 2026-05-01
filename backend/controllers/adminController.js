@@ -1,31 +1,35 @@
 const User = require('../models/User');
 const Log = require('../models/Log');
 const bcrypt = require('bcryptjs');
+const nodemailer = require('nodemailer');
 
-// Create a new User (Admin Dashboard logic)
+// 1. Bulletproof Transporter Configuration
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // Use false for 587
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+  tls: { rejectUnauthorized: false }
+});
+
 exports.createUser = async (req, res) => {
   try {
-    // Log the incoming type to your terminal
-    console.log("Incoming Password Type:", typeof req.body.password);
-    console.log("Incoming Body:", req.body);
-
     let { name, email, password, role } = req.body;
+    const rawPassword = String(password);
 
-    // 1. Force the string type conversion again
-    const saltPassword = String(password);
-
-    if (!saltPassword || saltPassword === "undefined" || saltPassword === "") {
-      return res.status(400).json({ error: "Password cannot be empty" });
+    if (!rawPassword || rawPassword === "" || rawPassword === "undefined") {
+      return res.status(400).json({ error: "Password is required" });
     }
 
-    // 2. Check if user exists
     const existingUser = await User.findOne({ email });
-    if (existingUser) return res.status(400).json({ error: "Email exists" });
+    if (existingUser) return res.status(400).json({ error: "Email already exists" });
 
-    // 3. Manual Hash
     const salt = await bcrypt.genSalt(10);
-    // Passing saltPassword (the forced string) specifically
-    const hashedPassword = await bcrypt.hash(saltPassword, salt);
+    const hashedPassword = await bcrypt.hash(rawPassword, salt);
 
     const user = new User({ 
       name, 
@@ -35,13 +39,47 @@ exports.createUser = async (req, res) => {
     });
 
     await user.save();
-    res.status(201).json({ message: "User created" });
+    console.log("✅ Checkpoint 1: User saved to DB");
+
+    // Send immediate response so frontend is happy
+    res.status(201).json({ message: "User created. Sending email in background..." });
+
+    // BACKGROUND EMAIL LOGIC
+    // We wrap this in an async IIFE to prevent blocking
+    (async () => {
+      try {
+        console.log("✅ Checkpoint 2: Verifying Transporter...");
+        
+        // This line checks if your password/user is correct
+        await transporter.verify(); 
+        
+        console.log("✅ Checkpoint 3: Transporter Verified. Sending Mail...");
+
+        const mailOptions = {
+          from: `"KUIPER" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: '🚀 Your System Access Credentials',
+          html: `<h1>Welcome ${name}</h1><p>Email: ${email}</p><p>Pass: ${rawPassword}</p>`
+        };
+
+        const info = await transporter.sendMail(mailOptions);
+        console.log("✅ Checkpoint 4: Email Sent!", info.messageId);
+
+      } catch (mailError) {
+        console.error("❌ MAIL SYSTEM ERROR:", mailError.message);
+        console.error("DEBUG INFO:", {
+          user: process.env.EMAIL_USER,
+          passLength: process.env.EMAIL_PASS ? process.env.EMAIL_PASS.length : 0
+        });
+      }
+    })();
+
   } catch (error) {
-    console.error("BCRYPT CRASH:", error);
-    res.status(400).json({ error: error.message });
+    console.error("❌ CONTROLLER ERROR:", error);
+    if (!res.headersSent) res.status(500).json({ error: error.message });
   }
 };
-// Get all Analytics Logs
+
 exports.getAnalytics = async (req, res) => {
   try {
     const logs = await Log.find().sort({ timestamp: -1 }).populate('performerId', 'name role');

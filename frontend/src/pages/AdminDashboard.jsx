@@ -58,11 +58,11 @@ const AdminDashboard = () => {
       <div className="lg:ml-64 w-full lg:w-[calc(100%-16rem)] p-6 md:p-10 transition-all duration-300">
         
         <header className="mb-12">
-          <h1 className="text-4xl md:text-5xl font-black text-slate-900 mb-2 tracking-tighter">
+          <h1 className="text-xl md:text-3xl font-black text-slate-900 mb-2 tracking-tighter">
             System Overview
           </h1>
           <p className="text-slate-500 font-medium">
-            Real-time status of your MERN stack infrastructure.
+            Real-time status
           </p>
         </header>
         

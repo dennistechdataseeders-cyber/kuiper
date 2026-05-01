@@ -14,6 +14,7 @@ import Prospects from './pages/Prospects';
 import DeveloperDashboard from './pages/DeveloperDashboard';
 import ProjectDetailView from './pages/ProjectDetailView';
 import DeveloperBucket from './components/DeveloperBucket';
+import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
   const navigate = useNavigate();
@@ -51,8 +52,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   if (!token) return <Navigate to="/login" replace />;
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
-    // If the user tries to access a route they aren't allowed in,
-    // we send them to their specific dashboard instead of login.
     const rolePaths = {
       'Admin': '/admin',
       'Sales Manager': '/sales-manager',
@@ -61,7 +60,6 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       'Project Manager': '/admin/projects',
     };
     
-    // Define the path and use it immediately
     const fallbackPath = rolePaths[userRole] || '/login';
     return <Navigate to={fallbackPath} replace />;
   }
@@ -72,6 +70,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 function AppContent() {
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
+  const location = useLocation(); // Required for AnimatePresence to track key changes
 
   const landingPath = useMemo(() => {
     if (!userRole) return '/login';
@@ -85,49 +84,55 @@ function AppContent() {
 
   return (
     <SessionManager>
-      <Routes>
-        <Route 
-          path="/login" 
-          element={token ? <Navigate to={landingPath} replace /> : <Login />} 
-        />
-        
-        <Route path="/*" element={
-          <ProtectedRoute>
-            <div className="flex bg-[#f8fafc] min-h-screen">
-              <Sidebar />
-              <main className="flex-1 w-full overflow-x-hidden pl-20 lg:pl-0">
-                <Routes>
-                  <Route path="/" element={<Navigate to={landingPath} replace />} />
+      {/* 
+          AnimatePresence must be given the current location and a unique key 
+          (usually location.pathname) so it knows when a route change occurs.
+      */}
+      <AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route 
+            path="/login" 
+            element={token ? <Navigate to={landingPath} replace /> : <Login />} 
+          />
+          
+          <Route path="/*" element={
+            <ProtectedRoute>
+              <div className="flex bg-[#f8fafc] min-h-screen">
+                <Sidebar />
+                <main className="flex-1 w-full overflow-x-hidden pl-20 lg:pl-0">
+                  <Routes>
+                    <Route path="/" element={<Navigate to={landingPath} replace />} />
 
-                  {/* Dashboards */}
-                  <Route path="/admin" element={<ProtectedRoute allowedRoles={['Admin']}><AdminDashboard /></ProtectedRoute>} />
-                  <Route path="/sales-manager" element={<ProtectedRoute allowedRoles={['Sales Manager']}><SalesManagerDashboard /></ProtectedRoute>} />
-                  <Route path="/sales" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
-                  
-                  {/* Sales Routes */}
-                  <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
-                  <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
-                  <Route path="/sales/prospects" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Prospects /></ProtectedRoute>} />
+                    {/* Dashboards */}
+                    <Route path="/admin" element={<ProtectedRoute allowedRoles={['Admin']}><AdminDashboard /></ProtectedRoute>} />
+                    <Route path="/sales-manager" element={<ProtectedRoute allowedRoles={['Sales Manager']}><SalesManagerDashboard /></ProtectedRoute>} />
+                    <Route path="/sales" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
+                    
+                    {/* Sales Routes */}
+                    <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
+                    <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
+                    <Route path="/sales/prospects" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Prospects /></ProtectedRoute>} />
 
-                  {/* Management */}
-                  <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
-                  <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
+                    {/* Management */}
+                    <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
+                    <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
 
-                  {/* Developer */}
-                  <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
-                  <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
-                  <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
+                    {/* Developer */}
+                    <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
+                    <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
+                    <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
 
-                  {/* Shared */}
-                  <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
+                    {/* Shared */}
+                    <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
 
-                  <Route path="*" element={<Navigate to={landingPath} replace />} />
-                </Routes>
-              </main>
-            </div>
-          </ProtectedRoute>
-        } />
-      </Routes>
+                    <Route path="*" element={<Navigate to={landingPath} replace />} />
+                  </Routes>
+                </main>
+              </div>
+            </ProtectedRoute>
+          } />
+        </Routes>
+      </AnimatePresence>
     </SessionManager>
   );
 }

@@ -64,30 +64,31 @@ const UserManagement = () => {
       }
     }
   };
-
+  const [loading, setLoading] = useState(false); // Add this at top
   const handleSubmit = async (e) => {
-    e.preventDefault();
-    try {
-      const payload = {
-        ...formData,
-        performerId: storedId 
-      };
+      e.preventDefault();
+      setLoading(true); // Start loading
+      try {
+          const payload = { ...formData, performerId: storedId };
 
-      if (isEditing) {
-        // If editing and password is empty, remove it from payload so it doesn't overwrite with blank
-        if (!payload.password) delete payload.password;
-        await axios.put(`${API_BASE}/users/${currentUserId}`, payload, authHeader);
-      } else {
-        payload.password = String(formData.password || "123456");
-        payload.adminId = storedId;
-        await axios.post(`${API_BASE}/users`, payload, authHeader);
+          if (isEditing) {
+              if (!payload.password) delete payload.password;
+              await axios.put(`${API_BASE}/users/${currentUserId}`, payload, authHeader);
+          } else {
+              // Ensure the password is sent so the backend can include it in the email
+              payload.password = String(formData.password || "123456");
+              payload.adminId = storedId;
+              await axios.post(`${API_BASE}/users`, payload, authHeader);
+              alert("Account created and credentials emailed to user.");
+          }
+          
+          closeModal();
+          fetchUsers();
+      } catch (err) {
+          alert("Error: " + (err.response?.data?.error || "Check backend console"));
+      } finally {
+          setLoading(false); // Stop loading
       }
-      
-      closeModal();
-      fetchUsers();
-    } catch (err) {
-      alert("Error: " + (err.response?.data?.error || "Check backend console"));
-    }
   };
 
   const closeModal = () => {
@@ -249,11 +250,12 @@ const UserManagement = () => {
               </div>
 
               <button 
-                type="submit" 
-                className="w-full py-5 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 transition-all font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-blue-100 mt-4"
-              >
-                {isEditing ? 'Save Changes' : 'Create Account'}
-              </button>
+              type="submit" 
+              disabled={loading}
+              className={`w-full py-5 bg-blue-600 text-white rounded-2xl transition-all font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-blue-100 mt-4 ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+            >
+              {loading ? 'Processing System Access...' : isEditing ? 'Save Changes' : 'Create Account & Notify User'}
+            </button>
             </form>
           </div>
         </div>
