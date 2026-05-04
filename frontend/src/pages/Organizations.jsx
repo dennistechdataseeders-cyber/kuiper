@@ -6,6 +6,7 @@ import {
   Mail, Pencil, Trash2, MapPin, ChevronDown, 
   CheckCircle, Building2, ChevronLeft, ChevronRight
 } from 'lucide-react';
+import API_BASE_URL from '../config';
 
 // --- SUB-COMPONENT: EXPANDABLE ORG CARD ---
 const OrganizationCard = ({ org, onEdit, onDelete }) => {
@@ -178,7 +179,7 @@ const Organizations = () => {
       const token = localStorage.getItem('token');
       
       // FIX: Use full URL or ensure base proxy is correct
-      const API_BASE_URL = "http://192.168.1.5:5000"; 
+      // const API_BASE_URL = "http://192.168.1.5:5000"; 
       
       const res = await axios.get(`${API_BASE_URL}/api/orgs`, { 
         headers: { Authorization: `Bearer ${token}` } 
@@ -231,7 +232,7 @@ const Organizations = () => {
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this organization?")) return;
-    try {
+    try { 
       const token = localStorage.getItem('token');
       await axios.delete(`/api/orgs/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       fetchOrgs();
@@ -240,7 +241,7 @@ const Organizations = () => {
 
  const handleSubmit = async (e) => {
   e.preventDefault();
-  const API_BASE_URL = "http://192.168.1.5:5000";
+  // const API_BASE_URL = "http://192.168.1.5:5000";
 
   const hasLinkedIn = formData.linkedin?.trim().length > 0;
   const hasEmail = formData.pocEmail?.trim().length > 0;

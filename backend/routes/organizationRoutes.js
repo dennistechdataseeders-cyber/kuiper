@@ -4,7 +4,7 @@ const Organization = require('../models/Organization');
 const Prospect = require('../models/Prospect');
 
 // --- POST: Create Organization from Prospect (STEP 1 in flow) ---
-router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
+router.post('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
   try {
     const { prospectId, companyName, website, pocName, pocEmail, pocPhone, linkedin, address } = req.body;
 
@@ -36,7 +36,7 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
 });
 
 // --- GET: View Organizations ---
-router.get('/', authorize('Admin', 'Sales'), async (req, res) => {
+router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
   try {
     const filter = req.user.role === 'Admin' ? {} : { salesRepId: req.user._id };
     const organizations = await Organization.find(filter).sort({ createdAt: -1 });
