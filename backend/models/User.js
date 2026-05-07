@@ -13,6 +13,8 @@ const UserSchema = new mongoose.Schema({
   pocName: String, 
   pocPhone: String,
   website: String,
+  resetPasswordToken: String,
+  resetPasswordExpires: Date,
   createdAt: { type: Date, default: Date.now }
 });
 

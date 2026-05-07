@@ -35,7 +35,7 @@ const ParticleSwarm = () => {
     for (let i = 0; i < count; i++) {
       const { pull, chaos, speed } = PARAMS;
       const angle = i * 0.2 + time * speed;
-      const baseRadius = 50; // Smaller radius to fit sidebar width
+      const baseRadius = 55; // Smaller radius to fit sidebar width
 
       // 1. Base Disk Math (Synced with Login logic)
       let x0 = Math.cos(angle) * baseRadius;
@@ -43,7 +43,7 @@ const ParticleSwarm = () => {
       let y0 = (Math.random() - 0.5) * 8;
 
       // 2. Diagonal Tilt (Synced with Login logic)
-      const tiltX = Math.PI / 19;
+      const tiltX = Math.PI / 15;
       const tiltZ = Math.PI / 15;
 
       let x1 = x0 * Math.cos(tiltZ) - y0 * Math.sin(tiltZ);
@@ -80,7 +80,7 @@ const KuiperLogo = ({ isExpanded }) => {
     <div className="relative flex items-center gap-3 mb-10 px-2 transition-all h-14">
       {/* 3D Particle Background - Resized for Sidebar */}
       {isExpanded && (
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden opacity-80" style={{ width: '200px', height: '100px', left: '-10x',top: '-20px' }}>
+        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden opacity-80" style={{ width: '210px', height: '110px', left: '-10x',top: '-20px' }}>
           <Canvas camera={{ position: [0, 0, 80], fov: 45 }} dpr={[1, 2]}>
             <ParticleSwarm />
             <Effects disableGamma>

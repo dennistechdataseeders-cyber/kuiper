@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto'); 
 const Task = require('../models/Task');
 // --- MODELS ---
 const User = require('../models/User');
@@ -9,6 +10,7 @@ const Project = require('../models/Project');
 const Feed = require('../models/Feed');
 const Prospect = require('../models/Prospect');
 const LeadGen = require('../models/LeadGen');
+const { register, login, forgotPassword, resetPassword } = require('../controllers/authController');
 // --- MIDDLEWARE ---
 const { authorize } = require('../middleware/roleCheck');
 const getWelcomeTemplate = require('../templates/welcomeEmail');
@@ -67,14 +69,34 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false
   }
 });
+// Place this right after your User Management routes but BEFORE any /:id routes
+router.post('/change-password', authorize('Admin', 'Sales Manager', 'Sales', 'Project Manager', 'Developer'), async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const user = await User.findById(req.user._id);
 
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Current password incorrect" });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    await user.save();
+    
+    res.json({ message: "Password updated successfully!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // --- UPDATED POST METHOD ---
 router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, role } = req.body; // Remove password from destructuring, we generate it
     let finalRole = role;
 
-    // Authorization Logic for Role Creation
     if (req.user.role === 'Sales Manager') {
       finalRole = 'Sales'; 
     } else if (req.user.role === 'Project Manager') {
@@ -84,51 +106,57 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ error: "Email already in use" });
 
-    // Use provided password or default to "123456"
-    const cleanPassword = String(password || "123456");
+    // 2. GENERATE TOKEN & EXPIRY (30 Minutes)
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    const resetExpires = Date.now() + 1800000; 
+
+    // 3. GENERATE A RANDOM TEMP PASSWORD (Required by Schema)
+    const tempPass = crypto.randomBytes(8).toString('hex');
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(cleanPassword, salt);
+    const hashedPassword = await bcrypt.hash(tempPass, salt);
 
     const newUser = new User({ 
       name, 
       email, 
       password: hashedPassword, 
-      role: finalRole 
+      role: finalRole,
+      resetPasswordToken: resetToken, // Save to DB
+      resetPasswordExpires: resetExpires // Save to DB
     });
 
     await newUser.save();
-    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole);
-    // --- BACKGROUND EMAIL LOGIC ---
-    // We do NOT "await" this so the frontend gets a response immediately
+
+    // 4. GENERATE EMAIL WITH RESET LINK
+    const resetUrl = `http://localhost:5173/set-password?token=${resetToken}`;
+    const emailHtml = getWelcomeTemplate(name, email, resetUrl, finalRole);
+
     const mailOptions = {
       from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: 'Your System Access Credentials',
-      html:emailHtml
+      subject: '🚀 Welcome to Kuiper - Activate Your Account',
+      html: emailHtml
     };
 
     transporter.sendMail(mailOptions)
-      .then(info => console.log("✅ Email sent successfully:", info.messageId))
-      .catch(err => console.error("❌ Email failed to send:", err.message));
+      .then(info => console.log("✅ Activation email sent:", info.messageId))
+      .catch(err => console.error("❌ Email failed:", err.message));
 
-    // --- LOGGING ---
+    // Logging...
     try {
       await Log.create({
         actionType: 'USER_CREATED',
         performerId: req.user._id,
-        details: `Created ${finalRole}: ${name} (By ${req.user.role})`,
+        details: `Created ${finalRole}: ${name} (Activation Link Sent)`,
         timestamp: new Date()
       });
-    } catch (logErr) {
-      console.error("Non-critical Log Error:", logErr.message);
-    }
+    } catch (logErr) { console.error(logErr.message); }
 
     res.status(201).json(newUser);
   } catch (err) {
-    console.error("Error creating user:", err);
     res.status(400).json({ error: err.message });
   }
 });
+
 
 router.put('/users/:id', authorize('Admin'), async (req, res) => {
   try {
@@ -308,7 +336,33 @@ router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) =>
     res.status(500).json({ error: err.message });
   }
 });
+// --- Place this ABOVE your router.get('/users'...) ---
 
+// This route MUST NOT have 'authorize' because the user isn't logged in yet!
+
+// Add this route to handle password changes for logged-in users
+router.post('/change-password', async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    // req.user.id comes from your 'protect' middleware
+    const user = await User.findById(req.user.id);
+
+    // Verify current password
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Current password does not match our records." });
+    }
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(newPassword, salt);
+    
+    await user.save();
+    res.json({ message: "Password updated successfully!" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 router.put('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const { name, assignedDevelopers, feedType } = req.body;

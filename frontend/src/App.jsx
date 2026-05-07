@@ -14,6 +14,7 @@ import Prospects from './pages/Prospects';
 import DeveloperDashboard from './pages/DeveloperDashboard';
 import ProjectDetailView from './pages/ProjectDetailView';
 import DeveloperBucket from './components/DeveloperBucket';
+import Profile from './pages/Profile';
 import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
@@ -124,8 +125,9 @@ function AppContent() {
 
                     {/* Shared */}
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
-
+                    <Route path="/profile" element={<Profile />} />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
+                    
                   </Routes>
                 </main>
               </div>

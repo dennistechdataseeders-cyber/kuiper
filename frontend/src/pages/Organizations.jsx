@@ -9,8 +9,11 @@ import {
 import API_BASE_URL from '../config';
 
 // --- SUB-COMPONENT: EXPANDABLE ORG CARD ---
-const OrganizationCard = ({ org, onEdit, onDelete }) => {
+const OrganizationCard = ({ org, onEdit, onDelete, userRole }) => {
   const [isExpanded, setIsExpanded] = useState(false);
+
+  // Define authorized roles
+  const canModify = userRole === 'Admin' || userRole === 'Sales Manager';
 
   return (
     <div className={`group relative transition-all duration-500 rounded-[2.5rem] border-2 h-fit ${
@@ -19,29 +22,31 @@ const OrganizationCard = ({ org, onEdit, onDelete }) => {
       : 'bg-blue-600 border-blue-500 shadow-lg hover:shadow-blue-200 hover:-translate-y-1'
     }`}>
       
-      {/* ACTION ZONE */}
-      <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
-        <button 
-          onClick={(e) => { e.stopPropagation(); onEdit(org); }} 
-          className={`p-2.5 rounded-xl border transition-all duration-300 ${
-            isExpanded 
-            ? 'bg-slate-50 border-slate-100 text-slate-400 hover:text-blue-600 hover:bg-blue-50' 
-            : 'bg-white/10 border-white/20 text-white/70 hover:text-white hover:bg-white/20'
-          }`}
-        >
-          <Pencil size={15} />
-        </button>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onDelete(org._id); }} 
-          className={`p-2.5 rounded-xl border transition-all duration-300 ${
-            isExpanded 
-            ? 'bg-slate-50 border-slate-100 text-slate-400 hover:text-red-600 hover:bg-red-50' 
-            : 'bg-white/10 border-white/20 text-white/70 hover:text-white hover:bg-red-500'
-          }`}
-        >
-          <Trash2 size={15} />
-        </button>
-      </div>
+      {/* ACTION ZONE - Conditioned by Role */}
+      {canModify && (
+        <div className="absolute top-6 right-6 flex items-center gap-2 z-20">
+          <button 
+            onClick={(e) => { e.stopPropagation(); onEdit(org); }} 
+            className={`p-2.5 rounded-xl border transition-all duration-300 ${
+              isExpanded 
+              ? 'bg-slate-50 border-slate-100 text-slate-400 hover:text-blue-600 hover:bg-blue-50' 
+              : 'bg-white/10 border-white/20 text-white/70 hover:text-white hover:bg-white/20'
+            }`}
+          >
+            <Pencil size={15} />
+          </button>
+          <button 
+            onClick={(e) => { e.stopPropagation(); onDelete(org._id); }} 
+            className={`p-2.5 rounded-xl border transition-all duration-300 ${
+              isExpanded 
+              ? 'bg-slate-50 border-slate-100 text-slate-400 hover:text-red-600 hover:bg-red-50' 
+              : 'bg-white/10 border-white/20 text-white/70 hover:text-white hover:bg-red-500'
+            }`}
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      )}
 
       <div onClick={() => setIsExpanded(!isExpanded)} className="p-7 cursor-pointer select-none">
         <div className="flex items-start gap-5">
@@ -146,14 +151,16 @@ const Organizations = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
-  // Added prospectId to state
+  // Role Logic
+  const userRole = localStorage.getItem('role'); // Assumes role is saved as 'Admin' or 'Sales Manager'
+  const canModify = userRole === 'Admin' || userRole === 'Sales Manager';
+
   const [formData, setFormData] = useState({
     companyName: '', website: '', pocName: '', 
     pocEmail: '', pocPhone: '', linkedin: '', address: '',
     prospectId: null 
   });
 
-  // EFFECT: Handle "Convert to Lead" redirection from Prospects page
   useEffect(() => {
     if (location.state?.convertedLead) {
       const data = location.state.convertedLead;
@@ -165,10 +172,9 @@ const Organizations = () => {
         pocPhone: data.pocPhone || '',
         linkedin: data.linkedin || '',
         address: '',
-        prospectId: data._id // Storing the link to the prospect
+        prospectId: data._id 
       });
       setIsModalOpen(true);
-      // Clear navigation state to prevent re-opening modal on refresh
       window.history.replaceState({}, document.title);
     }
   }, [location]);
@@ -177,14 +183,9 @@ const Organizations = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
-      // FIX: Use full URL or ensure base proxy is correct
-      // const API_BASE_URL = "http://192.168.1.5:5000"; 
-      
       const res = await axios.get(`${API_BASE_URL}/api/orgs`, { 
         headers: { Authorization: `Bearer ${token}` } 
       });
-      
       const data = Array.isArray(res.data) ? res.data : (res.data.leads || []);
       setOrgs(data);
     } catch (err) {
@@ -193,6 +194,7 @@ const Organizations = () => {
       setLoading(false);
     }
   };
+  
   useEffect(() => { fetchOrgs(); }, []);
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -215,7 +217,7 @@ const Organizations = () => {
       pocPhone: org.pocPhone || '', 
       linkedin: org.linkedin || '', 
       address: org.address || '',
-      prospectId: null // Edit mode doesn't need to link to prospect
+      prospectId: null 
     });
     setIsModalOpen(true);
   };
@@ -234,50 +236,44 @@ const Organizations = () => {
     if (!window.confirm("Delete this organization?")) return;
     try { 
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/orgs/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+      await axios.delete(`${API_BASE_URL}/api/orgs/${id}`, { headers: { Authorization: `Bearer ${token}` } });
       fetchOrgs();
     } catch (err) { console.error(err); }
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  // const API_BASE_URL = "http://192.168.1.5:5000";
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const hasLinkedIn = formData.linkedin?.trim().length > 0;
+    const hasEmail = formData.pocEmail?.trim().length > 0;
+    const hasPhone = formData.pocPhone?.trim().length > 0;
 
-  const hasLinkedIn = formData.linkedin?.trim().length > 0;
-  const hasEmail = formData.pocEmail?.trim().length > 0;
-  const hasPhone = formData.pocPhone?.trim().length > 0;
-
-  if (!hasLinkedIn && !hasEmail && !hasPhone) {
-    alert("Incomplete Contact Info: Provide LinkedIn, Email, or Phone.");
-    return;
-  }
-
-  try {
-    const token = localStorage.getItem('token');
-    const config = { headers: { Authorization: `Bearer ${token}` } };
-    
-    // FIX: The LeadGen model REQUIRES leadType. 
-    // We add a default value here so the server doesn't return a 400 error.
-    const payload = {
-      ...formData,
-      leadType: 'Inbound' // Defaulting to Inbound to satisfy the Mongoose enum
-    };
-    
-    if (editingId) {
-      await axios.put(`${API_BASE_URL}/api/orgs/${editingId}`, payload, config);
-    } else {
-      await axios.post(`${API_BASE_URL}/api/orgs`, payload, config);
+    if (!hasLinkedIn && !hasEmail && !hasPhone) {
+      alert("Incomplete Contact Info: Provide LinkedIn, Email, or Phone.");
+      return;
     }
-    
-    fetchOrgs();
-    closeModal();
-  } catch (err) {
-    console.error("Submission Error:", err.response?.data);
-    // This alert will now show you the SPECIFIC validation error from Mongoose
-    const msg = err.response?.data?.error || "Error saving organization.";
-    alert(msg);
-  }
-};
+
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const payload = {
+        ...formData,
+        leadType: 'Inbound' 
+      };
+      
+      if (editingId) {
+        await axios.put(`${API_BASE_URL}/api/orgs/${editingId}`, payload, config);
+      } else {
+        await axios.post(`${API_BASE_URL}/api/orgs`, payload, config);
+      }
+      
+      fetchOrgs();
+      closeModal();
+    } catch (err) {
+      console.error("Submission Error:", err.response?.data);
+      const msg = err.response?.data?.error || "Error saving organization.";
+      alert(msg);
+    }
+  };
 
   return (
     <div className="p-8 lg:ml-64 min-h-screen bg-blue-100">
@@ -291,9 +287,13 @@ const Organizations = () => {
             {orgs.length} Registered Entities
           </p>
         </div>
-        <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95">
-          <Plus size={18} strokeWidth={3} /> New Entry
-        </button>
+
+        {/* New Entry Button Restricted by Role */}
+        {canModify && (
+          <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95">
+            <Plus size={18} strokeWidth={3} /> New Entry
+          </button>
+        )}
       </div>
 
       {/* LIST SECTION */}
@@ -306,7 +306,13 @@ const Organizations = () => {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-start">
               {currentOrgs.map(org => (
-                <OrganizationCard key={org._id} org={org} onEdit={openEditModal} onDelete={handleDelete} />
+                <OrganizationCard 
+                  key={org._id} 
+                  org={org} 
+                  onEdit={openEditModal} 
+                  onDelete={handleDelete} 
+                  userRole={userRole} 
+                />
               ))}
             </div>
 

@@ -38,7 +38,7 @@ router.post('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) =
 // --- GET: View Organizations ---
 router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
   try {
-    const filter = req.user.role === 'Admin' ? {} : { salesRepId: req.user._id };
+    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') ? {} : { salesRepId: req.user._id };
     const organizations = await Organization.find(filter).sort({ createdAt: -1 });
     res.json(organizations);
   } catch (err) {
@@ -47,9 +47,9 @@ router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) =>
 });
 
 // --- PUT: Update Organization ---
-router.put('/:id', authorize('Admin', 'Sales'), async (req, res) => {
+router.put('/:id', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
   try {
-    const filter = req.user.role === 'Admin' 
+    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') 
       ? { _id: req.params.id } 
       : { _id: req.params.id, salesRepId: req.user._id };
     
@@ -68,7 +68,7 @@ router.put('/:id', authorize('Admin', 'Sales'), async (req, res) => {
 });
 
 // --- DELETE: Remove Organization ---
-router.delete('/:id', authorize('Admin', 'Sales'), async (req, res) => {
+router.delete('/:id', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
   try {
     const org = await Organization.findOneAndDelete({ _id: req.params.id });
     
