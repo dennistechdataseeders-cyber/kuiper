@@ -13,7 +13,7 @@ const OrganizationCard = ({ org, onEdit, onDelete, userRole }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Define authorized roles
-  const canModify = userRole === 'Admin' || userRole === 'Sales Manager';
+  const canModify = userRole === 'Admin' || userRole === 'Sales Manager' || userRole === 'Sales';
 
   return (
     <div className={`group relative transition-all duration-500 rounded-[2.5rem] border-2 h-fit ${
@@ -153,7 +153,7 @@ const Organizations = () => {
 
   // Role Logic
   const userRole = localStorage.getItem('role'); // Assumes role is saved as 'Admin' or 'Sales Manager'
-  const canModify = userRole === 'Admin' || userRole === 'Sales Manager';
+  const canModify = userRole === 'Admin' || userRole === 'Sales Manager' || userRole === 'Sales';
 
   const [formData, setFormData] = useState({
     companyName: '', website: '', pocName: '', 
