@@ -94,9 +94,10 @@ router.post('/change-password', authorize('Admin', 'Sales Manager', 'Sales', 'Pr
 // --- UPDATED POST METHOD ---
 router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
-    const { name, email, role } = req.body; // Remove password from destructuring, we generate it
+    const { name, email, password, role } = req.body;
     let finalRole = role;
 
+    // Authorization Logic for Role Creation
     if (req.user.role === 'Sales Manager') {
       finalRole = 'Sales'; 
     } else if (req.user.role === 'Project Manager') {
@@ -106,58 +107,51 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ error: "Email already in use" });
 
-    // 2. GENERATE TOKEN & EXPIRY (30 Minutes)
-    const resetToken = crypto.randomBytes(20).toString('hex');
-    const resetExpires = Date.now() + 1800000; 
-
-    // 3. GENERATE A RANDOM TEMP PASSWORD (Required by Schema)
-    const tempPass = crypto.randomBytes(8).toString('hex');
+    // Use provided password or default to "123456"
+    const cleanPassword = String(password || "123456");
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(tempPass, salt);
+    const hashedPassword = await bcrypt.hash(cleanPassword, salt);
 
     const newUser = new User({ 
       name, 
       email, 
       password: hashedPassword, 
-      role: finalRole,
-      resetPasswordToken: resetToken, // Save to DB
-      resetPasswordExpires: resetExpires // Save to DB
+      role: finalRole 
     });
 
     await newUser.save();
-
-    // 4. GENERATE EMAIL WITH RESET LINK
-    const resetUrl = `http://localhost:5173/set-password?token=${resetToken}`;
-    const emailHtml = getWelcomeTemplate(name, email, resetUrl, finalRole);
-
+    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole," http://192.168.1.105:5173/");
+    // --- BACKGROUND EMAIL LOGIC ---
+    // We do NOT "await" this so the frontend gets a response immediately
     const mailOptions = {
       from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: '🚀 Welcome to Kuiper - Activate Your Account',
-      html: emailHtml
+      subject: 'Your System Access Credentials',
+      html:emailHtml
     };
 
     transporter.sendMail(mailOptions)
-      .then(info => console.log("✅ Activation email sent:", info.messageId))
-      .catch(err => console.error("❌ Email failed:", err.message));
+      .then(info => console.log("✅ Email sent successfully:", info.messageId))
+      .catch(err => console.error("❌ Email failed to send:", err.message));
 
-    // Logging...
+    // --- LOGGING ---
     try {
       await Log.create({
         actionType: 'USER_CREATED',
         performerId: req.user._id,
-        details: `Created ${finalRole}: ${name} (Activation Link Sent)`,
+        details: `Created ${finalRole}: ${name} (By ${req.user.role})`,
         timestamp: new Date()
       });
-    } catch (logErr) { console.error(logErr.message); }
+    } catch (logErr) {
+      console.error("Non-critical Log Error:", logErr.message);
+    }
 
     res.status(201).json(newUser);
   } catch (err) {
+    console.error("Error creating user:", err);
     res.status(400).json({ error: err.message });
   }
 });
-
-
 router.put('/users/:id', authorize('Admin'), async (req, res) => {
   try {
     const { name, email, role } = req.body;
