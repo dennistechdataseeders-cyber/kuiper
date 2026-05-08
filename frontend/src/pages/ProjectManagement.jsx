@@ -5,9 +5,22 @@ import {
   Globe, Briefcase, Send, ChevronDown, ChevronUp, ShoppingBag, LayoutGrid,
   ChevronLeft, ChevronRight
 } from 'lucide-react';
-import countryList from 'react-select-country-list';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
+
+// 1. Define the abbreviation mapping dictionary
+const POPULAR_COUNTRIES = [
+  { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
+  { label: "Australia", value: "AU" }, { label: "Brazil", value: "BR" }, { label: "Canada", value: "CA" },
+  { label: "China", value: "CN" }, { label: "France", value: "FR" }, { label: "Germany", value: "DE" },
+  { label: "India", value: "IN" }, { label: "Indonesia", value: "ID" }, { label: "Italy", value: "IT" },
+  { label: "Japan", value: "JP" }, { label: "Mexico", value: "MX" }, { label: "Netherlands", value: "NL" },
+  { label: "Nigeria", value: "NG" }, { label: "Pakistan", value: "PK" }, { label: "Russia", value: "RU" },
+  { label: "Saudi Arabia", value: "SA" }, { label: "Singapore", value: "SG" }, { label: "South Africa", value: "ZA" },
+  { label: "South Korea", value: "KR" }, { label: "Spain", value: "ES" }, { label: "Turkey", value: "TR" },
+  { label: "United Arab Emirates", value: "AE" }, { label: "United Kingdom", value: "GB" }, 
+  { label: "United States", value: "US" }, { label: "Vietnam", value: "VN" }
+];
 
 const ProjectManagement = () => {
   // --- Data State ---
@@ -18,7 +31,7 @@ const ProjectManagement = () => {
   
   // --- Pagination State ---
   const [currentPage, setCurrentPage] = useState(1);
-  const projectsPerPage = 6; // Set items per page
+  const projectsPerPage = 6;
 
   // --- Filter State ---
   const [activeFilter, setActiveFilter] = useState('All'); 
@@ -36,27 +49,25 @@ const ProjectManagement = () => {
   const [isEditingFeed, setIsEditingFeed] = useState(false);
   const [expandedProjects, setExpandedProjects] = useState({});
 
-  // --- Auth & Config ---
   const ADMIN_BASE = `${API_BASE_URL}/api/admin`;
   const token = localStorage.getItem('token');
   const currentUserId = localStorage.getItem('userId');
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-  const countryOptions = useMemo(() => countryList().getData(), []);
   const industries = useMemo(() => [
-    { label: "Tech", value: "Tech" },
-    { label: "Finance", value: "Finance" },
-    { label: "Health", value: "Health" },
-    { label: "Retail", value: "Retail" },
-    { label: "Energy", value: "Energy" },
-    { label: "Media", value: "Media" },
-    { label: "ECOM", value: "ECOM" },
-    { label: "Logistics", value: "Logistics" }
+   { label: "ECOM", value: "ECOM" },
+  { label: "FOOD", value: "FOOD" },
+  { label: "HTL", value: "HTL" },
+  { label: "TRVL", value: "TRVL" },
+  { label: "FNC", value: "FNC" },
+  { label: "SCLM", value: "SCLM" },
+  { label: "JOB", value: "JOB" },
+  { label: "AUTO", value: "AUTO" }
   ], []);
 
   // --- Forms ---
   const [projectForm, setProjectForm] = useState({ 
-    name: '', clients: [], projectManager: '', description: '', country: 'USA', industry: 'Tech' 
+    name: '', clients: [], projectManager: '', description: '', country: 'United States', industry: 'Tech' 
   });
 
   const [feedForm, setFeedForm] = useState({ 
@@ -65,10 +76,7 @@ const ProjectManagement = () => {
 
   const [taskText, setTaskText] = useState("");
 
-  // --- Data Fetching ---
-  useEffect(() => {
-    fetchInitialData();
-  }, []);
+  useEffect(() => { fetchInitialData(); }, []);
 
   const fetchInitialData = async () => {
     try {
@@ -82,40 +90,22 @@ const ProjectManagement = () => {
       setClients(clientRes.data);
       setDevelopers(devRes.data);
       setProjectManagers(pmRes.data);
-    } catch (err) {
-      console.error("Data fetch failed:", err);
-    }
+    } catch (err) { console.error("Data fetch failed:", err); }
   };
 
-  // --- Logic Helpers ---
-// --- Logic Helpers ---
   const filteredProjects = useMemo(() => {
     let result = projects;
-
-    // 1. First, filter by Project Manager (Access Control)
-    result = result.filter(p => 
-      p.projectManager?._id === currentUserId || p.projectManager === currentUserId
-    );
-
-    // 2. Apply the UI Filters based on Country presence
+    result = result.filter(p => p.projectManager?._id === currentUserId || p.projectManager === currentUserId);
     if (activeFilter === 'Assigned') {
-      // Show ONLY projects that HAVE a country specified
       result = result.filter(p => p.country && p.country.trim() !== "" && p.country !== 'Not Specified');
     } else if (activeFilter === 'Unassigned') {
-      // Show ONLY projects that DO NOT have a country
       result = result.filter(p => !p.country || p.country.trim() === "" || p.country === 'Not Specified');
     }
-    
-    // Note: If activeFilter is 'All', no additional filtering is applied
     return result;
   }, [projects, activeFilter, currentUserId]);
 
-  // Reset page when filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [activeFilter]);
+  useEffect(() => { setCurrentPage(1); }, [activeFilter]);
 
-  // --- Pagination Logic ---
   const indexOfLastProject = currentPage * projectsPerPage;
   const indexOfFirstProject = indexOfLastProject - projectsPerPage;
   const currentProjectSlice = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
@@ -126,62 +116,62 @@ const ProjectManagement = () => {
   };
 
   // --- Project Handlers ---
-const handleProjectSubmit = async (e) => {
-  e.preventDefault();
-  
-  let customId = projectForm.projectCustomId; 
-  let finalName = projectForm.name;
-
-  if (isEditing || projectForm.name.includes('PRJ')) { 
-    // 1. Extract the number from the existing name (e.g., "TDS0002" -> "0002")
-    // This regex looks for 4 digits immediately following "TDS"
-    const sequenceMatch = projectForm.name.match(/TDS(\d{4})/);
-    const sequence = sequenceMatch ? sequenceMatch[1] : "0000"; 
-
-    // 2. Format the codes
-    // Get 2-letter country code (e.g., India -> IN)
-    const countryCode = (projectForm.country || 'XX').substring(0, 2).toUpperCase();
-    // Get 4-letter industry code (e.g., Retail -> RETA)
-    const industryCode = (projectForm.industry || 'GEN').toUpperCase().substring(0, 4);
+  const handleProjectSubmit = async (e) => {
+    e.preventDefault();
     
-    // 3. Extract the Company Name
-    // We split by '|' and take the last part to ensure we don't keep the old codes
-    const nameParts = projectForm.name.split('|');
-    const companyName = nameParts.length > 1 
-      ? nameParts[nameParts.length - 1].trim() 
-      : projectForm.name;
+    let customId = projectForm.projectCustomId; 
+    let finalName = projectForm.name;
 
-    // 4. Reconstruct the full string
-    const updatedFormattedString = `TDS${sequence}-${industryCode} | ${countryCode} | ${companyName}`;
+    // Logic for formatting the Project Name with Abbreviations
+    if (isEditing || projectForm.name.includes('PRJ') || projectForm.name.includes('TDS')) { 
+      const sequenceMatch = projectForm.name.match(/TDS(\d{4})/) || projectForm.name.match(/PRJ(\d{4})/);
+      const sequence = sequenceMatch ? sequenceMatch[1] : "0000"; 
+      const prefix = projectForm.name.includes('PRJ') ? 'PRJ' : 'TDS';
+
+      // LOOKUP ABBREVIATION
+      const selectedCountryObj = POPULAR_COUNTRIES.find(c => c.label === projectForm.country);
+      const countryCode = selectedCountryObj ? selectedCountryObj.value : (projectForm.country?.substring(0, 2).toUpperCase() || "XX");
+      
+      const industryCode = (projectForm.industry || 'GEN').toUpperCase().substring(0, 4);
+      
+      const nameParts = projectForm.name.split('|');
+      const companyName = nameParts[nameParts.length - 1].trim();
+
+      // RECONSTRUCT SAVED NAME
+      const updatedFormattedString = `${prefix}${sequence}-${industryCode} | ${countryCode} | ${companyName}`;
+      
+      customId = updatedFormattedString;
+      finalName = updatedFormattedString;
+    }
+
+    const finalData = { 
+      ...projectForm, 
+      name: finalName,
+      projectCustomId: customId, 
+      projectManager: projectForm.projectManager || currentUserId,
+      adminId: currentUserId 
+    };
+
+    try {
+      if (isEditing) {
+        await axios.put(`${ADMIN_BASE}/projects/${activeProjectId}`, finalData, authHeader);
+      } else {
+        await axios.post(`${ADMIN_BASE}/projects`, finalData, authHeader);
+      }
+     setShowProjectModal(false);
     
-    customId = updatedFormattedString;
-    finalName = updatedFormattedString;
-  }
-
-  const finalData = { 
-    ...projectForm, 
-    name: finalName,
-    projectCustomId: customId, 
-    projectManager: projectForm.projectManager || currentUserId,
-    adminId: currentUserId 
+    // 3. CRITICAL: Re-fetch data to update the UI without a refresh
+    await fetchInitialData(); 
+    
+    // 4. Reset the form
+    setProjectForm({ name: '', clients: [], projectManager: '', description: '', country: '', industry: '' });
+    } catch (err) { alert(err.response?.data?.error || "Project save failed"); }
   };
 
-  try {
-    if (isEditing) {
-      await axios.put(`${ADMIN_BASE}/projects/${activeProjectId}`, finalData, authHeader);
-    } else {
-      await axios.post(`${ADMIN_BASE}/projects`, finalData, authHeader);
-    }
-    closeProjectModal();
-    fetchInitialData();
-  } catch (err) { 
-    alert(err.response?.data?.error || "Project save failed"); 
-  }
-};
   const closeProjectModal = () => {
     setShowProjectModal(false);
     setIsEditing(false);
-    setProjectForm({ name: '', clients: [], projectManager: '', description: '', country: 'USA', industry: 'Tech' });
+    setProjectForm({ name: '', clients: [], projectManager: '', description: '', country: 'United States', industry: 'Tech' });
   };
 
   const handleEditClick = (project) => {
@@ -192,13 +182,12 @@ const handleProjectSubmit = async (e) => {
       clients: project.clients?.map(c => typeof c === 'object' ? c._id : c) || [],
       projectManager: project.projectManager?._id || project.projectManager || '',
       description: project.description,
-      country: project.country || 'USA',
+      country: project.country || 'United States',
       industry: project.industry || 'Tech'
     });
     setShowProjectModal(true);
   };
 
-  // --- Feed Handlers ---
   const handleFeedSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -231,7 +220,6 @@ const handleProjectSubmit = async (e) => {
     setShowFeedModal(true);
   };
 
-  // --- Task Handlers ---
   const handleCreateTask = async (e) => {
     e.preventDefault();
     if (!taskText.trim()) return;
@@ -249,7 +237,6 @@ const handleProjectSubmit = async (e) => {
     } catch (err) { alert("Failed to push task"); }
   };
 
-  // --- Styles ---
   const customDropdownStyles = {
     control: (base) => ({
       ...base, padding: '8px', borderRadius: '1.25rem', border: '1px solid #f1f5f9',
@@ -264,7 +251,6 @@ const handleProjectSubmit = async (e) => {
 
   return (
     <div className="ml-64 p-10 bg-[#F4F7FE] min-h-screen font-sans text-slate-900">
-      {/* Header & Filter Bar */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-[#1B2559]">Workspace Hub</h1>
@@ -296,7 +282,6 @@ const handleProjectSubmit = async (e) => {
         </div>
       </div>
 
-      {/* Quick Stats Row */}
       <div className="flex gap-4 mb-8">
          <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm flex-1">
             <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center"><LayoutGrid size={20}/></div>
@@ -309,7 +294,7 @@ const handleProjectSubmit = async (e) => {
             <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center"><ShoppingBag size={20}/></div>
             <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sales Leads</p>
-                <p className="text-xl font-black text-[#1B2559]">{projects.filter(p => p.projectCustomId?.startsWith('PRJ-')).length}</p>
+                <p className="text-xl font-black text-[#1B2559]">{projects.filter(p => p.projectCustomId?.includes('PRJ')).length}</p>
             </div>
          </div>
          <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm flex-1">
@@ -321,11 +306,10 @@ const handleProjectSubmit = async (e) => {
          </div>
       </div>
 
-      {/* Project Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {currentProjectSlice.map((project) => {
           const isExpanded = expandedProjects[project._id];
-          const isFromSales = project.projectCustomId?.startsWith('PRJ-');
+          const isFromSales = project.projectCustomId?.includes('PRJ');
 
           return (
             <div 
@@ -357,21 +341,24 @@ const handleProjectSubmit = async (e) => {
                     <h3 className="text-lg font-semibold text-[#1B2559] tracking-tight truncate max-w-[70%]">
                       {project.projectCustomId || 'NO_ID'}
                     </h3>
-
                     {isFromSales && (
                         <span className="bg-amber-100 text-amber-700 text-[8px] font-black uppercase px-2 py-1 rounded-lg tracking-widest border border-amber-200">
                             Sales
                         </span>
                     )}
-                  </div>
-                  <p className="text-[#A3AED0] font-bold text-sm tracking-tight mb-4">{project.name}</p>
-                  
+                  </div>  
                   <div className="flex flex-wrap gap-2">
                     <span className="flex items-center gap-1.5 text-[9px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-3 py-1.5 rounded-xl border border-blue-100">
                       <Briefcase size={10} /> {project.industry}
                     </span>
                     <span className="flex items-center gap-1.5 text-[9px] font-black text-slate-500 uppercase tracking-widest bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-100">
-                      <Globe size={10} /> {project.country}
+                      <Globe size={10} /> 
+                      {/* UPDATED: Lookup abbreviation for the badge */}
+                      {
+                        POPULAR_COUNTRIES.find(c => c.label === project.country)?.value || 
+                        (project.country?.length === 2 ? project.country : project.country?.substring(0, 2).toUpperCase()) || 
+                        'XX'
+                      }
                     </span>
                   </div>
                 </div>
@@ -446,7 +433,6 @@ const handleProjectSubmit = async (e) => {
         })}
       </div>
 
-      {/* --- PAGINATION CONTROLS --- */}
       {totalPages > 1 && (
         <div className="mt-12 flex justify-center items-center gap-3">
           <button 
@@ -483,7 +469,6 @@ const handleProjectSubmit = async (e) => {
         </div>
       )}
 
-      {/* --- MODALS --- */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
@@ -495,28 +480,26 @@ const handleProjectSubmit = async (e) => {
             </div>
             <form onSubmit={handleProjectSubmit} className="space-y-6">
               <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Title</label>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
                   <input type="text" placeholder="Title" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold" value={projectForm.name} onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} />
               </div>
               <div className="grid grid-cols-2 gap-6">
-                <CreatableSelect isClearable options={countryOptions} value={countryOptions.find(opt => opt.label === projectForm.country) || {label: projectForm.country, value: projectForm.country}} onChange={(v) => setProjectForm({...projectForm, country: v?.label || ''})} styles={customDropdownStyles} />
+                <CreatableSelect 
+                  isClearable 
+                  options={POPULAR_COUNTRIES} 
+                  placeholder="Select Country"
+                  // Value mapping to ensure dropdown shows Full Name while state might store code
+                  value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || {label: projectForm.country, value: projectForm.country}} 
+                  onChange={(v) => setProjectForm({...projectForm, country: v?.label || ''})} 
+                  styles={customDropdownStyles} 
+                />
                 <CreatableSelect isClearable options={industries} value={industries.find(opt => opt.value === projectForm.industry) || {label: projectForm.industry, value: projectForm.industry}} onChange={(v) => setProjectForm({...projectForm, industry: v?.value || ''})} styles={customDropdownStyles} />
               </div>
               <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}>
                 <option value="">Select Manager</option>
                 {projectManagers.map(pm => <option key={pm._id} value={pm._id}>{pm.name}</option>)}
               </select>
-              <div className="grid grid-cols-2 gap-3 p-4 bg-slate-50 rounded-2xl max-h-40 overflow-y-auto border border-slate-100">
-                {clients.map(client => (
-                  <label key={client._id} className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all ${projectForm.clients.includes(client._id) ? 'bg-blue-600 text-white' : 'bg-white text-slate-600 shadow-sm'}`}>
-                    <input type="checkbox" className="hidden" checked={projectForm.clients.includes(client._id)} onChange={(e) => {
-                      const selected = e.target.checked ? [...projectForm.clients, client._id] : projectForm.clients.filter(id => id !== client._id);
-                      setProjectForm({...projectForm, clients: selected});
-                    }} />
-                    <span className="text-[9px] font-black uppercase truncate">{client.name}</span>
-                  </label>
-                ))}
-              </div>
+             
               <button type="submit" className="w-full py-5 bg-[#111C44] text-white font-black rounded-2xl hover:bg-blue-600 transition-all uppercase text-xs tracking-widest shadow-xl">
                 {isEditing ? 'Save Changes' : 'Create Project'}
               </button>

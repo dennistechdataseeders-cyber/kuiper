@@ -9,7 +9,8 @@ import {
 import API_BASE_URL from '../config';
 import tips from '../data/salesTips';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';// Sub-component to handle individual card expansion state
+import { useNavigate } from 'react-router-dom';
+import CreatableSelect from 'react-select/creatable'; 
 const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal }) => {
   const [isExpanded, setIsExpanded] = useState(false);  
   
@@ -116,6 +117,7 @@ const SalesDashboard = () => {
   const [randomTip, setRandomTip] = useState("");
   const navigate = useNavigate(); // Add this line here
   const [generatedLeads, setGeneratedLeads] = useState([]);
+  const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [followUps, setFollowUps] = useState([]);
   const [feasibilityTasks, setFeasibilityTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -180,7 +182,6 @@ const SalesDashboard = () => {
     setShowActionModal(false);
     setShowFeasibilityModal(true);
   };
-  const [projectManagers, setProjectManagers] = useState([]);
   const getStatusStyle = (status) => {
     switch (status) {
       case 'Follow-up Scheduled': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
@@ -260,6 +261,17 @@ const fetchData = async () => {
       setLoading(false);
     }
 };
+  const [showProjectModal, setShowProjectModal] = useState(false);
+  const [projectManagers, setProjectManagers] = useState([]); // To populate the PM dropdown
+  const [projectForm, setProjectForm] = useState({
+    name: '',
+    clients: [],
+    projectManager: '',
+    description: '',
+    country: '',
+    industry: '',
+    organizationId: '' // Important for linking
+  });
   useEffect(() => {
     const fetchPMs = async () => {
         const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
@@ -315,7 +327,47 @@ useEffect(() => {
   const indexOfFirstLead = indexOfLastLead - leadsPerPage;
   const currentLeads = generatedLeads.slice(indexOfFirstLead, indexOfLastLead);
   const totalPages = Math.ceil(generatedLeads.length / leadsPerPage);
+  const POPULAR_COUNTRIES = [
+  { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
+  { label: "Australia", value: "AU" }, { label: "Brazil", value: "BR" }, { label: "Canada", value: "CA" },
+  { label: "China", value: "CN" }, { label: "France", value: "FR" }, { label: "Germany", value: "DE" },
+  { label: "India", value: "IN" }, { label: "Indonesia", value: "ID" }, { label: "Italy", value: "IT" },
+  { label: "Japan", value: "JP" }, { label: "Mexico", value: "MX" }, { label: "Netherlands", value: "NL" },
+  { label: "Nigeria", value: "NG" }, { label: "Pakistan", value: "PK" }, { label: "Russia", value: "RU" },
+  { label: "Saudi Arabia", value: "SA" }, { label: "Singapore", value: "SG" }, { label: "South Africa", value: "ZA" },
+  { label: "South Korea", value: "KR" }, { label: "Spain", value: "ES" }, { label: "Turkey", value: "TR" },
+  { label: "United Arab Emirates", value: "AE" }, { label: "United Kingdom", value: "GB" },
+  { label: "United States", value: "US" }, { label: "Vietnam", value: "VN" }
+];
 
+const INDUSTRY_OPTIONS = [
+  { label: "ECOM", value: "ECOM" },
+  { label: "FOOD", value: "FOOD" },
+  { label: "HTL", value: "HTL" },
+  { label: "TRVL", value: "TRVL" },
+  { label: "FNC", value: "FNC" },
+  { label: "SCLM", value: "SCLM" },
+  { label: "JOB", value: "JOB" },
+  { label: "AUTO", value: "AUTO" }
+];
+const customSelectStyles = {
+  control: (base) => ({
+    ...base,
+    padding: '8px',
+    borderRadius: '1rem',
+    border: '1px solid #f1f5f9',
+    backgroundColor: '#f8fafc',
+    fontWeight: 'bold',
+    boxShadow: 'none',
+    '&:hover': { border: '1px solid #e2e8f0' }
+  }),
+  option: (base, state) => ({
+    ...base,
+    backgroundColor: state.isFocused ? '#eff6ff' : 'white',
+    color: state.isFocused ? '#2563eb' : '#1e293b',
+    fontWeight: 'bold'
+  })
+};
   // Helper to change page
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
       const handleFeasibilitySubmit = async (e) => {
@@ -480,6 +532,22 @@ const handleApproachSubmit = async (e) => {
   }
 };
     const handleStatusUpdate = async (leadId, status, extraData = {}) => {
+      if (status === 'Production Ready') {
+          const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
+          setProjectForm({
+            name: selectedLead.companyName || '',
+            clients: [selectedLead.pocName || ''],
+            projectManager: defaultPM,
+            description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
+            country: selectedLead.country || '',
+            industry: selectedLead.industry || '',
+            organizationId: selectedLead.organizationId?._id || selectedLead.organizationId
+          });
+          
+          setShowProjectModal(true);
+          setShowActionModal(false);
+          return; // Exit here so no API call is made yet
+        }
       try {
         const token = localStorage.getItem('token');
         await axios.patch(`${API_BASE_URL}/api/leads/${leadId}/action`, {
@@ -501,7 +569,37 @@ const handleApproachSubmit = async (e) => {
       } finally {
         setSubmittingApproach(false);
       }
-    };
+    };  
+const handleProjectSubmit = async (e) => {
+  if (e) e.preventDefault();
+  if (isSubmittingProject) return;
+
+  try {
+    setIsSubmittingProject(true);
+    const token = localStorage.getItem('token');
+    
+    await axios.patch(
+      `${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
+      { 
+        status: 'Production Ready',
+        projectManagerId: projectForm.projectManager,
+        industry: projectForm.industry,
+        country: projectForm.country,
+        // CHANGE: Send the name clearly as projectBriefName
+        projectBriefName: projectForm.name 
+      }, 
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    toast.success("Project launched successfully!");
+    setShowProjectModal(false);
+    fetchData(); 
+  } catch (err) {
+    toast.error("Failed to launch project");
+  } finally {
+    setIsSubmittingProject(false);
+  }
+};
   return (
     <div className="lg:ml-64 md:ml-20 ml-0 p-4 md:p-6 lg:p-10 min-h-screen bg-blue-100 transition-all duration-300">
       <div className="max-w-[1600px] mx-auto">
@@ -1064,15 +1162,20 @@ const handleApproachSubmit = async (e) => {
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Available Managers</label>
+                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                      Assign Project Manager
+                    </label>
                     <select 
-                      value={selectedPM}
-                      onChange={(e) => setSelectedPM(e.target.value)}
-                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-emerald-500/20 appearance-none cursor-pointer"
+                      required
+                      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700"
+                      value={projectForm.projectManager}
+                      onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
                     >
-                      <option value="">Stay Unassigned (Move to Bucket)</option>
+                      <option value="">Select a Manager...</option>
                       {projectManagers.map(pm => (
-                        <option key={pm._id} value={pm._id}>{pm.name}</option>
+                        <option key={pm._id} value={pm._id}>
+                          {pm.name}
+                        </option>
                       ))}
                     </select>
                   </div>
@@ -1168,6 +1271,91 @@ const handleApproachSubmit = async (e) => {
           </div>
         </div>
       )}
+{/* PROJECT LAUNCH MODAL */}
+{showProjectModal && (
+  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[200] p-6">
+    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
+      <div className="flex justify-between items-center mb-10">
+        <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2>
+        <button onClick={() => setShowProjectModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors">
+          <X size={28} />
+        </button>
+      </div>
+
+     <form onSubmit={handleProjectSubmit} className="space-y-6">
+  {/* PROJECT TITLE */}
+  <div className="space-y-2">
+    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
+    <input 
+      type="text" required 
+      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700"
+      value={projectForm.name} 
+      onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} 
+    />
+  </div>
+
+  <div className="grid grid-cols-2 gap-6">
+    {/* INDUSTRY SELECTOR */}
+    <div className="space-y-2">
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label>
+      <CreatableSelect
+        isClearable
+        options={INDUSTRY_OPTIONS}
+        value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)}
+        onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })}
+        styles={customSelectStyles}
+        placeholder="Type or select..."
+      />
+    </div>
+
+    {/* COUNTRY SELECTOR */}
+    <div className="space-y-2">
+      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label>
+      <CreatableSelect
+        isClearable
+        options={POPULAR_COUNTRIES}
+        value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)}
+        onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })}
+        styles={customSelectStyles}
+        placeholder="Select country..."
+      />
+    </div>
+  </div>
+
+  {/* PROJECT MANAGER SELECTOR */}
+  <div className="space-y-2">
+    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label>
+    <select 
+      required
+      className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none"
+      value={projectForm.projectManager}
+      onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
+    >
+      <option value="">Select a Manager...</option>
+      {projectManagers.map(pm => (
+        <option key={pm._id} value={pm._id}>{pm.name}</option>
+      ))}
+    </select>
+  </div>
+
+ <button 
+  type="submit" 
+  disabled={isSubmittingProject}
+  className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${
+    isSubmittingProject ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'
+  }`}
+>
+  {isSubmittingProject ? (
+    <div className="flex items-center justify-center gap-2">
+      <Loader2 className="animate-spin" size={20} />
+      <span>Creating Project...</span>
+    </div>
+  ) : "Confirm & Create Project"}
+</button>
+</form>
+    </div>
+  </div>
+)}
       {/* --- APPROACH MODAL IN DASHBOARD --- */}
 {isApproachModalOpen && (
   <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left">

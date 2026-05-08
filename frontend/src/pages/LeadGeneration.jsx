@@ -5,6 +5,7 @@ import {
   Plus, X, Target, Phone, Mail, Clock, ChevronDown, 
   Globe, Filter, ChevronLeft, ChevronRight, UserPlus, Search, AlertCircle
 } from 'lucide-react';
+import API_BASE_URL from '../config';
 
 // Helper for formatting Lead IDs
 const formatId = (num, prefix = "LEAD") => {
@@ -154,7 +155,7 @@ const LeadGeneration = () => {
     referredBy: ''
   });
 
-  const API_BASE_URL = "http://192.168.1.5:5000";
+  // const API_BASE_URL = "http://192.168.1.5:5000";
 
   const fetchData = useCallback(async () => {
   setLoading(true);

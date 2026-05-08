@@ -103,7 +103,18 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
-
+const COUNTRY_MAP = {
+  "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
+  "Australia": "AU", "Brazil": "BR", "Canada": "CA", 
+  "China": "CN", "France": "FR", "Germany": "DE", 
+  "India": "IN", "Indonesia": "ID", "Italy": "IT", 
+  "Japan": "JP", "Mexico": "MX", "Netherlands": "NL", 
+  "Nigeria": "NG", "Pakistan": "PK", "Russia": "RU", 
+  "Saudi Arabia": "SA", "Singapore": "SG", "South Africa": "ZA", 
+  "South Korea": "KR", "Spain": "ES", "Turkey": "TR", 
+  "United Arab Emirates": "AE", "United Kingdom": "GB", 
+  "United States": "US", "Vietnam": "VN"
+};
 // --- PATCH: Take Action on a Lead ---
 router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), async (req, res) => {
   try {
@@ -143,41 +154,7 @@ router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), 
     }
 
     // --- CONVERSION TO PROJECT LOGIC (STEP 3: Lead → Project) ---
-    if (status === 'Production Ready') {
-      if (!projectManagerId) {
-        return res.status(400).json({ message: "Please select a Project Manager." });
-      }
-
-      // Check if project already exists
-      const existingProject = await Project.findOne({ leadId: lead._id });
-      
-      if (!existingProject) {
-        // Generate the correct project ID format: TDS0011-ECOM | AE | ProjectName
-        const projectCount = await Project.countDocuments();
-        const sequence = String(projectCount + 1).padStart(4, '0');
-        const upperIndustry = (lead.organizationId?.industry || 'General').toUpperCase();
-        const countryCode = (lead.organizationId?.country || lead.country || 'XX').substring(0, 2).toUpperCase();
-        const companyName = lead.organizationId?.companyName || `Project - ${lead.pocName}`;
-        
-        // Full formatted name: TDS0011-FOOD | AN | CompanyName
-        const fullName = `PRJ${sequence}-${upperIndustry} | ${countryCode} | ${companyName}`;
-
-        const newProject = await Project.create({
-          name: fullName,  // Store full formatted name
-          clients: lead.organizationId ? [lead.organizationId._id] : [],
-          projectManager: projectManagerId,
-          country: lead.organizationId?.country || lead.country || 'Not Specified',
-          industry: lead.organizationId?.industry || lead.industry || 'General',
-          leadId: lead._id,
-          projectCustomId: fullName,  // Same value
-          description: lastInteractionDesc || 'Converted from Lead Generation',
-          adminId: req.user._id
-        });
-
-        updateData.projectId = newProject._id;
-      }
-    }
-
+ 
     const updatedLead = await LeadGen.findByIdAndUpdate(
       leadId,
       { $set: updateData },
@@ -188,7 +165,43 @@ router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), 
     try {
       let actionType = 'LEAD_UPDATED';
       let logDetail = `Updated lead: ${lead.pocName}`;
+      // Inside router.patch('/:id/action', ...
+// Inside leadgenroutes.js -> router.patch('/:id/action')
+if (status === 'Production Ready') {
+  const existingProject = await Project.findOne({ leadId: lead._id });
+  
+  if (!existingProject) {
+    const projectCount = await Project.countDocuments();
+    const serialNumber = String(projectCount + 1).padStart(4, '0');
+    
+    const country = req.body.country || lead.country || 'Unknown';
+    const industry = req.body.industry || lead.industry || 'General';
+    
+    const countryCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
+    const industryCode = industry.toUpperCase().substring(0, 4);
+    
+    // CHANGE: Use the specific brief name from the frontend
+    const briefName = req.body.projectBriefName || lead.organizationId?.companyName || "New Project";
+    
+    // RESULT: TDS0001-ECOM | AE | Books Data Extraction
+    const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${briefName}`;
 
+    const newProject = await Project.create({
+      name: fullFormattedName,
+      projectCustomId: fullFormattedName,
+      clients: lead.organizationId ? [lead.organizationId._id] : [],
+      projectManager: projectManagerId,
+      country: country,
+      industry: industry,
+      leadId: lead._id,
+      description: `Launched: ${briefName}`,
+      adminId: req.user._id
+    });
+
+    updateData.projectId = newProject._id;
+    updateData.lastInteractionDesc = `Project Created: ${fullFormattedName}`;
+  }
+}
       if (status === 'Follow-up Scheduled') {
         actionType = 'FOLLOW_UP_SET';
         logDetail = `Scheduled ${followUpType} follow-up for ${lead.pocName} on ${followUpDate}`;

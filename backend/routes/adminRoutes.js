@@ -233,36 +233,57 @@ router.get('/projects', authorize('Admin', 'Project Manager'), async (req, res) 
   }
 });
 
-router.post('/projects', authorize('Admin', 'Project Manager'), async (req, res) => {
-  try {
-    const { name, clients, description, adminId, country, industry, projectManager } = req.body;
+// Replace the POST '/projects' route in your adminRoutes.js with this:
 
+const COUNTRY_MAP = {
+  "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
+  "Australia": "AU", "Brazil": "BR", "Canada": "CA", 
+  "China": "CN", "France": "FR", "Germany": "DE", 
+  "India": "IN", "Indonesia": "ID", "Italy": "IT", 
+  "Japan": "JP", "Mexico": "MX", "Netherlands": "NL", 
+  "Nigeria": "NG", "Pakistan": "PK", "Russia": "RU", 
+  "Saudi Arabia": "SA", "Singapore": "SG", "South Africa": "ZA", 
+  "South Korea": "KR", "Spain": "ES", "Turkey": "TR", 
+  "United Arab Emirates": "AE", "United Kingdom": "GB", 
+  "United States": "US", "Vietnam": "VN"
+};
+
+router.post('/projects', authorize('Admin', 'Project Manager','Sales'), async (req, res) => {
+  try {
+    const { name, clients, description, country, industry, projectManager } = req.body;
+
+    // 1. Generate Serial Number
     const projectCount = await Project.countDocuments();
-    const sequence = String(projectCount + 1).padStart(4, '0');
-    const upperName = name.toUpperCase();
-    const upperIndustry = industry.toUpperCase();
-    const formattedCountry = country.toUpperCase().replace(/\s+/g, "-");
-    const customId = `TDS${sequence}-${upperIndustry} | ${formattedCountry} | ${upperName}`;
+    const serialNumber = String(projectCount + 1).padStart(4, '0');
+    
+    // 2. Get 2-letter Country Code
+    const countryCode = COUNTRY_MAP[country] || (country ? country.substring(0, 2).toUpperCase() : 'XX');
+    
+    // 3. Get 4-letter Industry Code (uppercase)
+    const industryCode = (industry || 'GEN').toUpperCase().substring(0, 4);
+    
+    // 4. Format: TDS0011-ECOM | AE | Books Data Extraction
+    const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${name}`;
 
     const newProject = new Project({
-      name,
+      name: fullFormattedName,              // Full formatted name
       clients,
       description,
-      adminId: req.user._id, // always use the logged-in user, not the body
+      adminId: req.user._id,
       projectManager: projectManager || (req.user.role === 'Project Manager' ? req.user._id : null),
       country,
       industry,
-      projectCustomId: customId
+      projectCustomId: fullFormattedName    // Same formatted name
     });
 
     await newProject.save();
 
-    // FIX 3: Log the project creation with the correct performerId
+    // Log creation
     try {
       await Log.create({
         actionType: 'PROJECT_CREATED',
-        performerId: req.user._id, // always the logged-in user
-        details: `Created project: ${name} [${customId}] (By ${req.user.role})`,
+        performerId: req.user._id,
+        details: `Created project: ${name} [${fullFormattedName}] (By ${req.user.role})`,
         timestamp: new Date()
       });
     } catch (logErr) {
@@ -274,7 +295,6 @@ router.post('/projects', authorize('Admin', 'Project Manager'), async (req, res)
     res.status(500).json({ error: err.message });
   }
 });
-
 router.put('/projects/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const updatedProject = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true });
