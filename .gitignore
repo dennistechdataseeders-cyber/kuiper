@@ -23,6 +23,7 @@ obj/
 .env
 *.local
 google-drive-key.json
+app_planning.txt
 
 # Editor directories and files
 .vscode/*

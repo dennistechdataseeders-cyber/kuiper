@@ -51,7 +51,7 @@ const Sidebar = () => {
 
         <div className={`px-4 py-4 mb-8 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] backdrop-blur-xl border border-white/10 shadow-[0_0_30px_rgba(59,130,246,0.08)] transition-all duration-500 ease-in-out ${isExpanded ? "opacity-100 translate-y-0" : "opacity-0 -translate-y-3 h-0 overflow-hidden p-0 mb-0"}`}>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400 mb-2">User : {userName}</p>
-          <span className="inline-block text-[10px] px-17 py-1 rounded-lg font-semibold uppercase tracking-wide bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300 border border-blue-400/20 shadow-[0_0_12px_rgba(59,130,246,0.2)] transition-all duration-300 hover:shadow-[0_0_18px_rgba(59,130,246,0.35)] hover:scale-105">
+          <span className="inline-block text-[10px] px-10 py-1 rounded-lg font-semibold uppercase tracking-wide bg-gradient-to-r from-blue-500/20 to-purple-500/20 text-blue-300 border border-blue-400/20 shadow-[0_0_12px_rgba(59,130,246,0.2)] transition-all duration-300 hover:shadow-[0_0_18px_rgba(59,130,246,0.35)] hover:scale-105">
             {userRole}
           </span>
         </div>

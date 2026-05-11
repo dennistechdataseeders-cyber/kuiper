@@ -4,15 +4,19 @@ import * as XLSX from 'xlsx';
 import { 
   FileSpreadsheet, Search, Loader2, Plus, X, 
   PackageSearch, RefreshCcw, Database, Layers, 
-  ChevronLeft, ChevronRight, User, Building2, Filter, 
-  UserCheck, Briefcase, Mail, Phone, ExternalLink 
+  ChevronLeft, ChevronRight, Building2, Filter, 
+  Mail, Send, ChevronDown, ChevronUp, Calendar, 
+  CheckCircle2, Clock, Trash2, AlertCircle
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API_BASE_URL from '../config';
 
 const Prospects = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Core State
   const [prospects, setProspects] = useState([]);
   const [bucketCount, setBucketCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -20,27 +24,47 @@ const Prospects = () => {
   const [fetchingBucket, setFetchingBucket] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All"); 
-  
+  const [expandedRow, setExpandedRow] = useState(null); 
+
+  // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // Approach Modal State
+  const [isApproachModalOpen, setIsApproachModalOpen] = useState(false);
+  const [selectedProspect, setSelectedProspect] = useState(null);
+  const [approachData, setApproachData] = useState({ method: 'Email', summary: '' });
+  const [submittingApproach, setSubmittingApproach] = useState(false);
+
+  // Close Prospect Modal State
+  const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState("");
+  const [isClosing, setIsClosing] = useState(false);
+
+  // General Modals
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [newProspect, setNewProspect] = useState({ 
+    companyName: '', pocName: '', pocEmail: '', 
+    industry: '', pocContact: '', pocLinkedin: '', sector:''
+  });
+
+  // Role Logic
+  const userRole = localStorage.getItem('role');
+  const isSM = userRole === 'Sales Manager' || userRole === 'Admin';
+
   const formatId = (num, prefix = "LEAD") => {
     if (!num) return `${prefix}---`;
     return `${prefix}${String(num).padStart(4, '0')}`;
   };
-  const userRole = localStorage.getItem('role');
-  const isSM = userRole === 'Sales Manager' || userRole === 'Admin';
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProspect, setNewProspect] = useState({ 
-    companyName: '', 
-    pocName: '', 
-    pocEmail: '', 
-    industry: '',
-    pocContact: '',
-    pocLinkedin: '',
-    sector:''
-  });
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+    if (location.state?.openApproachFor) {
+      setSelectedProspect(location.state.openApproachFor);
+      setIsApproachModalOpen(true); 
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -71,147 +95,133 @@ const Prospects = () => {
   const handleFetchBucket = async () => {
     setFetchingBucket(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/prospects/fetch-bucket`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       toast.success(res.data.message);
       fetchData();
     } catch (err) {
-      const errorMessage = err.response?.data?.details || err.response?.data?.message || "Server error";
-      toast.error(`Error: ${errorMessage}`);
+      toast.error(err.response?.data?.message || "Server error");
     } finally {
       setFetchingBucket(false);
     }
   };
 
- const handleFileUpload = (e) => {
+  const handleApproachSubmit = async (e) => {
+    e.preventDefault();
+    if (!approachData.summary) return toast.error("Please provide a summary");
+    setSubmittingApproach(true);
+    try {
+      const stepToUpdate = (selectedProspect.status !== 'Approached') ? 0 : (selectedProspect.currentFollowUpStep || 0);
+      await axios.put(`${API_BASE_URL}/api/prospects/approach/${selectedProspect._id}`, {
+        ...approachData,
+        step: stepToUpdate 
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }});
+      
+      toast.success("Action recorded!");
+      setIsApproachModalOpen(false);
+      setApproachData({ method: 'Email', summary: '' });
+      fetchData();
+    } catch (err) { 
+      toast.error("Failed to update approach"); 
+    } finally {
+      setSubmittingApproach(false);
+    }
+  };
+
+  const handleCloseSubmit = async (e) => {
+    e.preventDefault();
+    if (!closeReason) return toast.error("Please provide a reason for closing.");
+    setIsClosing(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/prospects/close/${selectedProspect._id}`, {
+        reason: closeReason
+      }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }});
+      
+      toast.success("Prospect moved to No Response");
+      setIsCloseModalOpen(false);
+      setCloseReason("");
+      setExpandedRow(null);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to close prospect");
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  const handleFileUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
     setImporting(true);
-
     const reader = new FileReader();
     reader.onload = async (event) => {
-        try {
+      try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' });
         const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+        const validData = rawData.filter(row => row.pocEmail || row.pocContact || row.pocLinkedin);
+        
+        if (validData.length === 0) return toast.error("No valid records found.");
 
-        // --- NEW FILTERING LOGIC ---
-        const validData = rawData.filter(row => {
-            // We check for common variants of keys (e.g., lowercase or spaces) 
-            // depending on your Excel headers
-            const email = row.pocEmail || row.email || row.Email;
-            const contact = row.pocContact || row.phone || row.Contact;
-            const linkedin = row.pocLinkedin || row.linkedin || row.LinkedIn;
-
-            return !!(email || contact || linkedin);
+        await axios.post(`${API_BASE_URL}/api/prospects/bulk-import`, validData, {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-
-        const skippedCount = rawData.length - validData.length;
-        if (skippedCount > 0) {
-            toast.error(`Skipped ${skippedCount} records missing contact info.`, { duration: 4000 });
-        }
-
-        if (validData.length === 0) {
-            setImporting(false);
-            return toast.error("No valid records found in file.");
-        }
-        // ----------------------------
-
-        const token = localStorage.getItem('token');
-        const CHUNK_SIZE = 1000;
-        let total = 0;
-
-        for (let i = 0; i < validData.length; i += CHUNK_SIZE) {
-            const chunk = validData.slice(i, i + CHUNK_SIZE);
-            const res = await axios.post(`${API_BASE_URL}/api/prospects/bulk-import`, chunk, {
-            headers: { Authorization: `Bearer ${token}` }
-            });
-            total += res.data.count;
-            toast.loading(`Importing: ${total} / ${validData.length}`, { id: 'up-status' });
-        }
-
-        toast.success(`Import Complete! ${total} records added.`, { id: 'up-status' });
+        toast.success("Import Complete!");
         fetchData();
-        } catch (err) { 
-        toast.error("Import encountered an error", { id: 'up-status' }); 
-        } finally { 
-        setImporting(false); 
-        e.target.value = null; 
-        }
+      } catch (err) { toast.error("Import failed"); }
+      finally { setImporting(false); e.target.value = null; }
     };
     reader.readAsBinaryString(file);
-    };
+  };
 
- const handleSingleSubmit = async (e) => {
+  const handleSingleSubmit = async (e) => {
     e.preventDefault();
-
-    // Validation: Check if at least one contact method is present
-    const { pocEmail, pocContact, pocLinkedin } = newProspect;
-    if (!pocEmail && !pocContact && !pocLinkedin) {
-      return toast.error("Please provide at least one contact method (Email, Phone, or LinkedIn)");
-    }
-
     try {
       await axios.post(`${API_BASE_URL}/api/prospects`, newProspect, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      toast.success("Added to Global Inventory");
+      toast.success("Added successfully");
       setIsModalOpen(false);
-      // Reset form
-      setNewProspect({ 
-        companyName: '', pocName: '', pocEmail: '', 
-        industry: '', pocContact: '', pocLinkedin: '' 
-      });
+      setNewProspect({ companyName: '', pocName: '', pocEmail: '', industry: '', pocContact: '', pocLinkedin: '' });
       fetchData();
-    } catch (err) { 
-        const msg = err.response?.data?.error || "Error adding prospect";
-        toast.error(msg); 
-    }
+    } catch (err) { toast.error(err.response?.data?.error || "Error adding prospect"); }
   };
-  const [expandedRows, setExpandedRows] = useState(new Set());
 
-    const toggleRow = (id) => {
-    const newExpandedRows = new Set(expandedRows);
-    if (newExpandedRows.has(id)) {
-        newExpandedRows.delete(id);
-    } else {
-        newExpandedRows.add(id);
-    }
-    setExpandedRows(newExpandedRows);
-    };
+  const toggleRow = (id) => setExpandedRow(expandedRow === id ? null : id);
+
+  const formatDate = (dateInput) => {
+    if (!dateInput) return 'N/A';
+    const date = new Date(dateInput.$date || dateInput); 
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const filtered = prospects.filter(p => {
-    const matchesSearch = 
-      p.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      p.pocName?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+    const matchesSearch = p.companyName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          p.pocName?.toLowerCase().includes(searchTerm.toLowerCase());
     if (statusFilter === "Assigned") return matchesSearch && p.salesRepId && !p.organizationId;
+    if (statusFilter === "Approached") return matchesSearch && p.status === "Approached";
     if (statusFilter === "Org Created") return matchesSearch && p.organizationId && !p.leadId;
     if (statusFilter === "Lead Generated") return matchesSearch && p.leadId;
     return matchesSearch;
   });
-  
-  const indexOfLastItem = currentPage * itemsPerPage;
-  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentItems = filtered.slice(indexOfFirstItem, indexOfLastItem);
+
+  const currentItems = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
   const isContactInfoProvided = !!(newProspect.pocEmail || newProspect.pocContact || newProspect.pocLinkedin);
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
   useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter]);
 
   return (
     <div className="lg:ml-64 p-8 min-h-screen bg-blue-100">
-      {/* HEADER SECTION */}
+      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start mb-10 gap-6">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">
             {isSM ? "Master Inventory" : "My Workspace"}
           </h1>
-          <p className="text-slate-500 font-medium mt-1">
-            {isSM ? "Manage and monitor global prospect flow." : "Claim and convert leads to organizations."}
-          </p>
+          <p className="text-slate-500 font-medium mt-1">Track and manage your prospect outreach steps.</p>
         </div>
-
+        
         <div className="flex flex-wrap gap-4 items-center">
           {!isSM && (
             <div className="bg-white px-6 py-3 rounded-2xl border border-emerald-100 flex items-center gap-4 shadow-sm">
@@ -247,14 +257,62 @@ const Prospects = () => {
         </div>
       </div>
 
-      {/* SEARCH & FILTERS */}
+      {/* Search & Filter */}
+      <div className=" flex flex-col md:flex-row justify-between items-center mt-6 px-4 gap-4">
+        <p className="text-sm font-bold text-slate-500">
+          Showing <span className="text-slate-900">{currentItems.length}</span> of <span className="text-slate-900">{filtered.length}</span> prospects
+        </p>
+        
+        <div className="flex items-center gap-2 py-5">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="p-3 bg-white rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <ChevronLeft size={20} />
+          </button>
+
+          <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-sm">
+            {[...Array(totalPages)].map((_, i) => {
+              const pageNum = i + 1;
+              // Only show first, last, and pages around current to avoid clutter
+              if (pageNum === 1 || pageNum === totalPages || (pageNum >= currentPage - 1 && pageNum <= currentPage + 1)) {
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-10 h-10 rounded-lg text-sm font-black transition-all ${
+                      currentPage === pageNum 
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' 
+                        : 'text-slate-400 hover:bg-slate-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              } else if (pageNum === currentPage - 2 || pageNum === currentPage + 2) {
+                return <span key={pageNum} className="px-1 text-slate-300">...</span>;
+              }
+              return null;
+            })}
+          </div>
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages || totalPages === 0}
+            className="p-3 bg-white rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all shadow-sm"
+          >
+            <ChevronRight size={20} />
+          </button>
+        </div>
+      </div>
       <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="relative flex-1 group">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-600 transition-colors" size={20} />
+        <div className="relative flex-1 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center px-6">
+          <Search className="text-slate-400" size={20} />
           <input 
             type="text" 
             placeholder="Search company or contact..." 
-            className="w-full pl-16 pr-8 py-5 bg-white rounded-2xl shadow-sm border border-slate-100 outline-none font-medium text-slate-800 focus:border-blue-500 transition-all" 
+            className="w-full py-5 px-4 outline-none font-medium text-slate-800" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
           />
@@ -263,321 +321,256 @@ const Prospects = () => {
         <div className="relative min-w-[220px]">
             <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <select 
-              className="w-full pl-12 pr-8 py-5 bg-white rounded-2xl shadow-sm border border-slate-100 outline-none font-bold text-slate-700 appearance-none cursor-pointer focus:border-blue-500 transition-all"
+              className="w-full pl-12 pr-8 py-5 bg-white rounded-2xl shadow-sm border border-slate-100 outline-none font-bold text-slate-700 appearance-none cursor-pointer"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
             >
               <option value="All">All Status</option>
               <option value="Assigned">Assigned</option>
+              <option value="Approached">Approached</option>
               <option value="Org Created">Created Org</option>
               <option value="Lead Generated">Lead Generated</option>
             </select>
         </div>
       </div>
 
-      {/* TABLE SECTION */}
-     {/* REFINED TABLE SECTION */}
-<div className="bg-white/70 backdrop-blur-md rounded-[2rem] shadow-xl shadow-blue-900/5 border border-white overflow-hidden mb-6">
-  <div className="overflow-x-auto">
-    <table className="w-full text-left border-separate border-spacing-0">
-      <thead>
-        <tr className="bg-slate-50/80">
-          <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Company Details</th>
-          <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Contact Info</th>
-          {isSM && <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Assignee</th>}
-          <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100 text-center">Status</th>
-          <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-[0.15em] border-b border-slate-100">Lead ID</th>
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-slate-50">
-        {loading ? (
-          <tr><td colSpan={isSM ? "5" : "4"} className="p-24 text-center"><Loader2 className="animate-spin mx-auto text-blue-500" size={40}/></td></tr>
-        ) : currentItems.length === 0 ? (
-          <tr><td colSpan={isSM ? "5" : "4"} className="p-24 text-center font-bold text-slate-400">No prospects available in this view.</td></tr>
-        ) : currentItems.map((item) => {
-            const isExpanded = expandedRows.has(item._id);
-          // Status Logic
-          let statusLabel = "Available";
-          let statusStyle = "bg-emerald-100 text-emerald-700 border-emerald-200";
-          if (item.leadId) {
-            statusLabel = "Lead Gen";
-            statusStyle = "bg-blue-100 text-blue-700 border-blue-200";
-          } else if (item.organizationId) {
-            statusLabel = "Org Created";
-            statusStyle = "bg-violet-100 text-violet-700 border-violet-200";
-          } else if (item.salesRepId) {
-            statusLabel = "Assigned";
-            statusStyle = "bg-amber-100 text-amber-700 border-amber-200";
-          }
+      <div className="bg-white/70 backdrop-blur-md rounded-[2rem] shadow-xl border border-white overflow-hidden mb-6">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-separate border-spacing-0">
+            <thead>
+              <tr className="bg-slate-50/80">
+                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest border-b">Company Details</th>
+                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest border-b">Contact</th>
+                {isSM && <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest border-b">Assignee</th>}
+                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest border-b">Lead ID</th>
+                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest border-b text-center">Status</th>
+                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest border-b text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {currentItems.map((item) => {
+                let displayStatus = item.status;
+                let statusStyle = "bg-emerald-50 text-emerald-600 border-emerald-100";
+                
+                if (item.leadId) {
+                    displayStatus = "Lead Generated";
+                    statusStyle = "bg-blue-50 text-blue-600 border-blue-100";
+                } else if (item.organizationId) {
+                    displayStatus = "Org Created";
+                    statusStyle = "bg-violet-50 text-violet-600 border-violet-100";
+                } else if (item.status === 'Approached') {
+                    statusStyle = "bg-orange-50 text-orange-600 border-orange-100";
+                }
 
-          return (
-            <tr key={item._id} className="group hover:bg-blue-50/50 transition-all duration-200">
-              {/* Company Column */}
-              <td className="px-8 py-6 relative">
-                <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-600 scale-y-0 group-hover:scale-y-100 transition-transform duration-200 rounded-r-full" />
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 group-hover:from-blue-500 group-hover:to-blue-600 group-hover:text-white group-hover:border-blue-400 transition-all duration-300 shadow-sm">
-                    <Building2 size={20} />
-                  </div>
-                  <div>
-                    <p className="font-bold text-slate-900 text-base mb-0.5">{item.companyName}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold uppercase tracking-wider">
-                        {item.sector || item.industry || 'General'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </td>
-
-            {/* Contact Column */}
-            <td className="px-8 py-6">
-              <div className="flex flex-col gap-2">
-                {/* POC Name - Primary focus */}
-                <div className="flex items-center gap-2 text-slate-900 font-bold text-sm">
-                  <User size={14} className="text-blue-500" />
-                  {item.pocName || 'Unknown POC'}
-                </div>
-
-                {/* Contact Details - Structured list */}
-                <div className="space-y-1.5">
-                  {/* Email Row */}
-                  {item.pocEmail ? (
-                    <a 
-                      href={`mailto:${item.pocEmail}`} 
-                      className="flex items-center gap-2 text-[12px] text-slate-500 hover:text-blue-600 transition-colors group/link"
-                    >
-                      <div className="p-1 bg-slate-100 rounded group-hover/link:bg-blue-100 transition-colors">
-                        <Mail size={12} className="text-slate-400 group-hover/link:text-blue-600" />
+                return (
+                <React.Fragment key={item._id}>
+                  <tr className={`group transition-all ${expandedRow === item._id ? 'bg-blue-50/80' : 'hover:bg-blue-50/30'}`}>
+                    <td className="px-8 py-6 cursor-pointer" onClick={() => toggleRow(item._id)}>
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-center">
+                          {expandedRow === item._id ? <ChevronUp size={16} className="text-blue-600"/> : <ChevronDown size={16} className="text-slate-400"/>}
+                        </div>
+                        <div className="w-10 h-10 rounded-xl bg-white border flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-colors">
+                          <Building2 size={18} />
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">{item.companyName}</p>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{item.industry || 'General'}</span>
+                        </div>
                       </div>
-                      <span className="truncate max-w-[180px]">{item.pocEmail}</span>
-                    </a>
-                  ) : (
-                    <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
-                      <Mail size={10} /> No Email
-                    </span>
-                  )}
+                    </td>
 
-                  {/* NEW: Phone/Contact Row */}
-                  {item.pocPhone ? (
-                    <div className="flex items-center gap-2 text-[12px] text-slate-500">
-                      <div className="p-1 bg-slate-100 rounded">
-                        <Phone size={12} className="text-slate-400" />
+                    <td className="px-8 py-6">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-bold text-slate-700">{item.pocName}</span>
+                        <span className="text-xs text-slate-400">{item.pocEmail}</span>
                       </div>
-                      <span>{item.pocPhone}</span>
-                    </div>
-                  ) : (
-                    <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
-                      <Phone size={10} /> No Phone
-                    </span>
-                  )}
-                  
-                  {/* NEW: LinkedIn Row */}
-                  {item.linkedin ? (
-                    <a 
-                      href={item.linkedin} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="flex items-center gap-2 text-[12px] text-slate-500 hover:text-blue-700 transition-colors group/link"
-                    >
-                      <div className="p-1 bg-slate-100 rounded group-hover/link:bg-blue-100">
-                        <ExternalLink size={12} className="text-slate-400 group-hover/link:text-blue-700" />
-                      </div>
-                      <span className="font-medium underline decoration-slate-200 underline-offset-2">{item.linkedin}</span>
-                    </a>
-                  ) : (
-                    <span className="text-[11px] text-slate-300 italic flex items-center gap-2 ml-1">
-                      <ExternalLink size={10} /> No LinkedIn
-                    </span>
-                  )}
-                </div>
-              </div>
-            </td>
+                    </td>
 
-              {/* Assignee Column (SM only) */}
-              {isSM && (
-                <td className="px-8 py-6">
-                  <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-xl border ${item.salesRepId ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-50 border-dashed border-slate-300'}`}>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center ${item.salesRepId ? 'bg-blue-100 text-blue-600' : 'bg-slate-200 text-slate-400'}`}>
-                      <User size={12} />
-                    </div>
-                    <span className={`text-xs font-bold ${item.salesRepId ? 'text-slate-700' : 'text-slate-400 italic'}`}>
-                      {item.salesRepId?.name || 'Waiting...'}
-                    </span>
-                  </div>
-                </td>
-              )}
-
-              {/* Status Column */}
-              <td className="px-8 py-6 text-center">
-                <span className={`inline-block min-w-[100px] px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border-2 shadow-sm ${statusStyle}`}>
-                  {statusLabel}
-                </span>
-              </td>
-
-              {/* Action Column */}
-              {/* Add this <td> inside your currentItems.map row */}
-              <td className="px-8 py-6">
-                {item.leadId ? (
-                  <div className="flex flex-col">
-                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md border border-blue-100 inline-block w-fit">
-                      {formatId(item.leadId.leadNumber)}
-                    </span>
-                    {/* Optional: Show date or source if available */}
-                    <span className="text-[9px] text-slate-400 font-medium mt-1 ml-1 uppercase"></span>
-                  </div>
-                ) : (
-                  <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest ml-2">
-                    Not Linked
-                  </span>
-                )}
-              </td>
-                      {/* Action Column */}
-              <td className="px-8 py-6 text-right">
-                {isSM ? (
-                  <div className="w-10" /> // Admin/SM just monitors
-                ) : (
-                  <div className="flex justify-end">
-                    {item.leadId ? (
-                      /* STAGE 3: Lead already exists */
-                      <div className="flex items-center gap-2 text-emerald-500 bg-emerald-50 px-4 py-2 rounded-xl border border-emerald-100">
-                        <UserCheck size={16} />
-                        <span className="text-xs font-black uppercase tracking-widest">Lead Gen Done</span>
-                      </div>
-                    ) : item.organizationId ? (
-                      /* STAGE 2: Org exists, need to generate Lead */
-                      <button 
-                        onClick={() => navigate('/sales/lead_generation', { 
-                          state: { prospect: item } 
-                        })}
-                        className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg bg-blue-600 text-white hover:bg-blue-700 shadow-blue-200 active:scale-95"
-                      >
-                        Generate Lead
-                        <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-                      </button>
-                    ) : (
-                      /* STAGE 1: Raw Prospect, need to convert to Org first */
-                      <button 
-                        onClick={() => navigate('/sales/add_org', { 
-                          state: { convertedLead: item } 
-                        })}
-                        className="group/btn flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-lg bg-slate-900 text-white hover:bg-blue-600 shadow-slate-200 active:scale-95"
-                      >
-                        Convert to Org
-                        <ChevronRight size={14} className="group-hover/btn:translate-x-1 transition-transform" />
-                      </button>
+                    {isSM && (
+                      <td className="px-8 py-6">
+                         <span className="text-xs font-bold text-slate-700">{item.salesRepId?.name || 'Unassigned'}</span>
+                      </td>
                     )}
-                  </div>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
-  </div>
-</div>
 
-      {/* PAGINATION SECTION */}
-      {totalPages > 1 && (
-        <div className="flex justify-between items-center bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            Page {currentPage} of {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <button onClick={() => paginate(currentPage - 1)} disabled={currentPage === 1} className="p-2 rounded-lg border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-all">
-              <ChevronLeft size={16} />
-            </button>
-            <button onClick={() => paginate(currentPage + 1)} disabled={currentPage === totalPages} className="p-2 rounded-lg border border-slate-200 disabled:opacity-30 hover:bg-slate-50 transition-all">
-              <ChevronRight size={16} />
-            </button>
+                    <td className="px-8 py-6">
+                      {item.leadId ? (
+                        <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md border border-blue-100">
+                          {formatId(item.leadId.leadNumber)}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Not Linked</span>
+                      )}
+                    </td>
+
+                    <td className="px-8 py-6 text-center">
+                      <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 ${statusStyle}`}>
+                        {displayStatus}
+                      </span>
+                    </td>
+
+                    <td className="px-8 py-6 text-right">
+                      <div className="flex justify-end gap-2">
+                        {!isSM && !item.leadId && (
+                          <button 
+                            onClick={() => { setSelectedProspect(item); setIsApproachModalOpen(true); }}
+                            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all"
+                          >
+                            {item.status === 'Approached' ? 'Follow Up' : 'Approach'}
+                          </button>
+                        )}
+
+                        {!isSM && (
+                          item.organizationId ? (
+                            !item.leadId && (
+                                <button 
+                                onClick={() => navigate('/sales/lead_generation', { state: { prospect: item } })}
+                                className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all"
+                                >
+                                Generate Lead
+                                </button>
+                            )
+                          ) : (
+                            !item.leadId && (
+                              <button 
+                                onClick={() => navigate('/sales/add_org', { state: { convertedLead: item } })}
+                                className="px-4 py-2 bg-white border-2 border-slate-900 text-slate-900 rounded-xl text-[10px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center gap-1"
+                              >
+                                <RefreshCcw size={12}/> Convert
+                              </button>
+
+                            )
+                          )
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+
+                  {expandedRow === item._id && (
+                    <tr>
+                      <td colSpan={isSM ? "6" : "5"} className="px-12 py-8 bg-slate-50/50 border-b border-slate-100">
+                        <div className="max-w-5xl">
+                          <div className="flex justify-between items-center mb-6">
+                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <Layers size={14} /> Approach History & Pipeline
+                            </h4>
+                            {/* CLOSE PROSPECT BUTTON */}
+                            {!isSM && !item.leadId && (
+                                <button 
+                                    onClick={() => { setSelectedProspect(item); setIsCloseModalOpen(true); }}
+                                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase border-2 border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all"
+                                >
+                                    <Trash2 size={12}/> Close Prospect
+                                </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {item.approaches?.map((appr, idx) => (
+                              <div key={idx} className={`p-4 rounded-2xl border-2 transition-all ${appr.status === 'Completed' ? 'bg-white border-emerald-100 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                                <div className="flex justify-between items-start mb-3">
+                                  <div className={`p-2 rounded-lg ${appr.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                                    {appr.status === 'Completed' ? <CheckCircle2 size={16}/> : <Clock size={16}/>}
+                                  </div>
+                                  <span className="text-[9px] font-black bg-slate-100 px-2 py-0.5 rounded uppercase text-slate-500">Step {appr.step}</span>
+                                </div>
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduled For</p>
+                                <p className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
+                                  <Calendar size={12} className="text-blue-500"/> {formatDate(appr.scheduledDate)}
+                                </p>
+                                {appr.status === 'Completed' && (
+                                  <div className="mt-2 pt-2 border-t border-slate-100">
+                                    <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{appr.method}</span>
+                                    <p className="text-xs italic text-slate-600 mt-2 line-clamp-2">"{appr.summary}"</p>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )})}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* MODAL: CLOSE PROSPECT */}
+      {isCloseModalOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 relative">
+            <button onClick={() => setIsCloseModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600"><X size={24} /></button>
+            <div className="flex flex-col items-center text-center mb-6">
+                <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-4 border-2 border-red-100">
+                    <AlertCircle size={32} />
+                </div>
+                <h2 className="text-2xl font-black text-slate-800">Close Prospect?</h2>
+                <p className="text-slate-500 text-sm mt-1 font-medium">This will move {selectedProspect?.companyName} to the 'No Response' archive.</p>
+            </div>
+            
+            <form onSubmit={handleCloseSubmit} className="space-y-6">
+              <textarea 
+                required 
+                rows="4" 
+                className="w-full p-5 bg-slate-50 rounded-2xl outline-none text-slate-700 font-medium border-2 border-transparent focus:border-red-100 transition-all" 
+                placeholder="Why are you closing this prospect? (e.g., Not interested, Wrong number, No response after 5 steps)" 
+                value={closeReason} 
+                onChange={(e) => setCloseReason(e.target.value)} 
+              />
+              <div className="flex gap-3">
+                  <button type="button" onClick={() => setIsCloseModalOpen(false)} className="flex-1 p-5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase hover:bg-slate-200 transition-all">Cancel</button>
+                  <button type="submit" disabled={isClosing} className="flex-2 px-10 p-5 bg-red-600 text-white rounded-2xl font-black uppercase hover:bg-red-700 flex items-center justify-center gap-3 shadow-lg shadow-red-100 transition-all">
+                    {isClosing ? <Loader2 className="animate-spin"/> : "Close Account"}
+                  </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
 
-      
-   {/* ADD SINGLE PROSPECT MODAL */}
+      {/* MODAL: APPROACH */}
+      {isApproachModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative">
+            <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600"><X size={24} /></button>
+            <h2 className="text-2xl font-black text-slate-800 mb-2">Record Approach</h2>
+            <form onSubmit={handleApproachSubmit} className="space-y-6 mt-4">
+              <div className="grid grid-cols-2 gap-3">
+                {['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((m) => (
+                  <button key={m} type="button" onClick={() => setApproachData({...approachData, method: m})}
+                    className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${approachData.method === m ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
+                  > {m} </button>
+                ))}
+              </div>
+              <textarea required rows="4" className="w-full p-5 bg-slate-50 rounded-2xl outline-none text-slate-700 font-medium" 
+                placeholder="What was the outcome?" value={approachData.summary} onChange={(e) => setApproachData({...approachData, summary: e.target.value})} />
+              <button type="submit" disabled={submittingApproach} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase hover:bg-blue-600 flex items-center justify-center gap-3">
+                {submittingApproach ? <Loader2 className="animate-spin"/> : <Send size={20}/>} Confirm Outreach
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: ADD SINGLE */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
-          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 relative border border-slate-100">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all">
-              <X size={24} />
-            </button>
-
-            <div className="mb-6">
-              <h2 className="text-2xl font-black text-slate-800">Add New Prospect</h2>
-              <p className="text-slate-400 text-sm font-medium">Please provide at least one contact method below.</p>
-            </div>
-
+          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 relative">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600"><X size={24} /></button>
+            <h2 className="text-2xl font-black text-slate-800 mb-6">Add New Prospect</h2>
             <form onSubmit={handleSingleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Company</label>
-                    <input required className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all"
-                        placeholder="Company Name"
-                        value={newProspect.companyName}
-                        onChange={(e) => setNewProspect({...newProspect, companyName: e.target.value})} />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">POC Name</label>
-                    <input required className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all"
-                        placeholder="Point of Contact"
-                        value={newProspect.pocName}
-                        onChange={(e) => setNewProspect({...newProspect, pocName: e.target.value})} />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Sector</label>
-                    <input required className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all"
-                        placeholder="IT,QuickCommerce..."
-                        value={newProspect.sector}
-                        onChange={(e) => setNewProspect({...newProspect, sector: e.target.value})} />
-                </div>
+              <input required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Company Name" value={newProspect.companyName} onChange={(e) => setNewProspect({...newProspect, companyName: e.target.value})} />
+              <input required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Point of Contact" value={newProspect.pocName} onChange={(e) => setNewProspect({...newProspect, pocName: e.target.value})} />
+              <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                  <input type="email" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="email@company.com" value={newProspect.pocEmail} onChange={(e) => setNewProspect({...newProspect, pocEmail: e.target.value})} />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Email Address</label>
-                <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input type="email" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all"
-                        placeholder="email@company.com"
-                        value={newProspect.pocEmail}
-                        onChange={(e) => setNewProspect({...newProspect, pocEmail: e.target.value})} />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Contact Number</label>
-                <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input type="text" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all"
-                        placeholder="+1 234 567 890"
-                        value={newProspect.pocContact}
-                        onChange={(e) => setNewProspect({...newProspect, pocContact: e.target.value})} />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">LinkedIn Profile URL</label>
-                <div className="relative">
-                    <ExternalLink className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                    <input type="url" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-slate-700 transition-all"
-                        placeholder="https://linkedin.com/in/username"
-                        value={newProspect.pocLinkedin}
-                        onChange={(e) => setNewProspect({...newProspect, pocLinkedin: e.target.value})} />
-                </div>
-              </div>
-
-             <button 
-                type="submit" 
-                disabled={!isContactInfoProvided}
-                className={`w-full mt-4 p-5 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 
-                    ${isContactInfoProvided 
-                    ? 'bg-slate-900 text-white hover:bg-blue-600' 
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                    }`}
-                >
+              <button type="submit" disabled={!isContactInfoProvided} className={`w-full p-5 rounded-2xl font-black uppercase shadow-xl ${isContactInfoProvided ? 'bg-slate-900 text-white hover:bg-blue-600' : 'bg-slate-200 text-slate-400'}`}>
                 Save Prospect
-            </button>
+              </button>
             </form>
           </div>
         </div>

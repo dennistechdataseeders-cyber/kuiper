@@ -46,11 +46,12 @@ const uploadToGoogleDrive = async (file) => {
 };
 
 // --- GET: Fetch all leads ---
-router.get('/', authorize('Admin', 'Sales'), async (req, res) => {
+router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
   try {
-    const filter = req.user.role === 'Admin' ? {} : { salesRepId: req.user._id };
+    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') ? {} : { salesRepId: req.user._id };
     const leads = await LeadGen.find(filter)
       .populate('organizationId', 'companyName linkedin') 
+      .populate('salesRepId', 'name')
       .sort({ createdAt: -1 }); 
       
     res.json(leads);

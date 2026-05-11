@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const Prospect = require('../models/Prospect');
 const { authorize } = require('../middleware/roleCheck');
-const Lead = require('../models/LeadGen'); // <--- ADD THIS LINE HERE
+const Lead = require('../models/LeadGen'); 
+const NoResponse = require('../models/NoResponse'); // Import the new model
+
 // ==========================================
 // 1. SPECIFIC ACTION ROUTES (MUST BE AT TOP)
 // ==========================================
@@ -54,7 +56,154 @@ router.get('/bucket-count', async (req, res) => {
   }
 });
 
+/**
+ * @route   POST /api/prospects/close/:id
+ * @desc    Move prospect to no_response table and delete from prospects
+ */
+router.post('/close/:id', authorize('Sales', 'Sales Manager', 'Admin'), async (req, res) => {
+  try {
+    const prospectId = req.params.id;
+    const { reason } = req.body;
 
+    // 1. Find the existing prospect
+    const prospect = await Prospect.findById(prospectId);
+    if (!prospect) {
+      return res.status(404).json({ message: "Prospect not found" });
+    }
+
+    // 2. Create the "No Response" entry
+    const closedProspect = new NoResponse({
+      companyName: prospect.companyName,
+      pocName: prospect.pocName,
+      pocEmail: prospect.pocEmail,
+      industry: prospect.industry,
+      reasonForClosing: reason,
+      closedBy: req.user.id,
+      originalProspectData: prospect.toObject() // Keep full history as a snapshot
+    });
+
+    await closedProspect.save();
+
+    // 3. Delete from the Prospect table
+    await Prospect.findByIdAndDelete(prospectId);
+
+    res.json({ message: "Prospect successfully moved to No Response archive" });
+  } catch (error) {
+    console.error("Close Prospect Error:", error);
+    res.status(500).json({ error: "Server error", details: error.message });
+  }
+});
+
+// Add this helper function at the top of your prospects.js file
+const calculateNextFollowUp = (originalApproachDate, step) => {
+  // Your requested fashion: +2, +5, +12, +22, +37
+  const intervals = [2, 5, 12, 22, 37];
+  
+  if (step >= intervals.length) return null; // No more follow-ups after 37 days
+
+  let nextDate = new Date(originalApproachDate);
+  nextDate.setDate(nextDate.getDate() + intervals[step]);
+
+  // Weekend logic: Ensure it doesn't land on Sat/Sun
+  const day = nextDate.getDay();
+  if (day === 6) nextDate.setDate(nextDate.getDate() + 2); // Move Sat to Mon
+  else if (day === 0) nextDate.setDate(nextDate.getDate() + 1); // Move Sun to Mon
+
+  return nextDate;
+};
+
+// CHANGE THIS FROM router.post TO router.put
+// PUT /api/prospects/approach/:id
+router.put('/approach/:id', async (req, res) => {
+  try {
+    const prospect = await Prospect.findById(req.params.id);
+    if (!prospect) return res.status(404).json({ message: "Not found" });
+
+    // 🔹 Helper: Fix consecutive dates + weekends
+    const adjustSchedule = (approaches) => {
+      for (let i = 1; i < approaches.length; i++) {
+        const prev = new Date(approaches[i - 1].scheduledDate);
+        let curr = new Date(approaches[i].scheduledDate);
+
+        const diffDays = (curr - prev) / (1000 * 60 * 60 * 24);
+
+        // If same or consecutive → push 2 days ahead
+        if (diffDays <= 1) {
+          curr = new Date(prev);
+          curr.setDate(curr.getDate() + 2);
+        }
+
+        // Weekend fix
+        const day = curr.getDay();
+        if (day === 6) curr.setDate(curr.getDate() + 2);
+        else if (day === 0) curr.setDate(curr.getDate() + 1);
+
+        approaches[i].scheduledDate = curr;
+      }
+      return approaches;
+    };
+
+    // CASE A: Initial Approach
+    if (!prospect.approaches || prospect.approaches.length === 0) {
+      const dayOffsets = [0, 2, 5, 12, 22, 37];
+
+      const schedule = dayOffsets.map((days, index) => {
+        const scheduledDate = new Date();
+        scheduledDate.setDate(scheduledDate.getDate() + days);
+
+        const day = scheduledDate.getDay();
+        if (day === 6) scheduledDate.setDate(scheduledDate.getDate() + 2);
+        else if (day === 0) scheduledDate.setDate(scheduledDate.getDate() + 1);
+
+        return {
+          step: index,
+          scheduledDate,
+          status: index === 0 ? 'Completed' : 'Pending',
+          method: index === 0 ? req.body.method : 'Pending',
+          summary: index === 0 ? req.body.summary : '',
+          approachedAt: index === 0 ? new Date() : null
+        };
+      });
+
+      // ✅ Apply fix here
+      const adjustedSchedule = adjustSchedule(schedule);
+
+      prospect.status = 'Approached';
+      prospect.approaches = adjustedSchedule;
+      prospect.currentFollowUpStep = 1;
+      prospect.nextFollowUpDate = adjustedSchedule[1].scheduledDate;
+    } 
+    
+    // CASE B: Follow-Up
+    else {
+      const stepIndex = prospect.currentFollowUpStep;
+
+      if (prospect.approaches[stepIndex]) {
+        prospect.approaches[stepIndex].status = 'Completed';
+        prospect.approaches[stepIndex].method = req.body.method;
+        prospect.approaches[stepIndex].summary = req.body.summary;
+        prospect.approaches[stepIndex].approachedAt = new Date();
+
+        // ✅ Re-adjust entire schedule after update
+        prospect.approaches = adjustSchedule(prospect.approaches);
+
+        const nextStep = stepIndex + 1;
+        prospect.currentFollowUpStep = nextStep;
+
+        prospect.nextFollowUpDate = prospect.approaches[nextStep]
+          ? prospect.approaches[nextStep].scheduledDate
+          : null;
+      }
+    }
+
+    await prospect.save();
+    res.json(prospect);
+
+  } catch (error) {
+    console.error("Approach Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
 /**
  * @route   POST /api/prospects/bulk-import
  * @desc    SM/Admin uploads prospects into the unassigned bucket
@@ -137,27 +286,23 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) =
   try {
     let filter = {};
 
-    // 1. Logic for Sales Rep (Show only their assigned items)
+    // Standard Sales Rep sees only their own
     if (req.user.role === 'Sales') {
       filter = { salesRepId: req.user.id || req.user._id };
     } 
-    // 2. Logic for Sales Manager / Admin (Show all)
+    // Admin and Sales Manager see everything
     else if (req.user.role === 'Sales Manager' || req.user.role === 'Admin') {
-      filter = {}; // Sees everything
+      filter = {}; 
     }
 
-    // 3. Population Fix: 
-    // IMPORTANT: Use 'LeadGen' instead of 'Lead' to match your model definition
     const prospects = await Prospect.find(filter)
       .populate('salesRepId', 'name') 
-      .populate('organizationId', 'name') 
-      .populate('leadId') // This will work if Prospect model ref is 'LeadGen'
+      .populate('leadId', 'leadNumber createdAt') // <--- ADD THIS LINE
       .sort({ createdAt: -1 });
 
     res.json(prospects);
   } catch (err) {
-    console.error("Fetch Prospects Error:", err);
-    res.status(500).json({ error: "Server Error", details: err.message });
+    res.status(500).json({ error: "Server Error" });
   }
 });
 

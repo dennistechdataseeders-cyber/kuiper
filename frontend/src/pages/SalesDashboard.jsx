@@ -3,14 +3,15 @@ import axios from 'axios';
 import { 
   Target, User, Mail, Phone, Clock, TrendingUp, Briefcase, 
   Calendar, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
-  ExternalLink, Upload, FileText, Loader2,ChevronLeft, ChevronDown, ChevronUp, AlertCircle 
+  ExternalLink, Upload, FileText, Loader2, ChevronLeft, ChevronDown, ChevronUp, AlertCircle,
+  Send 
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import tips from '../data/salesTips';
 import toast from 'react-hot-toast';
-// Sub-component to handle individual card expansion state
+import { useNavigate } from 'react-router-dom';// Sub-component to handle individual card expansion state
 const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);  
   
   const formatId = (num, prefix = "LEAD") => {
     if (!num) return `${prefix}---`;
@@ -113,7 +114,7 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal })
 
 const SalesDashboard = () => {
   const [randomTip, setRandomTip] = useState("");
- 
+  const navigate = useNavigate(); // Add this line here
   const [generatedLeads, setGeneratedLeads] = useState([]);
   const [followUps, setFollowUps] = useState([]);
   const [feasibilityTasks, setFeasibilityTasks] = useState([]);
@@ -123,6 +124,7 @@ const SalesDashboard = () => {
   const [showFeasibilityModal, setShowFeasibilityModal] = useState(false);
   const [actionStep, setActionStep] = useState(1);
   const [isUploading, setIsUploading] = useState(false);
+  const [approachesToday, setApproachesToday] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
   const [overviewRange, setOverviewRange] = useState(7); // default to 7 days
     // Calculate date ranges
@@ -189,47 +191,75 @@ const SalesDashboard = () => {
     }
   };
 
-  const fetchData = async () => {
+const fetchData = async () => {
+    setLoading(true);
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('/api/lead-generation', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
+      const headers = { Authorization: `Bearer ${token}` };
+
+      // Fetch both datasets
+      const [res, prospect_res] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/lead-generation`, { headers }),
+        axios.get(`${API_BASE_URL}/api/prospects`, { headers })
+      ]);
+
       const data = Array.isArray(res.data) ? res.data : [];
-      setAllData(data); 
+      const prospect_data = Array.isArray(prospect_res.data) ? prospect_res.data : [];
 
-      // Use local comparison to handle timezone offsets correctly
+      setAllData(data);
+
       const todayStr = new Date().toLocaleDateString('en-CA'); 
-
-      // Filter for New Leads created today
+   
+      // 1. New Leads
       setGeneratedLeads(data.filter(l => 
         new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
         (!l.status || l.status === 'New')
       ));
 
-      // Filter for Follow-up Scheduled today
+      // 2. Follow-ups
       setFollowUps(data.filter(l => 
         l.followUpDate && 
         new Date(l.followUpDate).toLocaleDateString('en-CA') === todayStr && 
         l.status === 'Follow-up Scheduled'
       ));
 
-      // --- THE FIX ---
-      // Filter Feasibility tasks based on the followUpDate (The reappearance date)
+      // 3. Feasibility Tasks
       setFeasibilityTasks(data.filter(l => 
         l.followUpDate && 
         new Date(l.followUpDate).toLocaleDateString('en-CA') === todayStr && 
         l.status === 'Feasibility'
       ));
-      
+
+      // 4. Approaches (Fixed assignment and improved check)
+    const now = new Date();
+    // Set to end of today to include everything up to midnight
+    now.setHours(23, 59, 59, 999);
+
+   // 4. Approaches (Catching Today + Overdue Backlog)
+  // 4. Approaches (Catching Today + Overdue)
+   // From your SalesDashboard.jsx
+  const filteredApproaches = prospect_data.filter(item => {
+    const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
+    if (dateValue) {
+      const followUpDate = new Date(dateValue);
+      const today = new Date(); // Your 11-05 system date
+
+      followUpDate.setHours(0, 0, 0, 0);
+      today.setHours(0, 0, 0, 0);
+
+      return followUpDate <= today && item.status === 'Approached';
+    }
+    return false;
+  });
+
+    setApproachesToday(filteredApproaches);
     } catch (err) {
       console.error("Fetch error:", err);
+      toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
-  };
-
+};
   useEffect(() => {
     const fetchPMs = async () => {
         const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
@@ -351,7 +381,7 @@ useEffect(() => {
       
       // Ensure we are sending a payload that the backend expects
       const payload = {
-        status: closingData.reason === 'won' ? 'Converted' : 'Closed',
+        status: closingData.reason === 'won' ? 'Production Ready' : 'Closed',
         lastInteractionDesc: closingData.description || 'No description provided',
         // Adding a null PM ID might prevent backend "undefined" errors if it's 
         // shared logic with the Production Ready flow
@@ -401,12 +431,54 @@ useEffect(() => {
     const firstFollowUpIndex = lastFollowUpIndex - itemsPerPage;
     const currentFollowUps = followUps.slice(firstFollowUpIndex, lastFollowUpIndex);
     const totalFollowUpPages = Math.ceil(followUps.length / itemsPerPage);
-
+  
     // --- Logic for Feasibility ---
     const lastFeasibilityIndex = feasibilityPage * itemsPerPage;
     const firstFeasibilityIndex = lastFeasibilityIndex - itemsPerPage;
     const currentFeasibility = feasibilityTasks.slice(firstFeasibilityIndex, lastFeasibilityIndex);
     const totalFeasibilityPages = Math.ceil(feasibilityTasks.length / itemsPerPage);
+    // --- Inside SalesDashboard.jsx ---
+
+// 1. Add these states
+const [isApproachModalOpen, setIsApproachModalOpen] = useState(false);
+const [selectedProspect, setSelectedProspect] = useState(null); // The lead you clicked
+const [approachData, setApproachData] = useState({ method: 'Email', summary: '' });
+const [submittingApproach, setSubmittingApproach] = useState(false);
+
+// 2. Add the submit handler (similar to Prospects.jsx)
+const handleApproachSubmit = async (e) => {
+  e.preventDefault();
+  if (!approachData.summary) return toast.error("Please provide a summary");
+  
+  setSubmittingApproach(true);
+  try {
+    const stepToUpdate = (selectedProspect.status !== 'Approached') 
+      ? 0 
+      : (selectedProspect.currentFollowUpStep || 0);
+
+    const payload = {
+      method: approachData.method,
+      summary: approachData.summary,
+      step: stepToUpdate 
+    };
+
+    await axios.put(`${API_BASE_URL}/api/prospects/approach/${selectedProspect._id}`, payload, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    });
+
+    toast.success("Action recorded!");
+    setIsApproachModalOpen(false);
+    setApproachData({ method: 'Email', summary: '' });
+    
+    // CHANGE THIS: Call the local fetchData function to refresh the bucket
+    fetchData();    
+    
+  } catch (err) {
+    toast.error("Failed to update approach");
+  } finally {
+    setSubmittingApproach(false);
+  }
+};
     const handleStatusUpdate = async (leadId, status, extraData = {}) => {
       try {
         const token = localStorage.getItem('token');
@@ -417,20 +489,17 @@ useEffect(() => {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        toast.success(extraData.projectManagerId ? "Project Assigned!" : "Project moved to Unassigned bucket");
-        // --- CHANGE THIS LINE ---
-        // If your function is named something else (e.g., fetchLeads), change it here:
-        if (typeof fetchLeads === 'function') {
-          fetchLeads(); 
-        } else {
-          // If you don't have a fetch function, just reload the page as a fallback
-          window.location.reload(); 
-        }
-
-        closeModal();
+       toast.success("Action recorded!");
+        setIsApproachModalOpen(false);
+        setApproachData({ method: 'Email', summary: '' });
+        
+        // CHANGE THIS: Call the local fetchData function to refresh the bucket
+        fetchData();    
+        
       } catch (err) {
-        console.error("Full Error Object:", err);
-        toast.error("Operation failed, but check database.");
+        toast.error("Failed to update approach");
+      } finally {
+        setSubmittingApproach(false);
       }
     };
   return (
@@ -671,6 +740,62 @@ useEffect(() => {
           </div>
         )}
       </div>
+    <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
+  <div>
+    <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+      <FileText size={20} className="text-purple-600"/>Today's Approaches
+    </h2>
+    {/* Today's Approaches List */}
+    <div className="space-y-4">
+      {approachesToday.length === 0 ? (
+        <p className="text-slate-400 text-sm italic text-center py-6">No approaches scheduled for today.</p>
+      ) : (
+        approachesToday.map((lead) => {
+          // ADD THE RETURN KEYWORD HERE
+          return (
+            <div 
+              key={lead._id.$oid || lead._id} 
+              onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })}
+              className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
+                  <Briefcase size={18}/>
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.companyName}</p>
+                    <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">
+                      Follow-up {lead.currentFollowUpStep} {/* Updated to match your JSON key */}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button 
+                onClick={(e) => { 
+                  e.stopPropagation(); // Prevent navigate from firing when clicking button
+                  setSelectedProspect(lead); // Set the specific lead data
+                  setIsApproachModalOpen(true);
+                }}
+                className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"
+              >
+                <ExternalLink size={16}/>
+              </button>
+            </div>
+          ); // End of return
+        })
+      )}
+    </div>
+  </div>
+
+  {/* Pagination Controls should also use approachesToday.length */}
+  {approachesToday.length > itemsPerPage && (
+    <div className="flex items-center justify-center gap-3 mt-6">
+       {/* ... pagination buttons ... */}
+    </div>
+  )}
+</div>
     </div>
           </div>
 
@@ -901,15 +1026,17 @@ useEffect(() => {
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Conclusion</h2>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      onClick={() => setClosingData({...closingData, reason: 'won'})} 
-                      className={`py-3 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${closingData.reason === 'won' ? 'bg-emerald-50 border-emerald-500 text-emerald-600' : 'bg-slate-50 border-transparent text-slate-400'}`}
-                    >Won</button>
-                    <button 
-                      onClick={() => setClosingData({...closingData, reason: 'lost'})} 
-                      className={`py-3 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${closingData.reason === 'lost' ? 'bg-rose-50 border-rose-500 text-rose-600' : 'bg-slate-50 border-transparent text-slate-400'}`}
-                    >Lost</button>
-                  </div>
+  <button 
+    onClick={() => setClosingData({...closingData, reason: 'lost'})} 
+    className={`col-span-2 mx-auto py-3 px-6 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${
+      closingData.reason === 'lost'
+        ? 'bg-rose-50 border-rose-500 text-rose-600'
+        : 'bg-slate-50 border-transparent text-slate-400'
+    }`}
+  >
+    Lost
+  </button>
+</div>
                   <textarea 
                     placeholder="Final summary/reasons..." 
                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-32 resize-none font-medium outline-none" 
@@ -1041,8 +1168,66 @@ useEffect(() => {
           </div>
         </div>
       )}
+      {/* --- APPROACH MODAL IN DASHBOARD --- */}
+{isApproachModalOpen && (
+  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left">
+    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative border border-slate-100">
+      <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all">
+        <X size={24} />
+      </button>
+
+      <div className="mb-8">
+        <h2 className="text-2xl font-black text-slate-800">Approach Prospect</h2>
+        <p className="text-slate-400 text-sm font-medium mt-1">Record the interaction for {selectedProspect?.companyName}.</p>
+      </div>
+
+      <form onSubmit={handleApproachSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label>
+          <div className="grid grid-cols-2 gap-3">
+            {['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((method) => (
+              <button
+                key={method}
+                type="button"
+                onClick={() => setApproachData({...approachData, method})}
+                className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
+                  approachData.method === method 
+                  ? 'border-blue-600 bg-blue-50 text-blue-600' 
+                  : 'border-slate-100 bg-slate-50 text-slate-400'
+                }`}
+              >
+                {method}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Summary of Discussion</label>
+          <textarea 
+            required
+            rows="4"
+            className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-medium text-slate-700 transition-all resize-none"
+            placeholder="What was discussed?"
+            value={approachData.summary}
+            onChange={(e) => setApproachData({...approachData, summary: e.target.value})}
+          />
+        </div>
+
+        <button 
+          type="submit" 
+          disabled={submittingApproach}
+          className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-blue-600 disabled:bg-slate-300 flex items-center justify-center gap-2"
+        >
+          {submittingApproach ? <Loader2 className="animate-spin" size={20}/> : <Send size={18}/>}
+          Confirm Approach
+        </button>
+      </form>
     </div>
+  </div>
+)}
+    </div>  
   );
 };
 
-export default SalesDashboard;  
+export default SalesDashboard;
