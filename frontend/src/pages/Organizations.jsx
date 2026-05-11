@@ -13,7 +13,7 @@ const OrganizationCard = ({ org, onEdit, onDelete, userRole }) => {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Define authorized roles
-  const canModify = userRole === 'Admin' || userRole === 'Sales Manager' || userRole === 'Sales';
+  const canModify = userRole === 'Admin' || userRole === 'Sales Manager';
 
   return (
     <div className={`group relative transition-all duration-500 rounded-[2.5rem] border-2 h-fit ${
