@@ -170,8 +170,8 @@ const ViewAnalytics = () => {
               <ChevronLeft size={20} />
             </button>
             <div className="flex items-center gap-4">
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-                Page {currentPage} <span className="mx-2 text-slate-200">/</span> {totalPages}
+              <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">
+                Page : {currentPage} <span className="mx-0 text-slate-900">/</span>{totalPages}
               </span>
             </div>
             <button 

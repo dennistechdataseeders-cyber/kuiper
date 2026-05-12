@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Your custom body styles remain the same */
+/* --- Existing Custom Animations --- */
 @keyframes cyber-glow {
   0%, 100% {
     filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.4)) drop-shadow(0 0 5px rgba(34, 211, 238, 0.2));
@@ -12,17 +12,6 @@
   }
 }
 
-.animate-cyber-glow {
-  animation: cyber-glow 3s ease-in-out infinite;
-}
-body {
-  margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background-color: #dbeafe; /* This is the hex for tailwind's bg-blue-100 */
-  @apply bg-slate-50 text-slate-900;
-
-}
 @keyframes asteroid-drift {
   0% {
     transform: translateX(-10vw) translateY(0) rotate(0deg) scale(0.8);
@@ -40,7 +29,93 @@ body {
   }
 }
 
+/* --- Base Body Styles --- */
+body {
+  margin: 0;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  @apply bg-slate-50 text-slate-900;
+}
+
+/* --- Utility Classes --- */
+.animate-cyber-glow {
+  animation: cyber-glow 3s ease-in-out infinite;
+}
+
 .animate-asteroid {
   animation: asteroid-drift linear infinite;
   will-change: transform;
+}
+
+/* --- React Calendar Custom Overrides --- */
+.react-calendar { 
+  width: 100% !important; 
+  border: none !important; 
+  font-family: inherit !important; 
+  background: transparent !important;
+}
+
+/* Navigation (Month/Year Switcher) */
+.react-calendar__navigation button { 
+  font-weight: 900 !important; 
+  color: #1B2559 !important; 
+  font-size: 1rem !important; 
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.react-calendar__navigation button:enabled:hover,
+.react-calendar__navigation button:enabled:focus {
+  background-color: #f1f5f9 !important;
+}
+
+/* Weekday Labels (M, T, W...) */
+.react-calendar__month-view__weekdays__weekday { 
+  font-size: 0.7rem !important; 
+  font-weight: 900 !important; 
+  text-transform: uppercase !important; 
+  color: #CBD5E1 !important; 
+  text-decoration: none !important; 
+  padding: 10px 0;
+}
+
+.react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none !important;
+}
+
+/* Day Tiles */
+.react-calendar__tile {
+  padding: 1.2em 0.5em !important;
+  font-weight: 700 !important;
+  color: #1B2559 !important;
+  border-radius: 14px !important;
+  transition: all 0.2s ease;
+}
+
+.react-calendar__tile:enabled:hover {
+  background-color: #f8fafc !important;
+  color: #4318FF !important;
+}
+
+/* Current Day */
+.react-calendar__tile--now { 
+  background: #E0E7FF !important; 
+  color: #4318FF !important; 
+}
+
+/* Selected Day */
+.react-calendar__tile--active { 
+  background: #4318FF !important; 
+  color: white !important; 
+  box-shadow: 0 10px 15px -3px rgba(67, 24, 255, 0.3);
+}
+
+.react-calendar__tile--active:enabled:hover,
+.react-calendar__tile--active:enabled:focus {
+  background: #3311CC !important;
+}
+
+/* Neighboring Month Days */
+.react-calendar__month-view__days__tile--neighboringMonth {
+  color: #CBD5E1 !important;
 }

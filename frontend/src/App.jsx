@@ -15,6 +15,7 @@ import DeveloperDashboard from './pages/DeveloperDashboard';
 import ProjectDetailView from './pages/ProjectDetailView';
 import DeveloperBucket from './components/DeveloperBucket';
 import Profile from './pages/Profile';
+import ProjectFeeds from './pages/ProjectFeeds';  
 import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
@@ -117,7 +118,11 @@ function AppContent() {
                     {/* Management */}
                     <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
                     <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
-
+                    <Route path="/pm/feeds" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                        <ProjectFeeds />
+                      </ProtectedRoute>
+                    } />
                     {/* Developer */}
                     <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
                     <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />

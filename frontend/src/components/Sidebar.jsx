@@ -36,8 +36,7 @@ const Sidebar = () => {
   };
 
   const handleDownloadGuide = () => {
-    // Replace with the actual path to your PDF
-    window.open('/user-guide.pdf', '_blank');
+    window.open('https://res.cloudinary.com/dhcwcyqke/image/upload/v1778510161/Future_Feature_Office_File_bhznye.pdf', '_blank');
   };
 
   const getRoleStyles = (role) => {
@@ -60,6 +59,7 @@ const Sidebar = () => {
     { name: 'Projects', icon: <FolderTree size={20}/>, path: '/admin/projects', roles: ['Admin', 'Project Manager'] },
     { name: 'Dev Hub', icon: <Activity size={20}/>, path: '/developer', roles: ['Admin', 'Developer'] },
     { name: 'My Bucket', path: '/developer/bucket', icon: <Inbox size={20} />, roles: ['Developer'] },
+    { name: 'Feed Explorer', icon: <Activity size={22} />,path: '/pm/feeds', roles: ['Admin', 'Project Manager'] },
     { name: 'Audit Trail', icon: <Activity size={20}/>, path: '/view_analytics', roles: ['Admin', 'Project Manager', 'Sales Manager'] },
   ];
 

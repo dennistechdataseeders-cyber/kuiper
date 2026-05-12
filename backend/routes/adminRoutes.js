@@ -322,17 +322,31 @@ router.delete('/projects/:id', authorize('Admin'), async (req, res) => {
 
 router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
-    const { name, assignedDevelopers, projectId, feedType } = req.body;
+    const {
+      name,
+      assignedDevelopers,
+      projectId,
+      feedType,
+      weekDay
+    } = req.body;
 
     const newFeed = await Feed.create({
       name,
       assignedDevelopers,
       projectId,
-      adminId: req.user._id, // always use logged-in user
-      feedType: feedType || 'Daily'
+      adminId: req.user._id,
+      feedType: feedType || 'Daily',
+
+      // NEW
+      weekDay: feedType === 'Weekly'
+        ? weekDay
+        : null
     });
 
-    await Project.findByIdAndUpdate(projectId, { $push: { feeds: newFeed._id } });
+    await Project.findByIdAndUpdate(
+      projectId,
+      { $push: { feeds: newFeed._id } }
+    );
 
     try {
       await Log.create({
@@ -346,15 +360,11 @@ router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) =>
     }
 
     res.status(201).json(newFeed);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
-// --- Place this ABOVE your router.get('/users'...) ---
-
-// This route MUST NOT have 'authorize' because the user isn't logged in yet!
-
-// Add this route to handle password changes for logged-in users
 router.post('/change-password', async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
@@ -379,13 +389,33 @@ router.post('/change-password', async (req, res) => {
 });
 router.put('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
-    const { name, assignedDevelopers, feedType } = req.body;
+    const {
+      name,
+      assignedDevelopers,
+      feedType,
+      weekDay
+    } = req.body;
+
     const updatedFeed = await Feed.findByIdAndUpdate(
       req.params.id,
-      { name, assignedDevelopers, feedType },
-      { new: true, runValidators: true }
+      {
+        name,
+        assignedDevelopers,
+        feedType,
+
+        // NEW
+        weekDay: feedType === 'Weekly'
+          ? weekDay
+          : null
+      },
+      {
+        new: true,
+        runValidators: true
+      }
     );
+
     res.json(updatedFeed);
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

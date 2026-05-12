@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import { 
   Target, User, Mail, Phone, Clock, TrendingUp, Briefcase, 
-  Calendar, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
+  Calendar as CalendarIcon, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
   ExternalLink, Upload, FileText, Loader2, ChevronLeft, ChevronDown, ChevronUp, AlertCircle,
-  Send 
+  Send, CalendarDays
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import tips from '../data/salesTips';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CreatableSelect from 'react-select/creatable'; 
+
 const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal }) => {
   const [isExpanded, setIsExpanded] = useState(false);  
   
@@ -115,7 +118,7 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal })
 
 const SalesDashboard = () => {
   const [randomTip, setRandomTip] = useState("");
-  const navigate = useNavigate(); // Add this line here
+  const navigate = useNavigate();
   const [generatedLeads, setGeneratedLeads] = useState([]);
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [followUps, setFollowUps] = useState([]);
@@ -128,16 +131,18 @@ const SalesDashboard = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [approachesToday, setApproachesToday] = useState([]);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [overviewRange, setOverviewRange] = useState(7); // default to 7 days
-    // Calculate date ranges
-  const [allData, setAllData] = useState([]); // Add this
-  // 1. Get current timestamps
+  const [overviewRange, setOverviewRange] = useState(7);
+  const [allData, setAllData] = useState([]);
+  // New state for scheduled calendar modal
+  const [showScheduledModal, setShowScheduledModal] = useState(false);
+  const [allScheduledItems, setAllScheduledItems] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+
+  // Calculate date ranges
   const now = new Date();
   const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  // 2. Filter from the RAW data (allData), not the "Today" lists
-  // We use optional chaining (?.) and default to an empty array ([]) to avoid errors
   const lastWeekCount = (allData || []).filter(lead => {
     const createdAt = new Date(lead.createdAt);
     return createdAt >= oneWeekAgo && createdAt <= now;
@@ -147,19 +152,19 @@ const SalesDashboard = () => {
     const createdAt = new Date(lead.createdAt);
     return createdAt >= oneMonthAgo && createdAt <= now;
   }).length;
+  
   const [followUpData, setFollowUpData] = useState({
     date: new Date().toISOString().split('T')[0],
     type: 'call',
     description: ''
   });
-  // Calculate the specific count based on the selected range
+  
   const overviewCount = allData.filter(l => {
     const leadDate = new Date(l.createdAt);
     const daysAgo = new Date(new Date().getTime() - overviewRange * 24 * 60 * 60 * 1000);
     return leadDate >= daysAgo;
   }).length;
 
-  // Optional: Calculate a simple percentage for the UI display
   const [feasibilityData, setFeasibilityData] = useState({
     feasibilityId: '',
     taskDetails: '',
@@ -182,6 +187,7 @@ const SalesDashboard = () => {
     setShowActionModal(false);
     setShowFeasibilityModal(true);
   };
+  
   const getStatusStyle = (status) => {
     switch (status) {
       case 'Follow-up Scheduled': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
@@ -192,13 +198,12 @@ const SalesDashboard = () => {
     }
   };
 
-const fetchData = async () => {
+  const fetchData = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
 
-      // Fetch both datasets
       const [res, prospect_res] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/lead-generation`, { headers }),
         axios.get(`${API_BASE_URL}/api/prospects`, { headers })
@@ -211,58 +216,70 @@ const fetchData = async () => {
 
       const todayStr = new Date().toLocaleDateString('en-CA'); 
    
-      // 1. New Leads
       setGeneratedLeads(data.filter(l => 
         new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
         (!l.status || l.status === 'New')
       ));
 
-      // 2. Follow-ups
       setFollowUps(data.filter(l => 
         l.followUpDate && 
         new Date(l.followUpDate).toLocaleDateString('en-CA') === todayStr && 
         l.status === 'Follow-up Scheduled'
       ));
 
-      // 3. Feasibility Tasks
       setFeasibilityTasks(data.filter(l => 
         l.followUpDate && 
         new Date(l.followUpDate).toLocaleDateString('en-CA') === todayStr && 
         l.status === 'Feasibility'
       ));
 
-      // 4. Approaches (Fixed assignment and improved check)
-    const now = new Date();
-    // Set to end of today to include everything up to midnight
-    now.setHours(23, 59, 59, 999);
+      const filteredApproaches = prospect_data.filter(item => {
+        const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
+        if (dateValue) {
+          const followUpDate = new Date(dateValue);
+          const today = new Date();
+          followUpDate.setHours(0, 0, 0, 0);
+          today.setHours(0, 0, 0, 0);
+          return followUpDate <= today && item.status === 'Approached';
+        }
+        return false;
+      });
 
-   // 4. Approaches (Catching Today + Overdue Backlog)
-  // 4. Approaches (Catching Today + Overdue)
-   // From your SalesDashboard.jsx
-  const filteredApproaches = prospect_data.filter(item => {
-    const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
-    if (dateValue) {
-      const followUpDate = new Date(dateValue);
-      const today = new Date(); // Your 11-05 system date
+      setApproachesToday(filteredApproaches);
 
-      followUpDate.setHours(0, 0, 0, 0);
-      today.setHours(0, 0, 0, 0);
-
-      return followUpDate <= today && item.status === 'Approached';
-    }
-    return false;
-  });
-
-    setApproachesToday(filteredApproaches);
+      // Build all scheduled items for calendar view
+      const scheduledFollowUps = data
+        .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled')
+        .map(l => ({
+          id: l._id,
+          title: l.pocName,
+          type: 'followup',
+          date: new Date(l.followUpDate),
+          originalLead: l
+        }));
+      
+      const scheduledFeasibility = data
+        .filter(l => l.followUpDate && l.status === 'Feasibility')
+        .map(l => ({
+          id: l._id,
+          title: l.pocName,
+          type: 'feasibility',
+          date: new Date(l.followUpDate),
+          originalLead: l
+        }));
+      
+      setAllScheduledItems([...scheduledFollowUps, ...scheduledFeasibility]);
+      
     } catch (err) {
       console.error("Fetch error:", err);
       toast.error("Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
-};
+  };
+  
   const [showProjectModal, setShowProjectModal] = useState(false);
-  const [projectManagers, setProjectManagers] = useState([]); // To populate the PM dropdown
+  const [projectManagers, setProjectManagers] = useState([]);
   const [projectForm, setProjectForm] = useState({
     name: '',
     clients: [],
@@ -270,14 +287,14 @@ const fetchData = async () => {
     description: '',
     country: '',
     industry: '',
-    organizationId: '' // Important for linking
+    organizationId: ''
   });
+  
   useEffect(() => {
     const fetchPMs = async () => {
         const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
             headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        // Filter users who have the PM role
         setProjectManagers(res.data.filter(u => u.role === 'Project Manager'));
     };
     fetchPMs();
@@ -286,31 +303,28 @@ const fetchData = async () => {
     const randomIndex = Math.floor(Math.random() * tips.length);
     setRandomTip(tips[randomIndex]);
   }, [])
-  // Inside SalesDashboard.jsx
-const [selectedPM, setSelectedPM] = useState('');
+  
+  const [selectedPM, setSelectedPM] = useState('');
 
-// Add this to your useEffect or a separate fetch function
-useEffect(() => {
+  useEffect(() => {
     const fetchPMs = async () => {
         try {
             const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
                 headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
             });
-
-            // Filter the results to only include users with the role "Project Manager"
             const onlyPMs = res.data.filter(user => user.role === 'Project Manager');
-            
             setProjectManagers(onlyPMs);
         } catch (err) {
             console.error("Error fetching PMs", err);
         }
     };
     fetchPMs();
-}, []); // Ensure the dependency array is here
+  }, []);
+  
   const handleFollowUpSubmit = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`/api/lead-generation/${selectedLead._id}/action`, { 
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, { 
         status: 'Follow-up Scheduled',
         followUpDate: followUpData.date,
         followUpType: followUpData.type,
@@ -319,132 +333,119 @@ useEffect(() => {
       fetchData(); closeModal();
     } catch (err) { alert("Follow-up update failed"); }
   };
+  
   const [currentPage, setCurrentPage] = useState(1);
-  const leadsPerPage = 5; // Change this number to show more/less per page
-
-  // Calculate indexes for slicing
+  const leadsPerPage = 5;
   const indexOfLastLead = currentPage * leadsPerPage;
   const indexOfFirstLead = indexOfLastLead - leadsPerPage;
   const currentLeads = generatedLeads.slice(indexOfFirstLead, indexOfLastLead);
   const totalPages = Math.ceil(generatedLeads.length / leadsPerPage);
+  
   const POPULAR_COUNTRIES = [
-  { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
-  { label: "Australia", value: "AU" }, { label: "Brazil", value: "BR" }, { label: "Canada", value: "CA" },
-  { label: "China", value: "CN" }, { label: "France", value: "FR" }, { label: "Germany", value: "DE" },
-  { label: "India", value: "IN" }, { label: "Indonesia", value: "ID" }, { label: "Italy", value: "IT" },
-  { label: "Japan", value: "JP" }, { label: "Mexico", value: "MX" }, { label: "Netherlands", value: "NL" },
-  { label: "Nigeria", value: "NG" }, { label: "Pakistan", value: "PK" }, { label: "Russia", value: "RU" },
-  { label: "Saudi Arabia", value: "SA" }, { label: "Singapore", value: "SG" }, { label: "South Africa", value: "ZA" },
-  { label: "South Korea", value: "KR" }, { label: "Spain", value: "ES" }, { label: "Turkey", value: "TR" },
-  { label: "United Arab Emirates", value: "AE" }, { label: "United Kingdom", value: "GB" },
-  { label: "United States", value: "US" }, { label: "Vietnam", value: "VN" }
-];
+    { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
+    { label: "Australia", value: "AU" }, { label: "Brazil", value: "BR" }, { label: "Canada", value: "CA" },
+    { label: "China", value: "CN" }, { label: "France", value: "FR" }, { label: "Germany", value: "DE" },
+    { label: "India", value: "IN" }, { label: "Indonesia", value: "ID" }, { label: "Italy", value: "IT" },
+    { label: "Japan", value: "JP" }, { label: "Mexico", value: "MX" }, { label: "Netherlands", value: "NL" },
+    { label: "Nigeria", value: "NG" }, { label: "Pakistan", value: "PK" }, { label: "Russia", value: "RU" },
+    { label: "Saudi Arabia", value: "SA" }, { label: "Singapore", value: "SG" }, { label: "South Africa", value: "ZA" },
+    { label: "South Korea", value: "KR" }, { label: "Spain", value: "ES" }, { label: "Turkey", value: "TR" },
+    { label: "United Arab Emirates", value: "AE" }, { label: "United Kingdom", value: "GB" },
+    { label: "United States", value: "US" }, { label: "Vietnam", value: "VN" }
+  ];
 
-const INDUSTRY_OPTIONS = [
-  { label: "ECOM", value: "ECOM" },
-  { label: "FOOD", value: "FOOD" },
-  { label: "HTL", value: "HTL" },
-  { label: "TRVL", value: "TRVL" },
-  { label: "FNC", value: "FNC" },
-  { label: "SCLM", value: "SCLM" },
-  { label: "JOB", value: "JOB" },
-  { label: "AUTO", value: "AUTO" }
-];
-const customSelectStyles = {
-  control: (base) => ({
-    ...base,
-    padding: '8px',
-    borderRadius: '1rem',
-    border: '1px solid #f1f5f9',
-    backgroundColor: '#f8fafc',
-    fontWeight: 'bold',
-    boxShadow: 'none',
-    '&:hover': { border: '1px solid #e2e8f0' }
-  }),
-  option: (base, state) => ({
-    ...base,
-    backgroundColor: state.isFocused ? '#eff6ff' : 'white',
-    color: state.isFocused ? '#2563eb' : '#1e293b',
-    fontWeight: 'bold'
-  })
-};
-  // Helper to change page
+  const INDUSTRY_OPTIONS = [
+    { label: "ECOM", value: "ECOM" },
+    { label: "FOOD", value: "FOOD" },
+    { label: "HTL", value: "HTL" },
+    { label: "TRVL", value: "TRVL" },
+    { label: "FNC", value: "FNC" },
+    { label: "SCLM", value: "SCLM" },
+    { label: "JOB", value: "JOB" },
+    { label: "AUTO", value: "AUTO" }
+  ];
+  
+  const customSelectStyles = {
+    control: (base) => ({
+      ...base,
+      padding: '8px',
+      borderRadius: '1rem',
+      border: '1px solid #f1f5f9',
+      backgroundColor: '#f8fafc',
+      fontWeight: 'bold',
+      boxShadow: 'none',
+      '&:hover': { border: '1px solid #e2e8f0' }
+    }),
+    option: (base, state) => ({
+      ...base,
+      backgroundColor: state.isFocused ? '#eff6ff' : 'white',
+      color: state.isFocused ? '#2563eb' : '#1e293b',
+      fontWeight: 'bold'
+    })
+  };
+  
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
-      const handleFeasibilitySubmit = async (e) => {
-        e.preventDefault();
-        setIsUploading(true);
+  
+  const handleFeasibilitySubmit = async (e) => {
+    e.preventDefault();
+    setIsUploading(true);
 
-        try {
-          const token = localStorage.getItem('token');
-          const formData = new FormData();
-
-          // 1. Logic for Feasibility Date (Selected by User)
-          // We append T12:00:00 to prevent IST/UTC timezone rollback
-          const safeFeasibilityDate = new Date(`${feasibilityData.feasibilityDate}T12:00:00`).toISOString();
-          
-          // 2. Logic for Next Follow-up Date (Selected by User)
-          // This is the date the user picked in the "Next Follow-up Date" field
-          const safeFollowUpDate = feasibilityData.nextFollowUpDate 
-            ? new Date(`${feasibilityData.nextFollowUpDate}T12:00:00`).toISOString() 
-            : null;
-
-          formData.append('status', 'Feasibility');
-          formData.append('feasibilityId', feasibilityData.feasibilityId);
-          formData.append('feasibilityDate', safeFeasibilityDate);
-          formData.append('taskDetails', feasibilityData.taskDetails);
-          
-          // Send the followUpDate to match your Mongoose Schema field name
-          if (safeFollowUpDate) {
-            formData.append('followUpDate', safeFollowUpDate);
-          }
-
-          if (feasibilityData.attachment) {
-            formData.append('file', feasibilityData.attachment);
-          }
-
-          await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, formData, {
-            headers: { 
-              Authorization: `Bearer ${token}`, 
-              'Content-Type': 'multipart/form-data' 
-            }
-          });
-          
-          setIsUploading(false);
-          setShowSuccess(true);
-          
-          setTimeout(() => { 
-            setShowSuccess(false); 
-            fetchData(); 
-            closeModal(); 
-          }, 2500);
-
-        } catch (err) {
-          setIsUploading(true); // Reset button state
-          console.error("Submission Error:", err);
-          alert(err.response?.data?.error || "Feasibility submission failed");
-        } finally {
-          setIsUploading(false);
-        }
-      };
-
- const handleCloseLead = async () => {
     try {
       const token = localStorage.getItem('token');
+      const formData = new FormData();
+
+      const safeFeasibilityDate = new Date(`${feasibilityData.feasibilityDate}T12:00:00`).toISOString();
+      const safeFollowUpDate = feasibilityData.nextFollowUpDate 
+        ? new Date(`${feasibilityData.nextFollowUpDate}T12:00:00`).toISOString() 
+        : null;
+
+      formData.append('status', 'Feasibility');
+      formData.append('feasibilityId', feasibilityData.feasibilityId);
+      formData.append('feasibilityDate', safeFeasibilityDate);
+      formData.append('taskDetails', feasibilityData.taskDetails);
       
-      // Ensure we are sending a payload that the backend expects
+      if (safeFollowUpDate) {
+        formData.append('followUpDate', safeFollowUpDate);
+      }
+
+      if (feasibilityData.attachment) {
+        formData.append('file', feasibilityData.attachment);
+      }
+
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`, 
+          'Content-Type': 'multipart/form-data' 
+        }
+      });
+      
+      setIsUploading(false);
+      setShowSuccess(true);
+      
+      setTimeout(() => { 
+        setShowSuccess(false); 
+        fetchData(); 
+        closeModal(); 
+      }, 2500);
+
+    } catch (err) {
+      setIsUploading(true);
+      console.error("Submission Error:", err);
+      alert(err.response?.data?.error || "Feasibility submission failed");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleCloseLead = async () => {
+    try {
+      const token = localStorage.getItem('token');
       const payload = {
         status: closingData.reason === 'won' ? 'Production Ready' : 'Closed',
         lastInteractionDesc: closingData.description || 'No description provided',
-        // Adding a null PM ID might prevent backend "undefined" errors if it's 
-        // shared logic with the Production Ready flow
         projectManagerId: null 
       };
-
-      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
-        payload, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, payload, { headers: { Authorization: `Bearer ${token}` } });
       toast.success(`Lead marked as ${payload.status}`);
       fetchData(); 
       closeModal();
@@ -455,273 +456,273 @@ const customSelectStyles = {
   };
 
   const closeModal = () => {
-  if (isUploading) return;
-  setShowActionModal(false);
-  setShowFeasibilityModal(false);
-  setShowSuccess(false);
-  setActionStep(1);
-  setFollowUpData({ 
-    date: new Date().toISOString().split('T')[0], 
-    type: 'call', 
-    description: '' 
-  });
-  setFeasibilityData({ 
-    feasibilityId: '', 
-    taskDetails: '', 
-    attachment: null, 
-    feasibilityDate: new Date().toISOString().split('T')[0],
-    nextFollowUpDate: '' // Ensure this is reset
-  });
-};
-      // --- Pagination State ---
-    const [followUpPage, setFollowUpPage] = useState(1);
-    const [feasibilityPage, setFeasibilityPage] = useState(1);
-    const itemsPerPage = 3; // Adjust as needed for your UI height
-
-    // --- Logic for Follow-ups ---
-    const lastFollowUpIndex = followUpPage * itemsPerPage;
-    const firstFollowUpIndex = lastFollowUpIndex - itemsPerPage;
-    const currentFollowUps = followUps.slice(firstFollowUpIndex, lastFollowUpIndex);
-    const totalFollowUpPages = Math.ceil(followUps.length / itemsPerPage);
-  
-    // --- Logic for Feasibility ---
-    const lastFeasibilityIndex = feasibilityPage * itemsPerPage;
-    const firstFeasibilityIndex = lastFeasibilityIndex - itemsPerPage;
-    const currentFeasibility = feasibilityTasks.slice(firstFeasibilityIndex, lastFeasibilityIndex);
-    const totalFeasibilityPages = Math.ceil(feasibilityTasks.length / itemsPerPage);
-    // --- Inside SalesDashboard.jsx ---
-
-// 1. Add these states
-const [isApproachModalOpen, setIsApproachModalOpen] = useState(false);
-const [selectedProspect, setSelectedProspect] = useState(null); // The lead you clicked
-const [approachData, setApproachData] = useState({ method: 'Email', summary: '' });
-const [submittingApproach, setSubmittingApproach] = useState(false);
-
-// 2. Add the submit handler (similar to Prospects.jsx)
-const handleApproachSubmit = async (e) => {
-  e.preventDefault();
-  if (!approachData.summary) return toast.error("Please provide a summary");
-  
-  setSubmittingApproach(true);
-  try {
-    const stepToUpdate = (selectedProspect.status !== 'Approached') 
-      ? 0 
-      : (selectedProspect.currentFollowUpStep || 0);
-
-    const payload = {
-      method: approachData.method,
-      summary: approachData.summary,
-      step: stepToUpdate 
-    };
-
-    await axios.put(`${API_BASE_URL}/api/prospects/approach/${selectedProspect._id}`, payload, {
-      headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+    if (isUploading) return;
+    setShowActionModal(false);
+    setShowFeasibilityModal(false);
+    setShowSuccess(false);
+    setActionStep(1);
+    setFollowUpData({ 
+      date: new Date().toISOString().split('T')[0], 
+      type: 'call', 
+      description: '' 
     });
-
-    toast.success("Action recorded!");
-    setIsApproachModalOpen(false);
-    setApproachData({ method: 'Email', summary: '' });
+    setFeasibilityData({ 
+      feasibilityId: '', 
+      taskDetails: '', 
+      attachment: null, 
+      feasibilityDate: new Date().toISOString().split('T')[0],
+      nextFollowUpDate: ''
+    });
+  };
+  
+  const [followUpPage, setFollowUpPage] = useState(1);
+  const [feasibilityPage, setFeasibilityPage] = useState(1);
+  const itemsPerPage = 3;
+  
+  const lastFollowUpIndex = followUpPage * itemsPerPage;
+  const firstFollowUpIndex = lastFollowUpIndex - itemsPerPage;
+  const currentFollowUps = followUps.slice(firstFollowUpIndex, lastFollowUpIndex);
+  const totalFollowUpPages = Math.ceil(followUps.length / itemsPerPage);
+  
+  const lastFeasibilityIndex = feasibilityPage * itemsPerPage;
+  const firstFeasibilityIndex = lastFeasibilityIndex - itemsPerPage;
+  const currentFeasibility = feasibilityTasks.slice(firstFeasibilityIndex, lastFeasibilityIndex);
+  const totalFeasibilityPages = Math.ceil(feasibilityTasks.length / itemsPerPage);
+  
+  const [isApproachModalOpen, setIsApproachModalOpen] = useState(false);
+  const [selectedProspect, setSelectedProspect] = useState(null);
+  const [approachData, setApproachData] = useState({ method: 'Email', summary: '' });
+  const [submittingApproach, setSubmittingApproach] = useState(false);
+  
+  const handleApproachSubmit = async (e) => {
+    e.preventDefault();
+    if (!approachData.summary) return toast.error("Please provide a summary");
     
-    // CHANGE THIS: Call the local fetchData function to refresh the bucket
-    fetchData();    
-    
-  } catch (err) {
-    toast.error("Failed to update approach");
-  } finally {
-    setSubmittingApproach(false);
-  }
-};
-    const handleStatusUpdate = async (leadId, status, extraData = {}) => {
-      if (status === 'Production Ready') {
-          const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
-          setProjectForm({
-            name: selectedLead.companyName || '',
-            clients: [selectedLead.pocName || ''],
-            projectManager: defaultPM,
-            description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
-            country: selectedLead.country || '',
-            industry: selectedLead.industry || '',
-            organizationId: selectedLead.organizationId?._id || selectedLead.organizationId
-          });
-          
-          setShowProjectModal(true);
-          setShowActionModal(false);
-          return; // Exit here so no API call is made yet
-        }
-      try {
-        const token = localStorage.getItem('token');
-        await axios.patch(`${API_BASE_URL}/api/leads/${leadId}/action`, {
-          status,
-          ...extraData // This will now spread { projectManagerId: null }
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
+    setSubmittingApproach(true);
+    try {
+      const stepToUpdate = (selectedProspect.status !== 'Approached') 
+        ? 0 
+        : (selectedProspect.currentFollowUpStep || 0);
+  
+      const payload = {
+        method: approachData.method,
+        summary: approachData.summary,
+        step: stepToUpdate 
+      };
+  
+      await axios.put(`${API_BASE_URL}/api/prospects/approach/${selectedProspect._id}`, payload, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+  
+      toast.success("Action recorded!");
+      setIsApproachModalOpen(false);
+      setApproachData({ method: 'Email', summary: '' });
+      fetchData();    
+      
+    } catch (err) {
+      toast.error("Failed to update approach");
+    } finally {
+      setSubmittingApproach(false);
+    }
+  };
+  
+  const handleStatusUpdate = async (leadId, status, extraData = {}) => {
+    if (status === 'Production Ready') {
+        const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
+        setProjectForm({
+          name: selectedLead.companyName || '',
+          clients: [selectedLead.pocName || ''],
+          projectManager: defaultPM,
+          description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
+          country: selectedLead.country || '',
+          industry: selectedLead.industry || '',
+          organizationId: selectedLead.organizationId?._id || selectedLead.organizationId
         });
-        
-       toast.success("Action recorded!");
-        setIsApproachModalOpen(false);
-        setApproachData({ method: 'Email', summary: '' });
-        
-        // CHANGE THIS: Call the local fetchData function to refresh the bucket
-        fetchData();    
-        
-      } catch (err) {
-        toast.error("Failed to update approach");
-      } finally {
-        setSubmittingApproach(false);
+        setShowProjectModal(true);
+        setShowActionModal(false);
+        return;
       }
-    };  
-const handleProjectSubmit = async (e) => {
-  if (e) e.preventDefault();
-  if (isSubmittingProject) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE_URL}/api/leads/${leadId}/action`, {
+        status,
+        ...extraData
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success("Action recorded!");
+      setIsApproachModalOpen(false);
+      setApproachData({ method: 'Email', summary: '' });
+      fetchData();    
+    } catch (err) {
+      toast.error("Failed to update approach");
+    } finally {
+      setSubmittingApproach(false);
+    }
+  };
+  
+  const handleProjectSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (isSubmittingProject) return;
+    try {
+      setIsSubmittingProject(true);
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
+        { 
+          status: 'Production Ready',
+          projectManagerId: projectForm.projectManager,
+          industry: projectForm.industry,
+          country: projectForm.country,
+          projectBriefName: projectForm.name 
+        }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success("Project launched successfully!");
+      setShowProjectModal(false);
+      fetchData(); 
+    } catch (err) {
+      toast.error("Failed to launch project");
+    } finally {
+      setIsSubmittingProject(false);
+    }
+  };
 
-  try {
-    setIsSubmittingProject(true);
-    const token = localStorage.getItem('token');
-    
-    await axios.patch(
-      `${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
-      { 
-        status: 'Production Ready',
-        projectManagerId: projectForm.projectManager,
-        industry: projectForm.industry,
-        country: projectForm.country,
-        // CHANGE: Send the name clearly as projectBriefName
-        projectBriefName: projectForm.name 
-      }, 
-      { headers: { Authorization: `Bearer ${token}` } }
+  // Helper to get items for a specific date
+  const getItemsForDate = (date) => {
+    const dateStr = date.toLocaleDateString('en-CA');
+    return allScheduledItems.filter(item => 
+      item.date.toLocaleDateString('en-CA') === dateStr
     );
+  };
 
-    toast.success("Project launched successfully!");
-    setShowProjectModal(false);
-    fetchData(); 
-  } catch (err) {
-    toast.error("Failed to launch project");
-  } finally {
-    setIsSubmittingProject(false);
-  }
-};
+  // Custom tile content for calendar
+  const tileContent = ({ date, view }) => {
+    if (view === 'month') {
+      const items = getItemsForDate(date);
+      if (items.length === 0) return null;
+      return (
+        <div className="flex justify-center gap-0.5 mt-1">
+          {items.some(i => i.type === 'followup') && (
+            <div className="w-1.5 h-1.5 rounded-full bg-orange-500"></div>
+          )}
+          {items.some(i => i.type === 'feasibility') && (
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-500"></div>
+          )}
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="lg:ml-64 md:ml-20 ml-0 p-4 md:p-6 lg:p-10 min-h-screen bg-blue-100 transition-all duration-300">
       <div className="max-w-[1600px] mx-auto">
 
         {/* SUMMARY STATS */}
-        {/* SUMMARY STATS - Compact Version */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {/* TOTAL LEADS CARD (Slim) */}
-          
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div className="bg-blue-500 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
+                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+              <Briefcase size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Today's Leads</p>
+              <h3 className="text-xl font-black text-slate-100 leading-none">{generatedLeads.length}</h3>
+            </div>
+          </div>
 
-          {/* NEW LEADS (Slim) */}
-        <div className="bg-blue-500 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-            <Briefcase size={20} />
+          <div className="bg-orange-100 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
+                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
+              <CalendarIcon size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest leading-none mb-1">Follow-ups</p>
+              <h3 className="text-xl font-black text-orange-600 leading-none">{followUps.length}</h3>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Today's Leads</p>
-            <h3 className="text-xl font-black text-slate-100 leading-none">{generatedLeads.length}</h3>
-          </div>
-        </div>
 
-        {/* FOLLOW-UPS (Slim) */}
-        <div className="bg-orange-100 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-          <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
-            <Calendar size={20} />
-          </div>
-          <div>
-            <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest leading-none mb-1">Follow-ups</p>
-            <h3 className="text-xl font-black text-orange-600 leading-none">{followUps.length}</h3>
-          </div>
-        </div>
-
-        {/* FEASIBILITY (Slim) */}
-        <div className="bg-purple-100 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-          <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0">
-            <TrendingUp size={20} />
-          </div>
-          <div>
-            <p className="text-[9px] font-black text-purple-600 uppercase tracking-widest leading-none mb-1">Feasibility</p>
-            <h3 className="text-xl font-black text-purple-600 leading-none">{feasibilityTasks.length}</h3>
+          <div className="bg-purple-100 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
+                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0">
+              <TrendingUp size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-purple-600 uppercase tracking-widest leading-none mb-1">Feasibility</p>
+              <h3 className="text-xl font-black text-purple-600 leading-none">{feasibilityTasks.length}</h3>
+            </div>
           </div>
           
-        </div>
-         <div className="bg-blue-900 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-          <div className="p-3 bg-slate-100 text-slate-900 rounded-xl shrink-0">
-            <Target size={20} />
+          <div className="bg-blue-900 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
+                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="p-3 bg-slate-100 text-slate-900 rounded-xl shrink-0">
+              <Target size={20} />
+            </div>
+            <div>
+              <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Total Leads</p>
+              <h3 className="text-xl font-black text-slate-100 leading-none">
+                {generatedLeads.length + followUps.length + feasibilityTasks.length}
+              </h3>
+            </div>
           </div>
-          <div>
-            <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Total Leads</p>
-            <h3 className="text-xl font-black text-slate-100 leading-none">
-              {generatedLeads.length + followUps.length + feasibilityTasks.length}
-            </h3>
-          </div>
         </div>
-      </div>
-     
+      
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 lg:gap-10">
           <div className="xl:col-span-3 space-y-10">
-            {/* PIPELINE */}
             {/* PIPELINE SECTION */}
-        <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-              <Target size={20} className="text-blue-600"/> Today's Generated Pipeline
-            </h2>
-            {/* Page Indicator */}
-            {totalPages > 1 && (
-              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Page {currentPage} of {totalPages}
-              </span>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {loading ? (
-              <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-300" /></div>
-            ) : generatedLeads.length === 0 ? (
-              <p className="text-slate-400 text-sm italic text-center py-10">No leads generated today yet.</p>
-            ) : (
-              <>
-                {/* Render only the leads for the current page */}
-                {currentLeads.map((lead) => (
-                  <LeadCard 
-                    key={lead._id} 
-                    lead={lead} 
-                    getStatusStyle={getStatusStyle}
-                    setSelectedLead={setSelectedLead} 
-                    setShowActionModal={setShowActionModal}
-                  />
-                ))}
-
-                {/* PAGINATION CONTROLS */}
+            <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                  <Target size={20} className="text-blue-600"/> Today's Generated Pipeline
+                </h2>
                 {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-slate-50">
-                    <button
-                      onClick={() => paginate(Math.max(1, currentPage - 1))}
-                      disabled={currentPage === 1}
-                      className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                    >
-                      <ChevronDown className="rotate-90" size={18} />
-                    </button>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                )}
+              </div>
 
-                    <div className="flex gap-1">
-                      {[...Array(totalPages)].map((_, i) => (
+              <div className="space-y-4">
+                {loading ? (
+                  <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-300" /></div>
+                ) : generatedLeads.length === 0 ? (
+                  <p className="text-slate-400 text-sm italic text-center py-10">No leads generated today yet.</p>
+                ) : (
+                  <>
+                    {currentLeads.map((lead) => (
+                      <LeadCard 
+                        key={lead._id} 
+                        lead={lead} 
+                        getStatusStyle={getStatusStyle}
+                        setSelectedLead={setSelectedLead} 
+                        setShowActionModal={setShowActionModal}
+                      />
+                    ))}
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-slate-50">
                         <button
-                          key={i + 1}
-                          onClick={() => paginate(i + 1)}
-                          className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
-                            currentPage === i + 1 
-                            ? 'bg-blue-600 text-white shadow-md shadow-blue-100' 
-                            : 'text-slate-400 hover:bg-slate-50'
-                          }`}
+                          onClick={() => paginate(Math.max(1, currentPage - 1))}
+                          disabled={currentPage === 1}
+                          className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
                         >
-                          {i + 1}
+                          <ChevronDown className="rotate-90" size={18} />
                         </button>
-                      ))}
-                    </div>
-
+                        <div className="flex gap-1">
+                          {[...Array(totalPages)].map((_, i) => (
+                            <button
+                              key={i + 1}
+                              onClick={() => paginate(i + 1)}
+                              className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
+                                currentPage === i + 1 
+                                ? 'bg-blue-600 text-white shadow-md shadow-blue-100' 
+                                : 'text-slate-400 hover:bg-slate-50'
+                              }`}
+                            >
+                              {i + 1}
+                            </button>
+                          ))}
+                        </div>
                         <button
                           onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
                           disabled={currentPage === totalPages}
@@ -738,168 +739,184 @@ const handleProjectSubmit = async (e) => {
 
             {/* SCHEDULED FOR TODAY SECTION */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-  {/* FOLLOW-UPS LIST */}
-  <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
-    <div>
-      <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-        <Clock size={20} className="text-orange-600"/> Follow-ups Today
-      </h2>
-      <div className="space-y-4">
-        {followUps.length === 0 ? (
-          <p className="text-slate-400 text-sm italic text-center py-6">No follow-ups today.</p>
-        ) : currentFollowUps.map((lead) => (
-          <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-orange-200 transition-all">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
-                {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
+              {/* FOLLOW-UPS LIST */}
+              <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                      <Clock size={20} className="text-orange-600"/> Follow-ups Today
+                    </h2>
+                    <button
+                      onClick={() => setShowScheduledModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-black transition-all"
+                    >
+                      <CalendarDays size={14} />
+                      Scheduled
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {followUps.length === 0 ? (
+                      <p className="text-slate-400 text-sm italic text-center py-6">No follow-ups today.</p>
+                    ) : currentFollowUps.map((lead) => (
+                      <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-orange-200 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
+                            {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
+                            <p className="text-[10px] text-slate-900 font-bold uppercase">{lead.pocPhone}</p>
+                             {/* {lead.lastInteractionDesc && ( */}
+                              <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[180px]">
+                                📝 {lead.lastInteractionDesc}
+                              </p>
+                            {/* )} */}
+                          </div>
+                        </div>
+                        <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors"><ExternalLink size={16}/></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {totalFollowUpPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 mt-6">
+                    <button 
+                      onClick={() => setFollowUpPage(p => Math.max(1, p - 1))}
+                      disabled={followUpPage === 1}
+                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
+                    >
+                      {"<"}
+                    </button>
+                    <span className="text-[10px] font-black text-slate-500 uppercase">Page {followUpPage} / {totalFollowUpPages}</span>
+                    <button 
+                      onClick={() => setFollowUpPage(p => Math.min(totalFollowUpPages, p + 1))}
+                      disabled={followUpPage === totalFollowUpPages}
+                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
+                    >
+                      {">"}
+                    </button>
+                  </div>
+                )}
               </div>
-              <div className="min-w-0">
-                <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-                <p className="text-[10px] text-slate-900 font-bold uppercase">{lead.pocPhone}</p>
+
+              {/* FEASIBILITY TODAY LIST */}
+              <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                      <FileText size={20} className="text-purple-600"/> Feasibility Today
+                    </h2>
+                    <button
+                      onClick={() => setShowScheduledModal(true)}
+                      className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-black transition-all"
+                    >
+                      <CalendarDays size={14} />
+                      Scheduled
+                    </button>
+                  </div>
+                  <div className="space-y-4">
+                    {feasibilityTasks.length === 0 ? (
+                      <p className="text-slate-400 text-sm italic text-center py-6">No feasibility tasks for today.</p>
+                    ) : currentFeasibility.map((lead) => (
+                      <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all">
+                        <div className="flex items-center gap-4">
+                          <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
+                            <Briefcase size={18}/>
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
+                            <div className="flex items-center gap-2">
+                              <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.feasibilityId}</p>
+                              <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">Scheduled</span>
+                            </div>
+                            {lead.lastInteractionDesc && (
+                              <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[180px]">
+                                💬 {lead.lastInteractionDesc}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"><ExternalLink size={16}/></button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {totalFeasibilityPages > 1 && (
+                  <div className="flex items-center justify-center gap-3 mt-6">
+                    <button 
+                      onClick={() => setFeasibilityPage(p => Math.max(1, p - 1))}
+                      disabled={feasibilityPage === 1}
+                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-[10px] font-black text-slate-500 uppercase">Page {feasibilityPage} / {totalFeasibilityPages}</span>
+                    <button 
+                      onClick={() => setFeasibilityPage(p => Math.min(totalFeasibilityPages, p + 1))}
+                      disabled={feasibilityPage === totalFeasibilityPages}
+                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                )}
+              </div>
+              
+              <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
+                <div>
+                  <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+                    <FileText size={20} className="text-purple-600"/>Today's Approaches
+                  </h2>
+                  <div className="space-y-4">
+                    {approachesToday.length === 0 ? (
+                      <p className="text-slate-400 text-sm italic text-center py-6">No approaches scheduled for today.</p>
+                    ) : (
+                      approachesToday.map((lead) => {
+                        return (
+                          <div 
+                            key={lead._id.$oid || lead._id} 
+                            onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })}
+                            className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all cursor-pointer"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
+                                <Briefcase size={18}/>
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
+                                <div className="flex items-center gap-2">
+                                  <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.companyName}</p>
+                                  <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">
+                                    Follow-up {lead.currentFollowUpStep}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={(e) => { 
+                                e.stopPropagation();
+                                setSelectedProspect(lead);
+                                setIsApproachModalOpen(true);
+                              }}
+                              className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"
+                            >
+                              <ExternalLink size={16}/>
+                            </button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
-            <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors"><ExternalLink size={16}/></button>
-          </div>
-        ))}
-      </div>
-    </div>
-
-    {/* Follow-up Pagination Controls */}
-    {totalFollowUpPages > 1 && (
-      <div className="flex items-center justify-center gap-3 mt-6">
-        <button 
-          onClick={() => setFollowUpPage(p => Math.max(1, p - 1))}
-          disabled={followUpPage === 1}
-          className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-        >
-          {"<"}
-        </button>
-        <span className="text-[10px] font-black text-slate-500 uppercase">Page {followUpPage} / {totalFollowUpPages}</span>
-        <button 
-          onClick={() => setFollowUpPage(p => Math.min(totalFollowUpPages, p + 1))}
-          disabled={followUpPage === totalFollowUpPages}
-          className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-        >
-          {">"}
-          </button>
-      </div>
-    )}
-  </div>
-
-      {/* FEASIBILITY TODAY LIST */}
-      <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
-        <div>
-          <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-            <FileText size={20} className="text-purple-600"/> Feasibility Today
-          </h2>
-          <div className="space-y-4">
-            {feasibilityTasks.length === 0 ? (
-              <p className="text-slate-400 text-sm italic text-center py-6">No feasibility tasks for today.</p>
-            ) : currentFeasibility.map((lead) => (
-              <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-                    <Briefcase size={18}/>
-                  </div>
-                 {/* In your currentFeasibility.map section */}
-                <div className="min-w-0">
-                  <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.feasibilityId}</p>
-                    {/* Adding a small tag to show the scheduled status */}
-                    <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">Scheduled</span>
-                  </div>
-                </div>
-                </div>
-                <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"><ExternalLink size={16}/></button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Feasibility Pagination Controls */}
-        {totalFeasibilityPages > 1 && (
-          <div className="flex items-center justify-center gap-3 mt-6">
-            <button 
-              onClick={() => setFeasibilityPage(p => Math.max(1, p - 1))}
-              disabled={feasibilityPage === 1}
-              className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span className="text-[10px] font-black text-slate-500 uppercase">Page {feasibilityPage} / {totalFeasibilityPages}</span>
-            <button 
-              onClick={() => setFeasibilityPage(p => Math.min(totalFeasibilityPages, p + 1))}
-              disabled={feasibilityPage === totalFeasibilityPages}
-              className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
-      </div>
-    <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
-  <div>
-    <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-      <FileText size={20} className="text-purple-600"/>Today's Approaches
-    </h2>
-    {/* Today's Approaches List */}
-    <div className="space-y-4">
-      {approachesToday.length === 0 ? (
-        <p className="text-slate-400 text-sm italic text-center py-6">No approaches scheduled for today.</p>
-      ) : (
-        approachesToday.map((lead) => {
-          // ADD THE RETURN KEYWORD HERE
-          return (
-            <div 
-              key={lead._id.$oid || lead._id} 
-              onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })}
-              className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all cursor-pointer"
-            >
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-                  <Briefcase size={18}/>
-                </div>
-                <div className="min-w-0">
-                  <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
-                  <div className="flex items-center gap-2">
-                    <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.companyName}</p>
-                    <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">
-                      Follow-up {lead.currentFollowUpStep} {/* Updated to match your JSON key */}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              <button 
-                onClick={(e) => { 
-                  e.stopPropagation(); // Prevent navigate from firing when clicking button
-                  setSelectedProspect(lead); // Set the specific lead data
-                  setIsApproachModalOpen(true);
-                }}
-                className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"
-              >
-                <ExternalLink size={16}/>
-              </button>
-            </div>
-          ); // End of return
-        })
-      )}
-    </div>
-  </div>
-
-  {/* Pagination Controls should also use approachesToday.length */}
-  {approachesToday.length > itemsPerPage && (
-    <div className="flex items-center justify-center gap-3 mt-6">
-       {/* ... pagination buttons ... */}
-    </div>
-  )}
-</div>
-    </div>
           </div>
 
           {/* --- SIDEBAR COLUMN --- */}
-        <div className="xl:col-span-1 space-y-6 ">
-          
+          <div className="xl:col-span-1 space-y-6 ">
+            
             {/* LEADS OVERVIEW SELECTOR */}
             <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out 
                 hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
@@ -908,7 +925,6 @@ const handleProjectSubmit = async (e) => {
                   <h3 className="text-lg font-black text-slate-800">Overview</h3>
                   <p className="text-[10px] text-slate-900 font-bold uppercase tracking-tight">Lead Volume</p>
                 </div>
-                {/* TOGGLE FILTER */}
                 <div className="flex bg-slate-100 p-1 rounded-xl">
                   <button 
                     onClick={() => setOverviewRange(7)}
@@ -939,71 +955,63 @@ const handleProjectSubmit = async (e) => {
                   <span className="text-sm font-bold text-slate-400 mb-1">leads</span>
                 </div>
 
-                {/* SUBTLE DECORATION */}
                 <div className="absolute bottom-4 right-6 ">
                   <TrendingUp size={40} className="text-slate-900" />
                 </div>
               </div>
-
             </div>
 
-          {/* DAILY GOAL CARD */}
-          <div className="bg-indigo-600 rounded-[2.5rem] p-4 text-white shadow-lg shadow-indigo-100 transition-all duration-300 ease-in-out 
+            {/* DAILY GOAL CARD */}
+            <div className="bg-indigo-600 rounded-[2.5rem] p-4 text-white shadow-lg shadow-indigo-100 transition-all duration-300 ease-in-out 
                 hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-indigo-500 rounded-lg">
-                <Target size={20} className="text-white"/>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-indigo-500 rounded-lg">
+                  <Target size={20} className="text-white"/>
+                </div>
+                <h3 className="text-lg font-black">Daily Goal</h3>
               </div>
-              <h3 className="text-lg font-black">Daily Goal</h3>
-            </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Tasks Remaining</p>
-                  {/* Sum of follow-ups and feasibility tasks currently in the lists */}
-                  <h4 className="text-4xl font-black">{followUps.length + feasibilityTasks.length}</h4>
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <div>
+                    <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Tasks Remaining</p>
+                    <h4 className="text-4xl font-black">{followUps.length + feasibilityTasks.length}</h4>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-indigo-100 text-[11px] leading-relaxed italic opacity-80">
+                    You have <span className="font-bold text-white">{followUps.length} follow-ups</span> and <span className="font-bold text-white">{feasibilityTasks.length} feasibility</span> checks left for today.
+                  </p>
                 </div>
               </div>
+            </div>
 
-              {/* Progress Bar */}
-              <div className="space-y-2">
-                <p className="text-indigo-100 text-[11px] leading-relaxed italic opacity-80">
-                  You have <span className="font-bold text-white">{followUps.length} follow-ups</span> and <span className="font-bold text-white">{feasibilityTasks.length} feasibility</span> checks left for today.
+            {/* PRO TIP CARD */}
+            <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm transition-all duration-300 ease-in-out 
+                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-amber-200">
+                  <AlertCircle size={18}/>
+                </div>
+                <h3 className="text-sm font-black text-amber-900 uppercase tracking-tight">Pro Tip</h3>
+              </div>
+              
+              <div className="relative">
+                <span className="absolute -top-4 -left-2 text-4xl text-orange-500 font-serif opacity-50">“</span>
+                <p className="text-amber-800 text-xs leading-relaxed font-bold italic relative z-10 px-2">
+                  {randomTip || "Loading your daily wisdom..."}
                 </p>
               </div>
             </div>
           </div>
-
-          {/* PRO TIP CARD */}
-          <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-amber-200">
-                <AlertCircle size={18}/>
-              </div>
-              <h3 className="text-sm font-black text-amber-900 uppercase tracking-tight">Pro Tip</h3>
-            </div>
-            
-            <div className="relative">
-              {/* Large decorative quotation mark */}
-              <span className="absolute -top-4 -left-2 text-4xl text-orange-500 font-serif opacity-50">“</span>
-              
-              <p className="text-amber-800 text-xs leading-relaxed font-bold italic relative z-10 px-2">
-                {randomTip || "Loading your daily wisdom..."}
-              </p>
-          </div>
-        </div>
-
-        </div>
         </div>
       </div>
 
       {/* --- ACTION MODAL --- */}
-        {showActionModal && (
+      {showActionModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] md:rounded-[3rem] p-6 md:p-10 shadow-2xl relative">
-            {/* Close Button */}
             <button 
               onClick={closeModal} 
               className="absolute top-6 right-6 md:top-10 md:right-10 text-slate-300 hover:text-slate-900 transition-colors"
@@ -1011,7 +1019,6 @@ const handleProjectSubmit = async (e) => {
               <X size={24}/>
             </button>
 
-            {/* STEP 1: Main Action Menu */}
             {actionStep === 1 && (
               <div className="animate-in fade-in zoom-in-95 duration-200">
                 <h2 className="text-3xl font-black text-slate-900 mb-2">Take Action</h2>
@@ -1020,18 +1027,16 @@ const handleProjectSubmit = async (e) => {
                 </p>
                 
                 <div className="space-y-3">
-                  {/* Set Follow-Up */}
                   <button 
                     onClick={() => setActionStep(2)} 
                     className="w-full flex items-center justify-between p-5 rounded-3xl bg-slate-50 hover:bg-amber-50 group border border-slate-100 transition-all"
                   >
                     <div className="flex items-center gap-4 text-slate-700 font-black group-hover:text-amber-600">
-                      <Calendar size={20} className="text-amber-500" /> Set Next Follow-Up
+                      <CalendarIcon size={20} className="text-amber-500" /> Set Next Follow-Up
                     </div>
                     <ChevronRight size={18} className="text-slate-300" />
                   </button>
 
-                  {/* Feasibility */}
                   <button 
                     onClick={openFeasibilityModal} 
                     className="w-full flex items-center justify-between p-5 rounded-3xl bg-slate-50 hover:bg-purple-50 group border border-slate-100 transition-all"
@@ -1042,9 +1047,6 @@ const handleProjectSubmit = async (e) => {
                     <ChevronRight size={18} className="text-slate-300" />
                   </button>
 
-                 
-
-                  {/* Close Lead */}
                   <button 
                     onClick={() => setActionStep(3)} 
                     className="w-full flex items-center justify-between p-5 rounded-3xl bg-rose-50 hover:bg-rose-100 group border border-rose-100 transition-all"
@@ -1054,29 +1056,24 @@ const handleProjectSubmit = async (e) => {
                     </div>
                     <ChevronRight size={18} />
                   </button>
-                   {/* Production Ready (New Flow) */}
+                  
                   <button
                     onClick={() => setActionStep(4)}
                     className="group relative w-full flex flex-col items-center gap-2 p-3 rounded-[1.5rem] bg-emerald-50 hover:bg-emerald-600 transition-all duration-500 border border-emerald-100 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-200 text-left"
                   >
-                    {/* Icon container: Reduced padding and icon size */}
                     <div className="p-1.5 bg-white rounded-xl text-emerald-600 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-sm">
                       <CheckCircle size={16} />
                     </div>
-
                     <div className="text-center">
-                      {/* Main text: Reduced from text-xs to text-[10px] */}
                       <span className="block text-[10px] font-black text-emerald-900 group-hover:text-white uppercase tracking-wider">
                         Production Ready
                       </span>
-                      {/* Subtext: Reduced from text-[10px] to text-[8px] */}
                     </div>
                   </button>
                 </div>
               </div>
             )}
 
-            {/* STEP 2: Follow-up Form */}
             {actionStep === 2 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-6">Follow-up Details</h2>
@@ -1118,23 +1115,22 @@ const handleProjectSubmit = async (e) => {
               </div>
             )}
 
-            {/* STEP 3: Conclusion (Won/Lost) */}
             {actionStep === 3 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Conclusion</h2>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-  <button 
-    onClick={() => setClosingData({...closingData, reason: 'lost'})} 
-    className={`col-span-2 mx-auto py-3 px-6 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${
-      closingData.reason === 'lost'
-        ? 'bg-rose-50 border-rose-500 text-rose-600'
-        : 'bg-slate-50 border-transparent text-slate-400'
-    }`}
-  >
-    Lost
-  </button>
-</div>
+                    <button 
+                      onClick={() => setClosingData({...closingData, reason: 'lost'})} 
+                      className={`col-span-2 mx-auto py-3 px-6 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${
+                        closingData.reason === 'lost'
+                          ? 'bg-rose-50 border-rose-500 text-rose-600'
+                          : 'bg-slate-50 border-transparent text-slate-400'
+                      }`}
+                    >
+                      Lost
+                    </button>
+                  </div>
                   <textarea 
                     placeholder="Final summary/reasons..." 
                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-32 resize-none font-medium outline-none" 
@@ -1152,7 +1148,6 @@ const handleProjectSubmit = async (e) => {
               </div>
             )}
 
-            {/* STEP 4: PM Selection (Production Ready) */}          
             {actionStep === 4 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Assign Project</h2>
@@ -1162,7 +1157,7 @@ const handleProjectSubmit = async (e) => {
                 
                 <div className="space-y-4">
                   <div>
-                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
                       Assign Project Manager
                     </label>
                     <select 
@@ -1184,7 +1179,6 @@ const handleProjectSubmit = async (e) => {
                     <button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
                     <button 
                       onClick={() => handleStatusUpdate(selectedLead._id, 'Production Ready', { 
-                        // Send null if selectedPM is an empty string
                         projectManagerId: selectedPM || null 
                       })} 
                       className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200"
@@ -1225,7 +1219,7 @@ const handleProjectSubmit = async (e) => {
                     type="date" 
                     readOnly 
                     className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" 
-                    value={feasibilityData.feasibilityDate} // Set this to today's date in state
+                    value={feasibilityData.feasibilityDate}
                   />
                 </div>
                 <div>
@@ -1271,149 +1265,246 @@ const handleProjectSubmit = async (e) => {
           </div>
         </div>
       )}
-{/* PROJECT LAUNCH MODAL */}
-{showProjectModal && (
-  <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[200] p-6">
-    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
-      <div className="flex justify-between items-center mb-10">
-        <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2>
-        <button onClick={() => setShowProjectModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors">
-          <X size={28} />
-        </button>
-      </div>
 
-     <form onSubmit={handleProjectSubmit} className="space-y-6">
-  {/* PROJECT TITLE */}
-  <div className="space-y-2">
-    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
-    <input 
-      type="text" required 
-      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700"
-      value={projectForm.name} 
-      onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} 
-    />
-  </div>
+      {/* PROJECT LAUNCH MODAL */}
+      {showProjectModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[200] p-6">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-10">
+              <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2>
+              <button onClick={() => setShowProjectModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors">
+                <X size={28} />
+              </button>
+            </div>
 
-  <div className="grid grid-cols-2 gap-6">
-    {/* INDUSTRY SELECTOR */}
-    <div className="space-y-2">
-      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label>
-      <CreatableSelect
-        isClearable
-        options={INDUSTRY_OPTIONS}
-        value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)}
-        onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })}
-        styles={customSelectStyles}
-        placeholder="Type or select..."
-      />
-    </div>
+            <form onSubmit={handleProjectSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
+                <input 
+                  type="text" required 
+                  className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700"
+                  value={projectForm.name} 
+                  onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} 
+                />
+              </div>
 
-    {/* COUNTRY SELECTOR */}
-    <div className="space-y-2">
-      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label>
-      <CreatableSelect
-        isClearable
-        options={POPULAR_COUNTRIES}
-        value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)}
-        onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })}
-        styles={customSelectStyles}
-        placeholder="Select country..."
-      />
-    </div>
-  </div>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label>
+                  <CreatableSelect
+                    isClearable
+                    options={INDUSTRY_OPTIONS}
+                    value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)}
+                    onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })}
+                    styles={customSelectStyles}
+                    placeholder="Type or select..."
+                  />
+                </div>
 
-  {/* PROJECT MANAGER SELECTOR */}
-  <div className="space-y-2">
-    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label>
-    <select 
-      required
-      className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none"
-      value={projectForm.projectManager}
-      onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
-    >
-      <option value="">Select a Manager...</option>
-      {projectManagers.map(pm => (
-        <option key={pm._id} value={pm._id}>{pm.name}</option>
-      ))}
-    </select>
-  </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label>
+                  <CreatableSelect
+                    isClearable
+                    options={POPULAR_COUNTRIES}
+                    value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)}
+                    onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })}
+                    styles={customSelectStyles}
+                    placeholder="Select country..."
+                  />
+                </div>
+              </div>
 
- <button 
-  type="submit" 
-  disabled={isSubmittingProject}
-  className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${
-    isSubmittingProject ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'
-  }`}
->
-  {isSubmittingProject ? (
-    <div className="flex items-center justify-center gap-2">
-      <Loader2 className="animate-spin" size={20} />
-      <span>Creating Project...</span>
-    </div>
-  ) : "Confirm & Create Project"}
-</button>
-</form>
-    </div>
-  </div>
-)}
-      {/* --- APPROACH MODAL IN DASHBOARD --- */}
-{isApproachModalOpen && (
-  <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left">
-    <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative border border-slate-100">
-      <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all">
-        <X size={24} />
-      </button>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label>
+                <select 
+                  required
+                  className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none"
+                  value={projectForm.projectManager}
+                  onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
+                >
+                  <option value="">Select a Manager...</option>
+                  {projectManagers.map(pm => (
+                    <option key={pm._id} value={pm._id}>{pm.name}</option>
+                  ))}
+                </select>
+              </div>
 
-      <div className="mb-8">
-        <h2 className="text-2xl font-black text-slate-800">Approach Prospect</h2>
-        <p className="text-slate-400 text-sm font-medium mt-1">Record the interaction for {selectedProspect?.companyName}.</p>
-      </div>
-
-      <form onSubmit={handleApproachSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label>
-          <div className="grid grid-cols-2 gap-3">
-            {['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((method) => (
-              <button
-                key={method}
-                type="button"
-                onClick={() => setApproachData({...approachData, method})}
-                className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
-                  approachData.method === method 
-                  ? 'border-blue-600 bg-blue-50 text-blue-600' 
-                  : 'border-slate-100 bg-slate-50 text-slate-400'
+              <button 
+                type="submit" 
+                disabled={isSubmittingProject}
+                className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${
+                  isSubmittingProject ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'
                 }`}
               >
-                {method}
+                {isSubmittingProject ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="animate-spin" size={20} />
+                    <span>Creating Project...</span>
+                  </div>
+                ) : "Confirm & Create Project"}
               </button>
-            ))}
+            </form>
           </div>
         </div>
+      )}
 
-        <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Summary of Discussion</label>
-          <textarea 
-            required
-            rows="4"
-            className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-medium text-slate-700 transition-all resize-none"
-            placeholder="What was discussed?"
-            value={approachData.summary}
-            onChange={(e) => setApproachData({...approachData, summary: e.target.value})}
-          />
+      {/* --- APPROACH MODAL IN DASHBOARD --- */}
+      {isApproachModalOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left">
+          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative border border-slate-100">
+            <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all">
+              <X size={24} />
+            </button>
+
+            <div className="mb-8">
+              <h2 className="text-2xl font-black text-slate-800">Approach Prospect</h2>
+              <p className="text-slate-400 text-sm font-medium mt-1">Record the interaction for {selectedProspect?.companyName}.</p>
+            </div>
+
+            <form onSubmit={handleApproachSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((method) => (
+                    <button
+                      key={method}
+                      type="button"
+                      onClick={() => setApproachData({...approachData, method})}
+                      className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
+                        approachData.method === method 
+                        ? 'border-blue-600 bg-blue-50 text-blue-600' 
+                        : 'border-slate-100 bg-slate-50 text-slate-400'
+                      }`}
+                    >
+                      {method}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Summary of Discussion</label>
+                <textarea 
+                  required
+                  rows="4"
+                  className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-medium text-slate-700 transition-all resize-none"
+                  placeholder="What was discussed?"
+                  value={approachData.summary}
+                  onChange={(e) => setApproachData({...approachData, summary: e.target.value})}
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={submittingApproach}
+                className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-blue-600 disabled:bg-slate-300 flex items-center justify-center gap-2"
+              >
+                {submittingApproach ? <Loader2 className="animate-spin" size={20}/> : <Send size={18}/>}
+                Confirm Approach
+              </button>
+            </form>
+          </div>
         </div>
+      )}
 
-        <button 
-          type="submit" 
-          disabled={submittingApproach}
-          className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-blue-600 disabled:bg-slate-300 flex items-center justify-center gap-2"
-        >
-          {submittingApproach ? <Loader2 className="animate-spin" size={20}/> : <Send size={18}/>}
-          Confirm Approach
-        </button>
-      </form>
-    </div>
-  </div>
-)}
+      {/* --- NEW SCHEDULED CALENDAR MODAL --- */}
+      {showScheduledModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl p-6 md:p-8 relative max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setShowScheduledModal(false)} 
+              className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors z-10"
+            >
+              <X size={24} />
+            </button>
+
+            <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
+              <CalendarDays size={24} className="text-purple-600" />
+              Scheduled Follow-ups & Feasibility
+            </h2>
+            <p className="text-slate-400 text-sm mb-6">View all upcoming scheduled tasks</p>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Calendar View */}
+              <div>
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                  Calendar View
+                </h3>
+                <Calendar
+                  onChange={setSelectedDate}
+                  value={selectedDate}
+                  tileContent={tileContent}
+                  className="rounded-2xl border-0 shadow-sm w-full"
+                  nextLabel={<ChevronRight size={18} />}
+                  prevLabel={<ChevronLeft size={18} />}
+                />
+                <div className="flex items-center justify-center gap-4 mt-4 text-xs">
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
+                    <span className="text-slate-500">Follow-up</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
+                    <span className="text-slate-500">Feasibility</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* List View for Selected Date */}
+              <div>
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  Tasks for {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </h3>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {getItemsForDate(selectedDate).length === 0 ? (
+                    <p className="text-slate-400 text-sm italic text-center py-8">No scheduled tasks for this date.</p>
+                  ) : (
+                    getItemsForDate(selectedDate).map((item) => (
+                      <div 
+                        key={item.id} 
+                        className={`p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer hover:shadow-md ${
+                          item.type === 'followup' 
+                            ? 'bg-orange-50 border-orange-100 hover:border-orange-200' 
+                            : 'bg-purple-50 border-purple-100 hover:border-purple-200'
+                        }`}
+                        onClick={() => {
+                          setShowScheduledModal(false);
+                          setSelectedLead(item.originalLead);
+                          setShowActionModal(true);
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`p-2 rounded-xl ${
+                            item.type === 'followup' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'
+                          }`}>
+                            {item.type === 'followup' ? <PhoneCall size={16} /> : <FileText size={16} />}
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-slate-800 text-sm">{item.title}</h4>
+                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">
+                              {item.type === 'followup' ? 'Follow-up' : 'Feasibility'} • {item.date.toLocaleDateString()}
+                            </p>
+                            {item.originalLead.lastInteractionDesc && (
+                              <p className="text-[9px] text-slate-400 italic mt-1 truncate max-w-[200px]">
+                                "{item.originalLead.lastInteractionDesc}"
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <button className="p-2 bg-white rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors">
+                          <ExternalLink size={14} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>  
   );
 };

@@ -43,7 +43,7 @@ const ParticleSwarm = () => {
       let y0 = (Math.random() - 0.5) * 8;
 
       // 2. Diagonal Tilt (Synced with Login logic)
-      const tiltX = Math.PI / 15;
+      const tiltX = Math.PI / 20;
       const tiltZ = Math.PI / 15;
 
       let x1 = x0 * Math.cos(tiltZ) - y0 * Math.sin(tiltZ);
