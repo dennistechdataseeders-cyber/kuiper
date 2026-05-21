@@ -7,7 +7,7 @@ import {
   CheckCircle, Building2, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-
+import { useSidebar } from '../context/SidebarContext';
 // --- SUB-COMPONENT: EXPANDABLE ORG CARD ---
 const OrganizationCard = ({ org, onEdit, onDelete, userRole }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -150,7 +150,7 @@ const Organizations = () => {
   const [editingId, setEditingId] = useState(null); 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
-
+  const { isCollapsed } = useSidebar();
   // Role Logic
   const userRole = localStorage.getItem('role'); // Assumes role is saved as 'Admin' or 'Sales Manager'
   const canModify = userRole === 'Admin' || userRole === 'Sales Manager' || userRole === 'Sales';
@@ -276,18 +276,30 @@ const Organizations = () => {
   };
 
   return (
-    <div className="p-8 lg:ml-64 min-h-screen bg-blue-100">
+    <div
+      className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+        isCollapsed ? 'ml-20' : 'ml-64'
+      }`}
+    >
       
       {/* HEADER SECTION */}
-      <div className="max-w-6xl mx-auto mb-10 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-6">
-        <div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+        {/* <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-1">Organizations</h1>
           <p className="text-slate-500 font-bold flex items-center gap-2">
             <CheckCircle size={16} className="text-blue-500" /> 
             {orgs.length} Registered Entities
           </p>
+        </div> */}
+        <div>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+           Organizations
+          </h1>
+          <p className="text-slate-500 font-bold flex items-center gap-2">
+            <CheckCircle size={16} className="text-blue-500" /> 
+            {orgs.length} Registered Entities
+          </p>
         </div>
-
         {/* New Entry Button Restricted by Role */}
         {canModify && (
           <button onClick={() => setIsModalOpen(true)} className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl shadow-blue-200 transition-all active:scale-95">

@@ -225,7 +225,11 @@ router.get('/projects', authorize('Admin', 'Project Manager'), async (req, res) 
       .populate('projectManager', 'name email')
       .populate({
         path: 'feeds',
-        populate: { path: 'assignedDevelopers', select: 'name', model: 'User' }
+        populate: {
+          path: 'assignedDevelopers',
+          select: 'name email',
+          model: 'User'
+        }
       });
     res.json(data);
   } catch (err) {
@@ -387,6 +391,59 @@ router.post('/change-password', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+router.post(
+  '/feeds/push-task',
+  authorize('Project Manager', 'Admin'),
+  async (req, res) => {
+    try {
+      const io = req.app.get('io');
+
+      const {
+        feedId,
+        projectId,
+        details,
+        targetUsers
+      } = req.body;
+
+     const createdTask = await Task.create({
+        feedId,
+        projectId,
+        performerId: req.user._id,
+        targetUsers,
+        details,
+        status: 'Pending'
+      });
+
+      const task = await Task.findById(createdTask._id)
+        .populate('projectId', 'name')
+        .populate('feedId', 'name')
+        .populate('targetUsers', 'name')
+        .populate('performerId', 'name');
+
+      // REALTIME PUSH
+      targetUsers.forEach(userId => {
+        io.to(userId.toString()).emit(
+          'new_task',
+          task
+        );
+      });
+
+      await Log.create({
+        actionType: 'TASK_PUSHED',
+        performerId: req.user._id,
+        details: `Pushed task to developers`
+      });
+
+      res.json(task);
+
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({
+        error: 'Failed to push task'
+      });
+    }
+  }
+);
 router.put('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const {
@@ -420,7 +477,77 @@ router.put('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res)
     res.status(500).json({ error: err.message });
   }
 });
+// GET TASK PROGRESS FOR PM
+router.get(
+  '/pm/task-progress',
+  authorize('Project Manager', 'Admin'),
+  async (req, res) => {
+    try {
+      // Find projects managed by current PM
+      const projects = await Project.find({
+        projectManager: req.user._id
+      })
+      .populate({
+        path: 'feeds',
+        populate: [
+          {
+            path: 'assignedDevelopers',
+            select: 'name email',
+            model: 'User'
+          }
+        ]
+      });
 
+      // Get all tasks related to those projects
+      const projectIds = projects.map(p => p._id);
+
+      const tasks = await Task.find({
+        projectId: { $in: projectIds }
+      })
+      .populate('feedId')
+      .populate('targetUsers', 'name')
+      .populate('performerId', 'name');
+
+      // Merge tasks into feeds
+      const formattedProjects = projects.map(project => {
+        const feeds = project.feeds.map(feed => {
+          const feedTasks = tasks.filter(
+            task =>
+              task.feedId &&
+              task.feedId._id.toString() === feed._id.toString()
+          );
+
+          const completed = feedTasks.filter(
+            t => t.status === 'Completed'
+          ).length;
+
+          const progress =
+            feedTasks.length > 0
+              ? Math.round((completed / feedTasks.length) * 100)
+              : 0;
+
+          return {
+            ...feed.toObject(),
+            tasks: feedTasks,
+            progress
+          };
+        });
+
+        return {
+          ...project.toObject(),
+          feeds
+        };
+      });
+
+      res.json(formattedProjects);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({
+        error: 'Failed to fetch task progress'
+      });
+    }
+  }
+);
 router.delete('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const feed = await Feed.findById(req.params.id);
@@ -446,7 +573,7 @@ router.get('/users/clients', authorize('Admin', 'Sales', 'Project Manager', 'Sal
 
 router.get('/users/developers', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
-    const developers = await User.find({ role: 'Developer' }).select('name email');
+    const developers = await User.find({ role: 'Developer' }).select('name email _id');
     res.json(developers);
   } catch (err) {
     res.status(500).json({ error: err.message });

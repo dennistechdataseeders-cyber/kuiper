@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
+import { useSidebar } from '../context/SidebarContext';
 import { 
   Target, User, Mail, Phone, Clock, TrendingUp, Briefcase, 
   Calendar as CalendarIcon, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
@@ -118,6 +119,7 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal })
 
 const SalesDashboard = () => {
   const [randomTip, setRandomTip] = useState("");
+  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const [generatedLeads, setGeneratedLeads] = useState([]);
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
@@ -615,57 +617,13 @@ const SalesDashboard = () => {
   };
 
   return (
-    <div className="lg:ml-64 md:ml-20 ml-0 p-4 md:p-6 lg:p-10 min-h-screen bg-blue-100 transition-all duration-300">
+      <div
+        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+          isCollapsed ? 'ml-20' : 'ml-64'
+        }`}
+      >      
       <div className="max-w-[1600px] mx-auto">
 
-        {/* SUMMARY STATS */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <div className="bg-blue-500 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-              <Briefcase size={20} />
-            </div>
-            <div>
-              <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Today's Leads</p>
-              <h3 className="text-xl font-black text-slate-100 leading-none">{generatedLeads.length}</h3>
-            </div>
-          </div>
-
-          <div className="bg-orange-100 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-            <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
-              <CalendarIcon size={20} />
-            </div>
-            <div>
-              <p className="text-[9px] font-black text-orange-600 uppercase tracking-widest leading-none mb-1">Follow-ups</p>
-              <h3 className="text-xl font-black text-orange-600 leading-none">{followUps.length}</h3>
-            </div>
-          </div>
-
-          <div className="bg-purple-100 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-            <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0">
-              <TrendingUp size={20} />
-            </div>
-            <div>
-              <p className="text-[9px] font-black text-purple-600 uppercase tracking-widest leading-none mb-1">Feasibility</p>
-              <h3 className="text-xl font-black text-purple-600 leading-none">{feasibilityTasks.length}</h3>
-            </div>
-          </div>
-          
-          <div className="bg-blue-900 p-4 rounded-[1.5rem] shadow-sm border border-slate-100 flex items-center gap-4 transition-all duration-300 ease-in-out 
-                  hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-            <div className="p-3 bg-slate-100 text-slate-900 rounded-xl shrink-0">
-              <Target size={20} />
-            </div>
-            <div>
-              <p className="text-[9px] font-black text-slate-100 uppercase tracking-widest leading-none mb-1">Total Leads</p>
-              <h3 className="text-xl font-black text-slate-100 leading-none">
-                {generatedLeads.length + followUps.length + feasibilityTasks.length}
-              </h3>
-            </div>
-          </div>
-        </div>
       
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 lg:gap-10">
           <div className="xl:col-span-3 space-y-10">
@@ -915,11 +873,53 @@ const SalesDashboard = () => {
           </div>
 
           {/* --- SIDEBAR COLUMN --- */}
+
           <div className="xl:col-span-1 space-y-6 ">
-            
+           <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl p-4 shadow-sm border border-slate-100 transition-all hover:shadow-md">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center">
+                  <Briefcase size={14} />
+                </div>
+                <div>
+                  <p className="text-[7px] font-black text-slate-900 uppercase">Today's Leads</p>
+                  <p className="text-lg font-black text-blue-600 leading-tight">{generatedLeads.length}</p>
+                </div>
+              </div>
+
+              <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center">
+                  <CalendarIcon size={14} />
+                </div>
+                <div>
+                  <p className="text-[7px] font-black text-slate-900 uppercase">Follow-ups</p>
+                  <p className="text-lg font-black text-orange-600 leading-tight">{followUps.length}</p>
+                </div>
+              </div>
+
+              <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-500 text-white flex items-center justify-center">
+                  <TrendingUp size={14} />
+                </div>
+                <div>
+                  <p className="text-[7px] font-black text-slate-900 uppercase">Feasibility</p>
+                  <p className="text-lg font-black text-purple-600 leading-tight">{feasibilityTasks.length}</p>
+                </div>
+              </div>
+
+              <div className="w-px h-8 bg-slate-200 hidden lg:block"></div>
+
+             
+            </div>
+          </div>  
             {/* LEADS OVERVIEW SELECTOR */}
             <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out 
                 hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+              
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h3 className="text-lg font-black text-slate-800">Overview</h3>
@@ -960,33 +960,6 @@ const SalesDashboard = () => {
                 </div>
               </div>
             </div>
-
-            {/* DAILY GOAL CARD */}
-            <div className="bg-indigo-600 rounded-[2.5rem] p-4 text-white shadow-lg shadow-indigo-100 transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-indigo-500 rounded-lg">
-                  <Target size={20} className="text-white"/>
-                </div>
-                <h3 className="text-lg font-black">Daily Goal</h3>
-              </div>
-
-              <div className="space-y-4">
-                <div className="flex justify-between items-end">
-                  <div>
-                    <p className="text-[10px] font-black text-indigo-300 uppercase tracking-widest mb-1">Tasks Remaining</p>
-                    <h4 className="text-4xl font-black">{followUps.length + feasibilityTasks.length}</h4>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-indigo-100 text-[11px] leading-relaxed italic opacity-80">
-                    You have <span className="font-bold text-white">{followUps.length} follow-ups</span> and <span className="font-bold text-white">{feasibilityTasks.length} feasibility</span> checks left for today.
-                  </p>
-                </div>
-              </div>
-            </div>
-
             {/* PRO TIP CARD */}
             <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm transition-all duration-300 ease-in-out 
                 hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
@@ -1183,7 +1156,7 @@ const SalesDashboard = () => {
                       })} 
                       className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200"
                     >
-                      {selectedPM ? "Assign & Convert" : "Move to Unassigned"}
+                      {selectedPM ? "Assign & Convert" : "Move to Production"}
                     </button>
                   </div>
                 </div>

@@ -3,6 +3,8 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import axios from 'axios';
 import './index.css';
+import { SidebarProvider } from './context/SidebarContext';
+import { Toaster } from 'react-hot-toast';
 
 // Global Axios Interceptor
 axios.interceptors.response.use(
@@ -19,6 +21,20 @@ axios.interceptors.response.use(
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+   <SidebarProvider>
+      <App />
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 3000,
+          style: {
+            background: '#1e293b',
+            color: '#fff',
+            fontWeight: 'bold',
+            borderRadius: '12px',
+          },
+        }}
+      />
+    </SidebarProvider>
   </React.StrictMode>
 );

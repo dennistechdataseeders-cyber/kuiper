@@ -1,6 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { useSidebar } from '../context/SidebarContext';
 import {
   Plus,
   X,
@@ -358,7 +359,7 @@ const LeadGeneration = () => {
     pocEmail: '',
     referredBy: ''
   });
-
+  const { isCollapsed } = useSidebar();
   const fetchData = useCallback(async () => {
     setLoading(true);
 
@@ -641,7 +642,11 @@ const LeadGeneration = () => {
   };
 
   return (
-    <div className="p-8 lg:ml-64 min-h-screen bg-blue-100">
+        <div
+        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+          isCollapsed ? 'ml-20' : 'ml-64'
+        }`}
+      >
       {/* HEADER */}
       <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
         <div>

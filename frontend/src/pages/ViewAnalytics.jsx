@@ -5,14 +5,14 @@ import {
   ChevronRight, ChevronDown, ChevronUp, Zap 
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-
+import { useSidebar } from '../context/SidebarContext';
 const ViewAnalytics = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expandedLog, setExpandedLog] = useState(null);
-  
+  const { isCollapsed } = useSidebar();
   const fetchLogs = async (page) => {
     setLoading(true);
     try {
@@ -46,7 +46,11 @@ const ViewAnalytics = () => {
   };
 
   return (
-    <div className="lg:ml-64 p-6 bg-blue-100 min-h-screen font-sans">
+    <div
+        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+          isCollapsed ? 'ml-20' : 'ml-64'
+        }`}
+      >
       <div className="max-w-4xl mx-auto">
         {/* Header Section */}
         <div className="flex items-center justify-between mb-8">

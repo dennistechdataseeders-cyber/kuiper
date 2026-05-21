@@ -5,7 +5,7 @@ import {
   Clock, FileText, Briefcase, ChevronDown, ChevronLeft, ChevronRight, User, Loader2, BarChart2, TrendingUp, Filter
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-
+import { useSidebar } from '../context/SidebarContext';
 // Reusable Lead Detail Card (Read-Only)
 const LeadDetailCard = ({ lead }) => {
   const [isExpanded, setIsExpanded] = useState(false);
@@ -85,7 +85,7 @@ const SalesManagerDashboard = () => {
   const [teamStats, setTeamStats] = useState([]);
   const [repsList, setRepsList] = useState([]); // List of unique reps for the filter
   const [selectedRep, setSelectedRep] = useState("All"); // Global Filter State
-  
+  const { isCollapsed } = useSidebar();
   const [rawPipeline, setRawPipeline] = useState([]);
   const [rawFollowUps, setRawFollowUps] = useState([]);
   const [rawFeasibility, setRawFeasibility] = useState([]);
@@ -154,7 +154,11 @@ const SalesManagerDashboard = () => {
   };
 
   return (
-    <div className="p-4 lg:p-8 lg:ml-64 bg-blue-100 min-h-screen">
+    <div
+        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+          isCollapsed ? 'ml-20' : 'ml-64'
+        }`}
+      >
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
         <div>
           <h1 className="text-4xl font-black text-slate-900 tracking-tight">Sales Command</h1>

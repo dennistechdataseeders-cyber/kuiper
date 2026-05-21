@@ -8,6 +8,7 @@ import {
   Mail, Send, ChevronDown, ChevronUp, Calendar, 
   CheckCircle2, Clock, Trash2, AlertCircle
 } from 'lucide-react';
+import { useSidebar } from '../context/SidebarContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API_BASE_URL from '../config';
@@ -15,7 +16,7 @@ import API_BASE_URL from '../config';
 const Prospects = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  
+  const { isCollapsed } = useSidebar();
   // Core State
   const [prospects, setProspects] = useState([]);
   const [bucketCount, setBucketCount] = useState(0);
@@ -212,17 +213,24 @@ const Prospects = () => {
   useEffect(() => { setCurrentPage(1); }, [searchTerm, statusFilter]);
 
   return (
-    <div className="lg:ml-64 p-8 min-h-screen bg-blue-100">
+    <div
+        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+          isCollapsed ? 'ml-20' : 'ml-64'
+        }`}
+      >
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start mb-10 gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight">
-            {isSM ? "Master Inventory" : "My Workspace"}
+          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
+             {isSM ? "Master Inventory" : "My Workspace"}
           </h1>
-          <p className="text-slate-500 font-medium mt-1">Track and manage your prospect outreach steps.</p>
+          <p className="text-slate-500 font-medium">
+           <p className="text-slate-500 font-medium mt-1">Track and manage your prospect outreach steps.</p>
+          </p>
         </div>
+
         
-        <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           {!isSM && (
             <div className="bg-white px-6 py-3 rounded-2xl border border-emerald-100 flex items-center gap-4 shadow-sm">
               <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Database size={20} /></div>
@@ -230,7 +238,7 @@ const Prospects = () => {
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Global Bucket</p>
                 <p className="text-xl font-black text-slate-800">{bucketCount}</p>
               </div>
-            </div>
+            </div>  
           )}
 
           {isSM && (

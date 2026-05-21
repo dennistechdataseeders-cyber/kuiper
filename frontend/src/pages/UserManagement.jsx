@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff } from 'lucide-react';
 import API_BASE_URL from '../config';
-
+import { useSidebar } from '../context/SidebarContext';
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [showModal, setShowModal] = useState(false);
@@ -12,7 +12,7 @@ const UserManagement = () => {
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
-
+  const { isCollapsed } = useSidebar();
   const [formData, setFormData] = useState({ 
     name: '', 
     email: '', 
@@ -105,7 +105,11 @@ const UserManagement = () => {
   };
 
   return (
-    <div className="ml-20 lg:ml-64 p-4 lg:p-8 bg-blue-100 min-h-screen transition-all">
+   <div
+      className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+        isCollapsed ? 'ml-20' : 'ml-64'
+      }`}
+    >
       {/* Header and Add Button */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>

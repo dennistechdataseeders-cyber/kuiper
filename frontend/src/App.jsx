@@ -16,6 +16,10 @@ import ProjectDetailView from './pages/ProjectDetailView';
 import DeveloperBucket from './components/DeveloperBucket';
 import Profile from './pages/Profile';
 import ProjectFeeds from './pages/ProjectFeeds';  
+import PMTaskProgress from './pages/PMTaskProgress';
+import Worklog from './pages/Worklog';
+import ResourceAnalytics from './pages/ResourceAnalytics';
+import EmailTrigger from './pages/EmailTrigger';
 import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
@@ -114,7 +118,20 @@ function AppContent() {
                     <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
                     <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
                     <Route path="/sales/prospects" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Prospects /></ProtectedRoute>} />
-
+                    <Route
+                      path="/sales/email-trigger"
+                      element={
+                        <ProtectedRoute
+                          allowedRoles={[
+                            'Sales',
+                            'Admin',
+                            'Sales Manager'
+                          ]}
+                        >
+                          <EmailTrigger />
+                        </ProtectedRoute>
+                      }
+                    />
                     {/* Management */}
                     <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
                     <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
@@ -123,11 +140,15 @@ function AppContent() {
                         <ProjectFeeds />
                       </ProtectedRoute>
                     } />
+                    <Route path="/pm/task-progress" element={<PMTaskProgress />}/>
+                    <Route path="/pm/resource-analytics"  element={    <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ResourceAnalytics /></ProtectedRoute>  }/>
+
                     {/* Developer */}
                     <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
                     <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
                     <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
-
+                    <Route path="/developer/worklog" element={ <ProtectedRoute allowedRoles={['Developer', 'Admin']}> <Worklog /></ProtectedRoute>}/>    
+                    
                     {/* Shared */}
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />

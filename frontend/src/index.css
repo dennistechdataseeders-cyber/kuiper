@@ -30,13 +30,12 @@
 }
 
 /* --- Base Body Styles --- */
-body {
-  margin: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  @apply bg-slate-50 text-slate-900;
+html,
+body,
+#root {
+  background-color: #dbeafe;
+  min-height: 100vh;
 }
-
 /* --- Utility Classes --- */
 .animate-cyber-glow {
   animation: cyber-glow 3s ease-in-out infinite;
