@@ -18,7 +18,8 @@ import {
   Search,
   UserCheck,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  CheckCircle
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
@@ -164,38 +165,70 @@ const ProjectManagement = () => {
   }, [developers, developerSearchTerm]);
 
   const filteredProjects = useMemo(() => {
-    let result = [...projects];
+  let result = [...projects];
 
+  // FILTER PROJECTS FOR CURRENT PM
+  result = result.filter(
+    (p) =>
+      p.projectManager?._id === currentUserId ||
+      p.projectManager === currentUserId
+  );
+
+  // FILTER BY ASSIGNED / UNASSIGNED
+  if (activeFilter === 'Assigned') {
     result = result.filter(
-      p => p.projectManager?._id === currentUserId || p.projectManager === currentUserId
+      (p) =>
+        p.country &&
+        p.country.trim() !== '' &&
+        p.country !== 'Not Specified'
     );
+  } else if (activeFilter === 'Unassigned') {
+    result = result.filter(
+      (p) =>
+        !p.country ||
+        p.country.trim() === '' ||
+        p.country === 'Not Specified'
+    );
+  }
 
-    if (activeFilter === 'Assigned') {
-      result = result.filter(
-        p => p.country && p.country.trim() !== "" && p.country !== 'Not Specified'
-      );
-    } else if (activeFilter === 'Unassigned') {
-      result = result.filter(
-        p => !p.country || p.country.trim() === "" || p.country === 'Not Specified'
-      );
-    }
+  // SEARCH FILTER
+  if (searchTerm.trim()) {
+    const search = searchTerm.toLowerCase().trim();
 
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      result = result.filter(project =>
-        project.projectCustomId?.toLowerCase().includes(search) ||
-        project.name?.toLowerCase().includes(search)
-      );
-    }
+    result = result.filter((project) => {
+      const searchableFields = [
+        project.projectCustomId,
+        project.name,
+        project.industry,
+        project.country,
+        project.projectManager?.name,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-    result.sort((a, b) => {
-      const aId = a.projectCustomId || '';
-      const bId = b.projectCustomId || '';
-      return aId.localeCompare(bId, undefined, { numeric: true, sensitivity: 'base' });
+      return searchableFields.includes(search);
     });
+  }
 
-    return result;
-  }, [projects, activeFilter, currentUserId, searchTerm]);
+  // SORT PROJECTS
+  result.sort((a, b) => {
+    const aId = a.projectCustomId || '';
+    const bId = b.projectCustomId || '';
+
+    return aId.localeCompare(bId, undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
+
+  return result;
+}, [
+  projects,
+  activeFilter,
+  currentUserId,
+  searchTerm
+]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -427,12 +460,15 @@ const ProjectManagement = () => {
 
         <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
           <div className="relative">
-            <input
+           <input
               type="text"
-              placeholder="Search project..."
+              placeholder="Search by project ID, name, country..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-64 pl-4 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-200 outline-none font-bold text-sm focus:border-blue-400"
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-64 pl-4 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-200 outline-none font-bold text-sm focus:border-blue-400 transition-all"
             />
           </div>
           <div className="h-6 w-px bg-slate-100 mx-2" />

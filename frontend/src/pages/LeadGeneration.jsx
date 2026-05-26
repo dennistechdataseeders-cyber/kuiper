@@ -2,6 +2,7 @@ import { useLocation } from 'react-router-dom';
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
+import toast from 'react-hot-toast';
 import {
   Plus,
   X,
@@ -16,7 +17,8 @@ import {
   ChevronRight,
   UserPlus,
   Search,
-  AlertCircle
+  AlertCircle,
+  Users
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -332,6 +334,9 @@ const LeadGeneration = () => {
   const [generatedLeads, setGeneratedLeads] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedOrgDetails, setSelectedOrgDetails] = useState(null);
+  const [availablePOCs, setAvailablePOCs] = useState([]);
+  const [selectedPOCIndex, setSelectedPOCIndex] = useState(null);
 
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
@@ -354,12 +359,16 @@ const LeadGeneration = () => {
   const [formData, setFormData] = useState({
     leadType: 'Inbound',
     organizationId: '',
+    pocId: '',
     pocName: '',
     pocPhone: '',
     pocEmail: '',
+    pocLinkedin: '',
     referredBy: ''
   });
+  
   const { isCollapsed } = useSidebar();
+  
   const fetchData = useCallback(async () => {
     setLoading(true);
 
@@ -406,6 +415,7 @@ const LeadGeneration = () => {
         "Error fetching data",
         err
       );
+      toast.error("Failed to fetch data");
     } finally {
       setLoading(false);
     }
@@ -428,15 +438,127 @@ const LeadGeneration = () => {
       setFormData((prev) => ({
         ...prev,
         organizationId: orgId,
-        pocName:
-          prospectData.pocName || '',
-        pocPhone:
-          prospectData.pocPhone || '',
-        pocEmail:
-          prospectData.pocEmail || ''
+        pocName: prospectData.pocName || '',
+        pocPhone: prospectData.pocPhone || '',
+        pocEmail: prospectData.pocEmail || '',
+        pocLinkedin: prospectData.linkedin || ''
       }));
+      
+      // Fetch organization details if orgId exists
+      if (orgId) {
+        fetchOrganizationDetails(orgId);
+      }
     }
   }, [prospectData]);
+
+  // Function to fetch organization details including POCs
+  const fetchOrganizationDetails = async (orgId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/api/orgs/${orgId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Handle different response structures
+      const orgData = response.data.data || response.data;
+      setSelectedOrgDetails(orgData);
+      
+      // Extract POCs from organization
+      const pocs = [];
+      
+      // First, check pointsOfContact array (new structure)
+      if (orgData.pointsOfContact && Array.isArray(orgData.pointsOfContact) && orgData.pointsOfContact.length > 0) {
+        orgData.pointsOfContact.forEach((poc, index) => {
+          pocs.push({
+            id: poc._id || `poc_${index}`,
+            name: poc.pocName,
+            email: poc.pocEmail,
+            phone: poc.pocPhone,
+            linkedin: poc.linkedin,
+            isPrimary: poc.isPrimary || false,
+            department: poc.department || 'Other'
+          });
+        });
+      } 
+      // Fallback to legacy fields if no pointsOfContact
+      else if (orgData.pocName) {
+        pocs.push({
+          id: 'main',
+          name: orgData.pocName,
+          email: orgData.pocEmail,
+          phone: orgData.pocPhone,
+          linkedin: orgData.linkedin,
+          isPrimary: true,
+          department: 'Primary Contact'
+        });
+      }
+      
+      console.log("Extracted POCs:", pocs);
+      setAvailablePOCs(pocs);
+      
+      // Auto-select first POC if available
+      if (pocs.length > 0 && !formData.pocName) {
+        handlePOCSelect(pocs[0]);
+      }
+      
+    } catch (err) {
+      console.error("Error fetching organization details:", err);
+      console.error("Error response:", err.response?.data);
+      setAvailablePOCs([]);
+      toast.error("Failed to load organization details");
+    }
+  };
+
+  // Handle POC selection
+  const handlePOCSelect = (poc) => {
+    setSelectedPOCIndex(poc.id);
+    setFormData(prev => ({
+      ...prev,
+      pocId: poc.id,
+      pocName: poc.name,
+      pocPhone: poc.phone || '',
+      pocEmail: poc.email || '',
+      pocLinkedin: poc.linkedin || ''
+    }));
+  };
+
+  // Handle organization change
+  const handleOrgChange = async (orgId) => {
+    const selectedOrg = orgs.find(
+      (o) => o._id === orgId
+    );
+
+    if (selectedOrg) {
+      setFormData((prev) => ({
+        ...prev,
+        organizationId: orgId,
+        pocId: '',
+        pocName: '',
+        pocPhone: '',
+        pocEmail: '',
+        pocLinkedin: ''
+      }));
+      
+      setSelectedPOCIndex(null);
+      setAvailablePOCs([]);
+      
+      // Fetch organization details including POCs
+      await fetchOrganizationDetails(orgId);
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        organizationId: '',
+        pocId: '',
+        pocName: '',
+        pocPhone: '',
+        pocEmail: '',
+        pocLinkedin: ''
+      }));
+      setSelectedPOCIndex(null);
+      setAvailablePOCs([]);
+      setSelectedOrgDetails(null);
+    }
+  };
 
   // QUICK ACTION
   const handleQuickAction = async (
@@ -481,12 +603,12 @@ const LeadGeneration = () => {
         }
       );
 
+      toast.success("Lead updated successfully");
       fetchData();
 
     } catch (err) {
       console.error(err);
-
-      alert(
+      toast.error(
         err.response?.data?.error ||
           'Failed to update lead'
       );
@@ -541,38 +663,11 @@ const LeadGeneration = () => {
     setCurrentPage(1);
   }, [filterStatus, searchTerm]);
 
-  const handleOrgChange = (orgId) => {
-    const selectedOrg = orgs.find(
-      (o) => o._id === orgId
-    );
-
-    if (selectedOrg) {
-      setFormData((prev) => ({
-        ...prev,
-        organizationId: orgId,
-        pocName:
-          selectedOrg.pocName || '',
-        pocPhone:
-          selectedOrg.pocPhone || '',
-        pocEmail:
-          selectedOrg.pocEmail || ''
-      }));
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        organizationId: '',
-        pocName: '',
-        pocPhone: '',
-        pocEmail: ''
-      }));
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (isAlreadyConverted) {
-      alert(
+      toast.error(
         "This prospect already has a lead generated."
       );
 
@@ -580,8 +675,16 @@ const LeadGeneration = () => {
     }
 
     if (!formData.organizationId) {
-      alert(
+      toast.error(
         "Please select an Organization first."
+      );
+
+      return;
+    }
+
+    if (!formData.pocName) {
+      toast.error(
+        "Please select a Point of Contact."
       );
 
       return;
@@ -597,7 +700,13 @@ const LeadGeneration = () => {
           ?._id;
 
       const finalData = {
-        ...formData,
+        leadType: formData.leadType,
+        organizationId: formData.organizationId,
+        pocName: formData.pocName,
+        pocPhone: formData.pocPhone,
+        pocEmail: formData.pocEmail,
+        linkedin: formData.pocLinkedin,
+        referredBy: formData.leadType === 'Reference' ? formData.referredBy : '',
         prospectId: prospectId || null
       };
 
@@ -613,7 +722,7 @@ const LeadGeneration = () => {
         }
       );
 
-      alert(
+      toast.success(
         "Lead Generated Successfully!"
       );
 
@@ -622,11 +731,17 @@ const LeadGeneration = () => {
       setFormData({
         leadType: 'Inbound',
         organizationId: '',
+        pocId: '',
         pocName: '',
         pocPhone: '',
         pocEmail: '',
+        pocLinkedin: '',
         referredBy: ''
       });
+      
+      setSelectedPOCIndex(null);
+      setAvailablePOCs([]);
+      setSelectedOrgDetails(null);
 
       fetchData();
 
@@ -635,18 +750,18 @@ const LeadGeneration = () => {
         err.response?.data?.error ||
         "Submission failed";
 
-      alert(
+      toast.error(
         `Failed to create lead: ${errorMessage}`
       );
     }
   };
 
   return (
-        <div
-        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
-          isCollapsed ? 'ml-20' : 'ml-64'
-        }`}
-      >
+    <div
+      className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
+        isCollapsed ? 'ml-20' : 'ml-64'
+      }`}
+    >
       {/* HEADER */}
       <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
         <div>
@@ -848,7 +963,7 @@ const LeadGeneration = () => {
 
       {/* MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
           <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl p-10 relative animate-in fade-in zoom-in duration-300 max-h-[95vh] overflow-y-auto border border-slate-100">
             <button
               onClick={() =>
@@ -972,7 +1087,7 @@ const LeadGeneration = () => {
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
-                    Select Org
+                    Select Organization
                   </label>
 
                   <select
@@ -995,7 +1110,7 @@ const LeadGeneration = () => {
                     }
                   >
                     <option value="">
-                      Choose...
+                      Select Organization...
                     </option>
 
                     {orgs &&
@@ -1005,10 +1120,8 @@ const LeadGeneration = () => {
                           key={org._id}
                           value={org._id}
                         >
-                          {org.name ||
-                            org.companyName ||
-                            org.organizationId
-                              ?.companyName ||
+                          {org.companyName ||
+                            org.name ||
                             "Unknown Organization"}
                         </option>
                       ))
@@ -1025,50 +1138,110 @@ const LeadGeneration = () => {
                 </div>
               </div>
 
+              {/* Contact Information Preview with POC Dropdown */}
               <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-2 text-center">
-                  Contact Information Preview
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center flex items-center justify-center gap-2">
+                  <Users size={14} />
+                  Point of Contact Selection
                 </h4>
 
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                    <Target
-                      size={16}
-                      className="text-blue-500"
-                    />
+                {availablePOCs.length > 0 ? (
+                  <>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
+                        Select POC
+                      </label>
+                      
+                      <select
+                        required
+                        disabled={isAlreadyConverted}
+                        className="w-full p-4 rounded-2xl border-2 transition-all outline-none font-bold bg-white border-transparent focus:border-blue-500 text-slate-700"
+                        value={selectedPOCIndex || ''}
+                        onChange={(e) => {
+                          const selectedPoc = availablePOCs.find(p => p.id === e.target.value);
+                          if (selectedPoc) handlePOCSelect(selectedPoc);
+                        }}
+                      >
+                        <option value="">Select a Point of Contact...</option>
+                        {availablePOCs.map((poc) => (
+                          <option key={poc.id} value={poc.id}>
+                            {poc.name} {poc.isPrimary && "(Primary)"} - {poc.department}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
 
-                    <p className="text-xs font-bold text-slate-700">
-                      {formData.pocName ||
-                        'POC Name'}
-                    </p>
+                    {formData.pocName && (
+                      <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-300">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                            Selected Contact Details
+                          </span>
+                          {selectedOrgDetails && (
+                            <span className="text-[8px] font-bold text-slate-400">
+                              {selectedOrgDetails.companyName}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                            <Target size={14} className="text-blue-500" />
+                            <div className="flex-1">
+                              <p className="text-[9px] font-bold text-slate-400">Name</p>
+                              <p className="text-sm font-bold text-slate-700">{formData.pocName}</p>
+                            </div>
+                          </div>
+
+                          {formData.pocEmail && (
+                            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                              <Mail size={14} className="text-emerald-500" />
+                              <div className="flex-1">
+                                <p className="text-[9px] font-bold text-slate-400">Email</p>
+                                <p className="text-sm font-bold text-slate-700">{formData.pocEmail}</p>
+                              </div>
+                            </div>
+                          )}
+
+                          {formData.pocPhone && (
+                            <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
+                              <Phone size={14} className="text-purple-500" />
+                              <div className="flex-1">
+                                <p className="text-[9px] font-bold text-slate-400">Phone</p>
+                                <p className="text-sm font-bold text-slate-700">{formData.pocPhone}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : formData.organizationId ? (
+                  <div className="text-center py-6 text-slate-400">
+                    <p className="text-xs font-medium">No POCs found for this organization.</p>
+                    <p className="text-[10px] mt-1">Please add POCs to the organization first.</p>
                   </div>
-
-                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                    <Phone
-                      size={16}
-                      className="text-emerald-500"
-                    />
-
-                    <p className="text-xs font-bold text-slate-700">
-                      {formData.pocPhone ||
-                        'POC Phone'}
-                    </p>
+                ) : (
+                  <div className="text-center py-6 text-slate-400">
+                    <p className="text-xs font-medium">Select an organization to view POCs.</p>
                   </div>
-                </div>
+                )}
               </div>
 
               <button
                 disabled={
-                  isAlreadyConverted
+                  isAlreadyConverted || !formData.pocName
                 }
                 className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
-                  isAlreadyConverted
+                  isAlreadyConverted || !formData.pocName
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
                 }`}
               >
                 {isAlreadyConverted
                   ? "Lead Already Generated"
+                  : !formData.pocName
+                  ? "Select a POC to Continue"
                   : "Generate Lead Now"}
               </button>
             </form>

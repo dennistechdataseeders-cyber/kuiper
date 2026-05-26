@@ -62,9 +62,18 @@ router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) =>
 
 // --- POST: Create a Lead from an Organization ---
 // This is STEP 2 in your flow (Org → Lead)
+// --- POST: Create a Lead from an Organization ---
 router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
   try {
-    const { organizationId, leadType, referredBy } = req.body;
+    const { 
+      organizationId, 
+      leadType, 
+      referredBy,
+      pocName,      // Add these fields to accept data from frontend
+      pocEmail,     // Add these fields to accept data from frontend
+      pocPhone,     // Add these fields to accept data from frontend
+      linkedin      // Add these fields to accept data from frontend
+    } = req.body;
 
     if (!organizationId) {
       return res.status(400).json({ error: "organizationId is required" });
@@ -76,13 +85,36 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
       return res.status(404).json({ error: "Organization not found" });
     }
 
-    // Create the Lead using Organization data
+    // Use provided data or fall back to organization data
+    const finalPocName = pocName || org.pocName;
+    const finalPocEmail = pocEmail || org.pocEmail;
+    const finalPocPhone = pocPhone || org.pocPhone;
+    const finalLinkedin = linkedin || org.linkedin;
+
+    // Validate required fields
+    if (!finalPocName) {
+      return res.status(400).json({ error: "POC Name is required" });
+    }
+
+    // Check for existing lead with same POC name and organization
+    const existingLead = await LeadGen.findOne({
+      organizationId: org._id,
+      pocName: { $regex: new RegExp(`^${finalPocName}$`, 'i') }
+    });
+
+    if (existingLead) {
+      return res.status(400).json({ 
+        error: `A lead already exists for ${finalPocName} at this organization` 
+      });
+    }
+
+    // Create the Lead using provided data
     const newLead = new LeadGen({
       organizationId: org._id,
-      pocName: org.pocName,
-      pocEmail: org.pocEmail,
-      pocPhone: org.pocPhone,
-      linkedin: org.linkedin,
+      pocName: finalPocName,
+      pocEmail: finalPocEmail,
+      pocPhone: finalPocPhone,
+      linkedin: finalLinkedin,
       leadType: leadType || 'Inbound',
       referredBy: leadType === 'Reference' ? referredBy : undefined,
       salesRepId: req.user._id,
@@ -91,15 +123,31 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
 
     const savedLead = await newLead.save();
 
-    // Update the prospect to mark it as converted to Lead (STEP 2 complete)
-    await Prospect.findOneAndUpdate(
-      { organizationId: org._id },
-      { $set: { leadId: savedLead._id } }
-    );
+    // Update the prospect to mark it as converted to Lead
+    if (req.body.prospectId) {
+      await Prospect.findByIdAndUpdate(
+        req.body.prospectId,
+        { $set: { leadId: savedLead._id } }
+      );
+    } else {
+      // Fallback: find prospect by organizationId
+      await Prospect.findOneAndUpdate(
+        { organizationId: org._id },
+        { $set: { leadId: savedLead._id } }
+      );
+    }
 
     res.status(201).json(savedLead);
   } catch (err) {
     console.error("Lead Creation Error:", err);
+    
+    // Handle duplicate key error
+    if (err.code === 11000) {
+      return res.status(400).json({ 
+        error: "Duplicate lead: A lead with this POC name already exists for this organization" 
+      });
+    }
+    
     res.status(400).json({ error: err.message });
   }
 });
@@ -116,6 +164,7 @@ const COUNTRY_MAP = {
   "United States": "US", "Vietnam": "VN"
 };
 // --- PATCH: Take Action on a Lead ---
+// Add this to your organizationRoutes.js file
 router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), async (req, res) => {
   try {
     const leadId = req.params.id;

@@ -25,7 +25,8 @@ import {
   Info,
   AlertTriangle,
   Lock,
-  RefreshCw
+  RefreshCw,
+  Globe
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -47,11 +48,16 @@ const Worklog = () => {
   const [isEditingLog, setIsEditingLog] = useState(false);
 
   // System Time Mismatch State
-  const [timeMismatch, setTimeMismatch] = useState({ isMismatch: false, message: '', serverTime: null, localTime: null });
+  const [timeMismatch, setTimeMismatch] = useState({ 
+    isMismatch: false, 
+    message: '', 
+    serverTime: null, 
+    localTime: null,
+    serverDate: null,
+    localDate: null,
+    timeDiffMinutes: 0
+  });
   const [isChecking, setIsChecking] = useState(false);
-  
-  // Auto-hide timer reference
-  const autoHideTimerRef = useRef(null);
 
   /*
   ========================================
@@ -71,14 +77,6 @@ const Worklog = () => {
       return `${mins}m ${secs}s`;
     }
     return `${secs}s`;
-  };
-
-  // Clear auto-hide timer
-  const clearAutoHideTimer = () => {
-    if (autoHideTimerRef.current) {
-      clearTimeout(autoHideTimerRef.current);
-      autoHideTimerRef.current = null;
-    }
   };
 
   /*
@@ -107,38 +105,58 @@ const Worklog = () => {
       const serverTime = new Date(response.data.serverTime);
       const localTime = new Date();
       
-      const timeDiffMinutes = Math.abs(serverTime - localTime) / (1000 * 60);
-      
+      // Format dates for comparison
       const serverDate = serverTime.toISOString().split('T')[0];
       const localDate = localTime.toISOString().split('T')[0];
+      
+      // Calculate time difference in minutes
+      const timeDiffMinutes = Math.abs(serverTime - localTime) / (1000 * 60);
+      
+      // Check if date is different
       const isDateMismatch = serverDate !== localDate;
+      
+      // Check if time difference is more than 5 minutes
       const isTimeMismatch = timeDiffMinutes > 5;
+      
+      console.log('=== TIME CHECK DEBUG ===');
+      console.log('Server Date:', serverDate);
+      console.log('Local Date:', localDate);
+      console.log('Is Date Mismatch:', isDateMismatch);
+      console.log('Server Time:', serverTime.toLocaleTimeString());
+      console.log('Local Time:', localTime.toLocaleTimeString());
+      console.log('Time Diff (minutes):', timeDiffMinutes);
+      console.log('Is Time Mismatch:', isTimeMismatch);
+      console.log('========================');
       
       if (isDateMismatch || isTimeMismatch) {
         let message = '';
         if (isDateMismatch) {
-          message = `⚠️ Your system date (${localDate}) does not match the server date (${serverDate}). `;
+          message = `Your system date (${localDate}) does NOT match the server date (${serverDate}). `;
         }
         if (isTimeMismatch) {
           message += `Your system time is ${Math.round(timeDiffMinutes)} minutes ${serverTime > localTime ? 'behind' : 'ahead'} of server time.`;
         }
         
-        clearAutoHideTimer();
-        
         setTimeMismatch({
           isMismatch: true,
           message: message.trim(),
-          serverTime: serverTime.toLocaleString(),
-          localTime: localTime.toLocaleString()
+          serverTime: serverTime.toLocaleTimeString(),
+          localTime: localTime.toLocaleTimeString(),
+          serverDate: serverDate,
+          localDate: localDate,
+          timeDiffMinutes: Math.round(timeDiffMinutes)
         });
         
-        autoHideTimerRef.current = setTimeout(() => {
-          setTimeMismatch(prev => ({ ...prev, isMismatch: false }));
-        }, 10000);
-        
       } else {
-        setTimeMismatch({ isMismatch: false, message: '', serverTime: null, localTime: null });
-        clearAutoHideTimer();
+        setTimeMismatch({ 
+          isMismatch: false, 
+          message: '', 
+          serverTime: serverTime.toLocaleTimeString(),
+          localTime: localTime.toLocaleTimeString(),
+          serverDate: serverDate,
+          localDate: localDate,
+          timeDiffMinutes: 0
+        });
       }
     } catch (err) {
       console.error('Time check failed:', err);
@@ -154,7 +172,11 @@ const Worklog = () => {
   */
 
   const fetchLogs = async () => {
-    if (timeMismatch.isMismatch) return;
+    // Don't fetch if there's a time mismatch
+    if (timeMismatch.isMismatch) {
+      console.log('Skipping fetch - time mismatch exists');
+      return;
+    }
     
     try {
       setLoading(true);
@@ -169,6 +191,7 @@ const Worklog = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       setLogs(res.data);
+      console.log('Logs fetched successfully');
     } catch (err) {
       console.error(err);
     } finally {
@@ -180,7 +203,6 @@ const Worklog = () => {
   useEffect(() => {
     const timer = setTimeout(() => {
       checkSystemTimeMismatch();
-      fetchLogs();
     }, 500);
     
     const interval = setInterval(() => {
@@ -190,9 +212,19 @@ const Worklog = () => {
     return () => {
       clearTimeout(timer);
       clearInterval(interval);
-      clearAutoHideTimer();
     };
   }, []);
+
+  // Fetch logs only when time mismatch is resolved
+  useEffect(() => {
+    console.log('timeMismatch.isMismatch changed to:', timeMismatch.isMismatch);
+    if (!timeMismatch.isMismatch) {
+      fetchLogs();
+    } else {
+      // Clear logs when mismatch exists
+      setLogs([]);
+    }
+  }, [timeMismatch.isMismatch]);
 
   // Listen for localStorage changes (token changes on login/logout)
   useEffect(() => {
@@ -204,10 +236,17 @@ const Worklog = () => {
         if (currentToken) {
           setTimeout(() => {
             checkSystemTimeMismatch();
-            fetchLogs();
           }, 500);
         } else {
-          setTimeMismatch({ isMismatch: false, message: '', serverTime: null, localTime: null });
+          setTimeMismatch({ 
+            isMismatch: false, 
+            message: '', 
+            serverTime: null, 
+            localTime: null,
+            serverDate: null,
+            localDate: null,
+            timeDiffMinutes: 0
+          });
           setLogs([]);
         }
       }
@@ -223,7 +262,6 @@ const Worklog = () => {
         const token = localStorage.getItem('token');
         if (token) {
           checkSystemTimeMismatch();
-          fetchLogs();
         }
       }
     };
@@ -542,10 +580,12 @@ const Worklog = () => {
   };
 
   const handleManualRefresh = () => {
+    console.log('Manual refresh triggered');
     checkSystemTimeMismatch();
-    if (!timeMismatch.isMismatch) {
-      fetchLogs();
-    }
+  };
+
+  const getCurrentISTTime = () => {
+    return new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
   return (
@@ -553,14 +593,30 @@ const Worklog = () => {
       
       {/* HEADER */}
       <div className="mb-6">
-        <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-          Worklog
-        </h1>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+              Worklog
+            </h1>
+            <p className="text-[10px] uppercase tracking-[0.35em] font-black text-blue-600 mt-1">
+              Developer Time Tracking (Overlap-Aware)
+            </p>
+          </div>
+          
+          {/* Time Display - Always visible */}
+          <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm text-right">
+            <div className="flex items-center gap-2">
+              <Globe size={12} className="text-blue-500" />
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">IST</span>
+            </div>
+            <p className="text-sm font-mono font-bold text-slate-700">{getCurrentISTTime()}</p>
+          </div>
+        </div>
       </div>
 
-      {/* SYSTEM TIME MISMATCH WARNING */}
+      {/* SYSTEM TIME MISMATCH WARNING - Stays until resolved */}
       {timeMismatch.isMismatch && (
-        <div className="mb-6 p-6 bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 rounded-xl shadow-lg animate-in slide-in-from-top-2 duration-300">
+        <div className="mb-6 p-6 bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 rounded-xl shadow-lg">
           <div className="flex flex-col items-center text-center gap-4">
             <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
               <Lock size={32} className="text-red-600" />
@@ -570,14 +626,36 @@ const Worklog = () => {
                 Time Synchronization Required
               </h3>
               <p className="text-sm font-medium text-red-700">
-                {timeMismatch.message}
+                ⚠️ {timeMismatch.message}
               </p>
-              <div className="mt-3 p-3 bg-white/50 rounded-lg inline-block">
-                <div className="text-[11px] text-red-600 space-y-1">
-                  <p>📍 Server Time (IST): <span className="font-mono font-bold">{timeMismatch.serverTime}</span></p>
-                  <p>💻 Your System Time: <span className="font-mono font-bold">{timeMismatch.localTime}</span></p>
+              
+              {/* Time Comparison Table */}
+              <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
+                <div className="grid grid-cols-2 gap-4 text-left">
+                  <div className="text-center">
+                    <p className="text-[9px] font-black text-green-700 uppercase tracking-wider flex items-center justify-center gap-1">
+                      <Globe size={10} />
+                      Server Time (IST)
+                    </p>
+                    <p className="text-sm font-mono font-bold text-green-700 mt-1">{timeMismatch.serverTime}</p>
+                    <p className="text-[10px] font-bold text-green-700">{timeMismatch.serverDate}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[9px] font-black text-red-700 uppercase tracking-wider flex items-center justify-center gap-1">
+                      <Clock3 size={10} />
+                      Your System Time
+                    </p>
+                    <p className="text-sm font-mono font-bold text-red-700 mt-1">{timeMismatch.localTime}</p>
+                    <p className="text-[10px] font-bold text-red-700">{timeMismatch.localDate}</p>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-slate-100 text-center">
+                  <p className="text-[10px] font-bold text-amber-600">
+                    Difference: {timeMismatch.timeDiffMinutes} minutes
+                  </p>
                 </div>
               </div>
+              
               <div className="mt-4 p-3 bg-red-100 rounded-lg">
                 <p className="text-[10px] text-red-700 font-medium">
                   ⚠️ To access worklogs and timer features, please synchronize your system date and time with the server.
@@ -595,7 +673,7 @@ const Worklog = () => {
         </div>
       )}
 
-      {/* STATS BAR */}
+      {/* STATS BAR - Only shown when no time mismatch */}
       {!timeMismatch.isMismatch && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
@@ -665,7 +743,7 @@ const Worklog = () => {
         </div>
       )}
 
-      {/* FILTERS & TABLE */}
+      {/* FILTERS & TABLE - Only shown when no time mismatch */}
       {!timeMismatch.isMismatch ? (
         <>
           {/* FILTERS */}

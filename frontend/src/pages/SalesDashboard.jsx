@@ -7,7 +7,7 @@ import {
   Target, User, Mail, Phone, Clock, TrendingUp, Briefcase, 
   Calendar as CalendarIcon, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
   ExternalLink, Upload, FileText, Loader2, ChevronLeft, ChevronDown, ChevronUp, AlertCircle,
-  Send, CalendarDays
+  Send, CalendarDays, Copy, Check, AlertTriangle, Building2
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import tips from '../data/salesTips';
@@ -15,100 +15,167 @@ import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CreatableSelect from 'react-select/creatable'; 
 
-const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal }) => {
+const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal, type }) => {
   const [isExpanded, setIsExpanded] = useState(false);  
+  const [copiedField, setCopiedField] = useState('');
   
   const formatId = (num, prefix = "LEAD") => {
     if (!num) return `${prefix}---`;
     return `${prefix}${String(num).padStart(4, '0')}`;
   };
+  
+  const handleCopy = async (text, field) => {
+    try {
+      await navigator.clipboard.writeText(text || '');
+      setCopiedField(field);
+      setTimeout(() => setCopiedField(''), 1500);
+    } catch (err) {
+      console.error('Copy failed', err);
+    }
+  };
+
+  // Get card background color based on type and overdue status
+  const getCardBgColor = () => {
+    const isOverdue = lead.followUpDate && new Date(lead.followUpDate) < new Date();
+    if (isOverdue) return 'bg-red-100 border-red-300';
+    if (type === 'followup') return 'bg-orange-100 border-orange-200';
+    if (type === 'feasibility') return 'bg-purple-100 border-purple-200';
+    return 'bg-blue-200 border-blue-100';
+  };
 
   return (
-    <div className="relative flex flex-col  p-3 pt-8 rounded-[2rem] bg-blue-200 text-slate-800 shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-md">
+    <div 
+      onClick={() => setIsExpanded(!isExpanded)}
+      className={`relative flex flex-col p-3 pt-8 rounded-[2rem] ${getCardBgColor()} text-slate-800 shadow-sm border transition-all duration-300 hover:shadow-md cursor-pointer`}
+    >
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="absolute top-1.5 left-5">
           <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">
             {formatId(lead.leadNumber)}
           </p>
         </div>
+        
         <div className="flex items-center gap-4">
-          <div 
-            className="p-3 bg-blue-50 text-blue-600 rounded-2xl shrink-0 cursor-pointer hover:bg-blue-100 transition-colors"
-            onClick={() => setIsExpanded(!isExpanded)}
-          >
+          <div className="p-3 bg-white/80 text-blue-600 rounded-2xl shrink-0 cursor-pointer hover:bg-white transition-colors">
             <User size={24} />
           </div>
-
-          <div className="cursor-pointer" onClick={() => setIsExpanded(!isExpanded)}>
-            <div className="flex items-center gap-2">
+          
+          <div className="cursor-pointer">
+            <div className="flex items-center gap-2 flex-wrap">
               <h4 className="font-black text-lg text-slate-900">{lead.pocName}</h4>
               <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold border ${getStatusStyle(lead.status)}`}>
                 {lead.status || 'New'}
               </span>
             </div>
-            <span className={`text-[6px] font-black uppercase tracking-widest px-1 py-0.5 rounded-md border italic ${
-              lead.leadType?.toLowerCase() === 'inbound' 
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
-                : 'bg-rose-50 text-rose-700 border-rose-100'
-            }`}>
-              {lead.leadType}
-            </span>
+            
+            {/* Organization Name */}
+            <div className="flex items-center gap-1 mt-1">
+              <Building2 size={12} className="text-slate-500" />
+              <span className="text-[10px] font-bold text-slate-700">
+                {lead.organizationId?.companyName || 'No Organization'}
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className={`text-[6px] font-black uppercase tracking-widest px-1 py-0.5 rounded-md border italic ${
+                lead.leadType?.toLowerCase() === 'inbound' 
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-100' 
+                  : 'bg-rose-50 text-rose-700 border-rose-100'
+              }`}>
+                {lead.leadType}
+              </span>
+              
+              {/* Show follow-up/feasibility date if available */}
+              {lead.followUpDate && (
+                <span className="text-[8px] font-black bg-white/60 px-1.5 py-0.5 rounded-full text-slate-600">
+                  📅 {new Date(lead.followUpDate).toLocaleDateString()}
+                </span>
+              )}
+            </div>
           </div>
         </div>
         
-        <div className="flex items-center gap-3 ml-auto lg:ml-0 border-black">
+        <div className="flex items-center gap-3 ml-auto lg:ml-0">
           <button 
-            onClick={() => { setSelectedLead(lead); setShowActionModal(true); }}
-            className="bg-gradient-to-r from-blue-800 to-blue-600 text-white hover:from-blue-600 hover:to-blue-800 px-6 py-2.5 rounded-xl text-xs font-black transition-all  shadow-blue-100 active:scale-95"
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedLead(lead);
+              setShowActionModal(true);
+            }}
+            className="bg-gradient-to-r from-blue-800 to-blue-600 text-white hover:from-blue-600 hover:to-blue-800 px-6 py-2.5 rounded-xl text-xs font-black transition-all shadow-blue-100 active:scale-95"
           >
             Take Action
-          </button>
-          <button 
-            onClick={() => setIsExpanded(!isExpanded)}
-            className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-slate-100 text-slate-900' : 'text-slate-900 hover:text-slate-600'}`}
-          >
-            {isExpanded ? <ChevronUp size={20}/> : <ChevronDown size={20}/>}
           </button>
         </div>
       </div>
 
-      <div className={`grid transition-all duration-500 ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-6 pt-6 border-t border-slate-50' : 'grid-rows-[0fr] opacity-0'}`}>
+      <div className={`grid transition-all duration-500 ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100 mt-6 pt-6 border-t border-slate-200' : 'grid-rows-[0fr] opacity-0'}`}>
         <div className="overflow-hidden">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pb-2">
             <div className="space-y-3">
-               <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Contact Details</p>
-               <div className="flex items-center gap-3 group">
-                <div className="p-2 bg-slate-50 rounded-lg text-slate-900 group-hover:text-blue-500 transition-colors">
-                  <Mail size={14}/>
+              <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Contact Details</p>
+              
+              <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="p-2 bg-white/60 rounded-lg text-slate-900">
+                    <Mail size={14}/>
+                  </div>
+                  <span className="text-xs font-semibold text-slate-900 truncate">{lead.pocEmail || 'No email'}</span>
                 </div>
-                <span className="text-xs font-semibold text-slate-900 truncate">{lead.pocEmail}</span>
+                {lead.pocEmail && (
+                  <button onClick={() => handleCopy(lead.pocEmail, 'email')} className="p-1.5 rounded-lg hover:bg-white/50 transition-colors shrink-0">
+                    {copiedField === 'email' ? <Check size={14} className="text-green-600" /> : <Copy size={14} className="text-slate-500" />}
+                  </button>
+                )}
               </div>
+              
               <div className="flex items-center gap-3 group">
-                <div className="p-2 bg-slate-50 rounded-lg text-slate-900 group-hover:text-blue-500 transition-colors">
+                <div className="p-2 bg-white/60 rounded-lg text-slate-900">
                   <Phone size={14}/>
                 </div>
-                <span className="text-xs font-semibold text-slate-900">{lead.pocPhone}</span>
+                <span className="text-xs font-semibold text-slate-900">{lead.pocPhone || 'No phone'}</span>
+                {lead.pocPhone && (
+                  <button onClick={() => handleCopy(lead.pocPhone, 'phone')} className="p-1.5 rounded-lg hover:bg-white/50 transition-colors shrink-0">
+                    {copiedField === 'phone' ? <Check size={14} className="text-green-600" /> : <Copy size={14} className="text-slate-500" />}
+                  </button>
+                )}
               </div>
             </div>
+            
             <div className="space-y-3">
-              <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Network</p>
+              <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">Network & Info</p>
+              
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-50 rounded-lg text-slate-900">
+                <div className="p-2 bg-white/60 rounded-lg text-slate-900">
                   <ExternalLink size={14}/>
                 </div>
                 <span className="text-xs font-medium text-slate-900 underline underline-offset-4 decoration-blue-100 truncate">
-                  {/* Use ?. here and check if organizationId exists */}
-                  {lead.organizationId?.linkedin || 'Not provided'}
+                  {lead.organizationId?.linkedin || 'No LinkedIn'}
                 </span>
+                {lead.organizationId?.linkedin && (
+                  <button onClick={() => handleCopy(lead.organizationId.linkedin, 'linkedin')} className="p-1.5 rounded-lg hover:bg-white/50 transition-colors shrink-0">
+                    {copiedField === 'linkedin' ? <Check size={14} className="text-green-600" /> : <Copy size={14} className="text-slate-500" />}
+                  </button>
+                )}
               </div>
+              
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-slate-50 rounded-lg text-slate-900">
+                <div className="p-2 bg-white/60 rounded-lg text-slate-900">
                   <Clock size={14}/>
                 </div>
-                <span className="text-[10px] font-bold text-slate-900 uppercase">
-                  Created: {new Date(lead.createdAt).toLocaleDateString()}
-                </span>
+                <span className="text-[10px] font-bold text-slate-900 uppercase">Created: {new Date(lead.createdAt).toLocaleDateString()}</span>
               </div>
+              
+              {/* Show Feasibility ID if available */}
+              {lead.feasibilityId && (
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white/60 rounded-lg text-purple-600">
+                    <FileText size={14}/>
+                  </div>
+                  <span className="text-[10px] font-black text-purple-700 uppercase tracking-widest">Feasibility ID: {lead.feasibilityId}</span>
+                </div>
+              )}
+              
             </div>
           </div>
         </div>
@@ -135,26 +202,16 @@ const SalesDashboard = () => {
   const [showSuccess, setShowSuccess] = useState(false);
   const [overviewRange, setOverviewRange] = useState(7);
   const [allData, setAllData] = useState([]);
-  // New state for scheduled calendar modal
   const [showScheduledModal, setShowScheduledModal] = useState(false);
   const [allScheduledItems, setAllScheduledItems] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [scheduledCurrentPage, setScheduledCurrentPage] = useState(1);
+  const scheduledItemsPerPage = 5;
 
-  // Calculate date ranges
-  const now = new Date();
-  const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const today = new Date();
+  const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const lastWeekCount = (allData || []).filter(lead => {
-    const createdAt = new Date(lead.createdAt);
-    return createdAt >= oneWeekAgo && createdAt <= now;
-  }).length;
-
-  const lastMonthCount = (allData || []).filter(lead => {
-    const createdAt = new Date(lead.createdAt);
-    return createdAt >= oneMonthAgo && createdAt <= now;
-  }).length;
-  
   const [followUpData, setFollowUpData] = useState({
     date: new Date().toISOString().split('T')[0],
     type: 'call',
@@ -192,12 +249,21 @@ const SalesDashboard = () => {
   
   const getStatusStyle = (status) => {
     switch (status) {
-      case 'Follow-up Scheduled': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      case 'Feasibility': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'Closed': return 'bg-rose-500/20 text-rose-400 border-rose-500/30';
-      case 'Converted': return 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30';
-      default: return 'bg-green-500 text-White border-1';
+      case 'Follow-up Scheduled': return 'bg-orange-500/20 text-orange-700 border-orange-500/30';
+      case 'Feasibility': return 'bg-purple-500/20 text-purple-700 border-purple-500/30';
+      case 'Closed': return 'bg-rose-500/20 text-rose-700 border-rose-500/30';
+      case 'Converted': return 'bg-emerald-500/20 text-emerald-700 border-emerald-500/30';
+      default: return 'bg-green-500 text-white border-1';
     }
+  };
+
+  // Check if a scheduled item is overdue (past due date and not completed)
+  const isOverdue = (scheduledDate) => {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const dueDate = new Date(scheduledDate);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < todayStart;
   };
 
   const fetchData = async () => {
@@ -216,33 +282,42 @@ const SalesDashboard = () => {
 
       setAllData(data);
 
-      const todayStr = new Date().toLocaleDateString('en-CA'); 
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
    
       setGeneratedLeads(data.filter(l => 
         new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
         (!l.status || l.status === 'New')
       ));
 
-      setFollowUps(data.filter(l => 
+      // Get ALL pending follow-ups (including past due)
+      const allPendingFollowUps = data.filter(l => 
         l.followUpDate && 
-        new Date(l.followUpDate).toLocaleDateString('en-CA') === todayStr && 
-        l.status === 'Follow-up Scheduled'
-      ));
+        l.status === 'Follow-up Scheduled' &&
+        !l.completedAt // Not completed
+      );
+      
+      // Show all pending follow-ups (past due will be marked)
+      setFollowUps(allPendingFollowUps);
 
-      setFeasibilityTasks(data.filter(l => 
+      // Get ALL pending feasibility tasks (including past due)
+      const allPendingFeasibility = data.filter(l => 
         l.followUpDate && 
-        new Date(l.followUpDate).toLocaleDateString('en-CA') === todayStr && 
-        l.status === 'Feasibility'
-      ));
+        l.status === 'Feasibility' &&
+        !l.completedAt // Not completed
+      );
+      
+      setFeasibilityTasks(allPendingFeasibility);
 
       const filteredApproaches = prospect_data.filter(item => {
         const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
         if (dateValue) {
           const followUpDate = new Date(dateValue);
-          const today = new Date();
+          const todayDate = new Date();
           followUpDate.setHours(0, 0, 0, 0);
-          today.setHours(0, 0, 0, 0);
-          return followUpDate <= today && item.status === 'Approached';
+          todayDate.setHours(0, 0, 0, 0);
+          return followUpDate <= todayDate && item.status === 'Approached';
         }
         return false;
       });
@@ -251,23 +326,27 @@ const SalesDashboard = () => {
 
       // Build all scheduled items for calendar view
       const scheduledFollowUps = data
-        .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled')
+        .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled' && !l.completedAt)
         .map(l => ({
           id: l._id,
           title: l.pocName,
+          orgName: l.organizationId?.companyName || 'No Org',
           type: 'followup',
           date: new Date(l.followUpDate),
-          originalLead: l
+          originalLead: l,
+          isOverdue: isOverdue(l.followUpDate)
         }));
       
       const scheduledFeasibility = data
-        .filter(l => l.followUpDate && l.status === 'Feasibility')
+        .filter(l => l.followUpDate && l.status === 'Feasibility' && !l.completedAt)
         .map(l => ({
           id: l._id,
           title: l.pocName,
+          orgName: l.organizationId?.companyName || 'No Org',
           type: 'feasibility',
           date: new Date(l.followUpDate),
-          originalLead: l
+          originalLead: l,
+          isOverdue: isOverdue(l.followUpDate)
         }));
       
       setAllScheduledItems([...scheduledFollowUps, ...scheduledFeasibility]);
@@ -330,12 +409,28 @@ const SalesDashboard = () => {
         status: 'Follow-up Scheduled',
         followUpDate: followUpData.date,
         followUpType: followUpData.type,
-        lastInteractionDesc: followUpData.description 
+        lastInteractionDesc: followUpData.description,
+        completedAt: null // Reset completed status
       }, { headers: { Authorization: `Bearer ${token}` } });
-      fetchData(); closeModal();
+      fetchData(); 
+      closeModal();
     } catch (err) { alert("Follow-up update failed"); }
   };
   
+  const handleCompleteTask = async (lead) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${lead._id}/action`, { 
+        completedAt: new Date().toISOString(),
+        status: lead.status === 'Follow-up Scheduled' ? 'Follow-up Completed' : 'Feasibility Completed'
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success("Task marked as completed!");
+      fetchData();
+    } catch (err) {
+      toast.error("Failed to complete task");
+    }
+  };
+
   const [currentPage, setCurrentPage] = useState(1);
   const leadsPerPage = 5;
   const indexOfLastLead = currentPage * leadsPerPage;
@@ -589,7 +684,6 @@ const SalesDashboard = () => {
     }
   };
 
-  // Helper to get items for a specific date
   const getItemsForDate = (date) => {
     const dateStr = date.toLocaleDateString('en-CA');
     return allScheduledItems.filter(item => 
@@ -597,7 +691,13 @@ const SalesDashboard = () => {
     );
   };
 
-  // Custom tile content for calendar
+  // Paginated scheduled items for modal
+  const paginatedScheduledItems = allScheduledItems.slice(
+    (scheduledCurrentPage - 1) * scheduledItemsPerPage,
+    scheduledCurrentPage * scheduledItemsPerPage
+  );
+  const totalScheduledPages = Math.ceil(allScheduledItems.length / scheduledItemsPerPage);
+
   const tileContent = ({ date, view }) => {
     if (view === 'month') {
       const items = getItemsForDate(date);
@@ -617,14 +717,8 @@ const SalesDashboard = () => {
   };
 
   return (
-      <div
-        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
-          isCollapsed ? 'ml-20' : 'ml-64'
-        }`}
-      >      
+    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>      
       <div className="max-w-[1600px] mx-auto">
-
-      
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 lg:gap-10">
           <div className="xl:col-span-3 space-y-10">
             {/* PIPELINE SECTION */}
@@ -654,38 +748,23 @@ const SalesDashboard = () => {
                         getStatusStyle={getStatusStyle}
                         setSelectedLead={setSelectedLead} 
                         setShowActionModal={setShowActionModal}
+                        type="pipeline"
                       />
                     ))}
 
                     {totalPages > 1 && (
                       <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-slate-50">
-                        <button
-                          onClick={() => paginate(Math.max(1, currentPage - 1))}
-                          disabled={currentPage === 1}
-                          className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                        >
+                        <button onClick={() => paginate(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
                           <ChevronDown className="rotate-90" size={18} />
                         </button>
                         <div className="flex gap-1">
                           {[...Array(totalPages)].map((_, i) => (
-                            <button
-                              key={i + 1}
-                              onClick={() => paginate(i + 1)}
-                              className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
-                                currentPage === i + 1 
-                                ? 'bg-blue-600 text-white shadow-md shadow-blue-100' 
-                                : 'text-slate-400 hover:bg-slate-50'
-                              }`}
-                            >
+                            <button key={i + 1} onClick={() => paginate(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'text-slate-400 hover:bg-slate-50'}`}>
                               {i + 1}
                             </button>
                           ))}
                         </div>
-                        <button
-                          onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
-                          disabled={currentPage === totalPages}
-                          className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
-                        >
+                        <button onClick={() => paginate(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
                           <ChevronDown className="-rotate-90" size={18} />
                         </button>
                       </div>
@@ -695,65 +774,68 @@ const SalesDashboard = () => {
               </div>  
             </div>
 
-            {/* SCHEDULED FOR TODAY SECTION */}
+            {/* SCHEDULED FOR TODAY SECTION - Now shows ALL pending tasks with SLA indicators */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* FOLLOW-UPS LIST */}
               <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
                 <div>
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                      <Clock size={20} className="text-orange-600"/> Follow-ups Today
+                      <Clock size={20} className="text-orange-600"/> Pending Follow-ups
                     </h2>
-                    <button
-                      onClick={() => setShowScheduledModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-black transition-all"
-                    >
+                    <button onClick={() => setShowScheduledModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-black transition-all">
                       <CalendarDays size={14} />
                       Scheduled
                     </button>
                   </div>
                   <div className="space-y-4">
                     {followUps.length === 0 ? (
-                      <p className="text-slate-400 text-sm italic text-center py-6">No follow-ups today.</p>
-                    ) : currentFollowUps.map((lead) => (
-                      <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-orange-200 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-orange-100 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
-                            {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
+                      <p className="text-slate-400 text-sm italic text-center py-6">No pending follow-ups.</p>
+                    ) : currentFollowUps.map((lead) => {
+                      const isOverdueTask = isOverdue(lead.followUpDate);
+                      return (
+                        <div key={lead._id} className={`p-5 rounded-3xl border flex items-center justify-between group transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-100 hover:border-orange-200'}`}>
+                          <div className="flex items-center gap-4 flex-1">
+                            <div className="p-3 bg-white/80 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
+                              {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
+                                <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
+                                  {lead.organizationId?.companyName || 'No Org'}
+                                </span>
+                                {isOverdueTask && (
+                                  <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                    <AlertTriangle size={8} />
+                                    Pending SLA
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[9px] text-slate-500 mt-1">Scheduled: {new Date(lead.followUpDate).toLocaleDateString()}</p>
+                              {lead.lastInteractionDesc && (
+                                <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
+                                  📝 {lead.lastInteractionDesc}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-                            <p className="text-[10px] text-slate-900 font-bold uppercase">{lead.pocPhone}</p>
-                             {/* {lead.lastInteractionDesc && ( */}
-                              <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[180px]">
-                                📝 {lead.lastInteractionDesc}
-                              </p>
-                            {/* )} */}
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors">
+                              <ExternalLink size={16}/>
+                            </button>
                           </div>
                         </div>
-                        <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors"><ExternalLink size={16}/></button>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 
                 {totalFollowUpPages > 1 && (
                   <div className="flex items-center justify-center gap-3 mt-6">
-                    <button 
-                      onClick={() => setFollowUpPage(p => Math.max(1, p - 1))}
-                      disabled={followUpPage === 1}
-                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-                    >
-                      {"<"}
-                    </button>
+                    <button onClick={() => setFollowUpPage(p => Math.max(1, p - 1))} disabled={followUpPage === 1} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all">{"<"}</button>
                     <span className="text-[10px] font-black text-slate-500 uppercase">Page {followUpPage} / {totalFollowUpPages}</span>
-                    <button 
-                      onClick={() => setFollowUpPage(p => Math.min(totalFollowUpPages, p + 1))}
-                      disabled={followUpPage === totalFollowUpPages}
-                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-                    >
-                      {">"}
-                    </button>
+                    <button onClick={() => setFollowUpPage(p => Math.min(totalFollowUpPages, p + 1))} disabled={followUpPage === totalFollowUpPages} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all">{">"}</button>
                   </div>
                 )}
               </div>
@@ -763,61 +845,75 @@ const SalesDashboard = () => {
                 <div>
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                      <FileText size={20} className="text-purple-600"/> Feasibility Today
+                      <FileText size={20} className="text-purple-600"/> Pending Feasibility
                     </h2>
-                    <button
-                      onClick={() => setShowScheduledModal(true)}
-                      className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-black transition-all"
-                    >
+                    <button onClick={() => setShowScheduledModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-black transition-all">
                       <CalendarDays size={14} />
                       Scheduled
                     </button>
                   </div>
                   <div className="space-y-4">
                     {feasibilityTasks.length === 0 ? (
-                      <p className="text-slate-400 text-sm italic text-center py-6">No feasibility tasks for today.</p>
-                    ) : currentFeasibility.map((lead) => (
-                      <div key={lead._id} className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all">
-                        <div className="flex items-center gap-4">
-                          <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-                            <Briefcase size={18}/>
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
-                            <div className="flex items-center gap-2">
-                              <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.feasibilityId}</p>
-                              <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">Scheduled</span>
-                            </div>
-                            {lead.lastInteractionDesc && (
-                              <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[180px]">
-                                💬 {lead.lastInteractionDesc}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"><ExternalLink size={16}/></button>
-                      </div>
-                    ))}
+                      <p className="text-slate-400 text-sm italic text-center py-6">No pending feasibility tasks.</p>
+                    ) : currentFeasibility.map((lead) => {
+                      const isOverdueTask = isOverdue(lead.followUpDate);
+                      return (
+                         <div key={lead._id} className={`relative p-5 rounded-3xl border flex flex-col transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-100 hover:border-purple-200'}`}>
+  {/* Feasibility ID at top left */}
+  <p className="absolute top-2 left-4 text-[9px] font-black text-purple-700 uppercase tracking-widest">
+    {lead.feasibilityId}
+  </p>
+  
+  {/* Main content wrapper */}
+  <div className="flex items-center justify-between mt-6">
+    <div className="flex items-center gap-4 flex-1">
+      <div className="p-3 bg-white/80 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
+        {/* Your icon here */}
+        <Briefcase size={18}/>
+      </div>
+      
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
+          <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
+            {lead.organizationId?.companyName || 'No Org'}
+          </span>
+          {isOverdueTask && (
+            <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+              <AlertTriangle size={8} />
+              Pending SLA
+            </span>
+          )}
+        </div>
+        
+        {/* Remove the ID from here since it's now at the top */}
+        
+        <p className="text-[9px] text-slate-500 mt-1">Due: {new Date(lead.followUpDate).toLocaleDateString()}</p>
+        {lead.lastInteractionDesc && (
+          <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
+            💬 {lead.lastInteractionDesc}
+          </p>
+        )}
+      </div>
+    </div>
+    
+    <div className="flex items-center gap-2">
+      <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors">
+        <ExternalLink size={16}/>
+      </button>
+    </div>
+  </div>
+</div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 {totalFeasibilityPages > 1 && (
                   <div className="flex items-center justify-center gap-3 mt-6">
-                    <button 
-                      onClick={() => setFeasibilityPage(p => Math.max(1, p - 1))}
-                      disabled={feasibilityPage === 1}
-                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
+                    <button onClick={() => setFeasibilityPage(p => Math.max(1, p - 1))} disabled={feasibilityPage === 1} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"><ChevronLeft size={16} /></button>
                     <span className="text-[10px] font-black text-slate-500 uppercase">Page {feasibilityPage} / {totalFeasibilityPages}</span>
-                    <button 
-                      onClick={() => setFeasibilityPage(p => Math.min(totalFeasibilityPages, p + 1))}
-                      disabled={feasibilityPage === totalFeasibilityPages}
-                      className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
+                    <button onClick={() => setFeasibilityPage(p => Math.min(totalFeasibilityPages, p + 1))} disabled={feasibilityPage === totalFeasibilityPages} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"><ChevronRight size={16} /></button>
                   </div>
                 )}
               </div>
@@ -833,33 +929,20 @@ const SalesDashboard = () => {
                     ) : (
                       approachesToday.map((lead) => {
                         return (
-                          <div 
-                            key={lead._id.$oid || lead._id} 
-                            onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })}
-                            className="p-5 rounded-3xl border border-slate-100 bg-blue-300 flex items-center justify-between group hover:border-purple-200 transition-all cursor-pointer"
-                          >
+                          <div key={lead._id.$oid || lead._id} onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })} className="p-5 rounded-3xl border border-slate-100 bg-blue-50 flex items-center justify-between group hover:border-purple-200 transition-all cursor-pointer">
                             <div className="flex items-center gap-4">
-                              <div className="p-3 bg-purple-100 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
+                              <div className="p-3 bg-white/80 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
                                 <Briefcase size={18}/>
                               </div>
                               <div className="min-w-0">
-                                <h4 className="font-bold text-slate-900 text-sm truncate">{lead.pocName}</h4>
+                                <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
                                 <div className="flex items-center gap-2">
-                                  <p className="text-[9px] font-black text-slate-900 uppercase tracking-widest">{lead.companyName}</p>
-                                  <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-purple-50 rounded">
-                                    Follow-up {lead.currentFollowUpStep}
-                                  </span>
+                                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{lead.companyName}</p>
+                                  <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-white/60 rounded">Follow-up {lead.currentFollowUpStep}</span>
                                 </div>
                               </div>
                             </div>
-                            <button 
-                              onClick={(e) => { 
-                                e.stopPropagation();
-                                setSelectedProspect(lead);
-                                setIsApproachModalOpen(true);
-                              }}
-                              className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors"
-                            >
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedProspect(lead); setIsApproachModalOpen(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors">
                               <ExternalLink size={16}/>
                             </button>
                           </div>
@@ -873,292 +956,120 @@ const SalesDashboard = () => {
           </div>
 
           {/* --- SIDEBAR COLUMN --- */}
-
           <div className="xl:col-span-1 space-y-6 ">
-           <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl p-4 shadow-sm border border-slate-100 transition-all hover:shadow-md">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center">
-                  <Briefcase size={14} />
+            <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl p-4 shadow-sm border border-slate-100 transition-all hover:shadow-md">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center"><Briefcase size={14} /></div>
+                  <div><p className="text-[7px] font-black text-slate-900 uppercase">Today's Leads</p><p className="text-lg font-black text-blue-600 leading-tight">{generatedLeads.length}</p></div>
                 </div>
-                <div>
-                  <p className="text-[7px] font-black text-slate-900 uppercase">Today's Leads</p>
-                  <p className="text-lg font-black text-blue-600 leading-tight">{generatedLeads.length}</p>
+                <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center"><CalendarIcon size={14} /></div>
+                  <div><p className="text-[7px] font-black text-slate-900 uppercase">Follow-ups</p><p className="text-lg font-black text-orange-600 leading-tight">{followUps.length}</p></div>
                 </div>
-              </div>
-
-              <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
-
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center">
-                  <CalendarIcon size={14} />
-                </div>
-                <div>
-                  <p className="text-[7px] font-black text-slate-900 uppercase">Follow-ups</p>
-                  <p className="text-lg font-black text-orange-600 leading-tight">{followUps.length}</p>
+                <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-purple-500 text-white flex items-center justify-center"><TrendingUp size={14} /></div>
+                  <div><p className="text-[7px] font-black text-slate-900 uppercase">Feasibility</p><p className="text-lg font-black text-purple-600 leading-tight">{feasibilityTasks.length}</p></div>
                 </div>
               </div>
-
-              <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
-
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-purple-500 text-white flex items-center justify-center">
-                  <TrendingUp size={14} />
-                </div>
-                <div>
-                  <p className="text-[7px] font-black text-slate-900 uppercase">Feasibility</p>
-                  <p className="text-lg font-black text-purple-600 leading-tight">{feasibilityTasks.length}</p>
-                </div>
-              </div>
-
-              <div className="w-px h-8 bg-slate-200 hidden lg:block"></div>
-
-             
-            </div>
-          </div>  
+            </div>  
+            
             {/* LEADS OVERVIEW SELECTOR */}
-            <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
-              
+            <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
               <div className="flex items-center justify-between mb-8">
-                <div>
-                  <h3 className="text-lg font-black text-slate-800">Overview</h3>
-                  <p className="text-[10px] text-slate-900 font-bold uppercase tracking-tight">Lead Volume</p>
-                </div>
+                <div><h3 className="text-lg font-black text-slate-800">Overview</h3><p className="text-[10px] text-slate-900 font-bold uppercase tracking-tight">Lead Volume</p></div>
                 <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button 
-                    onClick={() => setOverviewRange(7)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 7 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
-                  >
-                    7D
-                  </button>
-                  <button 
-                    onClick={() => setOverviewRange(30)}
-                    className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 30 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}
-                  >
-                    30D
-                  </button>
+                  <button onClick={() => setOverviewRange(7)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 7 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>7D</button>
+                  <button onClick={() => setOverviewRange(30)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 30 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>30D</button>
                 </div>
               </div>
-              
               <div className="relative group p-4 bg-slate-50 rounded-[2rem] border border-slate-100 transition-all ">
                 <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Total Leads (Last {overviewRange} Days)
-                  </p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Leads (Last {overviewRange} Days)</p>
                 </div>
-                
                 <div className="flex items-end gap-2">
-                  <h4 className="text-4xl font-black text-slate-900 leading-none">
-                    {overviewCount}
-                  </h4>
+                  <h4 className="text-4xl font-black text-slate-900 leading-none">{overviewCount}</h4>
                   <span className="text-sm font-bold text-slate-400 mb-1">leads</span>
                 </div>
-
-                <div className="absolute bottom-4 right-6 ">
-                  <TrendingUp size={40} className="text-slate-900" />
-                </div>
+                <div className="absolute bottom-4 right-6"><TrendingUp size={40} className="text-slate-900" /></div>
               </div>
             </div>
+            
             {/* PRO TIP CARD */}
-            <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm transition-all duration-300 ease-in-out 
-                hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
               <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-amber-200">
-                  <AlertCircle size={18}/>
-                </div>
+                <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-amber-200"><AlertCircle size={18}/></div>
                 <h3 className="text-sm font-black text-amber-900 uppercase tracking-tight">Pro Tip</h3>
               </div>
-              
               <div className="relative">
                 <span className="absolute -top-4 -left-2 text-4xl text-orange-500 font-serif opacity-50">“</span>
-                <p className="text-amber-800 text-xs leading-relaxed font-bold italic relative z-10 px-2">
-                  {randomTip || "Loading your daily wisdom..."}
-                </p>
+                <p className="text-amber-800 text-xs leading-relaxed font-bold italic relative z-10 px-2">{randomTip || "Loading your daily wisdom..."}</p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* [Rest of the modals remain the same as in your original code...] */}
       {/* --- ACTION MODAL --- */}
       {showActionModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] md:rounded-[3rem] p-6 md:p-10 shadow-2xl relative">
-            <button 
-              onClick={closeModal} 
-              className="absolute top-6 right-6 md:top-10 md:right-10 text-slate-300 hover:text-slate-900 transition-colors"
-            >
-              <X size={24}/>
-            </button>
-
+            <button onClick={closeModal} className="absolute top-6 right-6 md:top-10 md:right-10 text-slate-300 hover:text-slate-900 transition-colors"><X size={24}/></button>
             {actionStep === 1 && (
               <div className="animate-in fade-in zoom-in-95 duration-200">
                 <h2 className="text-3xl font-black text-slate-900 mb-2">Take Action</h2>
-                <p className="text-slate-400 font-medium mb-8 italic">
-                  Target: <span className="text-indigo-600 font-bold">{selectedLead?.pocName}</span>
-                </p>
-                
+                <p className="text-slate-400 font-medium mb-8 italic">Target: <span className="text-indigo-600 font-bold">{selectedLead?.pocName}</span></p>
                 <div className="space-y-3">
-                  <button 
-                    onClick={() => setActionStep(2)} 
-                    className="w-full flex items-center justify-between p-5 rounded-3xl bg-slate-50 hover:bg-amber-50 group border border-slate-100 transition-all"
-                  >
-                    <div className="flex items-center gap-4 text-slate-700 font-black group-hover:text-amber-600">
-                      <CalendarIcon size={20} className="text-amber-500" /> Set Next Follow-Up
-                    </div>
+                  <button onClick={() => setActionStep(2)} className="w-full flex items-center justify-between p-5 rounded-3xl bg-slate-50 hover:bg-amber-50 group border border-slate-100 transition-all">
+                    <div className="flex items-center gap-4 text-slate-700 font-black group-hover:text-amber-600"><CalendarIcon size={20} className="text-amber-500" /> Set Next Follow-Up</div>
                     <ChevronRight size={18} className="text-slate-300" />
                   </button>
-
-                  <button 
-                    onClick={openFeasibilityModal} 
-                    className="w-full flex items-center justify-between p-5 rounded-3xl bg-slate-50 hover:bg-purple-50 group border border-slate-100 transition-all"
-                  >
-                    <div className="flex items-center gap-4 text-slate-700 font-black group-hover:text-purple-600">
-                      <TrendingUp size={20} className="text-purple-500" /> Send to Feasibility
-                    </div>
+                  <button onClick={openFeasibilityModal} className="w-full flex items-center justify-between p-5 rounded-3xl bg-slate-50 hover:bg-purple-50 group border border-slate-100 transition-all">
+                    <div className="flex items-center gap-4 text-slate-700 font-black group-hover:text-purple-600"><TrendingUp size={20} className="text-purple-500" /> Send to Feasibility</div>
                     <ChevronRight size={18} className="text-slate-300" />
                   </button>
-
-                  <button 
-                    onClick={() => setActionStep(3)} 
-                    className="w-full flex items-center justify-between p-5 rounded-3xl bg-rose-50 hover:bg-rose-100 group border border-rose-100 transition-all"
-                  >
-                    <div className="flex items-center gap-4 text-rose-600 font-black">
-                      <X size={20} /> Close Lead
-                    </div>
+                  <button onClick={() => setActionStep(3)} className="w-full flex items-center justify-between p-5 rounded-3xl bg-rose-50 hover:bg-rose-100 group border border-rose-100 transition-all">
+                    <div className="flex items-center gap-4 text-rose-600 font-black"><X size={20} /> Close Lead</div>
                     <ChevronRight size={18} />
                   </button>
-                  
-                  <button
-                    onClick={() => setActionStep(4)}
-                    className="group relative w-full flex flex-col items-center gap-2 p-3 rounded-[1.5rem] bg-emerald-50 hover:bg-emerald-600 transition-all duration-500 border border-emerald-100 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-200 text-left"
-                  >
-                    <div className="p-1.5 bg-white rounded-xl text-emerald-600 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-sm">
-                      <CheckCircle size={16} />
-                    </div>
-                    <div className="text-center">
-                      <span className="block text-[10px] font-black text-emerald-900 group-hover:text-white uppercase tracking-wider">
-                        Production Ready
-                      </span>
-                    </div>
+                  <button onClick={() => setActionStep(4)} className="group relative w-full flex flex-col items-center gap-2 p-3 rounded-[1.5rem] bg-emerald-50 hover:bg-emerald-600 transition-all duration-500 border border-emerald-100 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-200 text-left">
+                    <div className="p-1.5 bg-white rounded-xl text-emerald-600 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-sm"><CheckCircle size={16} /></div>
+                    <div className="text-center"><span className="block text-[10px] font-black text-emerald-900 group-hover:text-white uppercase tracking-wider">Production Ready</span></div>
                   </button>
                 </div>
               </div>
             )}
-
             {actionStep === 2 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-6">Follow-up Details</h2>
                 <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Date</label>
-                    <input 
-                      type="date" 
-                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500/20" 
-                      value={followUpData.date} 
-                      onChange={(e) => setFollowUpData({...followUpData, date: e.target.value})} 
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Method</label>
-                    <select 
-                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" 
-                      value={followUpData.type} 
-                      onChange={(e) => setFollowUpData({...followUpData, type: e.target.value})}
-                    >
-                      <option value="call">📞 Phone Call</option>
-                      <option value="email">📧 Email</option>
-                      <option value="message">💬 Message</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes</label>
-                    <textarea 
-                      className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-amber-500/20" 
-                      value={followUpData.description} 
-                      onChange={(e) => setFollowUpData({...followUpData, description: e.target.value})} 
-                    />
-                  </div>
-                  <div className="flex gap-3 pt-4">
-                    <button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
-                    <button onClick={handleFollowUpSubmit} className="flex-[2] py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-200">Save Schedule</button>
-                  </div>
+                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Date</label><input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.date}   min={new Date().toISOString().split('T')[0]} onChange={(e) => setFollowUpData({...followUpData, date: e.target.value})} /></div>
+                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Method</label><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" value={followUpData.type} onChange={(e) => setFollowUpData({...followUpData, type: e.target.value})}><option value="call">📞 Phone Call</option><option value="email">📧 Email</option><option value="message">💬 Message</option></select></div>
+                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes</label><textarea className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.description} onChange={(e) => setFollowUpData({...followUpData, description: e.target.value})} /></div>
+                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={handleFollowUpSubmit} className="flex-[2] py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-200">Save Schedule</button></div>
                 </div>
               </div>
             )}
-
             {actionStep === 3 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Conclusion</h2>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      onClick={() => setClosingData({...closingData, reason: 'lost'})} 
-                      className={`col-span-2 mx-auto py-3 px-6 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${
-                        closingData.reason === 'lost'
-                          ? 'bg-rose-50 border-rose-500 text-rose-600'
-                          : 'bg-slate-50 border-transparent text-slate-400'
-                      }`}
-                    >
-                      Lost
-                    </button>
-                  </div>
-                  <textarea 
-                    placeholder="Final summary/reasons..." 
-                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-32 resize-none font-medium outline-none" 
-                    value={closingData.description} 
-                    onChange={(e) => setClosingData({...closingData, description: e.target.value})} 
-                  />
-                  <div className="flex gap-3 pt-4">
-                    <button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
-                    <button 
-                      onClick={handleCloseLead} 
-                      className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase shadow-lg transition-all ${closingData.reason === 'won' ? 'bg-emerald-500 shadow-emerald-200' : 'bg-rose-500 shadow-rose-200'}`}
-                    >Confirm Status</button>
-                  </div>
+                  <div className="grid grid-cols-2 gap-3"><button onClick={() => setClosingData({...closingData, reason: 'lost'})} className={`col-span-2 mx-auto py-3 px-6 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${closingData.reason === 'lost' ? 'bg-rose-50 border-rose-500 text-rose-600' : 'bg-slate-50 border-transparent text-slate-400'}`}>Lost</button></div>
+                  <textarea placeholder="Final summary/reasons..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-32 resize-none font-medium outline-none" value={closingData.description} onChange={(e) => setClosingData({...closingData, description: e.target.value})} />
+                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={handleCloseLead} className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase shadow-lg transition-all ${closingData.reason === 'won' ? 'bg-emerald-500 shadow-emerald-200' : 'bg-rose-500 shadow-rose-200'}`}>Confirm Status</button></div>
                 </div>
               </div>
             )}
-
             {actionStep === 4 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Assign Project</h2>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">
-                  Select a Project Manager or leave blank to keep Unassigned
-                </p>
-                
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select a Project Manager or leave blank to keep Unassigned</p>
                 <div className="space-y-4">
-                  <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">
-                      Assign Project Manager
-                    </label>
-                    <select 
-                      required
-                      className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700"
-                      value={projectForm.projectManager}
-                      onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
-                    >
-                      <option value="">Select a Manager...</option>
-                      {projectManagers.map(pm => (
-                        <option key={pm._id} value={pm._id}>
-                          {pm.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex gap-3 pt-4">
-                    <button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
-                    <button 
-                      onClick={() => handleStatusUpdate(selectedLead._id, 'Production Ready', { 
-                        projectManagerId: selectedPM || null 
-                      })} 
-                      className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200"
-                    >
-                      {selectedPM ? "Assign & Convert" : "Move to Production"}
-                    </button>
-                  </div>
+                  <div><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label><select required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}><option value="">Select a Manager...</option>{projectManagers.map(pm => (<option key={pm._id} value={pm._id}>{pm.name}</option>))}</select></div>
+                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={() => handleStatusUpdate(selectedLead._id, 'Production Ready', { projectManagerId: selectedPM || null })} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200">{selectedPM ? "Assign & Convert" : "Move to Production"}</button></div>
                 </div>
               </div>
             )}
@@ -1168,312 +1079,141 @@ const SalesDashboard = () => {
 
       {/* --- FEASIBILITY MODAL --- */}
       {showFeasibilityModal && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-xl rounded-[2.5rem] md:rounded-[3rem] p-8 md:p-12 shadow-2xl relative animate-in zoom-in duration-300 overflow-hidden">
-            {showSuccess && (
-              <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center animate-in fade-in">
-                <div className="p-6 bg-green-100 text-green-600 rounded-full mb-6"><CheckCircle size={60} /></div>
-                <h2 className="text-2xl font-black text-slate-900 uppercase">Feasibility Sent</h2>
-              </div>
-            )}
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-lg rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 overflow-hidden">
+            {showSuccess && (<div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center animate-in fade-in"><div className="p-6 bg-green-100 text-green-600 rounded-full mb-6"><CheckCircle size={60} /></div><h2 className="text-2xl font-black text-slate-900 uppercase">Feasibility Sent</h2></div>)}
             <button onClick={closeModal} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900"><X size={24}/></button>
             <h2 className="text-3xl font-black text-slate-900 mb-2">Feasibility Request</h2>
             <p className="text-slate-400 mb-8 font-medium italic underline">Client: <span className="text-purple-600 font-bold">{selectedLead?.pocName}</span></p>
-            
             <form onSubmit={handleFeasibilitySubmit} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility ID</label>
-                  <input type="text" readOnly className="w-full p-4 bg-purple-50 border border-purple-100 rounded-2xl font-black text-purple-700 outline-none" value={feasibilityData.feasibilityId} />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility Date</label>
-                  <input 
-                    type="date" 
-                    readOnly 
-                    className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" 
-                    value={feasibilityData.feasibilityDate}
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
-                    Next Follow-up Date
-                  </label>
-                  <input 
-                    type="date" 
-                    required 
-                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" 
-                    value={feasibilityData.nextFollowUpDate || ''} 
-                    onChange={(e) => setFeasibilityData({
-                      ...feasibilityData, 
-                      nextFollowUpDate: e.target.value 
-                    })} 
-                  />
-                  <p className="text-[9px] text-slate-400 mt-2 italic">
-                    * This task will reappear in your dashboard on this date.
-                  </p>
-                </div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility ID</label><input type="text" readOnly className="w-full p-4 bg-purple-50 border border-purple-100 rounded-2xl font-black text-purple-700 outline-none" value={feasibilityData.feasibilityId} /></div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility Date</label><input type="date" readOnly className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" value={feasibilityData.feasibilityDate} /></div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Next Follow-up Date</label><input type="date" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" value={feasibilityData.nextFollowUpDate || ''}  min={new Date().toISOString().split('T')[0]} onChange={(e) => setFeasibilityData({...feasibilityData, nextFollowUpDate: e.target.value})} /><p className="text-[9px] text-slate-400 mt-2 italic">* This task will reappear in your dashboard on this date.</p></div>
               </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Task Details</label>
-                <textarea required placeholder="Requirement details..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-medium outline-none h-24 md:h-32 resize-none" value={feasibilityData.taskDetails} onChange={(e) => setFeasibilityData({...feasibilityData, taskDetails: e.target.value})} />
-              </div>
-              <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Attachment (PDF/Word)</label>
-                <div className="relative group">
-                  <input type="file" accept=".pdf,.doc,.docx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => setFeasibilityData({...feasibilityData, attachment: e.target.files[0]})} />
-                  <div className="w-full p-6 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-2 group-hover:border-purple-400 transition-colors bg-slate-50">
-                    <Upload size={24} className="text-slate-400" />
-                    <span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">{feasibilityData.attachment ? feasibilityData.attachment.name : "Click to upload files"}</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex gap-4 pt-4">
-                <button type="button" onClick={() => { setShowFeasibilityModal(false); setShowActionModal(true); }} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button>
-                <button type="submit" disabled={isUploading} className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 shadow-lg shadow-purple-200 flex items-center justify-center gap-2">
-                  {isUploading ? <><Loader2 size={18} className="animate-spin" /> Uploading...</> : "Submit"}
-                </button>
-              </div>
+              <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Task Details</label><textarea required placeholder="Requirement details..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-medium outline-none h-14 md:h-22 resize-none" value={feasibilityData.taskDetails} onChange={(e) => setFeasibilityData({...feasibilityData, taskDetails: e.target.value})} /></div>
+              <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Attachment (PDF/Word)</label><div className="relative group"><input type="file" accept=".pdf,.doc,.docx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => setFeasibilityData({...feasibilityData, attachment: e.target.files[0]})} /><div className="w-full p-6 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-2 group-hover:border-purple-400 transition-colors bg-slate-50"><Upload size={24} className="text-slate-400" /><span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">{feasibilityData.attachment ? feasibilityData.attachment.name : "Click to upload files"}</span></div></div></div>
+              <div className="flex gap-4 pt-4"><button type="button" onClick={() => { setShowFeasibilityModal(false); setShowActionModal(true); }} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button type="submit" disabled={isUploading} className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 shadow-lg shadow-purple-200 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={18} className="animate-spin" /> Uploading...</> : "Submit"}</button></div>
             </form>
           </div>
         </div>
       )}
 
-      {/* PROJECT LAUNCH MODAL */}
+      {/* --- PROJECT LAUNCH MODAL --- */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[200] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2>
-              <button onClick={() => setShowProjectModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors">
-                <X size={28} />
-              </button>
-            </div>
-
+            <div className="flex justify-between items-center mb-10"><h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2><button onClick={() => setShowProjectModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors"><X size={28} /></button></div>
             <form onSubmit={handleProjectSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
-                <input 
-                  type="text" required 
-                  className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700"
-                  value={projectForm.name} 
-                  onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} 
-                />
-              </div>
-
+              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label><input type="text" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700" value={projectForm.name} onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} /></div>
               <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label>
-                  <CreatableSelect
-                    isClearable
-                    options={INDUSTRY_OPTIONS}
-                    value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)}
-                    onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })}
-                    styles={customSelectStyles}
-                    placeholder="Type or select..."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label>
-                  <CreatableSelect
-                    isClearable
-                    options={POPULAR_COUNTRIES}
-                    value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)}
-                    onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })}
-                    styles={customSelectStyles}
-                    placeholder="Select country..."
-                  />
-                </div>
+                <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label><CreatableSelect isClearable options={INDUSTRY_OPTIONS} value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)} onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })} styles={customSelectStyles} placeholder="Type or select..." /></div>
+                <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label><CreatableSelect isClearable options={POPULAR_COUNTRIES} value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)} onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })} styles={customSelectStyles} placeholder="Select country..." /></div>
               </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label>
-                <select 
-                  required
-                  className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none"
-                  value={projectForm.projectManager}
-                  onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
-                >
-                  <option value="">Select a Manager...</option>
-                  {projectManagers.map(pm => (
-                    <option key={pm._id} value={pm._id}>{pm.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={isSubmittingProject}
-                className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${
-                  isSubmittingProject ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'
-                }`}
-              >
-                {isSubmittingProject ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <Loader2 className="animate-spin" size={20} />
-                    <span>Creating Project...</span>
-                  </div>
-                ) : "Confirm & Create Project"}
-              </button>
+              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label><select required className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none" value={projectForm.projectManager} onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}><option value="">Select a Manager...</option>{projectManagers.map(pm => (<option key={pm._id} value={pm._id}>{pm.name}</option>))}</select></div>
+              <button type="submit" disabled={isSubmittingProject} className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${isSubmittingProject ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'}`}>{isSubmittingProject ? (<div className="flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={20} /><span>Creating Project...</span></div>) : "Confirm & Create Project"}</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- APPROACH MODAL IN DASHBOARD --- */}
+      {/* --- APPROACH MODAL --- */}
       {isApproachModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative border border-slate-100">
-            <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all">
-              <X size={24} />
-            </button>
-
-            <div className="mb-8">
-              <h2 className="text-2xl font-black text-slate-800">Approach Prospect</h2>
-              <p className="text-slate-400 text-sm font-medium mt-1">Record the interaction for {selectedProspect?.companyName}.</p>
-            </div>
-
+            <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all"><X size={24} /></button>
+            <div className="mb-8"><h2 className="text-2xl font-black text-slate-800">Approach Prospect</h2><p className="text-slate-400 text-sm font-medium mt-1">Record the interaction for {selectedProspect?.companyName}.</p></div>
             <form onSubmit={handleApproachSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((method) => (
-                    <button
-                      key={method}
-                      type="button"
-                      onClick={() => setApproachData({...approachData, method})}
-                      className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
-                        approachData.method === method 
-                        ? 'border-blue-600 bg-blue-50 text-blue-600' 
-                        : 'border-slate-100 bg-slate-50 text-slate-400'
-                      }`}
-                    >
-                      {method}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Summary of Discussion</label>
-                <textarea 
-                  required
-                  rows="4"
-                  className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-medium text-slate-700 transition-all resize-none"
-                  placeholder="What was discussed?"
-                  value={approachData.summary}
-                  onChange={(e) => setApproachData({...approachData, summary: e.target.value})}
-                />
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={submittingApproach}
-                className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-blue-600 disabled:bg-slate-300 flex items-center justify-center gap-2"
-              >
-                {submittingApproach ? <Loader2 className="animate-spin" size={20}/> : <Send size={18}/>}
-                Confirm Approach
-              </button>
+              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label><div className="grid grid-cols-2 gap-3">{['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((method) => (<button key={method} type="button" onClick={() => setApproachData({...approachData, method})} className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${approachData.method === method ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-slate-50 text-slate-400'}`}>{method}</button>))}</div></div>
+              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Summary of Discussion</label><textarea required rows="4" className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-medium text-slate-700 transition-all resize-none" placeholder="What was discussed?" value={approachData.summary} onChange={(e) => setApproachData({...approachData, summary: e.target.value})} /></div>
+              <button type="submit" disabled={submittingApproach} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-blue-600 disabled:bg-slate-300 flex items-center justify-center gap-2">{submittingApproach ? <Loader2 className="animate-spin" size={20}/> : <Send size={18}/>}Confirm Approach</button>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- NEW SCHEDULED CALENDAR MODAL --- */}
+      {/* --- SCHEDULED CALENDAR MODAL WITH PAGINATION AND COMPACT CARDS --- */}
       {showScheduledModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-4xl rounded-[2.5rem] shadow-2xl p-6 md:p-8 relative max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setShowScheduledModal(false)} 
-              className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors z-10"
-            >
-              <X size={24} />
-            </button>
-
-            <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2">
-              <CalendarDays size={24} className="text-purple-600" />
-              Scheduled Follow-ups & Feasibility
-            </h2>
+          <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl p-6 md:p-8 relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setShowScheduledModal(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors z-10"><X size={24} /></button>
+            <h2 className="text-2xl font-black text-slate-800 mb-2 flex items-center gap-2"><CalendarDays size={24} className="text-purple-600" /> Scheduled Follow-ups & Feasibility</h2>
             <p className="text-slate-400 text-sm mb-6">View all upcoming scheduled tasks</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               {/* Calendar View */}
               <div>
-                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                  Calendar View
-                </h3>
-                <Calendar
-                  onChange={setSelectedDate}
-                  value={selectedDate}
-                  tileContent={tileContent}
-                  className="rounded-2xl border-0 shadow-sm w-full"
-                  nextLabel={<ChevronRight size={18} />}
-                  prevLabel={<ChevronLeft size={18} />}
-                />
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-500"></span>Calendar View</h3>
+                <Calendar onChange={setSelectedDate} value={selectedDate} tileContent={tileContent} className="rounded-2xl border-0 shadow-sm w-full" nextLabel={<ChevronRight size={18} />} prevLabel={<ChevronLeft size={18} />} />
                 <div className="flex items-center justify-center gap-4 mt-4 text-xs">
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-orange-500"></div>
-                    <span className="text-slate-500">Follow-up</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-                    <span className="text-slate-500">Feasibility</span>
-                  </div>
+                  <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-orange-500"></div><span className="text-slate-500">Follow-up</span></div>
+                  <div className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-purple-500"></div><span className="text-slate-500">Feasibility</span></div>
                 </div>
               </div>
 
-              {/* List View for Selected Date */}
+              {/* List View for Selected Date with Pagination */}
               <div>
-                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                  Tasks for {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </h3>
-                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Tasks for {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</h3>
+                <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2">
                   {getItemsForDate(selectedDate).length === 0 ? (
                     <p className="text-slate-400 text-sm italic text-center py-8">No scheduled tasks for this date.</p>
                   ) : (
                     getItemsForDate(selectedDate).map((item) => (
-                      <div 
-                        key={item.id} 
-                        className={`p-4 rounded-2xl border flex items-center justify-between transition-all cursor-pointer hover:shadow-md ${
-                          item.type === 'followup' 
-                            ? 'bg-orange-50 border-orange-100 hover:border-orange-200' 
-                            : 'bg-purple-50 border-purple-100 hover:border-purple-200'
-                        }`}
-                        onClick={() => {
-                          setShowScheduledModal(false);
-                          setSelectedLead(item.originalLead);
-                          setShowActionModal(true);
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className={`p-2 rounded-xl ${
-                            item.type === 'followup' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'
-                          }`}>
-                            {item.type === 'followup' ? <PhoneCall size={16} /> : <FileText size={16} />}
+                      <div key={item.id} className={`p-3 rounded-xl border flex items-center justify-between transition-all cursor-pointer hover:shadow-md ${item.isOverdue ? 'bg-red-50 border-red-200' : item.type === 'followup' ? 'bg-orange-50 border-orange-100 hover:border-orange-200' : 'bg-purple-50 border-purple-100 hover:border-purple-200'}`} onClick={() => { setShowScheduledModal(false); setSelectedLead(item.originalLead); setShowActionModal(true); }}>
+                        <div className="flex items-center gap-2">
+                          <div className={`p-1.5 rounded-lg ${item.isOverdue ? 'bg-red-200 text-red-700' : item.type === 'followup' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
+                            {item.type === 'followup' ? <PhoneCall size={12} /> : <FileText size={12} />}
                           </div>
                           <div>
-                            <h4 className="font-bold text-slate-800 text-sm">{item.title}</h4>
-                            <p className="text-[10px] text-slate-500 uppercase tracking-wider">
-                              {item.type === 'followup' ? 'Follow-up' : 'Feasibility'} • {item.date.toLocaleDateString()}
-                            </p>
+                            <div className="flex items-center gap-1.5">
+                              <h4 className="font-bold text-slate-800 text-xs">{item.title}</h4>
+                              <span className="text-[8px] font-bold text-slate-500">{item.orgName}</span>
+                              {item.isOverdue && (
+                                <span className="text-[7px] font-black bg-red-500 text-white px-1 py-0.5 rounded-full uppercase tracking-wider">Overdue</span>
+                              )}
+                            </div>
+                            <p className="text-[8px] text-slate-500">{item.type === 'followup' ? 'Follow-up' : 'Feasibility'} • {item.date.toLocaleDateString()}</p>
                             {item.originalLead.lastInteractionDesc && (
-                              <p className="text-[9px] text-slate-400 italic mt-1 truncate max-w-[200px]">
-                                "{item.originalLead.lastInteractionDesc}"
-                              </p>
+                              <p className="text-[7px] text-slate-400 italic mt-0.5 truncate max-w-[150px]">"{item.originalLead.lastInteractionDesc.substring(0, 50)}"</p>
                             )}
                           </div>
                         </div>
-                        <button className="p-2 bg-white rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors">
-                          <ExternalLink size={14} />
-                        </button>
+                        <button className="p-1.5 bg-white rounded-lg border border-slate-200 text-slate-500 hover:text-slate-700 transition-colors"><ExternalLink size={10} /></button>
                       </div>
                     ))
                   )}
                 </div>
               </div>
+            </div>
+
+            {/* All Scheduled Items Section with Pagination */}
+            <div className="mt-8 pt-6 border-t border-slate-100">
+              <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span>All Scheduled Tasks ({allScheduledItems.length})</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto p-1">
+                {paginatedScheduledItems.map((item) => (
+                  <div key={item.id} className={`p-2 rounded-lg border flex items-center justify-between transition-all cursor-pointer hover:shadow-sm ${item.isOverdue ? 'bg-red-50 border-red-200' : item.type === 'followup' ? 'bg-orange-50 border-orange-100' : 'bg-purple-50 border-purple-100'}`} onClick={() => { setShowScheduledModal(false); setSelectedLead(item.originalLead); setShowActionModal(true); }}>
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1 rounded-md ${item.isOverdue ? 'bg-red-200 text-red-700' : item.type === 'followup' ? 'bg-orange-100 text-orange-600' : 'bg-purple-100 text-purple-600'}`}>
+                        {item.type === 'followup' ? <PhoneCall size={10} /> : <FileText size={10} />}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-800 text-[10px]">{item.title}</p>
+                        <p className="text-[7px] text-slate-500">{item.orgName} • {item.date.toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <ExternalLink size={10} className="text-slate-400 shrink-0" />
+                  </div>
+                ))}
+              </div>
+              
+              {/* Pagination for all scheduled items */}
+              {totalScheduledPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-slate-100">
+                  <button onClick={() => setScheduledCurrentPage(p => Math.max(1, p - 1))} disabled={scheduledCurrentPage === 1} className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"><ChevronLeft size={14} /></button>
+                  <span className="text-[9px] font-black text-slate-500">Page {scheduledCurrentPage} of {totalScheduledPages}</span>
+                  <button onClick={() => setScheduledCurrentPage(p => Math.min(totalScheduledPages, p + 1))} disabled={scheduledCurrentPage === totalScheduledPages} className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"><ChevronRight size={14} /></button>
+                </div>
+              )}
             </div>
           </div>
         </div>

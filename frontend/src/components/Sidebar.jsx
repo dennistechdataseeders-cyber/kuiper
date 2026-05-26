@@ -152,11 +152,11 @@ const Sidebar = () => {
         icon: <ChartBar size={20} />,
         label: 'Resource Analytics',
       },
-      {
-        path: '/sales/email-trigger',
-        icon: <Inbox size={20} />,
-        label: 'Email Trigger',
-      },
+      // {
+      //   path: '/sales/email-trigger',
+      //   icon: <Inbox size={20} />,
+      //   label: 'Email Trigger',
+      // },
     ],
 
     'Sales Manager': [
@@ -185,11 +185,11 @@ const Sidebar = () => {
         icon: <Building2 size={20} />,
         label: 'Organizations',
       },
-      {
-        path: '/sales/email-trigger',
-        icon: <Inbox size={20} />,
-        label: 'Email Trigger',
-      },
+      // {
+      //   path: '/sales/email-trigger',
+      //   icon: <Inbox size={20} />,
+      //   label: 'Email Trigger',
+      // },
     ],
 
     Sales: [
@@ -218,11 +218,11 @@ const Sidebar = () => {
         icon: <TrendingUp size={20} />,
         label: 'Analytics',
       },
-      {
-        path: '/sales/email-trigger',
-        icon: <Inbox size={20} />,
-        label: 'Email Trigger',
-      },
+      // {
+      //   path: '/sales/email-trigger',
+      //   icon: <Inbox size={20} />,
+      //   label: 'Email Trigger',
+      // },
     ],
 
     'Project Manager': [
@@ -342,32 +342,39 @@ const Sidebar = () => {
         )}
 
         {/* NAVIGATION */}
-        <nav className="p-4 space-y-2 overflow-y-auto no-scrollbar">
-          {links.map((item) => {
-            const active = isRouteActive(item.path);
+       {/* NAVIGATION */}
+<nav
+  className={`p-4 space-y-2 overflow-y-auto no-scrollbar ${
+    isCollapsed
+      ? 'h-[calc(100vh-180px)]'
+      : 'h-[calc(100vh-340px)]'
+  }`}
+>
+  {links.map((item) => {
+    const active = isRouteActive(item.path);
 
-            return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={`flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 group ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                    : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
-                } ${isCollapsed ? 'justify-center' : ''}`}
-                title={isCollapsed ? item.label : ''}
-              >
-                <span>{item.icon}</span>
+    return (
+      <NavLink
+        key={item.path}
+        to={item.path}
+        className={`flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 group ${
+          active
+            ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+            : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
+        } ${isCollapsed ? 'justify-center' : ''}`}
+        title={isCollapsed ? item.label : ''}
+      >
+        <span>{item.icon}</span>
 
-                {!isCollapsed && (
-                  <span className="font-bold text-sm tracking-tight whitespace-nowrap">
-                    {item.label}
-                  </span>
-                )}
-              </NavLink>
-            );
-          })}
-        </nav>
+        {!isCollapsed && (
+          <span className="font-bold text-sm tracking-tight whitespace-nowrap">
+            {item.label}
+          </span>
+        )}
+      </NavLink>
+    );
+  })}
+</nav>
 
         {/* ACCOUNT SECTION */}
         <div

@@ -40,6 +40,32 @@ router.post('/fetch-bucket', async (req, res) => {
     res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
+// Add this PUT route to update a prospect
+router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { organizationId, leadId } = req.body;
+    
+    const updateData = {};
+    if (organizationId) updateData.organizationId = organizationId;
+    if (leadId) updateData.leadId = leadId;
+    
+    const updatedProspect = await Prospect.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true }
+    );
+    
+    if (!updatedProspect) {
+      return res.status(404).json({ error: "Prospect not found" });
+    }
+    
+    res.json(updatedProspect);
+  } catch (err) {
+    console.error("Prospect update error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
 router.get('/bucket-count', async (req, res) => {
   try {
     // THE FIX: Specifically look for prospects where salesRepId is missing, null, or undefined
