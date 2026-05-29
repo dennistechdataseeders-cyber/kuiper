@@ -8,9 +8,40 @@ const Feed = require('../models/Feed');
 const Log = require('../models/Log');
 const Task = require('../models/Task');
 const WorkLog = require('../models/WorkLog');
+const { getServerTimestamp } = require('../utils/serverTime');
+
 // Import your Authentication Middleware
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
+
+
+/**
+ * @route   GET /api/dev/system-time-check
+ * @desc    Get server time — used for:
+ *          1. Mismatch detection (>5 min diff or different date blocks access)
+ *          2. Client clock offset calculation for server-side time tracking
+ *          Returns ISO timestamp so client can compute offset = serverTime - clientReceiveTime
+ * @access  Private (Developer)
+ */
+router.get('/system-time-check', protect, authorize('Developer'), async (req, res) => {
+  try {
+    // Use getServerTimestamp if available, otherwise fall back to new Date()
+    const serverNow = typeof getServerTimestamp === 'function'
+      ? getServerTimestamp()
+      : new Date();
+
+    res.json({
+      success: true,
+      serverTime: serverNow.toISOString(),
+      serverTimestamp: serverNow.getTime(), // ms epoch — used by client for offset math
+      timezone: 'Asia/Kolkata'
+    });
+
+  } catch (err) {
+    console.error('Time check error:', err);
+    res.status(500).json({ error: 'Failed to fetch server time' });
+  }
+});
 
 /**
  * @route   GET /api/dev/my-projects
@@ -19,15 +50,12 @@ const { authorize } = require('../middleware/roleCheck');
  */
 router.get('/my-projects', protect, authorize('Developer'), async (req, res) => {
   try {
-    // 1. Find all feeds where this specific developer is in the assignedDevelopers array
     const assignedFeeds = await Feed.find({
       assignedDevelopers: req.user._id
     }).select('projectId');
 
-    // 2. Extract unique project IDs from those feeds
     const projectIds = [...new Set(assignedFeeds.map(f => f.projectId))];
 
-    // 3. Fetch the full project details
     const projects = await Project.find({
       _id: { $in: projectIds }
     })
@@ -57,12 +85,10 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
       .populate('assignedDevelopers', 'name email')
       .sort({ createdAt: -1 });
 
-    // Filter out feeds that are already completed for today
     const filteredFeeds = feeds.filter(feed => {
       const isCompletedToday = feed.completionHistory && 
         Array.isArray(feed.completionHistory) && 
         feed.completionHistory.some(h => h && h.date === today);
-      
       return !isCompletedToday;
     });
 
@@ -82,44 +108,28 @@ router.post('/complete-feed', protect, authorize('Developer'), async (req, res) 
   try {
     const { feedId, description, completedAt } = req.body;
 
-    if (!feedId) {
-      return res.status(400).json({ error: 'Feed ID is required' });
-    }
-
-    if (!description || !description.trim()) {
-      return res.status(400).json({ error: 'Description is required' });
-    }
+    if (!feedId) return res.status(400).json({ error: 'Feed ID is required' });
+    if (!description || !description.trim()) return res.status(400).json({ error: 'Description is required' });
 
     const feed = await Feed.findById(feedId);
-
-    if (!feed) {
-      return res.status(404).json({ error: 'Feed not found' });
-    }
+    if (!feed) return res.status(404).json({ error: 'Feed not found' });
 
     const isAssigned = feed.assignedDevelopers.some(
       devId => devId.toString() === req.user._id.toString()
     );
-
-    if (!isAssigned) {
-      return res.status(403).json({ error: 'Not authorized to complete this feed' });
-    }
+    if (!isAssigned) return res.status(403).json({ error: 'Not authorized to complete this feed' });
 
     const today = new Date().toISOString().split('T')[0];
 
-    if (!feed.completionHistory) {
-      feed.completionHistory = [];
-    }
+    if (!feed.completionHistory) feed.completionHistory = [];
 
     const alreadyCompleted = feed.completionHistory.some(h => h && h.date === today);
-    
-    if (alreadyCompleted) {
-      return res.status(400).json({ error: 'Feed already completed for today' });
-    }
+    if (alreadyCompleted) return res.status(400).json({ error: 'Feed already completed for today' });
 
     feed.completionHistory.push({
       date: today,
       completedBy: req.user._id,
-      description: description,
+      description,
       completedAt: completedAt ? new Date(completedAt) : new Date()
     });
 
@@ -157,12 +167,8 @@ router.post('/complete-feed', protect, authorize('Developer'), async (req, res) 
     });
 
   } catch (err) {
-    console.error('=== COMPLETE FEED ERROR ===');
-    console.error('Error message:', err.message);
-    res.status(500).json({ 
-      error: 'Server error while completing feed',
-      details: err.message
-    });
+    console.error('=== COMPLETE FEED ERROR ===', err.message);
+    res.status(500).json({ error: 'Server error while completing feed', details: err.message });
   }
 });
 
@@ -177,18 +183,12 @@ router.patch('/feeds/:id/status', protect, authorize('Developer'), async (req, r
     const feedId = req.params.id;
 
     const feed = await Feed.findById(feedId);
-
-    if (!feed) {
-      return res.status(404).json({ error: 'Feed not found' });
-    }
+    if (!feed) return res.status(404).json({ error: 'Feed not found' });
 
     const isAssigned = feed.assignedDevelopers.some(
       devId => devId.toString() === req.user._id.toString()
     );
-
-    if (!isAssigned) {
-      return res.status(403).json({ error: 'Not authorized to update this feed' });
-    }
+    if (!isAssigned) return res.status(403).json({ error: 'Not authorized to update this feed' });
 
     feed.status = status;
     await feed.save();
@@ -204,18 +204,13 @@ router.patch('/feeds/:id/status', protect, authorize('Developer'), async (req, r
     }
 
     const io = req.app.get('io');
-    if (io) {
-      io.to(req.user._id.toString()).emit('feed_updated', feed);
-    }
+    if (io) io.to(req.user._id.toString()).emit('feed_updated', feed);
 
-    res.json({
-      message: `Feed status updated to ${status}`,
-      feed
-    });
+    res.json({ message: `Feed status updated to ${status}`, feed });
 
   } catch (err) {
-    console.error("Error updating feed:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error('Error updating feed:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -227,39 +222,24 @@ router.patch('/feeds/:id/status', protect, authorize('Developer'), async (req, r
 router.patch('/tasks/:taskId', protect, authorize('Developer'), async (req, res) => {
   try {
     const { status, details, name } = req.body;
-
     const task = await Task.findById(req.params.taskId);
 
-    if (!task) {
-      return res.status(404).json({
-        error: "Task not found"
-      });
-    }
+    if (!task) return res.status(404).json({ error: 'Task not found' });
 
     const isAssigned = task.targetUsers.some(
       userId => userId.toString() === req.user._id.toString()
     );
-
-    if (!isAssigned) {
-      return res.status(403).json({
-        error: "Not authorized to update this task"
-      });
-    }
+    if (!isAssigned) return res.status(403).json({ error: 'Not authorized to update this task' });
 
     if (status) task.status = status;
     if (details) task.details = details;
     if (name) task.name = name;
-
-    if (status === 'Completed') {
-      task.completedAt = new Date();
-    }
+    if (status === 'Completed') task.completedAt = new Date();
 
     await task.save();
 
     const io = req.app.get('io');
-    if (io) {
-      io.to(req.user._id.toString()).emit('task_updated', task);
-    }
+    if (io) io.to(req.user._id.toString()).emit('task_updated', task);
 
     if (Log) {
       await Log.create({
@@ -270,14 +250,11 @@ router.patch('/tasks/:taskId', protect, authorize('Developer'), async (req, res)
       });
     }
 
-    res.json({
-      message: "Task updated successfully",
-      task
-    });
+    res.json({ message: 'Task updated successfully', task });
 
   } catch (err) {
-    console.error("Error updating task:", err);
-    res.status(500).json({ error: "Server error" });
+    console.error('Error updating task:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -299,7 +276,7 @@ router.get('/my-bucket', protect, authorize('Developer'), async (req, res) => {
     res.json(tasks);
   } catch (error) {
     console.error(error);
-    res.status(500).send("Server Error");
+    res.status(500).send('Server Error');
   }
 });
 
@@ -334,10 +311,7 @@ router.get('/worklog', protect, authorize('Developer'), async (req, res) => {
           });
         }
 
-        return {
-          feed,
-          worklog: log
-        };
+        return { feed, worklog: log };
       })
     );
 
@@ -351,43 +325,45 @@ router.get('/worklog', protect, authorize('Developer'), async (req, res) => {
 /**
  * @route   POST /api/dev/worklog/start/:feedId
  * @desc    Start timer for a feed
+ *          Always records server-side startedAt — client cannot supply a timestamp.
+ *          Returns serverTimestamp so client can recalibrate its offset.
  * @access  Private (Developer)
  */
 router.post('/worklog/start/:feedId', protect, authorize('Developer'), async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
 
-    let log = await WorkLog.findOne({
+    const log = await WorkLog.findOne({
       developerId: req.user._id,
       feedId: req.params.feedId,
       date: today
     });
 
-    if (!log) {
-      return res.status(404).json({ error: 'Worklog not found' });
-    }
+    if (!log) return res.status(404).json({ error: 'Worklog not found' });
+    if (log.isRunning) return res.status(400).json({ error: 'Timer already running' });
 
-    if (!log.isRunning) {
-      const now = new Date();
-      log.startedAt = now;
-      log.isRunning = true;
-      
-      // Initialize timeBlocks array if it doesn't exist
-      if (!log.timeBlocks) {
-        log.timeBlocks = [];
-      }
-      
-      // Add new time block
-      log.timeBlocks.push({
-        startTime: now,
-        endTime: null,
-        duration: 0
-      });
-      
-      await log.save();
-    }
+    // Always use server clock — never trust client-supplied time
+    const serverNow = new Date();
 
-    res.json(log);
+    log.startedAt = serverNow;
+    log.isRunning = true;
+
+    if (!log.timeBlocks) log.timeBlocks = [];
+
+    log.timeBlocks.push({
+      startTime: serverNow,
+      endTime: null,
+      duration: 0
+    });
+
+    await log.save();
+
+    res.json({
+      success: true,
+      worklog: log,
+      serverTimestamp: serverNow.getTime() // client uses this to correct offset
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to start timer' });
@@ -397,6 +373,8 @@ router.post('/worklog/start/:feedId', protect, authorize('Developer'), async (re
 /**
  * @route   POST /api/dev/worklog/pause/:feedId
  * @desc    Pause timer for a feed
+ *          Duration is computed server-side from stored startedAt.
+ *          Returns serverTimestamp so client can recalibrate its offset.
  * @access  Private (Developer)
  */
 router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (req, res) => {
@@ -409,32 +387,34 @@ router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (re
       date: today
     });
 
-    if (!log) {
-      return res.status(404).json({ error: 'Worklog not found' });
-    }
+    if (!log) return res.status(404).json({ error: 'Worklog not found' });
+    if (!log.isRunning) return res.status(400).json({ error: 'Timer is not running' });
 
-    if (!log.isRunning) {
-      return res.status(400).json({ error: 'Timer is not running' });
-    }
+    // Server computes elapsed time — client clock is irrelevant
+    const serverNow = new Date();
+    const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
 
-    const now = new Date();
-    const diff = Math.floor((now - log.startedAt) / 1000);
     log.totalTime += diff;
-    
-    // Update the current time block with end time
-    if (log.timeBlocks && log.timeBlocks.length > 0) {
+
+    if (log.timeBlocks?.length > 0) {
       const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
       if (currentBlock && !currentBlock.endTime) {
-        currentBlock.endTime = now;
+        currentBlock.endTime = serverNow;
         currentBlock.duration = diff;
       }
     }
-    
+
     log.isRunning = false;
     log.startedAt = null;
+
     await log.save();
 
-    res.json(log);
+    res.json({
+      success: true,
+      worklog: log,
+      serverTimestamp: serverNow.getTime() // client uses this to correct offset
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to pause timer' });
@@ -444,6 +424,8 @@ router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (re
 /**
  * @route   POST /api/dev/worklog/stop/:feedId
  * @desc    Stop timer for a feed
+ *          If running, duration is computed server-side from stored startedAt.
+ *          Returns serverTimestamp so client can recalibrate its offset.
  * @access  Private (Developer)
  */
 router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req, res) => {
@@ -456,20 +438,19 @@ router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req
       date: today
     });
 
-    if (!log) {
-      return res.status(404).json({ error: 'Worklog not found' });
-    }
+    if (!log) return res.status(404).json({ error: 'Worklog not found' });
 
     if (log.isRunning) {
-      const now = new Date();
-      const diff = Math.floor((now - log.startedAt) / 1000);
+      // Server computes elapsed time — client clock is irrelevant
+      const serverNow = new Date();
+      const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
+
       log.totalTime += diff;
-      
-      // Update the current time block with end time
-      if (log.timeBlocks && log.timeBlocks.length > 0) {
+
+      if (log.timeBlocks?.length > 0) {
         const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
         if (currentBlock && !currentBlock.endTime) {
-          currentBlock.endTime = now;
+          currentBlock.endTime = serverNow;
           currentBlock.duration = diff;
         }
       }
@@ -477,9 +458,17 @@ router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req
 
     log.isRunning = false;
     log.startedAt = null;
+
     await log.save();
 
-    res.json(log);
+    const serverNow = new Date();
+
+    res.json({
+      success: true,
+      worklog: log,
+      serverTimestamp: serverNow.getTime() // client uses this to correct offset
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to stop timer' });
@@ -506,19 +495,11 @@ router.post('/worklog/deduct-break/:feedId', protect, authorize('Developer'), as
       date: today
     });
 
-    if (!log) {
-      return res.status(404).json({ error: 'Worklog not found' });
-    }
+    if (!log) return res.status(404).json({ error: 'Worklog not found' });
 
-    // Initialize arrays if they don't exist
-    if (!log.breakEntries) {
-      log.breakEntries = [];
-    }
-    if (!log.totalBreakTime) {
-      log.totalBreakTime = 0;
-    }
+    if (!log.breakEntries) log.breakEntries = [];
+    if (!log.totalBreakTime) log.totalBreakTime = 0;
 
-    // Add break entry
     log.totalBreakTime += breakSeconds;
     log.breakEntries.push({
       duration: breakSeconds,
@@ -526,7 +507,6 @@ router.post('/worklog/deduct-break/:feedId', protect, authorize('Developer'), as
       timestamp: new Date()
     });
     
-    // Recalculate net time
     log.netTime = Math.max(0, (log.totalTime || 0) - log.totalBreakTime);
     
     await log.save();
@@ -545,26 +525,6 @@ router.post('/worklog/deduct-break/:feedId', protect, authorize('Developer'), as
   } catch (err) {
     console.error('Error deducting break time:', err);
     res.status(500).json({ error: 'Failed to deduct break time' });
-  }
-});
-/**
- * @route   GET /api/dev/system-time-check
- * @desc    Get server time to check against client system time
- * @access  Private (Developer)
- */
-router.get('/system-time-check', protect, authorize('Developer'), async (req, res) => {
-  try {
-    // Get current server time in IST
-    const serverTime = new Date();
-    
-    res.json({
-      serverTime: serverTime.toISOString(),
-      timezone: 'Asia/Kolkata',
-      message: 'Server time in IST'
-    });
-  } catch (err) {
-    console.error('Time check error:', err);
-    res.status(500).json({ error: 'Failed to get server time' });
   }
 });
 

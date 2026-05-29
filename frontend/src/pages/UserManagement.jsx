@@ -180,7 +180,7 @@ const UserManagement = () => {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex justify-center items-center z-50 p-4">
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex justify-center items-center z-70 p-4">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative">
             <button onClick={closeModal} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-100 rounded-full">
               <X size={20} />

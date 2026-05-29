@@ -8,7 +8,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://192.168.1.5:5000', // replace with your actual IP from ipconfig
+        target: 'http://192.168.1.6:5000', // replace with your actual IP from ipconfig
         changeOrigin: true,
         secure: false,
       },

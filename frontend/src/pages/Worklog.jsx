@@ -2,7 +2,8 @@ import React, {
   useEffect,
   useState,
   useMemo,
-  useRef
+  useRef,
+  useCallback
 } from 'react';
 
 import axios from 'axios';
@@ -26,7 +27,10 @@ import {
   AlertTriangle,
   Lock,
   RefreshCw,
-  Globe
+  Globe,
+  Wifi,
+  WifiOff,
+  ShieldCheck
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -61,6 +65,41 @@ const Worklog = () => {
 
   /*
   ========================================
+  SERVER TIME SYNC STATE
+  ========================================
+  */
+
+  // serverTimeOffset: milliseconds to ADD to Date.now() to get server time
+  // e.g. if server is 5000ms ahead of client, offset = +5000
+  const serverTimeOffsetRef = useRef(0);
+  const [serverSyncStatus, setServerSyncStatus] = useState({
+    synced: false,
+    lastSyncAt: null,       // client Date.now() when we last synced
+    lastSyncDisplay: null,  // human-readable string
+    offsetMs: 0,            // current offset in ms
+    isSyncing: false,
+    isStale: false,         // true if last sync was >35s ago
+  });
+
+  // Ticker to re-render every second (for live timers)
+  const [tick, setTick] = useState(0);
+
+  /*
+  ========================================
+  GET SERVER-CORRECTED "NOW"
+  ========================================
+  */
+
+  /**
+   * Returns the current time adjusted to match server time.
+   * All live duration calculations must use this instead of Date.now().
+   */
+  const getServerNow = useCallback(() => {
+    return Date.now() + serverTimeOffsetRef.current;
+  }, []);
+
+  /*
+  ========================================
   FORMAT TIME (WITH SECONDS FULL DISPLAY)
   ========================================
   */
@@ -79,91 +118,128 @@ const Worklog = () => {
     return `${secs}s`;
   };
 
+  const formatSyncAge = (lastSyncAt) => {
+    if (!lastSyncAt) return 'Never';
+    const ageSeconds = Math.floor((Date.now() - lastSyncAt) / 1000);
+    if (ageSeconds < 5) return 'Just now';
+    if (ageSeconds < 60) return `${ageSeconds}s ago`;
+    return `${Math.floor(ageSeconds / 60)}m ago`;
+  };
+
   /*
   ========================================
-  CHECK SYSTEM TIME AGAINST SERVER TIME
+  SYNC SERVER TIME (offset calculation)
   ========================================
   */
 
-  const checkSystemTimeMismatch = async () => {
-    if (isChecking) return;
-    
-    setIsChecking(true);
-    
+  /**
+   * Fetches server time and calculates the offset between server and client clocks.
+   * Uses the round-trip time to estimate network latency and correct for it.
+   *
+   * offset = serverTime - clientTime
+   * getServerNow() = Date.now() + offset
+   */
+  const syncServerTime = useCallback(async (silent = false) => {
+    if (!silent) {
+      setServerSyncStatus(prev => ({ ...prev, isSyncing: true }));
+    }
+
     try {
       const token = localStorage.getItem('token');
-      
-      if (!token) {
-        setIsChecking(false);
-        return;
-      }
-      
+      if (!token) return;
+
+      const t0 = Date.now(); // client time before request
       const response = await axios.get(`${API_BASE_URL}/api/dev/system-time-check`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      const t1 = Date.now(); // client time after response
+
+      const serverTime = new Date(response.data.serverTime).getTime();
       
-      const serverTime = new Date(response.data.serverTime);
-      const localTime = new Date();
+      // Estimate server time at moment of receipt: serverTime + half round-trip
+      const networkLatencyMs = (t1 - t0) / 2;
+      const estimatedServerNow = serverTime + networkLatencyMs;
       
-      // Format dates for comparison
-      const serverDate = serverTime.toISOString().split('T')[0];
-      const localDate = localTime.toISOString().split('T')[0];
+      // Offset: how many ms to add to client time to get server time
+      const newOffset = estimatedServerNow - t1;
       
-      // Calculate time difference in minutes
-      const timeDiffMinutes = Math.abs(serverTime - localTime) / (1000 * 60);
-      
-      // Check if date is different
+      serverTimeOffsetRef.current = newOffset;
+
+      const now = Date.now();
+      const displayTime = new Date(estimatedServerNow).toLocaleTimeString('en-IN', { 
+        timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+      });
+
+      setServerSyncStatus({
+        synced: true,
+        lastSyncAt: now,
+        lastSyncDisplay: displayTime,
+        offsetMs: Math.round(newOffset),
+        isSyncing: false,
+        isStale: false,
+      });
+
+      // Also run the mismatch check logic with the data we already have
+      const serverDate = new Date(estimatedServerNow).toISOString().split('T')[0];
+      const localDate = new Date(t1).toISOString().split('T')[0];
+      const timeDiffMinutes = Math.abs(newOffset) / (1000 * 60);
       const isDateMismatch = serverDate !== localDate;
-      
-      // Check if time difference is more than 5 minutes
       const isTimeMismatch = timeDiffMinutes > 5;
-      
-      console.log('=== TIME CHECK DEBUG ===');
-      console.log('Server Date:', serverDate);
-      console.log('Local Date:', localDate);
-      console.log('Is Date Mismatch:', isDateMismatch);
-      console.log('Server Time:', serverTime.toLocaleTimeString());
-      console.log('Local Time:', localTime.toLocaleTimeString());
-      console.log('Time Diff (minutes):', timeDiffMinutes);
-      console.log('Is Time Mismatch:', isTimeMismatch);
-      console.log('========================');
-      
+
       if (isDateMismatch || isTimeMismatch) {
         let message = '';
         if (isDateMismatch) {
           message = `Your system date (${localDate}) does NOT match the server date (${serverDate}). `;
         }
         if (isTimeMismatch) {
-          message += `Your system time is ${Math.round(timeDiffMinutes)} minutes ${serverTime > localTime ? 'behind' : 'ahead'} of server time.`;
+          message += `Your system time is ${Math.round(timeDiffMinutes)} minutes ${newOffset > 0 ? 'behind' : 'ahead'} of server time.`;
         }
-        
         setTimeMismatch({
           isMismatch: true,
           message: message.trim(),
-          serverTime: serverTime.toLocaleTimeString(),
-          localTime: localTime.toLocaleTimeString(),
-          serverDate: serverDate,
-          localDate: localDate,
+          serverTime: new Date(estimatedServerNow).toLocaleTimeString(),
+          localTime: new Date(t1).toLocaleTimeString(),
+          serverDate,
+          localDate,
           timeDiffMinutes: Math.round(timeDiffMinutes)
         });
-        
       } else {
         setTimeMismatch({ 
           isMismatch: false, 
           message: '', 
-          serverTime: serverTime.toLocaleTimeString(),
-          localTime: localTime.toLocaleTimeString(),
-          serverDate: serverDate,
-          localDate: localDate,
+          serverTime: new Date(estimatedServerNow).toLocaleTimeString(),
+          localTime: new Date(t1).toLocaleTimeString(),
+          serverDate,
+          localDate,
           timeDiffMinutes: 0
         });
       }
+
+      console.log(`[TimeSync] Offset: ${Math.round(newOffset)}ms | Latency: ${Math.round(networkLatencyMs)}ms | ServerNow: ${displayTime}`);
+
     } catch (err) {
-      console.error('Time check failed:', err);
-    } finally {
-      setIsChecking(false);
+      console.error('[TimeSync] Sync failed:', err);
+      setServerSyncStatus(prev => ({ 
+        ...prev, 
+        isSyncing: false,
+        synced: prev.synced, // keep previous synced state
+      }));
     }
-  };
+  }, []);
+
+  /*
+  ========================================
+  CHECK SYSTEM TIME AGAINST SERVER TIME
+  (legacy wrapper — now calls syncServerTime)
+  ========================================
+  */
+
+  const checkSystemTimeMismatch = useCallback(async () => {
+    if (isChecking) return;
+    setIsChecking(true);
+    await syncServerTime(false);
+    setIsChecking(false);
+  }, [isChecking, syncServerTime]);
 
   /*
   ========================================
@@ -172,7 +248,6 @@ const Worklog = () => {
   */
 
   const fetchLogs = async () => {
-    // Don't fetch if there's a time mismatch
     if (timeMismatch.isMismatch) {
       console.log('Skipping fetch - time mismatch exists');
       return;
@@ -181,17 +256,12 @@ const Worklog = () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      
-      if (!token) {
-        setLoading(false);
-        return;
-      }
+      if (!token) { setLoading(false); return; }
       
       const res = await axios.get(`${API_BASE_URL}/api/dev/worklog`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setLogs(res.data);
-      console.log('Logs fetched successfully');
     } catch (err) {
       console.error(err);
     } finally {
@@ -199,93 +269,89 @@ const Worklog = () => {
     }
   };
 
-  // Run on component mount
+  /*
+  ========================================
+  EFFECTS
+  ========================================
+  */
+
+  // Initial sync + periodic sync every 30 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
-      checkSystemTimeMismatch();
+      syncServerTime(false);
     }, 500);
-    
-    const interval = setInterval(() => {
-      checkSystemTimeMismatch();
+
+    const syncInterval = setInterval(() => {
+      syncServerTime(true); // silent background sync
     }, 30000);
-    
+
     return () => {
       clearTimeout(timer);
-      clearInterval(interval);
+      clearInterval(syncInterval);
     };
+  }, [syncServerTime]);
+
+  // Stale indicator: mark sync as stale if > 35 seconds since last sync
+  useEffect(() => {
+    const staleCheck = setInterval(() => {
+      setServerSyncStatus(prev => {
+        if (!prev.lastSyncAt) return prev;
+        const isStale = (Date.now() - prev.lastSyncAt) > 35000;
+        if (isStale !== prev.isStale) return { ...prev, isStale };
+        return prev;
+      });
+    }, 5000);
+    return () => clearInterval(staleCheck);
   }, []);
 
-  // Fetch logs only when time mismatch is resolved
+  // Fetch logs when mismatch resolves
   useEffect(() => {
-    console.log('timeMismatch.isMismatch changed to:', timeMismatch.isMismatch);
     if (!timeMismatch.isMismatch) {
       fetchLogs();
     } else {
-      // Clear logs when mismatch exists
       setLogs([]);
     }
   }, [timeMismatch.isMismatch]);
 
-  // Listen for localStorage changes (token changes on login/logout)
+  // Token change listener
   useEffect(() => {
     let lastToken = localStorage.getItem('token');
-    const tokenCheckInterval = setInterval(() => {
-      const currentToken = localStorage.getItem('token');
-      if (currentToken !== lastToken) {
-        lastToken = currentToken;
-        if (currentToken) {
-          setTimeout(() => {
-            checkSystemTimeMismatch();
-          }, 500);
+    const tokenCheck = setInterval(() => {
+      const current = localStorage.getItem('token');
+      if (current !== lastToken) {
+        lastToken = current;
+        if (current) {
+          setTimeout(() => syncServerTime(false), 500);
         } else {
-          setTimeMismatch({ 
-            isMismatch: false, 
-            message: '', 
-            serverTime: null, 
-            localTime: null,
-            serverDate: null,
-            localDate: null,
-            timeDiffMinutes: 0
-          });
+          setTimeMismatch({ isMismatch: false, message: '', serverTime: null, localTime: null, serverDate: null, localDate: null, timeDiffMinutes: 0 });
           setLogs([]);
         }
       }
     }, 1000);
-    
-    return () => clearInterval(tokenCheckInterval);
-  }, []);
+    return () => clearInterval(tokenCheck);
+  }, [syncServerTime]);
 
-  // Listen for page visibility change
+  // Visibility / focus re-sync
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        const token = localStorage.getItem('token');
-        if (token) {
-          checkSystemTimeMismatch();
-        }
+    const onVisible = () => {
+      if (!document.hidden && localStorage.getItem('token')) {
+        syncServerTime(false);
       }
     };
-    
-    const handleFocus = () => {
-      const token = localStorage.getItem('token');
-      if (token) {
-        checkSystemTimeMismatch();
-      }
+    const onFocus = () => {
+      if (localStorage.getItem('token')) syncServerTime(false);
     };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleFocus);
-    
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onFocus);
     return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onFocus);
     };
-  }, []);
+  }, [syncServerTime]);
 
+  // 1-second ticker for live timer display
   useEffect(() => {
-    const interval = setInterval(() => {
-      setLogs(prev => [...prev]);
-    }, 1000);
+    const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
   }, []);
 
@@ -296,7 +362,9 @@ const Worklog = () => {
   */
 
   const startTimer = async (feedId) => {
-    await checkSystemTimeMismatch();
+    // Re-sync before starting to ensure offset is fresh
+    await syncServerTime(false);
+    
     if (timeMismatch.isMismatch) {
       alert('Warning: Your system time/date does not match the server time. Please sync your system clock before starting the timer.');
       return;
@@ -307,8 +375,23 @@ const Worklog = () => {
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/start/${feedId}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      // Server returns serverTimestamp — update our offset to stay in sync
+      if (res.data.serverTimestamp) {
+        const receivedAt = Date.now();
+        const newOffset = res.data.serverTimestamp - receivedAt;
+        serverTimeOffsetRef.current = newOffset;
+        setServerSyncStatus(prev => ({ 
+          ...prev, 
+          lastSyncAt: receivedAt, 
+          offsetMs: Math.round(newOffset),
+          isStale: false,
+          synced: true
+        }));
+      }
+
       setLogs(prev => prev.map(item =>
-        item.feed._id === feedId ? { ...item, worklog: res.data } : item
+        item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
       ));
     } catch (err) {
       console.error(err);
@@ -322,8 +405,21 @@ const Worklog = () => {
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/pause/${feedId}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      if (res.data.serverTimestamp) {
+        const receivedAt = Date.now();
+        serverTimeOffsetRef.current = res.data.serverTimestamp - receivedAt;
+        setServerSyncStatus(prev => ({ 
+          ...prev, 
+          lastSyncAt: receivedAt, 
+          offsetMs: Math.round(res.data.serverTimestamp - receivedAt),
+          isStale: false,
+          synced: true
+        }));
+      }
+
       setLogs(prev => prev.map(item =>
-        item.feed._id === feedId ? { ...item, worklog: res.data } : item
+        item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
       ));
     } catch (err) {
       console.error(err);
@@ -337,8 +433,21 @@ const Worklog = () => {
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/stop/${feedId}`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+
+      if (res.data.serverTimestamp) {
+        const receivedAt = Date.now();
+        serverTimeOffsetRef.current = res.data.serverTimestamp - receivedAt;
+        setServerSyncStatus(prev => ({ 
+          ...prev, 
+          lastSyncAt: receivedAt, 
+          offsetMs: Math.round(res.data.serverTimestamp - receivedAt),
+          isStale: false,
+          synced: true
+        }));
+      }
+
       setLogs(prev => prev.map(item =>
-        item.feed._id === feedId ? { ...item, worklog: res.data } : item
+        item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
       ));
     } catch (err) {
       console.error(err);
@@ -367,9 +476,7 @@ const Worklog = () => {
   };
 
   const saveWorkDescription = async () => {
-    if (!workDescription.trim()) {
-      return alert('Please enter work description');
-    }
+    if (!workDescription.trim()) return alert('Please enter work description');
 
     try {
       setSubmittingLog(true);
@@ -397,32 +504,35 @@ const Worklog = () => {
 
   /*
   ========================================
-  GET FEED'S OWN TIME (individual)
+  GET FEED TIME — uses server-corrected clock
   ========================================
   */
 
-  const getFeedTime = (worklog) => {
+  const getFeedTime = useCallback((worklog) => {
     let total = worklog.totalTime || 0;
     if (worklog.isRunning && worklog.startedAt) {
-      total += Math.floor((Date.now() - new Date(worklog.startedAt)) / 1000);
+      // Use server-corrected "now" so manipulating local clock has no effect
+      const serverNow = getServerNow();
+      const elapsed = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
+      total += Math.max(0, elapsed);
     }
     return total;
-  };
+  }, [tick, getServerNow]); // tick dependency forces re-evaluation every second
 
   /*
   ========================================
-  OVERLAP DETECTION LOGIC
+  OVERLAP DETECTION — uses server-corrected clock
   ========================================
   */
 
-  const getAllTimeIntervals = () => {
+  const getAllTimeIntervals = useCallback(() => {
     const intervals = [];
-    const now = Date.now();
+    const serverNow = getServerNow();
 
     logs.forEach(item => {
       const worklog = item.worklog;
       
-      if (worklog.timeBlocks && worklog.timeBlocks.length > 0) {
+      if (worklog.timeBlocks?.length > 0) {
         worklog.timeBlocks.forEach(block => {
           if (block.startTime && block.endTime) {
             intervals.push({
@@ -432,62 +542,51 @@ const Worklog = () => {
           } else if (block.startTime && !block.endTime && !worklog.isRunning) {
             intervals.push({
               start: new Date(block.startTime).getTime(),
-              end: now
+              end: serverNow
             });
           }
         });
       }
       
+      // For the currently running block, use server-corrected "now" as end
       if (worklog.isRunning && worklog.startedAt) {
         intervals.push({
           start: new Date(worklog.startedAt).getTime(),
-          end: now
+          end: serverNow
         });
       }
     });
 
     return intervals;
-  };
+  }, [logs, tick, getServerNow]);
 
   const mergeIntervals = (intervals) => {
     if (intervals.length === 0) return [];
-    
     intervals.sort((a, b) => a.start - b.start);
-    
-    const merged = [intervals[0]];
-    
+    const merged = [{ ...intervals[0] }];
     for (let i = 1; i < intervals.length; i++) {
       const current = intervals[i];
       const last = merged[merged.length - 1];
-      
       if (current.start <= last.end) {
         last.end = Math.max(last.end, current.end);
       } else {
-        merged.push(current);
+        merged.push({ ...current });
       }
     }
-    
     return merged;
   };
 
-  const calculateActualWorkingTime = () => {
+  const calculateActualWorkingTime = useCallback(() => {
     const intervals = getAllTimeIntervals();
     
     if (intervals.length === 0) {
-      return logs.reduce((total, item) => {
-        return total + (item.worklog.totalTime || 0);
-      }, 0);
+      return logs.reduce((total, item) => total + (item.worklog.totalTime || 0), 0);
     }
     
-    const mergedIntervals = mergeIntervals(intervals);
-    
-    let totalMs = 0;
-    mergedIntervals.forEach(interval => {
-      totalMs += (interval.end - interval.start);
-    });
-    
+    const merged = mergeIntervals(intervals);
+    const totalMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
     return Math.floor(totalMs / 1000);
-  };
+  }, [logs, getAllTimeIntervals]);
 
   /*
   ========================================
@@ -499,9 +598,7 @@ const Worklog = () => {
     const map = new Map();
     logs.forEach(item => {
       const project = item.feed?.projectId;
-      if (project?._id) {
-        map.set(project._id, project);
-      }
+      if (project?._id) map.set(project._id, project);
     });
     return Array.from(map.values());
   }, [logs]);
@@ -510,18 +607,12 @@ const Worklog = () => {
     return logs.filter(item => {
       const feed = item.feed;
       const worklog = item.worklog;
-
-      const matchesProject = selectedProject === 'all' ? true : feed.projectId?._id === selectedProject;
+      const matchesProject = selectedProject === 'all' || feed.projectId?._id === selectedProject;
       const matchesSearch = feed.name.toLowerCase().includes(searchTerm.toLowerCase());
-
       let currentStatus = 'stopped';
-      if (worklog.isRunning) {
-        currentStatus = 'running';
-      } else if (worklog.totalTime > 0) {
-        currentStatus = 'paused';
-      }
-      const matchesStatus = statusFilter === 'all' ? true : currentStatus === statusFilter;
-
+      if (worklog.isRunning) currentStatus = 'running';
+      else if (worklog.totalTime > 0) currentStatus = 'paused';
+      const matchesStatus = statusFilter === 'all' || currentStatus === statusFilter;
       return matchesProject && matchesSearch && matchesStatus;
     });
   }, [logs, selectedProject, searchTerm, statusFilter]);
@@ -533,59 +624,95 @@ const Worklog = () => {
   */
 
   const totalIndividualTime = useMemo(() => {
-    return filteredLogs.reduce((total, item) => {
-      return total + getFeedTime(item.worklog);
-    }, 0);
-  }, [filteredLogs]);
+    return filteredLogs.reduce((total, item) => total + getFeedTime(item.worklog), 0);
+  }, [filteredLogs, tick]);
 
-  const actualWorkingTime = useMemo(() => {
-    return calculateActualWorkingTime();
-  }, [logs]);
+  const actualWorkingTime = useMemo(() => calculateActualWorkingTime(), [logs, tick]);
 
-  const overlapTime = useMemo(() => {
-    return Math.max(0, totalIndividualTime - actualWorkingTime);
-  }, [totalIndividualTime, actualWorkingTime]);
+  const overlapTime = useMemo(() => Math.max(0, totalIndividualTime - actualWorkingTime), [totalIndividualTime, actualWorkingTime]);
 
-  const activeRunningCount = useMemo(() => {
-    return filteredLogs.filter(item => item.worklog.isRunning).length;
-  }, [filteredLogs]);
+  const activeRunningCount = useMemo(() => filteredLogs.filter(item => item.worklog.isRunning).length, [filteredLogs]);
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case 'running':
-        return { 
-          bg: 'bg-emerald-50', 
-          text: 'text-emerald-700', 
-          border: 'border-emerald-200',
-          icon: <Play size={10} className="text-emerald-600" />,
-          label: 'Running' 
-        };
-      case 'paused':
-        return { 
-          bg: 'bg-amber-50', 
-          text: 'text-amber-700', 
-          border: 'border-amber-200',
-          icon: <Pause size={10} className="text-amber-600" />,
-          label: 'Paused' 
-        };
-      default:
-        return { 
-          bg: 'bg-slate-100', 
-          text: 'text-slate-500', 
-          border: 'border-slate-200',
-          icon: <Square size={10} className="text-slate-500" />,
-          label: 'Stopped' 
-        };
+      case 'running': return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <Play size={10} className="text-emerald-600" />, label: 'Running' };
+      case 'paused': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Pause size={10} className="text-amber-600" />, label: 'Paused' };
+      default: return { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', icon: <Square size={10} className="text-slate-500" />, label: 'Stopped' };
     }
   };
 
   const handleManualRefresh = () => {
-    console.log('Manual refresh triggered');
-    checkSystemTimeMismatch();
+    syncServerTime(false);
   };
 
   const getCurrentISTTime = () => {
-    return new Date().toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
+    // Display server-corrected time
+    return new Date(getServerNow()).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
+  };
+
+  /*
+  ========================================
+  SYNC INDICATOR COMPONENT
+  ========================================
+  */
+
+  const SyncIndicator = () => {
+    const { synced, isSyncing, isStale, lastSyncAt, offsetMs } = serverSyncStatus;
+    const ageLabel = formatSyncAge(lastSyncAt);
+
+    if (isSyncing) {
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
+          <RefreshCw size={10} className="text-blue-500 animate-spin" />
+          <span className="text-[8px] font-black text-blue-600 uppercase tracking-wider">Syncing...</span>
+        </div>
+      );
+    }
+
+    if (!synced) {
+      return (
+        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200">
+          <WifiOff size={10} className="text-slate-400" />
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Not synced</span>
+        </div>
+      );
+    }
+
+    if (isStale) {
+      return (
+        <button
+          onClick={handleManualRefresh}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all"
+          title="Sync is stale — click to refresh"
+        >
+          <AlertTriangle size={10} className="text-amber-500" />
+          <span className="text-[8px] font-black text-amber-600 uppercase tracking-wider">Stale · {ageLabel}</span>
+        </button>
+      );
+    }
+
+    // Healthy sync
+    const offsetDisplay = Math.abs(offsetMs) < 1000
+      ? `${offsetMs > 0 ? '+' : ''}${offsetMs}ms`
+      : `${offsetMs > 0 ? '+' : ''}${(offsetMs / 1000).toFixed(1)}s`;
+
+    return (
+      <div
+        className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 cursor-default"
+        title={`Server offset: ${offsetDisplay} | Last sync: ${ageLabel}`}
+      >
+        {/* Pulsing green dot */}
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+        </span>
+        <ShieldCheck size={10} className="text-emerald-600" />
+        <span className="text-[8px] font-black text-emerald-700 uppercase tracking-wider">
+          Synced with server
+        </span>
+        <span className="text-[7px] text-emerald-500 font-bold">· {ageLabel}</span>
+      </div>
+    );
   };
 
   return (
@@ -603,18 +730,43 @@ const Worklog = () => {
             </p>
           </div>
           
-          {/* Time Display - Always visible */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm text-right">
-            <div className="flex items-center gap-2">
-              <Globe size={12} className="text-blue-500" />
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">IST</span>
+          {/* Time Display + Sync Indicator */}
+          <div className="flex flex-col items-end gap-2">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm text-right">
+              <div className="flex items-center gap-2">
+                <Globe size={12} className="text-blue-500" />
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">IST (Server-Corrected)</span>
+              </div>
+              <p className="text-sm font-mono font-bold text-slate-700">{getCurrentISTTime()}</p>
             </div>
-            <p className="text-sm font-mono font-bold text-slate-700">{getCurrentISTTime()}</p>
+            {/* Sync Status Badge */}
+            <SyncIndicator />
           </div>
         </div>
       </div>
 
-      {/* SYSTEM TIME MISMATCH WARNING - Stays until resolved */}
+      {/* SERVER OFFSET DEBUG INFO (development hint — remove in production if desired) */}
+      {serverSyncStatus.synced && Math.abs(serverSyncStatus.offsetMs) > 1000 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Info size={14} className="text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">
+                Clock offset detected — server time tracking active
+              </p>
+              <p className="text-[8px] text-blue-600 mt-0.5">
+                Your system clock is {Math.abs(serverSyncStatus.offsetMs) >= 1000
+                  ? `${(Math.abs(serverSyncStatus.offsetMs) / 1000).toFixed(1)}s`
+                  : `${Math.abs(serverSyncStatus.offsetMs)}ms`}{' '}
+                {serverSyncStatus.offsetMs > 0 ? 'behind' : 'ahead'} of the server. 
+                All timer durations are calculated using the server clock to prevent manipulation.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SYSTEM TIME MISMATCH WARNING */}
       {timeMismatch.isMismatch && (
         <div className="mb-6 p-6 bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 rounded-xl shadow-lg">
           <div className="flex flex-col items-center text-center gap-4">
@@ -629,7 +781,6 @@ const Worklog = () => {
                 ⚠️ {timeMismatch.message}
               </p>
               
-              {/* Time Comparison Table */}
               <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
                 <div className="grid grid-cols-2 gap-4 text-left">
                   <div className="text-center">
@@ -673,7 +824,7 @@ const Worklog = () => {
         </div>
       )}
 
-      {/* STATS BAR - Only shown when no time mismatch */}
+      {/* STATS BAR */}
       {!timeMismatch.isMismatch && (
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
           <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
@@ -726,24 +877,22 @@ const Worklog = () => {
         </div>
       )}
 
-      {/* INFO NOTE */}
+      {/* INFO NOTE — multiple timers */}
       {!timeMismatch.isMismatch && activeRunningCount > 1 && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start gap-2">
             <Info size={14} className="text-blue-600 mt-0.5" />
             <div>
-              <p className="text-[9px] font-black text-blue-700">
-                Multiple timers running simultaneously
-              </p>
+              <p className="text-[9px] font-black text-blue-700">Multiple timers running simultaneously</p>
               <p className="text-[8px] text-blue-600 mt-0.5">
-                Time is counted only once in "Actual Time" (overlapping periods are merged)
+                Time is counted only once in "Actual Time" (overlapping periods are merged using server timestamps)
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* FILTERS & TABLE - Only shown when no time mismatch */}
+      {/* FILTERS & TABLE */}
       {!timeMismatch.isMismatch ? (
         <>
           {/* FILTERS */}
@@ -756,9 +905,7 @@ const Worklog = () => {
               >
                 <option value="all">All Projects</option>
                 {projects.map(project => (
-                  <option key={project._id} value={project._id}>
-                    {project.name}
-                  </option>
+                  <option key={project._id} value={project._id}>{project.name}</option>
                 ))}
               </select>
 
@@ -785,12 +932,7 @@ const Worklog = () => {
               </select>
 
               <button
-                onClick={() => {
-                  setSelectedProject('all');
-                  setSearchTerm('');
-                  setStatusFilter('all');
-                  handleManualRefresh();
-                }}
+                onClick={() => { setSelectedProject('all'); setSearchTerm(''); setStatusFilter('all'); handleManualRefresh(); }}
                 className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
               >
                 <X size={12} />
@@ -799,7 +941,7 @@ const Worklog = () => {
             </div>
           </div>
 
-          {/* TABLE VIEW */}
+          {/* TABLE */}
           {loading ? (
             <div className="flex justify-center py-20 text-slate-400 font-black">LOADING WORKLOGS...</div>
           ) : filteredLogs.length === 0 ? (
@@ -832,9 +974,7 @@ const Worklog = () => {
                         <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-2">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${
-                                worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'
-                              }`}>
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'}`}>
                                 <Hash size={12} className={worklog.isRunning ? 'text-emerald-600' : 'text-slate-400'} />
                               </div>
                               <span className="text-sm font-bold text-slate-800">{feed.name}</span>
@@ -850,9 +990,7 @@ const Worklog = () => {
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
                               <Briefcase size={10} className="text-slate-400" />
-                              <span className="text-xs font-medium text-slate-600">
-                                {feed.projectId?.name || 'Unknown'}
-                              </span>
+                              <span className="text-xs font-medium text-slate-600">{feed.projectId?.name || 'Unknown'}</span>
                             </div>
                           </td>
 
@@ -862,6 +1000,11 @@ const Worklog = () => {
                               <span className="text-sm font-black text-blue-700 font-mono">
                                 {formatTimeWithSeconds(feedTime)}
                               </span>
+                              {worklog.isRunning && (
+                                <span className="text-[7px] font-black bg-emerald-100 text-emerald-600 px-1 py-0.5 rounded uppercase">
+                                  server
+                                </span>
+                              )}
                             </div>
                           </td>
 
@@ -877,11 +1020,7 @@ const Worklog = () => {
                               <button
                                 onClick={() => startTimer(feed._id)}
                                 disabled={worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                                  worklog.isRunning
-                                    ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:shadow-md'
-                                }`}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:shadow-md'}`}
                                 title="Start Timer"
                               >
                                 <Play size={12} />
@@ -890,11 +1029,7 @@ const Worklog = () => {
                               <button
                                 onClick={() => pauseTimer(feed._id)}
                                 disabled={!worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
-                                  !worklog.isRunning
-                                    ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                                    : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'
-                                }`}
+                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
                                 title="Pause Timer"
                               >
                                 <Pause size={12} />
@@ -966,20 +1101,13 @@ const Worklog = () => {
           <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between">
               <div>
-                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-blue-600 mb-1">
-                  Daily Work Entry
-                </p>
+                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-blue-600 mb-1">Daily Work Entry</p>
                 <h2 className="text-xl font-black text-slate-900">
                   {isEditingLog ? "Edit Today's Work" : "Log Today's Work"}
                 </h2>
-                <p className="text-xs text-slate-500 mt-1 font-medium">
-                  {selectedFeed?.name}
-                </p>
+                <p className="text-xs text-slate-500 mt-1 font-medium">{selectedFeed?.name}</p>
               </div>
-              <button
-                onClick={closeModal}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all"
-              >
+              <button onClick={closeModal} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all">
                 <X size={14} />
               </button>
             </div>
@@ -989,9 +1117,7 @@ const Worklog = () => {
                 <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle size={12} className="text-amber-600" />
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">
-                      Existing Log
-                    </p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Existing Log</p>
                   </div>
                   <div className="text-xs whitespace-pre-wrap text-slate-700 max-h-32 overflow-y-auto bg-white p-3 rounded-lg">
                     {selectedFeed?.todayDescription?.description}
@@ -1012,10 +1138,7 @@ const Worklog = () => {
               />
 
               <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={closeModal}
-                  className="px-5 h-9 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-100 transition-all"
-                >
+                <button onClick={closeModal} className="px-5 h-9 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-100 transition-all">
                   Cancel
                 </button>
                 <button
@@ -1024,10 +1147,7 @@ const Worklog = () => {
                   className="px-5 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
                 >
                   {submittingLog ? (
-                    <>
-                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Saving...
-                    </>
+                    <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>
                   ) : (
                     isEditingLog ? 'Update Log' : 'Save Log'
                   )}
