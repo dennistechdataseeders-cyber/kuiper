@@ -19,11 +19,15 @@ import {
   UserCheck,
   ChevronDown,
   ChevronUp,
-  CheckCircle
+  CheckCircle,
+  Users,
+  UserPlus,
+  Trash2
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
+import toast from 'react-hot-toast';
 
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
@@ -43,6 +47,7 @@ const ProjectManagement = () => {
   const [projects, setProjects] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [projectManagers, setProjectManagers] = useState([]);
+  const [clients, setClients] = useState([]); // New state for clients
   const { isCollapsed } = useSidebar();
   
   // --- Pagination State ---
@@ -63,6 +68,11 @@ const ProjectManagement = () => {
 
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingFeed, setIsEditingFeed] = useState(false);
+
+  // --- Client Search State ---
+  const [clientSearchTerm, setClientSearchTerm] = useState('');
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const clientDropdownRef = React.useRef(null);
 
   // --- Developer Selection State ---
   const [developerSearchTerm, setDeveloperSearchTerm] = useState('');
@@ -108,7 +118,8 @@ const ProjectManagement = () => {
     projectManager: '',
     description: '',
     country: 'United States',
-    industry: 'Tech'
+    industry: 'Tech',
+    clients: [] // Array of client objects or IDs
   });
 
   const [feedForm, setFeedForm] = useState({
@@ -121,6 +132,38 @@ const ProjectManagement = () => {
   const [taskText, setTaskText] = useState("");
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // Fetch clients (users with role 'Client')
+  const fetchClients = async () => {
+    try {
+      const res = await axios.get(`${ADMIN_BASE}/users/clients`, authHeader);
+      setClients(res.data);
+    } catch (err) {
+      console.error("Error fetching clients:", err);
+      toast.error("Failed to load clients");
+    }
+  };
+
+  // Filter clients based on search term
+  const filteredClients = useMemo(() => {
+    if (!clientSearchTerm.trim()) return clients;
+    const search = clientSearchTerm.toLowerCase();
+    return clients.filter(client => 
+      client.name?.toLowerCase().includes(search) ||
+      client.email?.toLowerCase().includes(search)
+    );
+  }, [clients, clientSearchTerm]);
+
+  // Close client dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target)) {
+        setIsClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -135,6 +178,7 @@ const ProjectManagement = () => {
 
   useEffect(() => {
     fetchInitialData();
+    fetchClients(); // Fetch clients on mount
   }, []);
 
   const fetchInitialData = async () => {
@@ -151,6 +195,7 @@ const ProjectManagement = () => {
 
     } catch (err) {
       console.error("Data fetch failed:", err);
+      toast.error("Failed to load data");
     }
   };
 
@@ -163,6 +208,27 @@ const ProjectManagement = () => {
       dev.email?.toLowerCase().includes(search)
     );
   }, [developers, developerSearchTerm]);
+
+  // Toggle client selection
+  const toggleClientSelection = (clientId) => {
+    setProjectForm(prev => {
+      const isSelected = prev.clients.includes(clientId);
+      return {
+        ...prev,
+        clients: isSelected 
+          ? prev.clients.filter(id => id !== clientId)
+          : [...prev.clients, clientId]
+      };
+    });
+  };
+
+  // Remove client from selection
+  const removeClient = (clientId) => {
+    setProjectForm(prev => ({
+      ...prev,
+      clients: prev.clients.filter(id => id !== clientId)
+    }));
+  };
 
   const filteredProjects = useMemo(() => {
   let result = [...projects];
@@ -196,12 +262,14 @@ const ProjectManagement = () => {
     const search = searchTerm.toLowerCase().trim();
 
     result = result.filter((project) => {
+      const clientNames = project.clients?.map(c => c?.name || '').join(' ') || '';
       const searchableFields = [
         project.projectCustomId,
         project.name,
         project.industry,
         project.country,
         project.projectManager?.name,
+        clientNames
       ]
         .filter(Boolean)
         .join(' ')
@@ -243,6 +311,12 @@ const ProjectManagement = () => {
   const handleProjectSubmit = async (e) => {
     e.preventDefault();
 
+    // Validate at least one client is selected
+    if (projectForm.clients.length === 0) {
+      toast.error("Please select at least one client for this project");
+      return;
+    }
+
     let customId = projectForm.projectCustomId;
     let finalName = projectForm.name;
 
@@ -273,8 +347,10 @@ const ProjectManagement = () => {
     try {
       if (isEditing) {
         await axios.put(`${ADMIN_BASE}/projects/${activeProjectId}`, finalData, authHeader);
+        toast.success("Project updated successfully");
       } else {
         await axios.post(`${ADMIN_BASE}/projects`, finalData, authHeader);
+        toast.success("Project created successfully");
       }
 
       setShowProjectModal(false);
@@ -285,11 +361,14 @@ const ProjectManagement = () => {
         projectManager: '',
         description: '',
         country: '',
-        industry: ''
+        industry: '',
+        clients: []
       });
+      setClientSearchTerm('');
+      setIsClientDropdownOpen(false);
 
     } catch (err) {
-      alert(err.response?.data?.error || "Project save failed");
+      toast.error(err.response?.data?.error || "Project save failed");
     }
   };
 
@@ -301,8 +380,11 @@ const ProjectManagement = () => {
       projectManager: '',
       description: '',
       country: 'United States',
-      industry: 'Tech'
+      industry: 'Tech',
+      clients: []
     });
+    setClientSearchTerm('');
+    setIsClientDropdownOpen(false);
   };
 
   const handleEditClick = (project) => {
@@ -311,9 +393,10 @@ const ProjectManagement = () => {
     setProjectForm({
       name: project.name,
       projectManager: project.projectManager?._id || project.projectManager || '',
-      description: project.description,
+      description: project.description || '',
       country: project.country || 'United States',
-      industry: project.industry || 'Tech'
+      industry: project.industry || 'Tech',
+      clients: project.clients?.map(c => c._id || c) || [] // Extract client IDs
     });
     setShowProjectModal(true);
   };
@@ -335,7 +418,7 @@ const ProjectManagement = () => {
     e.preventDefault();
 
     if (feedForm.feedType === 'Weekly' && !feedForm.weekDay) {
-      alert('Please select a day for weekly feed');
+      toast.error('Please select a day for weekly feed');
       return;
     }
 
@@ -349,23 +432,17 @@ const ProjectManagement = () => {
 
       if (isEditingFeed) {
         await axios.put(`${ADMIN_BASE}/feeds/${activeFeedId}`, payload, authHeader);
+        toast.success("Feed updated successfully");
       } else {
         await axios.post(`${ADMIN_BASE}/feeds`, payload, authHeader);
+        toast.success("Feed added successfully");
       }
 
       closeFeedModal();
-
-      setSuccessMessage(isEditingFeed ? 'Feed updated successfully' : 'Feed added successfully');
-      setShowSuccessPopup(true);
-
-      setTimeout(() => {
-        setShowSuccessPopup(false);
-      }, 2000);
-
       fetchInitialData();
 
     } catch (err) {
-      alert('Feed save failed');
+      toast.error("Feed save failed");
     }
   };
 
@@ -397,7 +474,10 @@ const ProjectManagement = () => {
 
   const handleCreateTask = async (e) => {
     e.preventDefault();
-    if (!taskText.trim()) return;
+    if (!taskText.trim()) {
+      toast.error("Please enter task details");
+      return;
+    }
 
     try {
       await axios.post(`${ADMIN_BASE}/tasks/create`, {
@@ -410,10 +490,11 @@ const ProjectManagement = () => {
 
       setTaskText("");
       setShowTaskModal(false);
+      toast.success("Task pushed to developers");
       fetchInitialData();
 
     } catch (err) {
-      alert("Failed to push task");
+      toast.error("Failed to push task");
     }
   };
 
@@ -462,7 +543,7 @@ const ProjectManagement = () => {
           <div className="relative">
            <input
               type="text"
-              placeholder="Search by project ID, name, country..."
+              placeholder="Search by project ID, name, client..."
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -517,6 +598,7 @@ const ProjectManagement = () => {
             <thead className="bg-[#F8FAFC] border-b border-slate-100">
               <tr>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Project</th>
+                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Clients</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Industry</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Country</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Feeds</th>
@@ -526,6 +608,7 @@ const ProjectManagement = () => {
             <tbody>
               {currentProjectSlice.map((project) => {
                 const isFromSales = project.projectCustomId?.includes('PRJ');
+                const clientList = project.clients || [];
                 return (
                   <tr key={project._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-all">
                     <td className="px-6 py-5">
@@ -539,6 +622,23 @@ const ProjectManagement = () => {
                           <p className="text-sm font-black text-[#1B2559]">{project.projectCustomId || 'NO_ID'}</p>
                           <p className="text-xs font-bold text-slate-400 mt-1">{project.name}</p>
                         </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5">
+                      <div className="flex flex-wrap gap-1">
+                        {clientList.length > 0 ? (
+                          clientList.slice(0, 2).map((client, idx) => (
+                            <span key={idx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-bold">
+                              <Users size={8} />
+                              {client.name || client}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-slate-400 text-[9px]">No clients</span>
+                        )}
+                        {clientList.length > 2 && (
+                          <span className="text-[9px] font-bold text-slate-400">+{clientList.length - 2} more</span>
+                        )}
                       </div>
                     </td>
                     <td className="px-6 py-5">
@@ -597,7 +697,7 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* PROJECT MODAL */}
+      {/* PROJECT MODAL WITH CLIENTS */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
@@ -614,6 +714,90 @@ const ProjectManagement = () => {
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
                 <input type="text" placeholder="Title" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
               </div>
+              
+              {/* CLIENTS SELECTION SECTION */}
+              <div className="space-y-2" ref={clientDropdownRef}>
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                  <Users size={12} />
+                  Assign Clients (Select at least one) *
+                </label>
+                
+                {/* Selected Clients Display */}
+                {projectForm.clients.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3 p-3 bg-purple-50 rounded-xl border border-purple-100">
+                    {projectForm.clients.map(clientId => {
+                      const client = clients.find(c => c._id === clientId);
+                      return client ? (
+                        <span key={clientId} className="inline-flex items-center gap-1.5 bg-purple-600 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider">
+                          <Users size={10} />
+                          {client.name}
+                          <button
+                            type="button"
+                            onClick={() => removeClient(clientId)}
+                            className="hover:text-red-200 transition-colors"
+                          >
+                            <X size={10} />
+                          </button>
+                        </span>
+                      ) : null;
+                    })}
+                  </div>
+                )}
+
+                {/* Search Input for Clients */}
+                <div className="relative">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Search clients by name or email..."
+                    value={clientSearchTerm}
+                    onChange={(e) => {
+                      setClientSearchTerm(e.target.value);
+                      setIsClientDropdownOpen(true);
+                    }}
+                    onFocus={() => setIsClientDropdownOpen(true)}
+                    className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-purple-500 bg-slate-50"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                  >
+                    {isClientDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                  </button>
+                </div>
+
+                {/* Dropdown List for Clients */}
+                {isClientDropdownOpen && (
+                  <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-50">
+                    {filteredClients.length === 0 ? (
+                      <div className="p-4 text-center text-slate-400 text-xs">No clients found</div>
+                    ) : (
+                      filteredClients.map(client => {
+                        const isSelected = projectForm.clients.includes(client._id);
+                        return (
+                          <div
+                            key={client._id}
+                            onClick={() => toggleClientSelection(client._id)}
+                            className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-purple-50' : ''}`}
+                          >
+                            <div>
+                              <p className="text-sm font-bold text-slate-800">{client.name}</p>
+                              <p className="text-[9px] text-slate-400">{client.email}</p>
+                            </div>
+                            {isSelected && <CheckCircle size={14} className="text-purple-600" />}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                )}
+                
+                <p className="text-[8px] text-slate-400 mt-1">
+                  {projectForm.clients.length} client(s) selected
+                </p>
+              </div>
+
               <div className="grid grid-cols-2 gap-6">
                 <CreatableSelect isClearable options={POPULAR_COUNTRIES} placeholder="Select Country" value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || { label: projectForm.country, value: projectForm.country }} onChange={(v) => setProjectForm({ ...projectForm, country: v?.label || '' })} styles={customDropdownStyles} />
                 <CreatableSelect isClearable options={industries} value={industries.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} styles={customDropdownStyles} />

@@ -20,6 +20,13 @@ import PMTaskProgress from './pages/PMTaskProgress';
 import Worklog from './pages/Worklog';
 import ResourceAnalytics from './pages/ResourceAnalytics';
 import EmailTrigger from './pages/EmailTrigger';
+import TicketDashboard from './pages/TicketDashboard';
+import CreateTicket from './pages/CreateTicket';
+import TicketDetails from './pages/TicketDetails';
+import ClientDashboard from './pages/ClientDashboard';
+import NotificationSettings from './pages/NotificationSettings';
+
+
 import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
@@ -64,12 +71,12 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       'Sales': '/sales',
       'Developer': '/developer',
       'Project Manager': '/admin/projects',
+      'Client': '/client',  // ADD THIS LINE
     };
     
     const fallbackPath = rolePaths[userRole] || '/login';
     return <Navigate to={fallbackPath} replace />;
   }
-
   return children;
 };
 
@@ -78,15 +85,16 @@ function AppContent() {
   const token = localStorage.getItem('token');
   const location = useLocation(); // Required for AnimatePresence to track key changes
 
-  const landingPath = useMemo(() => {
-    if (!userRole) return '/login';
-    if (userRole === 'Admin') return '/admin';
-    if (userRole === 'Sales Manager') return '/sales-manager';
-    if (userRole === 'Sales') return '/sales';
-    if (userRole === 'Project Manager') return '/admin/projects';
-    if (userRole === 'Developer') return '/developer';
-    return '/login';
-  }, [userRole]);
+const landingPath = useMemo(() => {
+  if (!userRole) return '/login';
+  if (userRole === 'Admin') return '/admin';
+  if (userRole === 'Sales Manager') return '/sales-manager';
+  if (userRole === 'Sales') return '/sales';
+  if (userRole === 'Project Manager') return '/admin/projects';
+  if (userRole === 'Developer') return '/developer';
+  if (userRole === 'Client') return '/client';  // ADD THIS LINE
+  return '/login';
+}, [userRole]);
 
   return (
     <SessionManager>
@@ -148,12 +156,22 @@ function AppContent() {
                     <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
                     <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
                     <Route path="/developer/worklog" element={ <ProtectedRoute allowedRoles={['Developer', 'Admin']}> <Worklog /></ProtectedRoute>}/>    
-                    
+                    {/*Client routes*/}
+                    <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientDashboard /></ProtectedRoute>} />
+
                     {/* Shared */}
+                    <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDashboard /></ProtectedRoute>} />
+                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager']}><CreateTicket /></ProtectedRoute>} />
+                    <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDetails /></ProtectedRoute>} />
+                    
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
-                    
+                    <Route path="/notifications" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}>
+                        <NotificationSettings />
+                      </ProtectedRoute>
+                    } />
                   </Routes>
                 </main>
               </div>

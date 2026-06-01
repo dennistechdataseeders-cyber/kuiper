@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',  // expose to local network
     port: 5173,
+    
     proxy: {
       '/api': {
         target: 'http://192.168.1.6:5000', // replace with your actual IP from ipconfig

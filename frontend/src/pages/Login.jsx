@@ -140,6 +140,8 @@ const Login = () => {
       let targetRoute = role === 'admin' ? '/admin' : 
                         role === 'developer' ? '/developer' : 
                         role === 'sales' ? '/sales' : '/login';
+                        role === 'client' ? '/client' : '/client';
+                      
 
       // Wait for the smooth lerp and warp to peak before navigating
       setTimeout(() => navigate(targetRoute, { replace: true }), 1500);

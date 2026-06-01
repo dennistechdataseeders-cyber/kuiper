@@ -395,7 +395,7 @@ const Organizations = () => {
 
     result.sort((a, b) => {
       let aVal = a.companyName || '';
-      let bVal = b.companyName || '';
+      let bVal = b.companyName || '';a
 
       if (sortOrder === 'asc') {
         return aVal.toString().localeCompare(bVal.toString());

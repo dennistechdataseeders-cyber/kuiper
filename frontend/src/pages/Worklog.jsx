@@ -5,7 +5,7 @@ import React, {
   useRef,
   useCallback
 } from 'react';
-
+import toast from 'react-hot-toast';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import {
@@ -13,7 +13,7 @@ import {
   Pause,
   Square,
   Clock3,
-  Search,
+  Search, 
   X,
   FileText,
   Pencil,
@@ -30,10 +30,12 @@ import {
   Globe,
   Wifi,
   WifiOff,
-  ShieldCheck
+  ShieldCheck,
+  Coffee
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
+import notificationManager from '../utils/notifications';
 
 const Worklog = () => {
 
@@ -50,6 +52,11 @@ const Worklog = () => {
   const [workDescription, setWorkDescription] = useState('');
   const [submittingLog, setSubmittingLog] = useState(false);
   const [isEditingLog, setIsEditingLog] = useState(false);
+
+  // Track if notification has been sent for each running feed
+  const notificationSentRef = useRef({});
+  // Track last notification time for each feed (to avoid spam)
+  const lastNotificationTimeRef = useRef({});
 
   // System Time Mismatch State
   const [timeMismatch, setTimeMismatch] = useState({ 
@@ -74,11 +81,11 @@ const Worklog = () => {
   const serverTimeOffsetRef = useRef(0);
   const [serverSyncStatus, setServerSyncStatus] = useState({
     synced: false,
-    lastSyncAt: null,       // client Date.now() when we last synced
-    lastSyncDisplay: null,  // human-readable string
-    offsetMs: 0,            // current offset in ms
+    lastSyncAt: null,
+    lastSyncDisplay: null,
+    offsetMs: 0,
     isSyncing: false,
-    isStale: false,         // true if last sync was >35s ago
+    isStale: false,
   });
 
   // Ticker to re-render every second (for live timers)
@@ -90,10 +97,6 @@ const Worklog = () => {
   ========================================
   */
 
-  /**
-   * Returns the current time adjusted to match server time.
-   * All live duration calculations must use this instead of Date.now().
-   */
   const getServerNow = useCallback(() => {
     return Date.now() + serverTimeOffsetRef.current;
   }, []);
@@ -132,13 +135,6 @@ const Worklog = () => {
   ========================================
   */
 
-  /**
-   * Fetches server time and calculates the offset between server and client clocks.
-   * Uses the round-trip time to estimate network latency and correct for it.
-   *
-   * offset = serverTime - clientTime
-   * getServerNow() = Date.now() + offset
-   */
   const syncServerTime = useCallback(async (silent = false) => {
     if (!silent) {
       setServerSyncStatus(prev => ({ ...prev, isSyncing: true }));
@@ -148,19 +144,15 @@ const Worklog = () => {
       const token = localStorage.getItem('token');
       if (!token) return;
 
-      const t0 = Date.now(); // client time before request
+      const t0 = Date.now();
       const response = await axios.get(`${API_BASE_URL}/api/dev/system-time-check`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const t1 = Date.now(); // client time after response
+      const t1 = Date.now();
 
       const serverTime = new Date(response.data.serverTime).getTime();
-      
-      // Estimate server time at moment of receipt: serverTime + half round-trip
       const networkLatencyMs = (t1 - t0) / 2;
       const estimatedServerNow = serverTime + networkLatencyMs;
-      
-      // Offset: how many ms to add to client time to get server time
       const newOffset = estimatedServerNow - t1;
       
       serverTimeOffsetRef.current = newOffset;
@@ -179,7 +171,6 @@ const Worklog = () => {
         isStale: false,
       });
 
-      // Also run the mismatch check logic with the data we already have
       const serverDate = new Date(estimatedServerNow).toISOString().split('T')[0];
       const localDate = new Date(t1).toISOString().split('T')[0];
       const timeDiffMinutes = Math.abs(newOffset) / (1000 * 60);
@@ -222,7 +213,7 @@ const Worklog = () => {
       setServerSyncStatus(prev => ({ 
         ...prev, 
         isSyncing: false,
-        synced: prev.synced, // keep previous synced state
+        synced: prev.synced,
       }));
     }
   }, []);
@@ -230,7 +221,6 @@ const Worklog = () => {
   /*
   ========================================
   CHECK SYSTEM TIME AGAINST SERVER TIME
-  (legacy wrapper — now calls syncServerTime)
   ========================================
   */
 
@@ -271,18 +261,83 @@ const Worklog = () => {
 
   /*
   ========================================
+  CHECK FOR LONG RUNNING TIMERS (2 HOUR WARNING)
+  ========================================
+  */
+
+  const checkLongRunningTimers = useCallback(() => {
+    logs.forEach(item => {
+      const worklog = item.worklog;
+      const feedName = item.feed?.name;
+      
+      if (worklog.isRunning && worklog.startedAt) {
+        const serverNow = getServerNow();
+        const startedAtTime = new Date(worklog.startedAt).getTime();
+        const elapsedSeconds = Math.floor((serverNow - startedAtTime) / 1000);
+        const elapsedHours = elapsedSeconds / 3600;
+        
+        // Check if elapsed time >= 2 hours (7200 seconds)
+        if (elapsedSeconds >= 7200) {
+          const notificationKey = `${item.feed._id}_2hr`;
+          const lastNotifTime = lastNotificationTimeRef.current[notificationKey] || 0;
+          const timeSinceLastNotif = serverNow - lastNotifTime;
+          
+          // Send notification every 30 minutes after the 2-hour mark
+          if (!notificationSentRef.current[notificationKey] || timeSinceLastNotif >= 30 * 60 * 1000) {
+            notificationSentRef.current[notificationKey] = true;
+            lastNotificationTimeRef.current[notificationKey] = serverNow;
+            
+            const hours = Math.floor(elapsedSeconds / 3600);
+            const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+            
+            notificationManager.show({
+              title: '⏰ Long Work Session Alert',
+              body: `You've been working on "${feedName}" for ${hours}h ${minutes}m. Consider taking a break!`,
+              icon: '/images/login_img.png',
+              tag: `long-work-${item.feed._id}`,
+              priority: 'default',
+              data: { feedId: item.feed._id, type: 'worklog' }
+            });
+            
+            // Also show a toast notification
+            toast.warning(`Working on "${feedName}" for ${hours}h ${minutes}m. Time for a break?`, {
+              duration: 5000,
+              icon: '☕'
+            });
+          }
+        } else if (elapsedSeconds < 7200) {
+          // Reset notification flag if timer stops before 2 hours
+          const notificationKey = `${item.feed._id}_2hr`;
+          notificationSentRef.current[notificationKey] = false;
+        }
+      }
+    });
+  }, [logs, tick, getServerNow]);
+
+  // Run the check every minute
+  useEffect(() => {
+    if (!timeMismatch.isMismatch) {
+      const interval = setInterval(() => {
+        checkLongRunningTimers();
+      }, 60000); // Check every minute
+      
+      return () => clearInterval(interval);
+    }
+  }, [checkLongRunningTimers, timeMismatch.isMismatch]);
+
+  /*
+  ========================================
   EFFECTS
   ========================================
   */
 
-  // Initial sync + periodic sync every 30 seconds
   useEffect(() => {
     const timer = setTimeout(() => {
       syncServerTime(false);
     }, 500);
 
     const syncInterval = setInterval(() => {
-      syncServerTime(true); // silent background sync
+      syncServerTime(true);
     }, 30000);
 
     return () => {
@@ -291,7 +346,6 @@ const Worklog = () => {
     };
   }, [syncServerTime]);
 
-  // Stale indicator: mark sync as stale if > 35 seconds since last sync
   useEffect(() => {
     const staleCheck = setInterval(() => {
       setServerSyncStatus(prev => {
@@ -304,7 +358,6 @@ const Worklog = () => {
     return () => clearInterval(staleCheck);
   }, []);
 
-  // Fetch logs when mismatch resolves
   useEffect(() => {
     if (!timeMismatch.isMismatch) {
       fetchLogs();
@@ -313,7 +366,6 @@ const Worklog = () => {
     }
   }, [timeMismatch.isMismatch]);
 
-  // Token change listener
   useEffect(() => {
     let lastToken = localStorage.getItem('token');
     const tokenCheck = setInterval(() => {
@@ -331,7 +383,6 @@ const Worklog = () => {
     return () => clearInterval(tokenCheck);
   }, [syncServerTime]);
 
-  // Visibility / focus re-sync
   useEffect(() => {
     const onVisible = () => {
       if (!document.hidden && localStorage.getItem('token')) {
@@ -349,7 +400,6 @@ const Worklog = () => {
     };
   }, [syncServerTime]);
 
-  // 1-second ticker for live timer display
   useEffect(() => {
     const interval = setInterval(() => setTick(t => t + 1), 1000);
     return () => clearInterval(interval);
@@ -362,7 +412,6 @@ const Worklog = () => {
   */
 
   const startTimer = async (feedId) => {
-    // Re-sync before starting to ensure offset is fresh
     await syncServerTime(false);
     
     if (timeMismatch.isMismatch) {
@@ -376,7 +425,6 @@ const Worklog = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Server returns serverTimestamp — update our offset to stay in sync
       if (res.data.serverTimestamp) {
         const receivedAt = Date.now();
         const newOffset = res.data.serverTimestamp - receivedAt;
@@ -389,6 +437,11 @@ const Worklog = () => {
           synced: true
         }));
       }
+
+      // Reset notification flag for this feed when starting
+      const notificationKey = `${feedId}_2hr`;
+      notificationSentRef.current[notificationKey] = false;
+      lastNotificationTimeRef.current[notificationKey] = 0;
 
       setLogs(prev => prev.map(item =>
         item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
@@ -445,6 +498,11 @@ const Worklog = () => {
           synced: true
         }));
       }
+
+      // Reset notification flag when stopping
+      const notificationKey = `${feedId}_2hr`;
+      notificationSentRef.current[notificationKey] = false;
+      lastNotificationTimeRef.current[notificationKey] = 0;
 
       setLogs(prev => prev.map(item =>
         item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
@@ -511,13 +569,12 @@ const Worklog = () => {
   const getFeedTime = useCallback((worklog) => {
     let total = worklog.totalTime || 0;
     if (worklog.isRunning && worklog.startedAt) {
-      // Use server-corrected "now" so manipulating local clock has no effect
       const serverNow = getServerNow();
       const elapsed = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
       total += Math.max(0, elapsed);
     }
     return total;
-  }, [tick, getServerNow]); // tick dependency forces re-evaluation every second
+  }, [tick, getServerNow]);
 
   /*
   ========================================
@@ -548,7 +605,6 @@ const Worklog = () => {
         });
       }
       
-      // For the currently running block, use server-corrected "now" as end
       if (worklog.isRunning && worklog.startedAt) {
         intervals.push({
           start: new Date(worklog.startedAt).getTime(),
@@ -646,7 +702,6 @@ const Worklog = () => {
   };
 
   const getCurrentISTTime = () => {
-    // Display server-corrected time
     return new Date(getServerNow()).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
@@ -691,7 +746,6 @@ const Worklog = () => {
       );
     }
 
-    // Healthy sync
     const offsetDisplay = Math.abs(offsetMs) < 1000
       ? `${offsetMs > 0 ? '+' : ''}${offsetMs}ms`
       : `${offsetMs > 0 ? '+' : ''}${(offsetMs / 1000).toFixed(1)}s`;
@@ -701,7 +755,6 @@ const Worklog = () => {
         className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-200 cursor-default"
         title={`Server offset: ${offsetDisplay} | Last sync: ${ageLabel}`}
       >
-        {/* Pulsing green dot */}
         <span className="relative flex h-2 w-2">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
@@ -739,13 +792,14 @@ const Worklog = () => {
               </div>
               <p className="text-sm font-mono font-bold text-slate-700">{getCurrentISTTime()}</p>
             </div>
-            {/* Sync Status Badge */}
             <SyncIndicator />
           </div>
         </div>
       </div>
 
-      {/* SERVER OFFSET DEBUG INFO (development hint — remove in production if desired) */}
+      {/* REST OF YOUR EXISTING COMPONENT CODE... */}
+      {/* The rest of your Worklog component remains the same from here */}
+      
       {serverSyncStatus.synced && Math.abs(serverSyncStatus.offsetMs) > 1000 && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start gap-2">
@@ -969,6 +1023,20 @@ const Worklog = () => {
                       const hasTodayLog = item.canEditToday;
                       const statusType = worklog.isRunning ? 'running' : (worklog.totalTime > 0 ? 'paused' : 'stopped');
                       const statusData = getStatusBadge(statusType);
+                      
+                      // Calculate if this specific running feed has exceeded 2 hours for badge display
+                      let isLongRunning = false;
+                      let longRunningHours = 0;
+                      let longRunningMinutes = 0;
+                      if (worklog.isRunning && worklog.startedAt) {
+                        const serverNow = getServerNow();
+                        const elapsedSeconds = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
+                        if (elapsedSeconds >= 7200) {
+                          isLongRunning = true;
+                          longRunningHours = Math.floor(elapsedSeconds / 3600);
+                          longRunningMinutes = Math.floor((elapsedSeconds % 3600) / 60);
+                        }
+                      }
 
                       return (
                         <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
@@ -982,6 +1050,12 @@ const Worklog = () => {
                                 <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1">
                                   <CheckCircle size={8} />
                                   Logged
+                                </span>
+                              )}
+                              {isLongRunning && (
+                                <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1 animate-pulse">
+                                  <Coffee size={8} />
+                                  {longRunningHours}h {longRunningMinutes}m
                                 </span>
                               )}
                             </div>

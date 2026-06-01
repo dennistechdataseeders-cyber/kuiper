@@ -218,10 +218,67 @@ router.get('/analytics', authorize('Admin', 'Sales', 'Project Manager', 'Sales M
 
 // --- PROJECT MANAGEMENT ROUTES ---
 
-router.get('/projects', authorize('Admin', 'Project Manager'), async (req, res) => {
+// Find this route in your adminRoutes.js
+// --- PROJECT MANAGEMENT ROUTES ---
+
+// FIRST: Specific route for client projects (MUST come before /projects)
+router.get('/client-projects', authorize('Admin', 'Project Manager', 'Client'), async (req, res) => {
+  try {
+    console.log('=== CLIENT PROJECTS ENDPOINT ===');
+    const clientIdStr = req.user._id.toString();
+    console.log('Looking for client ID (string):', clientIdStr);
+    
+    // Use aggregation to convert string clients to ObjectId for comparison
+    const projects = await Project.aggregate([
+      {
+        // Add a field that converts client IDs to strings for comparison
+        $addFields: {
+          clientIdsAsString: {
+            $map: {
+              input: "$clients",
+              as: "client",
+              in: { $toString: "$$client" }
+            }
+          }
+        }
+      },
+      {
+        // Match where the string version of client ID exists in the array
+        $match: {
+          $expr: {
+            $in: [clientIdStr, "$clientIdsAsString"]
+          }
+        }
+      }
+    ]);
+    
+    // Populate the results
+    const populatedProjects = await Project.populate(projects, [
+      { path: 'clients', select: 'name email role' },
+      { path: 'projectManager', select: 'name email' },
+      {
+        path: 'feeds',
+        populate: {
+          path: 'assignedDevelopers',
+          select: 'name email',
+          model: 'User'
+        }
+      }
+    ]);
+    
+    console.log(`Found ${populatedProjects.length} projects for client`);
+    res.json(populatedProjects);
+  } catch (err) {
+    console.error('Error fetching client projects:', err);
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// THEN: General projects route
+router.get('/projects', authorize('Admin', 'Project Manager','Client'), async (req, res) => {
   try {
     const data = await Project.find()
-      .populate('clients', 'name email')
+      .populate('clients', 'name email role')
       .populate('projectManager', 'name email')
       .populate({
         path: 'feeds',
@@ -236,9 +293,6 @@ router.get('/projects', authorize('Admin', 'Project Manager'), async (req, res) 
     res.status(500).json({ message: err.message });
   }
 });
-
-// Replace the POST '/projects' route in your adminRoutes.js with this:
-
 const COUNTRY_MAP = {
   "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
   "Australia": "AU", "Brazil": "BR", "Canada": "CA", 

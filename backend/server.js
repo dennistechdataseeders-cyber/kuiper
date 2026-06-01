@@ -3,9 +3,40 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
 const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 
 require('dotenv').config();
 require('./cron/dripCampaignWorker');
+
+// =========================================================
+// CREATE UPLOADS DIRECTORY IF NOT EXISTS
+// =========================================================
+
+const createUploadsDirectory = () => {
+  const uploadDirs = [
+    path.join(__dirname, 'uploads'),
+    path.join(__dirname, 'uploads/tickets'),
+    path.join(__dirname, 'uploads/profiles'),
+    path.join(__dirname, 'uploads/temp')
+  ];
+  
+  uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`📁 Created directory: ${dir}`);
+    } else {
+      console.log(`✅ Directory already exists: ${dir}`);
+    }
+  });
+};
+
+// Call the function to create directories
+createUploadsDirectory();
+
+// =========================================================
+// CONTINUE WITH YOUR EXISTING SERVER CODE
+// =========================================================
 
 // Middleware Imports
 const { protect } = require('./middleware/authMiddleware');
@@ -21,6 +52,7 @@ const pmRoutes = require('./routes/pmRoutes');
 const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
 const resourceAnalyticsRoutes =  require('./routes/resourceAnalyticsRoutes');
 const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
 
 const app = express();
 
@@ -31,20 +63,20 @@ const app = express();
 const server = http.createServer(app);
 
 // In server.js, update the Socket.IO configuration
-
 const io = new Server(server, {
   cors: {
     origin: [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
-      'http://192.168.1.6:5173',  // Add your frontend IP
+      'http://192.168.1.6:5173', 
+      'http://192.168.1.105:5173',
       /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
       /^http:\/\/localhost(:\d+)?$/
     ],
     credentials: true,
     methods: ["GET", "POST"]
   },
-  transports: ['websocket', 'polling']  // Add both transports
+  transports: ['websocket', 'polling']
 });
 
 /* =========================================================
@@ -56,10 +88,14 @@ app.set('io', io);
 io.on('connection', (socket) => {
   console.log('🟢 Socket Connected:', socket.id);
 
-  // JOIN USER ROOM
   socket.on('join-user-room', (userId) => {
     socket.join(userId);
     console.log(`👤 User joined room: ${userId}`);
+  });
+
+  socket.on('join-ticket-room', (ticketId) => {
+    socket.join(`ticket_${ticketId}`);
+    console.log(`🎫 Joined ticket room: ${ticketId}`);
   });
 
   socket.on('disconnect', () => {
@@ -78,7 +114,6 @@ app.use(cors({
   origin: function(origin, callback) {
     if (!origin) return callback(null, true);
 
-    // Allow localhost + LAN IPs
     const allowed =
       /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
 
@@ -90,6 +125,9 @@ app.use(cors({
   },
   credentials: true
 }));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* =========================================================
    ENV VALIDATION
@@ -123,6 +161,8 @@ app.use('/api/pm', protect, pmRoutes);
 app.use('/api/dev/worklog',protect,workDescriptionRoutes);
 app.use('/api/resource-analytics',  resourceAnalyticsRoutes);
 app.use('/api/email-campaign',  emailCampaignRoutes);
+app.use('/api/tickets', ticketRoutes);
+
 /* =========================================================
    TEST ROUTE
 ========================================================= */
@@ -151,6 +191,7 @@ app.use((req, res) => {
 mongoose.connect(MONGO_URI)
   .then(() => {
     console.log('✅ MongoDB Connected');
+    console.log('📁 Uploads directory ready');
 
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server running on:`);

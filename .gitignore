@@ -35,3 +35,15 @@ app_planning.txt
 *.njsproj
 *.sln
 *.sw?
+
+# ========================================
+# UPLOADED FILES - DO NOT TRACK
+# ========================================
+backend/uploads/
+uploads/
+
+# Keep the empty folder structure with .gitkeep
+!backend/uploads/.gitkeep
+!backend/uploads/tickets/.gitkeep
+!backend/uploads/profiles/.gitkeep
+!backend/uploads/temp/.gitkeep
