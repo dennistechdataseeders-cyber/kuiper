@@ -71,7 +71,7 @@ router.get('/my-projects', protect, authorize('Developer'), async (req, res) => 
 
 /**
  * @route   GET /api/dev/my-feeds
- * @desc    Get all individual feeds/tasks assigned to the developer (excluding completed)
+ * @desc    Get all individual feeds/tasks assigned to the developer
  * @access  Private (Developer)
  */
 router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
@@ -81,24 +81,368 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
     const feeds = await Feed.find({ 
       assignedDevelopers: req.user._id
     })
-      .populate('projectId', 'name projectCustomId')
-      .populate('assignedDevelopers', 'name email')
+      .populate({
+        path: 'projectId',
+        select: 'name projectCustomId gitRepoUrl gitRepoName country industry',
+        model: 'Project'
+      })
+      .populate('assignedDevelopers', 'name email githubUsername githubLinked')
+      .lean()
       .sort({ createdAt: -1 });
 
-    const filteredFeeds = feeds.filter(feed => {
-      const isCompletedToday = feed.completionHistory && 
-        Array.isArray(feed.completionHistory) && 
-        feed.completionHistory.some(h => h && h.date === today);
-      return !isCompletedToday;
+    // Enhance each feed with Git path information
+    const enhancedFeeds = feeds.map(feed => {
+      const project = feed.projectId;
+      let gitPath = null;
+      
+      if (project && project.gitRepoName && project.gitRepoUrl) {
+        // Use the same sanitization logic as gitService
+        const feedFolderName = feed.name
+          .toLowerCase()
+          .replace(/[^a-z0-9-]/g, '-')
+          .replace(/-+/g, '-')
+          .replace(/^-|-$/g, '');
+        
+        // Create multiple path variations
+        gitPath = {
+          repoName: project.gitRepoName,
+          repoUrl: project.gitRepoUrl,
+          feedPath: feedFolderName,
+          // Different path levels
+          rootPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}`,
+          srcPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/src`,
+          docsPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/docs`,
+          testsPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/tests`,
+          configPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/config`,
+          // Full URL for cloning
+          cloneUrl: project.gitRepoUrl,
+          // Display path for UI
+          displayPath: `${feedFolderName}/src`
+        };
+      }
+      
+      return {
+        ...feed,
+        gitPath,
+        projectName: project?.name || 'Unknown Project',
+        projectCustomId: project?.projectCustomId || 'N/A',
+        hasGitRepo: !!(project?.gitRepoName && project?.gitRepoUrl)
+      };
     });
 
-    res.json(filteredFeeds);
+    res.json(enhancedFeeds);
   } catch (err) {
     console.error('Error fetching dev feeds:', err);
     res.status(500).json({ error: 'Server error while fetching assigned feeds' });
   }
 });
 
+/**
+ * @route   GET /api/dev/feeds/:feedId/generate-script
+ * @desc    Generate secure deployment script (push-only, no clone)
+ * @access  Private (Developer)
+ */
+router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const feed = await Feed.findById(req.params.feedId)
+      .populate({
+        path: 'projectId',
+        select: 'gitRepoUrl gitRepoName name projectCustomId gitRepoOwner'
+      });
+
+    if (!feed) {
+      return res.status(404).json({ error: 'Feed not found' });
+    }
+
+    const project = feed.projectId;
+    
+    if (!project || !project.gitRepoUrl) {
+      return res.status(400).json({ error: 'No Git repository linked to this feed' });
+    }
+
+    // Check if developer is assigned to this feed
+    const isAssigned = feed.assignedDevelopers.some(
+      devId => devId.toString() === req.user._id.toString()
+    );
+    
+    if (!isAssigned) {
+      return res.status(403).json({ error: 'Not authorized to access this feed' });
+    }
+
+    const feedFolderName = feed.name
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    // Generate a write-only token (you need to create this in GitHub)
+    // This token should have ONLY "contents: write" permission for this specific repo
+    const writeToken = process.env.GITHUB_WRITE_TOKEN;
+
+    // Create authenticated URL with write token
+    const repoOwner = project.gitRepoOwner || process.env.GITHUB_OWNER;
+    const authenticatedUrl = `https://${writeToken}@github.com/${repoOwner}/${project.gitRepoName}.git`;
+
+    // Generate the secure Python script
+    const pythonScript = `#!/usr/bin/env python3
+"""
+SECURE DEPLOYMENT SCRIPT - PUSH ONLY
+- Cannot clone the repository
+- Clears previous files before upload
+- Uploads complete folder structure
+- Token has write-only permissions
+"""
+
+import os
+import shutil
+import subprocess
+import tempfile
+from pathlib import Path
+from datetime import datetime
+
+# ============================================
+# CONFIGURATION (DO NOT MODIFY)
+# ============================================
+REPO_URL = "${authenticatedUrl}"
+REPO_NAME = "${project.gitRepoName}"
+FEED_FOLDER = "${feedFolderName}"
+TARGET_PATH = f"{FEED_FOLDER}/src"
+
+# Get current directory (where deploy.py is located)
+CURRENT_DIR = Path(__file__).parent.absolute()
+
+print("=" * 70)
+print("🔒 SECURE DEPLOYMENT MODE: PUSH ONLY")
+print("📦 Feed: ${feed.name}")
+print(f"👤 Developer: ${req.user.name}")
+print(f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+print("=" * 70)
+print(f"📁 Source: {CURRENT_DIR}")
+print(f"🎯 Target: ${feed.name}/src")
+print()
+
+def run_command(cmd, cwd=None, capture=False):
+    """Run shell command and return result"""
+    try:
+        if capture:
+            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+            return result.returncode == 0, result.stdout, result.stderr
+        else:
+            subprocess.run(cmd, shell=True, cwd=cwd, check=True)
+            return True, "", ""
+    except subprocess.CalledProcessError as e:
+        return False, "", str(e)
+
+def create_temp_repo():
+    """Create a temporary repository for pushing (no clone needed)"""
+    temp_dir = Path(tempfile.mkdtemp()) / REPO_NAME
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    
+    print("🔧 Setting up temporary workspace...")
+    
+    # Initialize git repo
+    run_command("git init", cwd=temp_dir)
+    
+    # Set up remote (with token)
+    run_command(f"git remote add origin {REPO_URL}", cwd=temp_dir)
+    
+    # Configure git to use token only for this operation
+    run_command('git config user.name "KUIPER Deployment Bot"', cwd=temp_dir)
+    run_command('git config user.email "deploy@kuiper.com"', cwd=temp_dir)
+    
+    return temp_dir
+
+def create_initial_structure(repo_path):
+    """Create the complete folder structure"""
+    # Create the target folder
+    target_folder = repo_path / TARGET_PATH
+    target_folder.mkdir(parents=True, exist_ok=True)
+    
+    # Create README file
+    readme_content = f"""# ${feed.name} Feed
+
+## Deployment Information
+- **Feed ID**: ${feed._id}
+- **Last Deployed**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+- **Deployed By**: ${req.user.name} (${req.user.email})
+
+## Structure
+- `/src` - Source code files
+- This folder is automatically updated on each deployment
+- Previous files are cleared before each upload
+
+## Auto-generated by KUIPER CRM
+*Do not manually modify files in this folder*
+"""
+    readme_path = target_folder / "README.md"
+    readme_path.write_text(readme_content)
+    print(f"  📄 Created: README.md")
+    
+    return target_folder
+
+def clear_previous_files(folder_path):
+    """Clear all previous files in the target folder"""
+    if folder_path.exists():
+        print("🗑️  Clearing previous files...")
+        for item in folder_path.iterdir():
+            if item.name == 'README.md':
+                continue  # Keep README
+            if item.is_file():
+                item.unlink()
+                print(f"  🗑️  Deleted: {item.name}")
+            elif item.is_dir():
+                shutil.rmtree(item)
+                print(f"  🗑️  Deleted folder: {item.name}/")
+        print("✓ Previous files cleared")
+
+def copy_new_files(source_dir, target_folder):
+    """Copy new files to the target folder"""
+    print("📤 Uploading new files...")
+    copied = 0
+    skipped = 0
+    
+    # Files/folders to exclude
+    exclude = {'.git', 'deploy.py', '__pycache__', '.DS_Store', 'venv', '.venv', 'node_modules'}
+    
+    for item in source_dir.iterdir():
+        if item.name in exclude:
+            continue
+        
+        # Skip large files (>100MB)
+        if item.is_file() and item.stat().st_size > 100 * 1024 * 1024:
+            print(f"  ⚠️ Skipping large file: {item.name} (>{100}MB)")
+            skipped += 1
+            continue
+        
+        dest = target_folder / item.name
+        if item.is_file():
+            shutil.copy2(item, dest)
+            print(f"  📄 Uploaded: {item.name}")
+            copied += 1
+        elif item.is_dir():
+            if dest.exists():
+                shutil.rmtree(dest)
+            shutil.copytree(item, dest)
+            print(f"  📁 Uploaded folder: {item.name}/")
+            copied += 1
+    
+    print(f"✓ Uploaded {copied} items")
+    if skipped > 0:
+        print(f"⚠️ Skipped {skipped} large items")
+    
+    return copied
+
+def commit_and_push(repo_path):
+    """Commit and push changes"""
+    print("📦 Committing changes...")
+    
+    # Add all files
+    success, _, stderr = run_command("git add .", cwd=repo_path, capture=True)
+    if not success:
+        print(f"❌ Failed to add files: {stderr}")
+        return False
+    
+    # Check if there are changes
+    success, stdout, _ = run_command("git diff --cached --quiet", cwd=repo_path, capture=True)
+    if success:
+        print("✓ No changes to commit")
+        return True
+    
+    # Commit
+    commit_msg = f"Deploy to ${feed.name} feed - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    success, _, stderr = run_command(f'git commit -m "{commit_msg}"', cwd=repo_path, capture=True)
+    if not success:
+        print(f"❌ Commit failed: {stderr}")
+        return False
+    
+    print("✓ Committed successfully")
+    
+    # Push to GitHub
+    print("🚀 Pushing to GitHub...")
+    success, stdout, stderr = run_command("git push -f origin main", cwd=repo_path, capture=True)
+    
+    if success:
+        print("✓ Successfully pushed to GitHub")
+        return True
+    else:
+        # Try with master branch
+        success, stdout, stderr = run_command("git push -f origin master", cwd=repo_path, capture=True)
+        if success:
+            print("✓ Successfully pushed to GitHub")
+            return True
+        else:
+            print(f"❌ Push failed: {stderr}")
+            return False
+
+def cleanup_temp_repo(repo_path):
+    """Clean up temporary repository"""
+    try:
+        shutil.rmtree(repo_path.parent)
+        print("🧹 Cleaned up temporary files")
+    except:
+        pass
+
+# ============================================
+# MAIN DEPLOYMENT PROCESS
+# ============================================
+
+try:
+    # Step 1: Create temporary repository
+    temp_repo = create_temp_repo()
+    print(f"✓ Temporary workspace: {temp_repo}")
+    
+    # Step 2: Create folder structure
+    target_folder = create_initial_structure(temp_repo)
+    
+    # Step 3: Clear previous files
+    clear_previous_files(target_folder)
+    
+    # Step 4: Copy new files
+    files_copied = copy_new_files(CURRENT_DIR, target_folder)
+    
+    if files_copied == 0:
+        print("⚠️ No files were uploaded. Check your source directory.")
+    else:
+        # Step 5: Commit and push
+        if commit_and_push(temp_repo):
+            print()
+            print("=" * 70)
+            print("✅ DEPLOYMENT COMPLETE!")
+            print(f"📍 Files deployed to: ${feed.name}/src")
+            print("🔒 Previous files have been replaced with new versions")
+            print("=" * 70)
+        else:
+            print()
+            print("=" * 70)
+            print("❌ DEPLOYMENT FAILED!")
+            print("Please check your internet connection and try again")
+            print("=" * 70)
+    
+    # Step 6: Cleanup
+    cleanup_temp_repo(temp_repo)
+    
+except Exception as e:
+    print(f"❌ Deployment error: {str(e)}")
+    print("=" * 70)
+    print("Please contact your system administrator")
+    print("=" * 70)
+    exit(1)
+`;
+
+    res.json({
+      success: true,
+      script: pythonScript,
+      feedInfo: {
+        name: feed.name,
+        feedPath: feedFolderName,
+        targetPath: `${feedFolderName}/src`
+      }
+    });
+  } catch (err) {
+    console.error('Error generating script:', err);
+    res.status(500).json({ error: 'Failed to generate script' });
+  }
+});
 /**
  * @route   POST /api/dev/complete-feed
  * @desc    Mark a feed as completed by the developer for today
@@ -325,8 +669,6 @@ router.get('/worklog', protect, authorize('Developer'), async (req, res) => {
 /**
  * @route   POST /api/dev/worklog/start/:feedId
  * @desc    Start timer for a feed
- *          Always records server-side startedAt — client cannot supply a timestamp.
- *          Returns serverTimestamp so client can recalibrate its offset.
  * @access  Private (Developer)
  */
 router.post('/worklog/start/:feedId', protect, authorize('Developer'), async (req, res) => {
@@ -342,7 +684,6 @@ router.post('/worklog/start/:feedId', protect, authorize('Developer'), async (re
     if (!log) return res.status(404).json({ error: 'Worklog not found' });
     if (log.isRunning) return res.status(400).json({ error: 'Timer already running' });
 
-    // Always use server clock — never trust client-supplied time
     const serverNow = new Date();
 
     log.startedAt = serverNow;
@@ -361,7 +702,7 @@ router.post('/worklog/start/:feedId', protect, authorize('Developer'), async (re
     res.json({
       success: true,
       worklog: log,
-      serverTimestamp: serverNow.getTime() // client uses this to correct offset
+      serverTimestamp: serverNow.getTime()
     });
 
   } catch (err) {
@@ -373,8 +714,6 @@ router.post('/worklog/start/:feedId', protect, authorize('Developer'), async (re
 /**
  * @route   POST /api/dev/worklog/pause/:feedId
  * @desc    Pause timer for a feed
- *          Duration is computed server-side from stored startedAt.
- *          Returns serverTimestamp so client can recalibrate its offset.
  * @access  Private (Developer)
  */
 router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (req, res) => {
@@ -390,7 +729,6 @@ router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (re
     if (!log) return res.status(404).json({ error: 'Worklog not found' });
     if (!log.isRunning) return res.status(400).json({ error: 'Timer is not running' });
 
-    // Server computes elapsed time — client clock is irrelevant
     const serverNow = new Date();
     const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
 
@@ -412,7 +750,7 @@ router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (re
     res.json({
       success: true,
       worklog: log,
-      serverTimestamp: serverNow.getTime() // client uses this to correct offset
+      serverTimestamp: serverNow.getTime()
     });
 
   } catch (err) {
@@ -424,8 +762,6 @@ router.post('/worklog/pause/:feedId', protect, authorize('Developer'), async (re
 /**
  * @route   POST /api/dev/worklog/stop/:feedId
  * @desc    Stop timer for a feed
- *          If running, duration is computed server-side from stored startedAt.
- *          Returns serverTimestamp so client can recalibrate its offset.
  * @access  Private (Developer)
  */
 router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req, res) => {
@@ -441,7 +777,6 @@ router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req
     if (!log) return res.status(404).json({ error: 'Worklog not found' });
 
     if (log.isRunning) {
-      // Server computes elapsed time — client clock is irrelevant
       const serverNow = new Date();
       const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
 
@@ -466,7 +801,7 @@ router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req
     res.json({
       success: true,
       worklog: log,
-      serverTimestamp: serverNow.getTime() // client uses this to correct offset
+      serverTimestamp: serverNow.getTime()
     });
 
   } catch (err) {

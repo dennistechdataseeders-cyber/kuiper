@@ -15,6 +15,15 @@ const UserSchema = new mongoose.Schema({
   website: String,
   resetPasswordToken: String,
   resetPasswordExpires: Date,
+  githubUsername: { 
+    type: String, 
+    default: null,
+    sparse: true // Allows multiple null values while maintaining uniqueness for non-null
+  },
+  githubLinked: { 
+    type: Boolean, 
+    default: false 
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

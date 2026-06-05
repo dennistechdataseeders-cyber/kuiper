@@ -3,6 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto'); 
 const Task = require('../models/Task');
+const gitService = require('../services/gitService');
+
 // --- MODELS ---
 const User = require('../models/User');
 const Log = require('../models/Log');
@@ -14,6 +16,7 @@ const { register, login, forgotPassword, resetPassword } = require('../controlle
 // --- MIDDLEWARE ---
 const { authorize } = require('../middleware/roleCheck');
 const getWelcomeTemplate = require('../templates/welcomeEmail');
+
 // --- USER MANAGEMENT ROUTES ---
 
 router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager','Sales'), async (req, res) => {
@@ -32,7 +35,6 @@ router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager','Sale
       const userObj = user.toObject();
 
       // Count Prospects in this rep's bucket
-      // We look for 'salesRepId' matching the user's ID
       userObj.prospectCount = await Prospect.countDocuments({ 
         salesRepId: user._id 
       });
@@ -42,10 +44,10 @@ router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager','Sale
         salesRepId: user._id 
       });
 
+      // GitHub status already included in user object
       return userObj;
     }));
 
-    // 3. Send the enriched data back to the frontend
     res.json(usersWithStats);
   } catch (err) {
     console.error("Error in /users route:", err);
@@ -69,6 +71,7 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false
   }
 });
+
 // Place this right after your User Management routes but BEFORE any /:id routes
 router.post('/change-password', authorize('Admin', 'Sales Manager', 'Sales', 'Project Manager', 'Developer'), async (req, res) => {
   try {
@@ -91,10 +94,11 @@ router.post('/change-password', authorize('Admin', 'Sales Manager', 'Sales', 'Pr
     res.status(500).json({ error: err.message });
   }
 });
+
 // --- UPDATED POST METHOD ---
 router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, githubUsername } = req.body;
     let finalRole = role;
 
     // Authorization Logic for Role Creation
@@ -107,27 +111,45 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ error: "Email already in use" });
 
-    // Use provided password or default to "123456"
     const cleanPassword = String(password || "123456");
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(cleanPassword, salt);
 
+    // Create user
     const newUser = new User({ 
       name, 
       email, 
       password: hashedPassword, 
-      role: finalRole 
+      role: finalRole,
+      githubUsername: githubUsername || null,
+      githubLinked: false
     });
 
+    // If role is Developer, try to link GitHub account automatically
+    let gitHubLinkResult = null;
+    if (finalRole === 'Developer') {
+      console.log(`👨‍💻 Attempting to link GitHub account for developer: ${email}`);
+      gitHubLinkResult = await gitService.linkGitHubAccountToUser(newUser._id, email);
+      
+      if (gitHubLinkResult.success && gitHubLinkResult.githubUsername) {
+        newUser.githubUsername = gitHubLinkResult.githubUsername;
+        newUser.githubLinked = true;
+        console.log(`✅ GitHub account linked: ${gitHubLinkResult.githubUsername}`);
+      } else {
+        console.log(`⚠️ GitHub account not found for ${email}`);
+      }
+    }
+
     await newUser.save();
+
+    // Send welcome email
     const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole," http://192.168.1.105:5173/");
-    // --- BACKGROUND EMAIL LOGIC ---
-    // We do NOT "await" this so the frontend gets a response immediately
+    
     const mailOptions = {
       from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
       to: email,
       subject: 'Your System Access Credentials',
-      html:emailHtml
+      html: emailHtml
     };
 
     transporter.sendMail(mailOptions)
@@ -139,25 +161,34 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
       await Log.create({
         actionType: 'USER_CREATED',
         performerId: req.user._id,
-        details: `Created ${finalRole}: ${name} (By ${req.user.role})`,
+        details: `Created ${finalRole}: ${name} (By ${req.user.role})${gitHubLinkResult?.success ? ` - GitHub linked: ${gitHubLinkResult.githubUsername}` : ' - GitHub not linked'}`,
         timestamp: new Date()
       });
     } catch (logErr) {
       console.error("Non-critical Log Error:", logErr.message);
     }
 
-    res.status(201).json(newUser);
+    // Return user with GitHub status
+    const userResponse = newUser.toObject();
+    delete userResponse.password;
+    
+    res.status(201).json({
+      ...userResponse,
+      gitHubLinked: newUser.githubLinked,
+      gitHubUsername: newUser.githubUsername
+    });
   } catch (err) {
     console.error("Error creating user:", err);
     res.status(400).json({ error: err.message });
   }
 });
+
 router.put('/users/:id', authorize('Admin'), async (req, res) => {
   try {
-    const { name, email, role } = req.body;
+    const { name, email, role, githubUsername } = req.body;
     const updatedUser = await User.findByIdAndUpdate(
       req.params.id,
-      { name, email, role },
+      { name, email, role, githubUsername },
       { new: true, runValidators: true }
     );
     res.json(updatedUser);
@@ -176,9 +207,6 @@ router.delete('/users/:id', authorize('Admin'), async (req, res) => {
 });
 
 // --- AUDIT & ANALYTICS ---
-
-// FIX 1: Added 'Project Manager' to authorize so PM can access this route
-// FIX 2: PM and Admin both see ALL logs — only Sales sees their own
 router.get('/analytics', authorize('Admin', 'Sales', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
@@ -190,11 +218,9 @@ router.get('/analytics', authorize('Admin', 'Sales', 'Project Manager', 'Sales M
     if (req.user.role === 'Sales') {
       filter = { performerId: req.user._id };
     } else if (req.user.role === 'Sales Manager') {
-      // Sales Manager sees all logs related to Sales activity
       const salesActions = ['USER_CREATED', 'PROSPECT_IMPORTED', 'LEAD_GENERATED', 'FOLLOW_UP_SET', 'LEAD_CLOSED'];
       filter = { actionType: { $in: salesActions } };
     }
-    // Admin and PM see {} (everything)
 
     const logs = await Log.find(filter)
       .sort({ timestamp: -1 })
@@ -218,20 +244,15 @@ router.get('/analytics', authorize('Admin', 'Sales', 'Project Manager', 'Sales M
 
 // --- PROJECT MANAGEMENT ROUTES ---
 
-// Find this route in your adminRoutes.js
-// --- PROJECT MANAGEMENT ROUTES ---
-
-// FIRST: Specific route for client projects (MUST come before /projects)
+// Specific route for client projects (MUST come before /projects)
 router.get('/client-projects', authorize('Admin', 'Project Manager', 'Client'), async (req, res) => {
   try {
     console.log('=== CLIENT PROJECTS ENDPOINT ===');
     const clientIdStr = req.user._id.toString();
     console.log('Looking for client ID (string):', clientIdStr);
     
-    // Use aggregation to convert string clients to ObjectId for comparison
     const projects = await Project.aggregate([
       {
-        // Add a field that converts client IDs to strings for comparison
         $addFields: {
           clientIdsAsString: {
             $map: {
@@ -243,7 +264,6 @@ router.get('/client-projects', authorize('Admin', 'Project Manager', 'Client'), 
         }
       },
       {
-        // Match where the string version of client ID exists in the array
         $match: {
           $expr: {
             $in: [clientIdStr, "$clientIdsAsString"]
@@ -252,7 +272,6 @@ router.get('/client-projects', authorize('Admin', 'Project Manager', 'Client'), 
       }
     ]);
     
-    // Populate the results
     const populatedProjects = await Project.populate(projects, [
       { path: 'clients', select: 'name email role' },
       { path: 'projectManager', select: 'name email' },
@@ -274,7 +293,7 @@ router.get('/client-projects', authorize('Admin', 'Project Manager', 'Client'), 
   }
 });
 
-// THEN: General projects route
+// General projects route
 router.get('/projects', authorize('Admin', 'Project Manager','Client'), async (req, res) => {
   try {
     const data = await Project.find()
@@ -293,6 +312,7 @@ router.get('/projects', authorize('Admin', 'Project Manager','Client'), async (r
     res.status(500).json({ message: err.message });
   }
 });
+
 const COUNTRY_MAP = {
   "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
   "Australia": "AU", "Brazil": "BR", "Canada": "CA", 
@@ -306,9 +326,10 @@ const COUNTRY_MAP = {
   "United States": "US", "Vietnam": "VN"
 };
 
+// UPDATED POST /projects with GitHub integration and collaborator addition
 router.post('/projects', authorize('Admin', 'Project Manager','Sales'), async (req, res) => {
   try {
-    const { name, clients, description, country, industry, projectManager } = req.body;
+    const { name, clients, description, country, industry, projectManager, assignedDevelopers } = req.body;
 
     // 1. Generate Serial Number
     const projectCount = await Project.countDocuments();
@@ -324,35 +345,301 @@ router.post('/projects', authorize('Admin', 'Project Manager','Sales'), async (r
     const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${name}`;
 
     const newProject = new Project({
-      name: fullFormattedName,              // Full formatted name
+      name: fullFormattedName,
       clients,
       description,
       adminId: req.user._id,
       projectManager: projectManager || (req.user.role === 'Project Manager' ? req.user._id : null),
       country,
       industry,
-      projectCustomId: fullFormattedName    // Same formatted name
+      projectCustomId: fullFormattedName
     });
 
     await newProject.save();
+    
+    // CREATE GITHUB REPOSITORY AND INVITE DEVELOPERS BY USER ID
+    let gitRepo = null;
+    let inviteResults = [];
+    
+    if (process.env.GITHUB_TOKEN) {
+      const cleanDescription = (description || '')
+        .replace(/[\n\r\t]/g, ' ')
+        .replace(/[^\x20-\x7E]/g, '')
+        .substring(0, 350);
+      
+      // Get developer IDs from assigned developers
+      let developerIds = [];
+      let developersWithNoGitHub = [];
+      
+      if (assignedDevelopers && assignedDevelopers.length > 0) {
+        const developers = await User.find({ 
+          _id: { $in: assignedDevelopers },
+          role: 'Developer'
+        }).select('email name githubUsername githubLinked');
+        
+        developerIds = developers.map(d => d._id);
+        developersWithNoGitHub = developers.filter(d => !d.githubUsername || !d.githubLinked);
+        
+        if (developersWithNoGitHub.length > 0) {
+          console.warn(`⚠️ ${developersWithNoGitHub.length} developers without GitHub account:`, 
+            developersWithNoGitHub.map(d => d.email));
+        }
+        
+        console.log(`Will invite ${developerIds.length} developers via GitHub using stored usernames`);
+      }
+      
+      // Create repository - GitHub will send invitation emails automatically
+      gitRepo = await gitService.createRepository(
+        fullFormattedName,
+        `Project: ${name} | Industry: ${industry} | Country: ${country}`,
+        developerIds  // Pass user IDs instead of emails
+      );
+      
+      if (gitRepo && gitRepo.success) {
+        newProject.gitRepoUrl = gitRepo.repoUrl;
+        newProject.gitRepoName = gitRepo.repoName;
+        await newProject.save();
+        
+        // Log detailed results
+        console.log(`Repository created: ${gitRepo.repoName}`);
+        if (gitRepo.addedCollaborators && gitRepo.addedCollaborators.length > 0) {
+          console.log(`GitHub invited: ${gitRepo.addedCollaborators.map(c => c.username).join(', ')}`);
+        }
+        if (gitRepo.failedCollaborators && gitRepo.failedCollaborators.length > 0) {
+          console.log(`Failed invitations:`, gitRepo.failedCollaborators);
+          inviteResults = gitRepo.failedCollaborators;
+        }
+      }
+    }
 
     // Log creation
     try {
       await Log.create({
         actionType: 'PROJECT_CREATED',
         performerId: req.user._id,
-        details: `Created project: ${name} [${fullFormattedName}] (By ${req.user.role})`,
+        details: `Created project: ${name} [${fullFormattedName}]${gitRepo?.success ? ' ✓ Git repo created' : ''} | Invited ${inviteResults.length} developers`,
         timestamp: new Date()
       });
     } catch (logErr) {
       console.error("Non-critical Log Error:", logErr.message);
     }
 
-    res.status(201).json(newProject);
+    res.status(201).json({
+      ...newProject.toObject(),
+      gitRepo: gitRepo || null,
+      inviteResults: inviteResults || null
+    });
   } catch (err) {
+    console.error('Project creation error:', err);
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============================================
+// GIT INVITE LINK ROUTES (NEW)
+// ============================================
+
+router.get('/projects/:id/invite-link', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project) {
+      return res.status(404).json({ success: false, error: 'Project not found' });
+    }
+    
+    if (!project.gitRepoName) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'No GitHub repository linked to this project' 
+      });
+    }
+    
+    const inviteLink = gitService.getInviteLink(project.gitRepoName);
+    
+    res.json({
+      success: true,
+      inviteLink: inviteLink,
+      repoName: project.gitRepoName,
+      repoUrl: project.gitRepoUrl
+    });
+  } catch (error) {
+    console.error('Error generating invite link:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:id/bulk-invite', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const { developerEmails, customMessage } = req.body;
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.status(404).json({ success: false, error: 'Project or Git repo not found' });
+    }
+    
+    const inviteLink = gitService.getInviteLink(project.gitRepoName);
+    const results = [];
+    
+    for (const email of developerEmails) {
+      try {
+        const mailOptions = {
+          from: `"KUIPER CRM" <${process.env.EMAIL_USER}>`,
+          to: email,
+          subject: `GitHub Repository Invitation: ${project.projectCustomId || project.name}`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
+              <h2 style="color: #2563eb;">GitHub Repository Access</h2>
+              <p>Hello,</p>
+              <p>You have been granted access to the GitHub repository for project:</p>
+              <h3 style="color: #1e293b;">${project.projectCustomId || project.name}</h3>
+              <p>${customMessage || 'Please click the link below to accept the invitation and start contributing.'}</p>
+              <a href="${inviteLink}" 
+                 style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
+                Accept GitHub Invitation
+              </a>
+              <p style="color: #666; font-size: 12px;">Or copy this link to your browser: ${inviteLink}</p>
+              <hr style="margin: 20px 0; border-color: #e0e0e0;">
+              <p style="color: #999; font-size: 11px;">This invitation will expire in 7 days. If you need an extension, please contact your project manager.</p>
+            </div>
+          `
+        };
+        
+        await transporter.sendMail(mailOptions);
+        
+        results.push({ email, success: true, message: 'Invitation sent' });
+        
+        await Log.create({
+          actionType: 'INVITE_SENT',
+          performerId: req.user._id,
+          details: `Sent GitHub invite for ${project.gitRepoName} to ${email}`,
+          timestamp: new Date()
+        });
+        
+      } catch (error) {
+        console.error(`Error sending email to ${email}:`, error);
+        results.push({ email, success: false, error: error.message });
+      }
+    }
+    
+    res.json({
+      success: true,
+      inviteLink: inviteLink,
+      results: results,
+      message: `Invitations sent to ${results.filter(r => r.success).length} developers`
+    });
+    
+  } catch (error) {
+    console.error('Error sending bulk invites:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/projects/:id/invite-status', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.status(404).json({ success: false, error: 'Project or Git repo not found' });
+    }
+    
+    const inviteLink = gitService.getInviteLink(project.gitRepoName);
+    
+    res.json({
+      success: true,
+      inviteLink: inviteLink,
+      repoName: project.gitRepoName,
+      message: 'Share this link with developers to invite them to the repository.',
+      note: 'To see pending invitations, visit the GitHub repository settings page.'
+    });
+  } catch (error) {
+    console.error('Error getting invite status:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/projects/:id/add-collaborator', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const { email, permission = 'push' } = req.body;
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.status(404).json({ error: 'Project or Git repo not found' });
+    }
+    
+    const result = await gitService.addCollaboratorToRepo(project.gitRepoName, email, permission);
+    
+    if (result.success) {
+      await Log.create({
+        actionType: 'COLLABORATOR_ADDED',
+        performerId: req.user._id,
+        details: `Added ${result.email} → ${result.username} to repo ${project.gitRepoName}`,
+        timestamp: new Date()
+      });
+      res.json({ success: true, message: `Collaborator added: ${result.email} → ${result.username}` });
+    } else {
+      const inviteLink = gitService.getInviteLink(project.gitRepoName);
+      res.status(400).json({ 
+        success: false, 
+        error: result.error,
+        inviteLink: inviteLink,
+        message: 'Could not add automatically. Please share this invite link with the developer.'
+      });
+    }
+  } catch (error) {
+    console.error('Error adding collaborator:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/projects/:id/collaborators', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.status(404).json({ error: 'Project or Git repo not found' });
+    }
+    
+    const result = await gitService.getCollaborators(project.gitRepoName);
+    
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error fetching collaborators:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.delete('/projects/:id/remove-collaborator', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const { email } = req.body;
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.status(404).json({ error: 'Project or Git repo not found' });
+    }
+    
+    const result = await gitService.removeCollaborator(project.gitRepoName, email);
+    
+    if (result.success) {
+      await Log.create({
+        actionType: 'COLLABORATOR_REMOVED',
+        performerId: req.user._id,
+        details: `Removed ${result.username} from repo ${project.gitRepoName}`,
+        timestamp: new Date()
+      });
+      res.json({ success: true, message: `Collaborator removed: ${result.username}` });
+    } else {
+      res.status(400).json({ error: result.error });
+    }
+  } catch (error) {
+    console.error('Error removing collaborator:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.put('/projects/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const updatedProject = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true });
@@ -364,20 +651,66 @@ router.put('/projects/:id', authorize('Admin', 'Project Manager'), async (req, r
 
 router.delete('/projects/:id', authorize('Admin'), async (req, res) => {
   try {
-    const project = await Project.findByIdAndDelete(req.params.id);
+    const project = await Project.findById(req.params.id);
     if (!project) return res.status(404).json({ message: "Project not found" });
 
     if (project.feeds && project.feeds.length > 0) {
       await Feed.deleteMany({ _id: { $in: project.feeds } });
     }
+    
+    await Project.findByIdAndDelete(req.params.id);
     res.json({ message: "Project and its feeds deleted successfully" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
+// Manual GitHub account linking for existing users
+router.post('/users/:userId/link-github', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+    
+    if (user.role !== 'Developer') {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'GitHub linking is only available for Developer role' 
+      });
+    }
+    
+    const result = await gitService.linkGitHubAccountToUser(userId, user.email);
+    
+    if (result.success && result.githubUsername) {
+      res.json({
+        success: true,
+        message: `GitHub account ${result.githubUsername} linked successfully`,
+        githubUsername: result.githubUsername,
+        githubLinked: true,
+        profile_url: result.profile_url
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: result.message || 'No GitHub account found with this email address',
+        githubLinked: false
+      });
+    }
+  } catch (error) {
+    console.error('Error linking GitHub account:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // --- FEED MANAGEMENT ROUTES ---
 
+// UPDATED POST /feeds with Monthly and Platform fields
+// --- FEED MANAGEMENT ROUTES ---
+
+// UPDATED POST /feeds with Monthly and Platform fields
 router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const {
@@ -385,7 +718,10 @@ router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) =>
       assignedDevelopers,
       projectId,
       feedType,
-      weekDay
+      weekDay,
+      monthDay,
+      feedPlatform,
+      webDomain
     } = req.body;
 
     const newFeed = await Feed.create({
@@ -394,231 +730,465 @@ router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) =>
       projectId,
       adminId: req.user._id,
       feedType: feedType || 'Daily',
-
-      // NEW
-      weekDay: feedType === 'Weekly'
-        ? weekDay
-        : null
+      weekDay: feedType === 'Weekly' ? weekDay : null,
+      monthDay: feedType === 'Monthly' ? monthDay : null,
+      feedPlatform: feedPlatform || null,
+      webDomain: (feedPlatform === 'Web' || feedPlatform === 'Both') ? webDomain : null
     });
 
     await Project.findByIdAndUpdate(
       projectId,
       { $push: { feeds: newFeed._id } }
     );
+    
+    // CREATE FOLDER ON GITHUB AND INVITE DEVELOPERS BY USER ID
+    let gitFolder = null;
+    let inviteResults = [];
+    
+    if (process.env.GITHUB_TOKEN) {
+      const project = await Project.findById(projectId);
+      if (project && project.gitRepoName) {
+        // Get assigned developer IDs
+        let developerIds = [];
+        let developersWithNoGitHub = [];
+        
+        if (assignedDevelopers && assignedDevelopers.length > 0) {
+          const developers = await User.find({ 
+            _id: { $in: assignedDevelopers },
+            role: 'Developer'
+          }).select('email name githubUsername githubLinked');
+          
+          developerIds = developers.map(d => d._id);
+          developersWithNoGitHub = developers.filter(d => !d.githubUsername || !d.githubLinked);
+          
+          if (developersWithNoGitHub.length > 0) {
+            console.warn(`⚠️ ${developersWithNoGitHub.length} developers without GitHub account for feed ${name}:`, 
+              developersWithNoGitHub.map(d => d.email));
+          }
+          
+          console.log(`Will invite ${developerIds.length} developers to repo ${project.gitRepoName} using stored usernames`);
+        }
+        
+        // Create feed folder
+        gitFolder = await gitService.createFeedFolder(
+          project.gitRepoName,
+          name,
+          newFeed._id,
+          developerIds
+        );
+        
+        // Invite each developer to the repository
+        if (developerIds.length > 0) {
+          console.log(`Sending GitHub invitations for feed "${name}" to:`, developerIds);
+          
+          for (const userId of developerIds) {
+            const result = await gitService.addCollaboratorById(
+              project.gitRepoName,
+              userId,
+              'push'
+            );
+            inviteResults.push(result);
+            console.log(`Invite result for user ${userId}:`, result.success ? `Success (${result.username})` : `Failed - ${result.error}`);
+            
+            // Add a small delay between invites to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+        }
+        
+        console.log(`Feed creation complete - Invite results: ${inviteResults.filter(r => r.success).length}/${developerIds.length} successful`);
+      }
+    }
 
     try {
       await Log.create({
         actionType: 'FEED_CREATED',
         performerId: req.user._id,
-        details: `Created feed: ${name} (By ${req.user.role})`,
+        details: `Created feed: ${name} (${feedType})${feedPlatform ? ` - Platform: ${feedPlatform}` : ''}${gitFolder?.success ? ' ✓ Git folder created' : ''}`,
         timestamp: new Date()
       });
     } catch (logErr) {
       console.error("Non-critical Log Error:", logErr.message);
     }
 
-    res.status(201).json(newFeed);
-
+    res.status(201).json({
+      ...newFeed.toObject(),
+      gitFolder: gitFolder || null,
+      inviteResults: inviteResults || null
+    });
   } catch (err) {
+    console.error('Feed creation error:', err);
     res.status(500).json({ error: err.message });
   }
 });
-router.post('/change-password', async (req, res) => {
+
+
+// Update project status (with feed status sync logic)
+router.patch('/projects/:id/status', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
-    const { currentPassword, newPassword } = req.body;
-    // req.user.id comes from your 'protect' middleware
-    const user = await User.findById(req.user.id);
-
-    // Verify current password
-    const isMatch = await bcrypt.compare(currentPassword, user.password);
-    if (!isMatch) {
-      return res.status(400).json({ error: "Current password does not match our records." });
-    }
-
-    // Hash new password
-    const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    const { projectStatus } = req.body;
+    const project = await Project.findById(req.params.id).populate('feeds');
     
-    await user.save();
-    res.json({ message: "Password updated successfully!" });
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const validStatuses = [
+      'New', 'Once off', 'Ad hoc', 'BAU Initiated', 'BAU Not Initiated',
+      'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]', 'Closed'
+    ];
+    
+    if (!validStatuses.includes(projectStatus)) {
+      return res.status(400).json({ error: 'Invalid project status' });
+    }
+    
+    project.projectStatus = projectStatus;
+    await project.save();
+    
+    // Log the status change
+    await Log.create({
+      actionType: 'PROJECT_STATUS_UPDATED',
+      performerId: req.user._id,
+      details: `Project ${project.projectCustomId} status changed to ${projectStatus}`,
+      timestamp: new Date()
+    });
+    
+    res.json({ 
+      success: true, 
+      project: {
+        _id: project._id,
+        projectCustomId: project.projectCustomId,
+        projectStatus: project.projectStatus
+      }
+    });
   } catch (err) {
+    console.error('Error updating project status:', err);
     res.status(500).json({ error: err.message });
   }
 });
-router.post(
-  '/feeds/push-task',
-  authorize('Project Manager', 'Admin'),
-  async (req, res) => {
-    try {
-      const io = req.app.get('io');
 
-      const {
-        feedId,
-        projectId,
-        details,
-        targetUsers
-      } = req.body;
-
-     const createdTask = await Task.create({
-        feedId,
-        projectId,
-        performerId: req.user._id,
-        targetUsers,
-        details,
-        status: 'Pending'
-      });
-
-      const task = await Task.findById(createdTask._id)
-        .populate('projectId', 'name')
-        .populate('feedId', 'name')
-        .populate('targetUsers', 'name')
-        .populate('performerId', 'name');
-
-      // REALTIME PUSH
-      targetUsers.forEach(userId => {
-        io.to(userId.toString()).emit(
-          'new_task',
-          task
-        );
-      });
-
-      await Log.create({
-        actionType: 'TASK_PUSHED',
-        performerId: req.user._id,
-        details: `Pushed task to developers`
-      });
-
-      res.json(task);
-
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({
-        error: 'Failed to push task'
-      });
+// Update feed status (with auto-project status update)
+router.patch('/feeds/:id/status', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const { feedStatus } = req.body;
+    const feed = await Feed.findById(req.params.id);
+    
+    if (!feed) {
+      return res.status(404).json({ error: 'Feed not found' });
     }
+    
+    const validStatuses = [
+      'New',
+      'Once off[In progress]',
+      'Once off[Delivered]',
+      'Ad hoc In-progress',
+      'Ad hoc delivered',
+      'ON hold[Sales]',
+      'ON hold[Technical]',
+      'ON hold[Client]'
+    ];
+    
+    if (!validStatuses.includes(feedStatus)) {
+      return res.status(400).json({ error: 'Invalid feed status' });
+    }
+    
+    feed.feedStatus = feedStatus;
+    await feed.save();
+    
+    // Update project status based on all feeds
+    const project = await Project.findById(feed.projectId);
+    if (project) {
+      await project.updateStatusFromFeeds();
+    }
+    
+    // Log the status change
+    await Log.create({
+      actionType: 'FEED_STATUS_UPDATED',
+      performerId: req.user._id,
+      details: `Feed "${feed.name}" status changed to ${feedStatus}`,
+      timestamp: new Date()
+    });
+    
+    res.json({ 
+      success: true, 
+      feed: {
+        _id: feed._id,
+        name: feed.name,
+        feedStatus: feed.feedStatus
+      }
+    });
+  } catch (err) {
+    console.error('Error updating feed status:', err);
+    res.status(500).json({ error: err.message });
   }
-);
+});
+
+// Get project status options
+router.get('/project-status-options', authorize('Admin', 'Project Manager'), async (req, res) => {
+  const statuses = [
+    'New',
+    'Once off',
+    'Ad hoc',
+    'BAU Initiated',
+    'BAU Not Initiated',
+    'ON hold[Sales]',
+    'ON hold[Technical]',
+    'ON hold[Client]',
+    'Closed'
+  ];
+  res.json(statuses);
+});
+
+// Get feed status options
+router.get('/feed-status-options', authorize('Admin', 'Project Manager'), async (req, res) => {
+  const statuses = [
+    'New',
+    'Once off[In progress]',
+    'Once off[Delivered]',
+    'Ad hoc In-progress',
+    'Ad hoc delivered',
+    'ON hold[Sales]',
+    'ON hold[Technical]',
+    'ON hold[Client]'
+  ];
+  res.json(statuses);
+});
+router.post('/projects/:id/invite-developers', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const { developerEmails } = req.body;
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.status(404).json({ success: false, error: 'Project or Git repo not found' });
+    }
+    
+    if (!developerEmails || developerEmails.length === 0) {
+      return res.status(400).json({ success: false, error: 'No emails provided' });
+    }
+    
+    const results = await gitService.addCollaboratorsByEmails(
+      project.gitRepoName,
+      developerEmails,
+      'push'
+    );
+    
+    await Log.create({
+      actionType: 'DEVELOPER_INVITED',
+      performerId: req.user._id,
+      details: `Invited ${developerEmails.length} developers to repo ${project.gitRepoName}`,
+      timestamp: new Date()
+    });
+    
+    res.json({
+      success: true,
+      results: results,
+      message: `GitHub will send invitations to ${results.filter(r => r.success).length} developers`
+    });
+    
+  } catch (error) {
+    console.error('Error inviting developers:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+router.post('/feeds/push-task', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const io = req.app.get('io');
+
+    const {
+      feedId,
+      projectId,
+      details,
+      targetUsers
+    } = req.body;
+
+    const createdTask = await Task.create({
+      feedId,
+      projectId,
+      performerId: req.user._id,
+      targetUsers,
+      details,
+      status: 'Pending'
+    });
+
+    const task = await Task.findById(createdTask._id)
+      .populate('projectId', 'name')
+      .populate('feedId', 'name')
+      .populate('targetUsers', 'name')
+      .populate('performerId', 'name');
+
+    targetUsers.forEach(userId => {
+      io.to(userId.toString()).emit('new_task', task);
+    });
+
+    await Log.create({
+      actionType: 'TASK_PUSHED',
+      performerId: req.user._id,
+      details: `Pushed task to developers`
+    });
+
+    res.json(task);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to push task' });
+  }
+});
+
+// UPDATED PUT /feeds/:id with Monthly and Platform fields
 router.put('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const {
       name,
       assignedDevelopers,
       feedType,
-      weekDay
+      weekDay,
+      monthDay,
+      feedPlatform,
+      webDomain
     } = req.body;
 
+    const oldFeed = await Feed.findById(req.params.id);
+    
     const updatedFeed = await Feed.findByIdAndUpdate(
       req.params.id,
       {
         name,
         assignedDevelopers,
         feedType,
-
-        // NEW
-        weekDay: feedType === 'Weekly'
-          ? weekDay
-          : null
+        weekDay: feedType === 'Weekly' ? weekDay : null,
+        monthDay: feedType === 'Monthly' ? monthDay : null,
+        feedPlatform: feedPlatform || null,
+        webDomain: (feedPlatform === 'Web' || feedPlatform === 'Both') ? webDomain : null
       },
       {
         new: true,
         runValidators: true
       }
     );
+    
+    // UPDATE GITHUB FOLDER NAME IF CHANGED
+    if (process.env.GITHUB_TOKEN && oldFeed && oldFeed.name !== name) {
+      const project = await Project.findById(updatedFeed.projectId);
+      if (project && project.gitRepoName) {
+        await gitService.updateFeedFolder(
+          project.gitRepoName,
+          oldFeed.name,
+          name
+        );
+      }
+    }
 
     res.json(updatedFeed);
-
   } catch (err) {
+    console.error('Feed update error:', err);
     res.status(500).json({ error: err.message });
   }
 });
+
 // GET TASK PROGRESS FOR PM
-router.get(
-  '/pm/task-progress',
-  authorize('Project Manager', 'Admin'),
-  async (req, res) => {
-    try {
-      // Find projects managed by current PM
-      const projects = await Project.find({
-        projectManager: req.user._id
-      })
-      .populate({
-        path: 'feeds',
-        populate: [
-          {
-            path: 'assignedDevelopers',
-            select: 'name email',
-            model: 'User'
-          }
-        ]
-      });
+router.get('/pm/task-progress', authorize('Project Manager', 'Admin'), async (req, res) => {
+  try {
+    const projects = await Project.find({
+      projectManager: req.user._id
+    })
+    .populate({
+      path: 'feeds',
+      populate: [
+        {
+          path: 'assignedDevelopers',
+          select: 'name email',
+          model: 'User'
+        }
+      ]
+    });
 
-      // Get all tasks related to those projects
-      const projectIds = projects.map(p => p._id);
+    const projectIds = projects.map(p => p._id);
 
-      const tasks = await Task.find({
-        projectId: { $in: projectIds }
-      })
-      .populate('feedId')
-      .populate('targetUsers', 'name')
-      .populate('performerId', 'name');
+    const tasks = await Task.find({
+      projectId: { $in: projectIds }
+    })
+    .populate('feedId')
+    .populate('targetUsers', 'name')
+    .populate('performerId', 'name');
 
-      // Merge tasks into feeds
-      const formattedProjects = projects.map(project => {
-        const feeds = project.feeds.map(feed => {
-          const feedTasks = tasks.filter(
-            task =>
-              task.feedId &&
-              task.feedId._id.toString() === feed._id.toString()
-          );
+    const formattedProjects = projects.map(project => {
+      const feeds = project.feeds.map(feed => {
+        const feedTasks = tasks.filter(
+          task =>
+            task.feedId &&
+            task.feedId._id.toString() === feed._id.toString()
+        );
 
-          const completed = feedTasks.filter(
-            t => t.status === 'Completed'
-          ).length;
+        const completed = feedTasks.filter(
+          t => t.status === 'Completed'
+        ).length;
 
-          const progress =
-            feedTasks.length > 0
-              ? Math.round((completed / feedTasks.length) * 100)
-              : 0;
-
-          return {
-            ...feed.toObject(),
-            tasks: feedTasks,
-            progress
-          };
-        });
+        const progress = feedTasks.length > 0
+          ? Math.round((completed / feedTasks.length) * 100)
+          : 0;
 
         return {
-          ...project.toObject(),
-          feeds
+          ...feed.toObject(),
+          tasks: feedTasks,
+          progress
         };
       });
 
-      res.json(formattedProjects);
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({
-        error: 'Failed to fetch task progress'
-      });
-    }
+      return {
+        ...project.toObject(),
+        feeds
+      };
+    });
+
+    res.json(formattedProjects);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch task progress' });
   }
-);
+});
+
 router.delete('/feeds/:id', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const feed = await Feed.findById(req.params.id);
     if (!feed) return res.status(404).json({ error: "Feed not found" });
+    
+    if (process.env.GITHUB_TOKEN) {
+      const project = await Project.findById(feed.projectId);
+      if (project && project.gitRepoName) {
+        await gitService.deleteFeedFolder(project.gitRepoName, feed.name);
+      }
+    }
+    
     await Project.findByIdAndUpdate(feed.projectId, { $pull: { feeds: feed._id } });
     await Feed.findByIdAndDelete(req.params.id);
     res.json({ message: "Feed deleted successfully" });
   } catch (err) {
+    console.error('Feed deletion error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- GIT INTEGRATION ROUTES ---
+router.get('/projects/:id/repo-contents', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.json({ success: false, error: 'No Git repository found for this project' });
+    }
+    
+    const contents = await gitService.getRepoContents(project.gitRepoName, req.query.path || '');
+    res.json({ success: true, contents });
+  } catch (err) {
+    console.error('Error fetching repo contents:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
 // --- HELPER ROUTES ---
-
 router.get('/users/clients', authorize('Admin', 'Sales', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
-    const clients = await User.find({ role: 'Client' }).select('name email');
+    const clients = await User.find({ role: 'Client' }).select('name email githubUsername');
     res.json(clients);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -627,7 +1197,8 @@ router.get('/users/clients', authorize('Admin', 'Sales', 'Project Manager', 'Sal
 
 router.get('/users/developers', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
-    const developers = await User.find({ role: 'Developer' }).select('name email _id');
+    const developers = await User.find({ role: 'Developer' })
+      .select('name email _id githubUsername githubLinked');
     res.json(developers);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -667,6 +1238,7 @@ router.patch('/feeds/:id/assign', authorize('Admin', 'Project Manager'), async (
     res.status(500).json({ error: err.message });
   }
 });
+
 router.get('/users/sales-reps', authorize('Admin', 'Sales Manager'), async (req, res) => {
   try {
     const reps = await User.find({ role: 'Sales' }).select('name email');
@@ -674,12 +1246,13 @@ router.get('/users/sales-reps', authorize('Admin', 'Sales Manager'), async (req,
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-}); 
+});
+
 router.get('/logs', authorize('Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
     let filter = {};
     if (req.user.role === 'Sales Manager') {
-        filter = { actionType: { $in: ['LEAD_GENERATED', 'FOLLOW_UP_SET', 'PROSPECT_IMPORTED'] } };
+      filter = { actionType: { $in: ['LEAD_GENERATED', 'FOLLOW_UP_SET', 'PROSPECT_IMPORTED'] } };
     }
 
     const logs = await Log.find(filter)
@@ -691,7 +1264,43 @@ router.get('/logs', authorize('Admin', 'Project Manager', 'Sales Manager'), asyn
     res.status(500).json({ error: "Could not fetch activity bucket" });
   }
 });
+router.post(
+  '/create-client',
+  authorize('Admin'),
+  async (req, res) => {
+    try {
+      const { name, email, password } = req.body;
 
+      const client = await User.create({
+        name,
+        email,
+        password,
+        role: 'Client'
+      });
+
+      res.status(201).json(client);
+    } catch (err) {
+      res.status(500).json({
+        error: err.message
+      });
+    }
+  }
+);
+router.post(
+  '/project-client',
+  authorize('Admin'),
+  async (req, res) => {
+    const { projectId, clientId } = req.body;
+
+    const relation = await ProjectClient.create({
+      projectId,
+      clientId,
+      assignedBy: req.user.id
+    });
+
+    res.json(relation);
+  }
+);
 router.post('/tasks', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const { title, description, feedId, projectId, developerId, deadline, priority } = req.body;
@@ -711,7 +1320,7 @@ router.post('/tasks/create', authorize('Admin', 'Project Manager'), async (req, 
     const newTask = new Task({
       projectId: req.body.projectId,
       feedId: req.body.feedId,
-      performerId: req.user._id, // always use logged-in user
+      performerId: req.user._id,
       targetUsers: req.body.assignedDevelopers,
       details: req.body.details
     });

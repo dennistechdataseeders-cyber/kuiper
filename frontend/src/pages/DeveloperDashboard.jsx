@@ -4,7 +4,7 @@ import {
   Layout, Database, Hash, ExternalLink, ChevronLeft, ChevronRight, 
   ChevronDown, ChevronUp, User, Globe, Calendar, Clock, Target,
   CheckCircle, AlertCircle, TrendingUp, Briefcase, Lightbulb, Users,
-  X, Send
+  X, Send, Monitor, Smartphone, Globe as GlobeIcon
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
@@ -52,6 +52,7 @@ const DeveloperDashboard = () => {
   // Check if feed is scheduled for today AND not completed today
   const isFeedForToday = (feed) => {
     const today = new Date().toISOString().split('T')[0];
+    const currentDayOfMonth = new Date().getDate(); // 1-31
     
     // Check if already completed for today
     const isCompletedToday = feed.completionHistory && 
@@ -66,6 +67,9 @@ const DeveloperDashboard = () => {
     if (feed.feedType === 'Weekly') {
       return feed.weekDay === getTodayDayName();
     }
+    if (feed.feedType === 'Monthly') {
+      return feed.monthDay === currentDayOfMonth;
+    }
     return false;
   };
 
@@ -76,6 +80,23 @@ const DeveloperDashboard = () => {
       return feed.completionHistory.some(h => h && h.date === today);
     }
     return false;
+  };
+
+  // Get platform icon and text
+  const getPlatformInfo = (feed) => {
+    const platform = feed.feedPlatform;
+    if (!platform) return null;
+    
+    switch(platform) {
+      case 'Web':
+        return { icon: <GlobeIcon size={10} />, text: 'Web', color: 'bg-blue-100 text-blue-700' };
+      case 'App':
+        return { icon: <Smartphone size={10} />, text: 'App', color: 'bg-purple-100 text-purple-700' };
+      case 'Both':
+        return { icon: <Monitor size={10} />, text: 'Web + App', color: 'bg-indigo-100 text-indigo-700' };
+      default:
+        return null;
+    }
   };
 
   useEffect(() => {
@@ -174,6 +195,7 @@ const DeveloperDashboard = () => {
     switch(type) {
       case 'Daily': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
       case 'Weekly': return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'Monthly': return 'bg-purple-50 text-purple-700 border-purple-200';
       default: return 'bg-slate-100 text-slate-600 border-slate-200';
     }
   };
@@ -182,8 +204,20 @@ const DeveloperDashboard = () => {
     switch(type) {
       case 'Daily': return <Clock size={10} />;
       case 'Weekly': return <Calendar size={10} />;
+      case 'Monthly': return <Calendar size={10} />;
       default: return <Target size={10} />;
     }
+  };
+
+  const getFeedTypeLabel = (feed) => {
+    if (feed.feedType === 'Monthly') {
+      const suffix = feed.monthDay ? ` (Day ${feed.monthDay})` : '';
+      return `Monthly${suffix}`;
+    }
+    if (feed.feedType === 'Weekly' && feed.weekDay) {
+      return `Weekly (${feed.weekDay})`;
+    }
+    return feed.feedType;
   };
 
   if (loading) return (
@@ -318,42 +352,68 @@ const DeveloperDashboard = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {todayFeeds.map(feed => (
-              <div key={feed._id} className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] group">
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className={`p-2 rounded-xl ${feed.feedType === 'Daily' ? 'bg-emerald-100' : 'bg-amber-100'}`}>
-                      {feed.feedType === 'Daily' ? <Clock size={14} className="text-emerald-600" /> : <Calendar size={14} className="text-amber-600" />}
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-800">{feed.name}</p>
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
-                        {getFeedTypeIcon(feed.feedType)}
-                        {feed.feedType}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="pt-3 border-t border-slate-100">
-                  <div className="flex items-center justify-between">
+            {todayFeeds.map(feed => {
+              const platformInfo = getPlatformInfo(feed);
+              return (
+                <div key={feed._id} className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] group">
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
-                      <Hash size={10} className="text-slate-400" />
-                      <p className="text-[9px] font-bold text-slate-500 uppercase">
-                        {feed.projectId?.projectCustomId || 'Unknown'}
-                      </p>
+                      <div className={`p-2 rounded-xl ${
+                        feed.feedType === 'Daily' ? 'bg-emerald-100' : 
+                        feed.feedType === 'Weekly' ? 'bg-amber-100' : 
+                        feed.feedType === 'Monthly' ? 'bg-purple-100' : 'bg-slate-100'
+                      }`}>
+                        {feed.feedType === 'Daily' ? <Clock size={14} className="text-emerald-600" /> : 
+                         feed.feedType === 'Weekly' ? <Calendar size={14} className="text-amber-600" /> : 
+                         feed.feedType === 'Monthly' ? <Calendar size={14} className="text-purple-600" /> :
+                         <Target size={14} className="text-slate-600" />}
+                      </div>
+                      <div>
+                        <p className="text-sm font-black text-slate-800">{feed.name}</p>
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
+                            {getFeedTypeIcon(feed.feedType)}
+                            {getFeedTypeLabel(feed)}
+                          </span>
+                          {platformInfo && (
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider ${platformInfo.color}`}>
+                              {platformInfo.icon}
+                              {platformInfo.text}
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <button
-                      onClick={() => openCompleteModal(feed)}
-                      className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all duration-200 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm hover:shadow-md"
-                    >
-                      <CheckCircle size={10} />
-                      Complete
-                    </button>
+                  </div>
+                  
+                  {/* Show domain if Web/Both and has webDomain */}
+                  {feed.webDomain && (feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && (
+                    <div className="mb-2 text-[8px] text-blue-600 truncate">
+                      <GlobeIcon size={8} className="inline mr-1" />
+                      {feed.webDomain}
+                    </div>
+                  )}
+                  
+                  <div className="pt-3 border-t border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Hash size={10} className="text-slate-400" />
+                        <p className="text-[9px] font-bold text-slate-500 uppercase">
+                          {feed.projectId?.projectCustomId || 'Unknown'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => openCompleteModal(feed)}
+                        className="px-3 py-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all duration-200 text-[9px] font-black uppercase tracking-wider flex items-center gap-1 shadow-sm hover:shadow-md"
+                      >
+                        <CheckCircle size={10} />
+                        Complete
+                      </button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -428,7 +488,10 @@ const DeveloperDashboard = () => {
                       <div className="px-4 pb-4 pt-0 animate-in fade-in slide-in-from-top-1 duration-200">
                         <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100">
                           <div className="flex items-center justify-between">
-                            <button className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-200 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                            <button 
+                              onClick={() => window.location.href = `/developer/project/${proj._id}`}
+                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-200 text-[9px] font-black uppercase tracking-wider flex items-center gap-1"
+                            >
                               <ExternalLink size={10} />
                               View
                             </button>
@@ -481,6 +544,7 @@ const DeveloperDashboard = () => {
                 const isExpanded = expandedFeedId === feed._id;
                 const isToday = isFeedForToday(feed);
                 const isCompletedToday = isFeedCompletedToday(feed);
+                const platformInfo = getPlatformInfo(feed);
                 
                 return (
                   <div 
@@ -504,14 +568,16 @@ const DeveloperDashboard = () => {
                         )}
                         <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
                           feed.feedType === 'Daily' ? 'bg-emerald-100' : 
-                          feed.feedType === 'Weekly' ? 'bg-amber-100' : 'bg-slate-100'
+                          feed.feedType === 'Weekly' ? 'bg-amber-100' : 
+                          feed.feedType === 'Monthly' ? 'bg-purple-100' : 'bg-slate-100'
                         }`}>
                           {feed.feedType === 'Daily' ? <Clock size={14} className="text-emerald-600" /> : 
                            feed.feedType === 'Weekly' ? <Calendar size={14} className="text-amber-600" /> : 
+                           feed.feedType === 'Monthly' ? <Calendar size={14} className="text-purple-600" /> :
                            <Target size={14} className="text-slate-600" />}
                         </div>
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="text-sm font-black text-slate-800">{feed.name}</p>
                             {isToday && !isCompletedToday && (
                               <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
@@ -524,18 +590,29 @@ const DeveloperDashboard = () => {
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 mt-0.5">
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <Hash size={9} className="text-slate-400" />
                             <p className="text-[9px] font-bold text-slate-500">
                               {feed.projectId?.projectCustomId || 'Global'}
                             </p>
+                            {platformInfo && (
+                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-wider ${platformInfo.color}`}>
+                                {platformInfo.icon}
+                                {platformInfo.text}
+                              </span>
+                            )}
+                            {feed.webDomain && (feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && (
+                              <span className="text-[7px] text-blue-500 truncate max-w-[150px]">
+                                {feed.webDomain}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
                           {getFeedTypeIcon(feed.feedType)}
-                          {feed.feedType}
+                          {getFeedTypeLabel(feed)}
                         </span>
                         {isExpanded ? 
                           <ChevronUp size={14} className="text-slate-400" /> : 
@@ -548,11 +625,19 @@ const DeveloperDashboard = () => {
                       <div className="px-4 pb-4 pt-0 animate-in fade-in slide-in-from-top-1 duration-200">
                         <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100">
                           <div className="space-y-2">
-                            {feed.feedType === 'Weekly' && (
+                            {feed.feedType === 'Weekly' && feed.weekDay && (
                               <div className="flex items-center gap-2">
                                 <Calendar size={10} className="text-amber-500" />
                                 <span className="text-[9px] font-bold text-amber-700 uppercase">
                                   Every {feed.weekDay}
+                                </span>
+                              </div>
+                            )}
+                            {feed.feedType === 'Monthly' && feed.monthDay && (
+                              <div className="flex items-center gap-2">
+                                <Calendar size={10} className="text-purple-500" />
+                                <span className="text-[9px] font-bold text-purple-700 uppercase">
+                                  Day {feed.monthDay} of each month
                                 </span>
                               </div>
                             )}
@@ -570,6 +655,28 @@ const DeveloperDashboard = () => {
                                 <span className="text-[9px] font-bold text-emerald-700 uppercase">
                                   Once-off
                                 </span>
+                              </div>
+                            )}
+                            {platformInfo && (
+                              <div className="flex items-center gap-2">
+                                {platformInfo.icon}
+                                <span className="text-[9px] font-bold text-slate-600">
+                                  Platform: {platformInfo.text}
+                                </span>
+                              </div>
+                            )}
+                            {feed.webDomain && (feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && (
+                              <div className="flex items-center gap-2">
+                                <GlobeIcon size={10} className="text-blue-500" />
+                                <a 
+                                  href={feed.webDomain} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="text-[9px] font-bold text-blue-600 hover:underline truncate"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {feed.webDomain}
+                                </a>
                               </div>
                             )}
                           </div>
@@ -620,10 +727,10 @@ const DeveloperDashboard = () => {
                   <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Feed Details</span>
                 </div>
                 <p className="text-sm font-bold text-slate-800">{selectedFeed.name}</p>
-                <div className="flex items-center gap-3 mt-2">
+                <div className="flex items-center gap-3 mt-2 flex-wrap">
                   <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(selectedFeed.feedType)}`}>
                     {getFeedTypeIcon(selectedFeed.feedType)}
-                    {selectedFeed.feedType}
+                    {getFeedTypeLabel(selectedFeed)}
                   </span>
                   <span className="text-[8px] font-bold text-slate-400">
                     Project: {selectedFeed.projectId?.projectCustomId || 'Unknown'}

@@ -18,7 +18,7 @@ const transporter = nodemailer.createTransport({
 
 exports.createUser = async (req, res) => {
   try {
-    let { name, email, password, role } = req.body;
+    const { name, email, password, role, githubUsername } = req.body;
     const rawPassword = String(password);
 
     if (!rawPassword || rawPassword === "" || rawPassword === "undefined") {
@@ -35,7 +35,8 @@ exports.createUser = async (req, res) => {
       name, 
       email, 
       password: hashedPassword, 
-      role: role.trim()
+      role: role.trim(),
+      githubUsername: githubUsername || ''
     });
 
     await user.save();

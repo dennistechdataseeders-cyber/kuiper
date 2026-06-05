@@ -22,12 +22,20 @@ import {
   CheckCircle,
   Users,
   UserPlus,
-  Trash2
+  Trash2,
+  AlertCircle,
+  GitFork,
+  RefreshCw,
+  Circle,
+  PauseCircle,
+  CheckCircle2,
+  Clock
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
@@ -43,11 +51,13 @@ const POPULAR_COUNTRIES = [
 ];
 
 const ProjectManagement = () => {
+  const navigate = useNavigate();
+  
   // --- Data State ---
   const [projects, setProjects] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [projectManagers, setProjectManagers] = useState([]);
-  const [clients, setClients] = useState([]); // New state for clients
+  const [clients, setClients] = useState([]);
   const { isCollapsed } = useSidebar();
   
   // --- Pagination State ---
@@ -78,6 +88,11 @@ const ProjectManagement = () => {
   const [developerSearchTerm, setDeveloperSearchTerm] = useState('');
   const [isDeveloperDropdownOpen, setIsDeveloperDropdownOpen] = useState(false);
   const developerDropdownRef = React.useRef(null);
+
+  // --- Status Options State ---
+  const [projectStatuses, setProjectStatuses] = useState([]);
+  const [feedStatuses, setFeedStatuses] = useState([]);
+  const [updatingStatus, setUpdatingStatus] = useState({});
 
   const ADMIN_BASE = `${API_BASE_URL}/api/admin`;
   const token = localStorage.getItem('token');
@@ -119,19 +134,89 @@ const ProjectManagement = () => {
     description: '',
     country: 'United States',
     industry: 'Tech',
-    clients: [] // Array of client objects or IDs
+    clients: []
   });
 
   const [feedForm, setFeedForm] = useState({
     name: '',
     assignedDevelopers: [],
     feedType: 'Daily',
-    weekDay: ''
+    weekDay: '',
+    monthDay: '',
+    feedPlatform: '',
+    webDomain: '',
+    feedStatus: 'New'
   });
 
   const [taskText, setTaskText] = useState("");
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+
+  // --- Status Helper Functions ---
+  const getProjectStatusColor = (status) => {
+    switch(status) {
+      case 'New': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'Once off': return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'Ad hoc': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'BAU Initiated': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'BAU Not Initiated': return 'bg-gray-100 text-gray-700 border-gray-200';
+      case 'ON hold[Sales]': return 'bg-orange-100 text-orange-700 border-orange-200';
+      case 'ON hold[Technical]': return 'bg-red-100 text-red-700 border-red-200';
+      case 'ON hold[Client]': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      case 'Closed': return 'bg-slate-100 text-slate-700 border-slate-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  const getFeedStatusColor = (status) => {
+    if (!status) return 'bg-slate-100 text-slate-700 border-slate-200';
+    if (status === 'New') return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (status.includes('In progress')) return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (status.includes('Delivered')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (status.includes('ON hold')) {
+      if (status.includes('Sales')) return 'bg-orange-100 text-orange-700 border-orange-200';
+      if (status.includes('Technical')) return 'bg-red-100 text-red-700 border-red-200';
+      if (status.includes('Client')) return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    }
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
+  // Navigate to Feed Explorer with selected project filter
+  const navigateToFeedExplorer = (project) => {
+    navigate('/pm/feeds', { state: { selectedProjectId: project._id, selectedProjectName: project.projectCustomId } });
+  };
+
+  // Fetch status options
+  const fetchStatusOptions = async () => {
+    try {
+      const [projectRes, feedRes] = await Promise.all([
+        axios.get(`${ADMIN_BASE}/project-status-options`, authHeader),
+        axios.get(`${ADMIN_BASE}/feed-status-options`, authHeader)
+      ]);
+      setProjectStatuses(projectRes.data);
+      setFeedStatuses(feedRes.data);
+    } catch (err) {
+      console.error('Error fetching status options:', err);
+    }
+  };
+
+  // Update project status
+  const updateProjectStatus = async (projectId, newStatus) => {
+    setUpdatingStatus(prev => ({ ...prev, [projectId]: true }));
+    try {
+      await axios.patch(`${ADMIN_BASE}/projects/${projectId}/status`, 
+        { projectStatus: newStatus },
+        authHeader
+      );
+      toast.success(`Project status updated to ${newStatus}`);
+      fetchInitialData();
+    } catch (err) {
+      console.error('Error updating project status:', err);
+      toast.error(err.response?.data?.error || 'Failed to update project status');
+    } finally {
+      setUpdatingStatus(prev => ({ ...prev, [projectId]: false }));
+    }
+  };
 
   // Fetch clients (users with role 'Client')
   const fetchClients = async () => {
@@ -178,7 +263,8 @@ const ProjectManagement = () => {
 
   useEffect(() => {
     fetchInitialData();
-    fetchClients(); // Fetch clients on mount
+    fetchClients();
+    fetchStatusOptions();
   }, []);
 
   const fetchInitialData = async () => {
@@ -192,6 +278,12 @@ const ProjectManagement = () => {
       setProjects(projRes.data);
       setDevelopers(devRes.data);
       setProjectManagers(pmRes.data);
+      
+      console.log('Fetched developers:', devRes.data.map(d => ({ 
+        name: d.name, 
+        githubLinked: d.githubLinked, 
+        githubUsername: d.githubUsername 
+      })));
 
     } catch (err) {
       console.error("Data fetch failed:", err);
@@ -231,72 +323,72 @@ const ProjectManagement = () => {
   };
 
   const filteredProjects = useMemo(() => {
-  let result = [...projects];
+    let result = [...projects];
 
-  // FILTER PROJECTS FOR CURRENT PM
-  result = result.filter(
-    (p) =>
-      p.projectManager?._id === currentUserId ||
-      p.projectManager === currentUserId
-  );
-
-  // FILTER BY ASSIGNED / UNASSIGNED
-  if (activeFilter === 'Assigned') {
+    // FILTER PROJECTS FOR CURRENT PM
     result = result.filter(
       (p) =>
-        p.country &&
-        p.country.trim() !== '' &&
-        p.country !== 'Not Specified'
+        p.projectManager?._id === currentUserId ||
+        p.projectManager === currentUserId
     );
-  } else if (activeFilter === 'Unassigned') {
-    result = result.filter(
-      (p) =>
-        !p.country ||
-        p.country.trim() === '' ||
-        p.country === 'Not Specified'
-    );
-  }
 
-  // SEARCH FILTER
-  if (searchTerm.trim()) {
-    const search = searchTerm.toLowerCase().trim();
+    // FILTER BY ASSIGNED / UNASSIGNED
+    if (activeFilter === 'Assigned') {
+      result = result.filter(
+        (p) =>
+          p.country &&
+          p.country.trim() !== '' &&
+          p.country !== 'Not Specified'
+      );
+    } else if (activeFilter === 'Unassigned') {
+      result = result.filter(
+        (p) =>
+          !p.country ||
+          p.country.trim() === '' ||
+          p.country === 'Not Specified'
+      );
+    }
 
-    result = result.filter((project) => {
-      const clientNames = project.clients?.map(c => c?.name || '').join(' ') || '';
-      const searchableFields = [
-        project.projectCustomId,
-        project.name,
-        project.industry,
-        project.country,
-        project.projectManager?.name,
-        clientNames
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+    // SEARCH FILTER
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
 
-      return searchableFields.includes(search);
+      result = result.filter((project) => {
+        const clientNames = project.clients?.map(c => c?.name || '').join(' ') || '';
+        const searchableFields = [
+          project.projectCustomId,
+          project.name,
+          project.industry,
+          project.country,
+          project.projectManager?.name,
+          clientNames
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+
+        return searchableFields.includes(search);
+      });
+    }
+
+    // SORT PROJECTS
+    result.sort((a, b) => {
+      const aId = a.projectCustomId || '';
+      const bId = b.projectCustomId || '';
+
+      return aId.localeCompare(bId, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
     });
-  }
 
-  // SORT PROJECTS
-  result.sort((a, b) => {
-    const aId = a.projectCustomId || '';
-    const bId = b.projectCustomId || '';
-
-    return aId.localeCompare(bId, undefined, {
-      numeric: true,
-      sensitivity: 'base',
-    });
-  });
-
-  return result;
-}, [
-  projects,
-  activeFilter,
-  currentUserId,
-  searchTerm
-]);
+    return result;
+  }, [
+    projects,
+    activeFilter,
+    currentUserId,
+    searchTerm
+  ]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -307,11 +399,32 @@ const ProjectManagement = () => {
   const currentProjectSlice = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
   const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
 
+  // --- Quick Link GitHub Handler (for existing developers without GitHub) ---
+  const handleQuickLinkGitHub = async (developer, e) => {
+    e.stopPropagation();
+    try {
+      const res = await axios.post(
+        `${ADMIN_BASE}/users/${developer._id}/link-github`,
+        {},
+        authHeader
+      );
+      
+      if (res.data.success) {
+        toast.success(`GitHub account ${res.data.githubUsername} linked for ${developer.name}!`);
+        fetchInitialData();
+      } else {
+        toast.error(res.data.error || 'Failed to link GitHub account');
+      }
+    } catch (err) {
+      console.error('GitHub linking error:', err);
+      toast.error(err.response?.data?.error || 'Failed to link GitHub account');
+    }
+  };
+
   // --- Project Handlers ---
   const handleProjectSubmit = async (e) => {
     e.preventDefault();
 
-    // Validate at least one client is selected
     if (projectForm.clients.length === 0) {
       toast.error("Please select at least one client for this project");
       return;
@@ -396,7 +509,7 @@ const ProjectManagement = () => {
       description: project.description || '',
       country: project.country || 'United States',
       industry: project.industry || 'Tech',
-      clients: project.clients?.map(c => c._id || c) || [] // Extract client IDs
+      clients: project.clients?.map(c => c._id || c) || []
     });
     setShowProjectModal(true);
   };
@@ -422,12 +535,32 @@ const ProjectManagement = () => {
       return;
     }
 
+    if (feedForm.feedType === 'Monthly' && !feedForm.monthDay) {
+      toast.error('Please select a day of the month for monthly feed');
+      return;
+    }
+
+    const selectedDevelopers = developers.filter(dev => feedForm.assignedDevelopers.includes(dev._id));
+    const developersWithoutGitHub = selectedDevelopers.filter(dev => !dev.githubLinked || !dev.githubUsername);
+    
+    if (developersWithoutGitHub.length > 0) {
+      const names = developersWithoutGitHub.map(d => d.name).join(', ');
+      toast.error(`⚠️ Warning: ${developersWithoutGitHub.length} developer(s) (${names}) don't have GitHub accounts linked. They won't receive GitHub invitations. You can link their accounts from User Management.`, {
+        duration: 5000,
+        icon: '⚠️'
+      });
+    }
+
     try {
       const payload = {
         ...feedForm,
         weekDay: feedForm.feedType === 'Weekly' ? feedForm.weekDay : '',
+        monthDay: feedForm.feedType === 'Monthly' ? feedForm.monthDay : null,
+        feedPlatform: feedForm.feedPlatform || null,
+        webDomain: (feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') ? feedForm.webDomain : null,
         projectId: activeProjectId,
-        adminId: currentUserId
+        adminId: currentUserId,
+        feedStatus: feedForm.feedStatus || 'New'
       };
 
       if (isEditingFeed) {
@@ -435,14 +568,27 @@ const ProjectManagement = () => {
         toast.success("Feed updated successfully");
       } else {
         await axios.post(`${ADMIN_BASE}/feeds`, payload, authHeader);
-        toast.success("Feed added successfully");
+        
+        if (developersWithoutGitHub.length === 0 && feedForm.assignedDevelopers.length > 0) {
+          toast.success(`Feed added successfully! GitHub invitations sent to ${feedForm.assignedDevelopers.length} developer(s).`);
+        } else if (feedForm.assignedDevelopers.length > 0) {
+          const invitedCount = feedForm.assignedDevelopers.length - developersWithoutGitHub.length;
+          if (invitedCount > 0) {
+            toast.success(`Feed added successfully! ${invitedCount} GitHub invitation(s) sent. ${developersWithoutGitHub.length} developer(s) need GitHub accounts linked.`);
+          } else {
+            toast.success("Feed added successfully, but no GitHub invitations were sent because developers don't have linked GitHub accounts.");
+          }
+        } else {
+          toast.success("Feed added successfully");
+        }
       }
 
       closeFeedModal();
       fetchInitialData();
 
     } catch (err) {
-      toast.error("Feed save failed");
+      console.error("Feed save error:", err);
+      toast.error(err.response?.data?.error || "Feed save failed");
     }
   };
 
@@ -455,7 +601,11 @@ const ProjectManagement = () => {
       name: '',
       assignedDevelopers: [],
       feedType: 'Daily',
-      weekDay: ''
+      weekDay: '',
+      monthDay: '',
+      feedPlatform: '',
+      webDomain: '',
+      feedStatus: 'New'
     });
   };
 
@@ -467,7 +617,11 @@ const ProjectManagement = () => {
       name: feed.name,
       assignedDevelopers: feed.assignedDevelopers?.map(d => typeof d === 'object' ? d._id : d) || [],
       feedType: feed.feedType || 'Daily',
-      weekDay: feed.weekDay || ''
+      weekDay: feed.weekDay || '',
+      monthDay: feed.monthDay || '',
+      feedPlatform: feed.feedPlatform || '',
+      webDomain: feed.webDomain || '',
+      feedStatus: feed.feedStatus || 'New'
     });
     setShowFeedModal(true);
   };
@@ -552,7 +706,9 @@ const ProjectManagement = () => {
               className="w-64 pl-4 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-200 outline-none font-bold text-sm focus:border-blue-400 transition-all"
             />
           </div>
+          
           <div className="h-6 w-px bg-slate-100 mx-2" />
+          
           <button
             onClick={() => {
               setIsEditing(false);
@@ -594,14 +750,15 @@ const ProjectManagement = () => {
       {/* TABLE VIEW */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px]">
+          <table className="w-full min-w-[1300px]">
             <thead className="bg-[#F8FAFC] border-b border-slate-100">
               <tr>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Project</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Clients</th>
+                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">POC</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Industry</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Country</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Feeds</th>
+                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
                 <th className="text-right px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
               </tr>
             </thead>
@@ -655,11 +812,42 @@ const ProjectManagement = () => {
                       </span>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="flex items-center gap-2">
-                        <Hash size={14} className="text-slate-400" />
-                        <span className="text-sm font-black text-[#1B2559]">{project.feeds?.length || 0}</span>
+                      <div 
+                        className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
+                        onClick={() => navigateToFeedExplorer(project)}
+                      >
+                        <Hash size={14} className="text-slate-400 group-hover:text-blue-600" />
+                        <span className="text-sm font-black text-[#1B2559] group-hover:text-blue-600">
+                          {project.feeds?.length || 0}
+                        </span>
+                        <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                          View Feeds →
+                        </span>
                       </div>
                     </td>
+                    
+                    {/* STATUS COLUMN */}
+                    <td className="px-6 py-5">
+                      <div className="relative">
+                        <select
+                          value={project.projectStatus || 'New'}
+                          onChange={(e) => updateProjectStatus(project._id, e.target.value)}
+                          disabled={updatingStatus[project._id]}
+                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-7 ${getProjectStatusColor(project.projectStatus)}`}
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '10px' }}
+                        >
+                          {projectStatuses.map(status => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                        </select>
+                        {updatingStatus[project._id] && (
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 mr-2">
+                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+                    
                     <td className="px-6 py-5">
                       <div className="flex items-center justify-end gap-2">
                         <button onClick={() => handleEditClick(project)} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all">
@@ -814,10 +1002,10 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* FEED MODAL WITH SEARCHABLE DROPDOWN */}
+      {/* FEED MODAL WITH SEARCHABLE DROPDOWN, GITHUB STATUS, MONTHLY OPTION, PLATFORM SELECTION, AND FEED STATUS */}
       {showFeedModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[110] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-10">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-10 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-10">
               <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">
                 {isEditingFeed ? 'Update Stream' : 'New Feed'}
@@ -840,10 +1028,16 @@ const ProjectManagement = () => {
               <select
                 className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700"
                 value={feedForm.feedType}
-                onChange={(e) => setFeedForm({ ...feedForm, feedType: e.target.value, weekDay: e.target.value !== 'Weekly' ? '' : feedForm.weekDay })}
+                onChange={(e) => setFeedForm({ 
+                  ...feedForm, 
+                  feedType: e.target.value, 
+                  weekDay: e.target.value !== 'Weekly' ? '' : feedForm.weekDay,
+                  monthDay: e.target.value !== 'Monthly' ? '' : feedForm.monthDay
+                })}
               >
                 <option value="Daily">Daily</option>
                 <option value="Weekly">Weekly</option>
+                <option value="Monthly">Monthly</option>
                 <option value="Once off">Once off</option>
               </select>
 
@@ -857,7 +1051,78 @@ const ProjectManagement = () => {
                 </div>
               )}
 
-              {/* SEARCHABLE DEVELOPER DROPDOWN */}
+              {feedForm.feedType === 'Monthly' && (
+                <div className="animate-in slide-in-from-top-2 duration-300">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Day of Month (1-31)</label>
+                  <select required value={feedForm.monthDay} onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700">
+                    <option value="">Select Day</option>
+                    {[...Array(31)].map((_, i) => (
+                      <option key={i + 1} value={i + 1}>{i + 1}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* FEED STATUS SELECTION */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                  <Activity size={12} />
+                  Feed Status
+                </label>
+                <select
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700 cursor-pointer"
+                  value={feedForm.feedStatus}
+                  onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
+                >
+                  {feedStatuses.map(status => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* WEB / APP SELECTION */}
+              <div className="space-y-3">
+                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Platform Type</label>
+                <div className="flex gap-3">
+                  {['Web', 'App', 'Both'].map((platform) => (
+                    <button
+                      key={platform}
+                      type="button"
+                      onClick={() => {
+                        setFeedForm({ 
+                          ...feedForm, 
+                          feedPlatform: platform,
+                          webDomain: platform === 'App' ? '' : feedForm.webDomain
+                        });
+                      }}
+                      className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                        feedForm.feedPlatform === platform
+                          ? 'bg-blue-600 text-white shadow-md'
+                          : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100'
+                      }`}
+                    >
+                      {platform}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* DOMAIN FIELD - Only show if Web or Both is selected */}
+              {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
+                <div className="animate-in slide-in-from-top-2 duration-300">
+                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Domain URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://example.com"
+                    value={feedForm.webDomain}
+                    onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
+                    className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 focus:border-blue-400 transition-all"
+                  />
+                  <p className="text-[8px] text-slate-400 mt-1 ml-1">Enter the full URL including https://</p>
+                </div>
+              )}
+
+              {/* SEARCHABLE DEVELOPER DROPDOWN WITH GITHUB STATUS */}
               <div className="space-y-2" ref={developerDropdownRef}>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
                   <UserCheck size={12} />
@@ -870,8 +1135,16 @@ const ProjectManagement = () => {
                     {feedForm.assignedDevelopers.map(devId => {
                       const dev = developers.find(d => d._id === devId);
                       return dev ? (
-                        <span key={devId} className="inline-flex items-center gap-1.5 bg-blue-600 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider">
+                        <span key={devId} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                          dev.githubLinked && dev.githubUsername 
+                            ? 'bg-green-600 text-white' 
+                            : 'bg-orange-500 text-white'
+                        }`}>
+                          <GitFork size={10} />
                           {dev.name}
+                          {(!dev.githubLinked || !dev.githubUsername) && (
+                            <span className="text-[7px] bg-orange-700 px-1 rounded ml-1">No GitHub</span>
+                          )}
                           <button
                             type="button"
                             onClick={() => toggleDeveloperSelection(devId)}
@@ -885,58 +1158,127 @@ const ProjectManagement = () => {
                   </div>
                 )}
 
-                {/* Search Input */}
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search developers by name or email..."
-                    value={developerSearchTerm}
-                    onChange={(e) => {
-                      setDeveloperSearchTerm(e.target.value);
-                      setIsDeveloperDropdownOpen(true);
-                    }}
-                    onFocus={() => setIsDeveloperDropdownOpen(true)}
-                    className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
-                  />
+                {/* GitHub Info Note */}
+                {feedForm.assignedDevelopers.length > 0 && (
+                  <div className="bg-blue-50 rounded-lg p-2 mb-2">
+                    <div className="flex items-center gap-1.5">
+                      <GitFork size={10} className="text-blue-600" />
+                      <p className="text-[7px] font-bold text-blue-700">
+                        Developers with linked GitHub accounts will receive automatic repository invitations.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Search Input with Refresh Button */}
+                <div className="relative flex gap-2">
+                  <div className="relative flex-1">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search developers by name or email..."
+                      value={developerSearchTerm}
+                      onChange={(e) => {
+                        setDeveloperSearchTerm(e.target.value);
+                        setIsDeveloperDropdownOpen(true);
+                      }}
+                      onFocus={() => setIsDeveloperDropdownOpen(true)}
+                      className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setIsDeveloperDropdownOpen(!isDeveloperDropdownOpen)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    >
+                      {isDeveloperDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+                  </div>
+                  
+                  {/* Refresh button */}
                   <button
                     type="button"
-                    onClick={() => setIsDeveloperDropdownOpen(!isDeveloperDropdownOpen)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                    onClick={() => fetchInitialData()}
+                    className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                    title="Refresh developers list"
                   >
-                    {isDeveloperDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    <RefreshCw size={16} />
                   </button>
                 </div>
 
-                {/* Dropdown List */}
+                {/* Dropdown List with GitHub Status */}
                 {isDeveloperDropdownOpen && (
-                  <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-50">
+                  <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-64 overflow-y-auto z-50">
                     {filteredDevelopers.length === 0 ? (
                       <div className="p-4 text-center text-slate-400 text-xs">No developers found</div>
                     ) : (
                       filteredDevelopers.map(dev => {
                         const isSelected = feedForm.assignedDevelopers.includes(dev._id);
+                        const hasGitHub = dev.githubLinked && dev.githubUsername;
                         return (
                           <div
                             key={dev._id}
-                            onClick={() => toggleDeveloperSelection(dev._id)}
                             className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-blue-50' : ''}`}
                           >
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">{dev.name}</p>
+                            <div 
+                              className="flex-1 cursor-pointer"
+                              onClick={() => toggleDeveloperSelection(dev._id)}
+                            >
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-bold text-slate-800">{dev.name}</p>
+                                {hasGitHub ? (
+                                  <span className="inline-flex items-center gap-1 text-[7px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
+                                    <CheckCircle size={8} />
+                                    GitHub: {dev.githubUsername}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[7px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
+                                    <AlertCircle size={8} />
+                                    GitHub: Not Linked
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-[9px] text-slate-400">{dev.email}</p>
+                              {!hasGitHub && dev.role === 'Developer' && (
+                                <p className="text-[7px] text-orange-500 mt-0.5">
+                                  ⚠️ Won't receive GitHub invitations
+                                </p>
+                              )}
                             </div>
-                            {isSelected && <CheckCircle size={14} className="text-blue-600" />}
+                            <div className="flex items-center gap-2">
+                              {!hasGitHub && dev.role === 'Developer' && (
+                                <button
+                                  onClick={(e) => handleQuickLinkGitHub(dev, e)}
+                                  className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
+                                  title="Link GitHub Account"
+                                >
+                                  <GitFork size={14} />
+                                </button>
+                              )}
+                              {isSelected && <CheckCircle size={14} className="text-blue-600 flex-shrink-0" />}
+                            </div>
                           </div>
                         );
                       })
                     )}
+                    {filteredDevelopers.length === 0 && developers.length > 0 && (
+                      <div className="p-4 text-center text-slate-400 text-xs">
+                        No matching developers found. Try a different search term.
+                      </div>
+                    )}
                   </div>
                 )}
                 
-                <p className="text-[8px] text-slate-400 mt-1">
-                  {feedForm.assignedDevelopers.length} developer(s) selected
-                </p>
+                <div className="flex justify-between items-center mt-1">
+                  <p className="text-[8px] text-slate-400">
+                    {feedForm.assignedDevelopers.length} developer(s) selected
+                  </p>
+                  <p className="text-[8px] text-slate-400">
+                    {feedForm.assignedDevelopers.filter(id => {
+                      const dev = developers.find(d => d._id === id);
+                      return dev && dev.githubLinked && dev.githubUsername;
+                    }).length} with GitHub
+                  </p>
+                </div>
               </div>
 
               <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl hover:bg-[#111C44] transition-all uppercase text-xs tracking-widest shadow-xl">

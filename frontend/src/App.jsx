@@ -25,7 +25,9 @@ import CreateTicket from './pages/CreateTicket';
 import TicketDetails from './pages/TicketDetails';
 import ClientDashboard from './pages/ClientDashboard';
 import NotificationSettings from './pages/NotificationSettings';
-
+import GitManager from './pages/GitManager';
+import DeveloperGitFeeds from './pages/DeveloperGitFeeds';
+import AdminProjectClients from './pages/AdminProjectClients';  
 
 import { AnimatePresence } from 'framer-motion';
 
@@ -150,12 +152,17 @@ const landingPath = useMemo(() => {
                     } />
                     <Route path="/pm/task-progress" element={<PMTaskProgress />}/>
                     <Route path="/pm/resource-analytics"  element={    <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ResourceAnalytics /></ProtectedRoute>  }/>
-
+                    <Route path="/pm/git-manager" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                          <GitManager />
+                        </ProtectedRoute>
+                      } />
                     {/* Developer */}
                     <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
                     <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
                     <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
                     <Route path="/developer/worklog" element={ <ProtectedRoute allowedRoles={['Developer', 'Admin']}> <Worklog /></ProtectedRoute>}/>    
+                    <Route path="/developer/git-feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperGitFeeds /></ProtectedRoute>} />
                     {/*Client routes*/}
                     <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientDashboard /></ProtectedRoute>} />
 
@@ -172,7 +179,9 @@ const landingPath = useMemo(() => {
                         <NotificationSettings />
                       </ProtectedRoute>
                     } />
+                    <Route path="/admin/project-clients" element={<ProtectedRoute allowedRoles={['Admin']}><AdminProjectClients /></ProtectedRoute>} />
                   </Routes>
+                  
                 </main>
               </div>
             </ProtectedRoute>

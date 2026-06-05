@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, CheckCircle, AlertCircle, GitFork } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
+import toast from 'react-hot-toast';
+
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
+  const [linkingGithub, setLinkingGithub] = useState(false);
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
@@ -19,6 +22,8 @@ const UserManagement = () => {
     password: '', 
     role: userRole === 'Sales Manager' ? 'Sales' : 'Client' 
   });
+  const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const API_BASE = `${API_BASE_URL}/api/admin`;
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
@@ -39,6 +44,7 @@ const UserManagement = () => {
       setUsers(res.data);
     } catch (err) {
       console.error("Error fetching users:", err);
+      toast.error("Failed to fetch users");
     }
   };
 
@@ -48,7 +54,7 @@ const UserManagement = () => {
     setFormData({
       name: user.name,
       email: user.email,
-      password: '', // Keep empty; only update if they type a new one
+      password: '',
       role: user.role
     });
     setShowModal(true);
@@ -58,37 +64,102 @@ const UserManagement = () => {
     if (window.confirm("Are you sure you want to remove this user?")) {
       try {
         await axios.delete(`${API_BASE}/users/${id}`, authHeader);
+        toast.success("User deleted successfully");
         fetchUsers();
       } catch (err) {
-        alert("Delete failed");
+        toast.error("Delete failed: " + (err.response?.data?.error || err.message));
       }
     }
   };
-  const [loading, setLoading] = useState(false); // Add this at top
-  const handleSubmit = async (e) => {
-      e.preventDefault();
-      setLoading(true); // Start loading
-      try {
-          const payload = { ...formData, performerId: storedId };
 
-          if (isEditing) {
-              if (!payload.password) delete payload.password;
-              await axios.put(`${API_BASE}/users/${currentUserId}`, payload, authHeader);
-          } else {
-              // Ensure the password is sent so the backend can include it in the email
-              payload.password = String(formData.password || "123456");
-              payload.adminId = storedId;
-              await axios.post(`${API_BASE}/users`, payload, authHeader);
-              alert("Account created and credentials emailed to user.");
-          }
-          
-          closeModal();
-          fetchUsers();
-      } catch (err) {
-          alert("Error: " + (err.response?.data?.error || "Check backend console"));
-      } finally {
-          setLoading(false); // Stop loading
+  // Link GitHub account for existing user
+  const handleLinkGitHub = async (user) => {
+    setLinkingGithub(true);
+    try {
+      const res = await axios.post(
+        `${API_BASE}/users/${user._id}/link-github`, 
+        {},
+        authHeader
+      );
+      
+      if (res.data.success) {
+        toast.success(`GitHub account ${res.data.githubUsername} linked successfully!`);
+        fetchUsers();
+      } else {
+        toast.error(res.data.error || 'Failed to link GitHub account');
       }
+    } catch (err) {
+      console.error('GitHub linking error:', err);
+      toast.error(err.response?.data?.error || 'Failed to link GitHub account');
+    } finally {
+      setLinkingGithub(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    setNewlyCreatedUser(null);
+    
+    try {
+      if (isEditing) {
+        // For editing, only send fields that should be updated
+        const updatePayload = {
+          name: formData.name,
+          email: formData.email,
+          role: formData.role
+        };
+        
+        // Only include password if it was provided
+        if (formData.password && formData.password.trim()) {
+          updatePayload.password = formData.password;
+        }
+        
+        await axios.put(`${API_BASE}/users/${currentUserId}`, updatePayload, authHeader);
+        toast.success("User updated successfully");
+        closeModal();
+        fetchUsers();
+      } else {
+        // For creating new user
+        if (!formData.name || !formData.email || !formData.role) {
+          toast.error("Please fill in all required fields");
+          setSubmitting(false);
+          return;
+        }
+        
+        // Generate a default password if not provided
+        const defaultPassword = formData.password || Math.random().toString(36).slice(-8);
+        
+        const createPayload = {
+          name: formData.name,
+          email: formData.email,
+          password: defaultPassword,
+          role: formData.role
+        };
+        
+        const response = await axios.post(`${API_BASE}/users`, createPayload, authHeader);
+        
+        if (response.data) {
+          setNewlyCreatedUser(response.data);
+          if (response.data.githubLinked && response.data.githubUsername) {
+            toast.success(`Account created! GitHub account linked: ${response.data.githubUsername}`);
+          } else if (formData.role === 'Developer') {
+            toast.success('Account created! You can link a GitHub account from the user list.');
+          } else {
+            toast.success("Account created successfully!");
+          }
+        }
+        
+        closeModal();
+        fetchUsers();
+      }
+    } catch (err) {
+      console.error("Submit error:", err);
+      const errorMessage = err.response?.data?.error || err.response?.data?.message || "Operation failed";
+      toast.error(errorMessage);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const closeModal = () => {
@@ -96,16 +167,17 @@ const UserManagement = () => {
     setIsEditing(false);
     setCurrentUserId(null);
     setShowPassword(false);
+    setNewlyCreatedUser(null);
     setFormData({ 
-        name: '', 
-        email: '', 
-        password: '', 
-        role: userRole === 'Sales Manager' ? 'Sales' : 'Client' 
+      name: '', 
+      email: '', 
+      password: '', 
+      role: userRole === 'Sales Manager' ? 'Sales' : 'Client' 
     });
   };
 
   return (
-   <div
+    <div
       className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
         isCollapsed ? 'ml-20' : 'ml-64'
       }`}
@@ -144,7 +216,24 @@ const UserManagement = () => {
               {filteredUsers.length > 0 ? filteredUsers.map((user) => (
                 <tr key={user._id} className="hover:bg-blue-50/30 transition-colors group">
                   <td className="p-5">
-                    <p className="font-bold text-slate-700">{user.name}</p>
+                    <div>
+                      <p className="font-bold text-slate-700">{user.name}</p>
+                      {user.role === 'Developer' && (
+                        <div className="flex items-center gap-2 mt-1">
+                          {user.githubLinked && user.githubUsername ? (
+                            <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <CheckCircle size={8} />
+                              GitHub: {user.githubUsername}
+                            </span>
+                          ) : (
+                            <span className="text-[8px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                              <AlertCircle size={8} />
+                              GitHub: Not Linked
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="p-5 text-slate-500 font-medium">{user.email}</td>
                   <td className="p-5">
@@ -159,6 +248,21 @@ const UserManagement = () => {
                   </td>
                   <td className="p-5 text-right">
                     <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                      {user.role === 'Developer' && !user.githubLinked && (
+                        <button 
+                          onClick={() => handleLinkGitHub(user)} 
+                          disabled={linkingGithub}
+                          className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-all shadow-sm disabled:opacity-50"
+                          title="Link GitHub Account"
+                        >
+                          <GitFork size={16}/>
+                        </button>
+                      )}
+                      {user.role === 'Developer' && user.githubLinked && user.githubUsername && (
+                        <div className="p-2 text-green-600 rounded-lg" title={`GitHub: ${user.githubUsername}`}>
+                          <CheckCircle size={16}/>
+                        </div>
+                      )}
                       <button onClick={() => handleEditClick(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm">
                         <Edit2 size={16}/>
                       </button>
@@ -181,7 +285,7 @@ const UserManagement = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md flex justify-center items-center z-70 p-4">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 relative max-h-[90vh] overflow-y-auto">
             <button onClick={closeModal} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-100 rounded-full">
               <X size={20} />
             </button>
@@ -192,30 +296,36 @@ const UserManagement = () => {
 
             <form onSubmit={handleSubmit} className="space-y-5">
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Full Name</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Full Name *</label>
                 <input 
-                  type="text" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
-                  value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})}
+                  type="text" 
+                  required 
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
+                  value={formData.name} 
+                  onChange={(e) => setFormData({...formData, name: e.target.value})}
                 />
               </div>
               
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Email Address</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">Email Address *</label>
                 <input 
-                  type="email" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
-                  value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})}
+                  type="email" 
+                  required 
+                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700"
+                  value={formData.email} 
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
                 />
               </div>
               
-              {/* Password Field (Visible in both New and Edit modes) */}
+              {/* Password Field */}
               <div className="space-y-1">
                 <label className="text-[10px] font-black uppercase text-slate-400 ml-1">
-                  {isEditing ? 'New Password (Leave blank to keep current)' : 'Temporary Password'}
+                  {isEditing ? 'New Password (Optional - leave blank to keep current)' : 'Temporary Password *'}
                 </label>
                 <div className="relative">
                   <input 
                     type={showPassword ? "text" : "password"} 
-                    required={!isEditing} // Required only for new accounts
+                    required={!isEditing}
                     className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 pr-12"
                     value={formData.password} 
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
@@ -228,10 +338,15 @@ const UserManagement = () => {
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
+                {!isEditing && (
+                  <p className="text-[8px] text-slate-400 mt-1">
+                    A temporary password will be generated if left blank.
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role</label>
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-1">System Role *</label>
                 <select 
                   className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 appearance-none disabled:bg-slate-100 disabled:cursor-not-allowed"
                   value={formData.role} 
@@ -242,7 +357,7 @@ const UserManagement = () => {
                     <option value="Sales">Sales</option>
                   ) : (
                     <>
-                      <option value="Client">Client</option>
+                      <option value="Client">POC</option>
                       <option value="Developer">Developer</option>
                       <option value="Sales">Sales</option>
                       <option value="Project Manager">Project Manager</option>
@@ -253,13 +368,49 @@ const UserManagement = () => {
                 </select>
               </div>
 
+              {/* GitHub Info for Developer Role */}
+              {!isEditing && formData.role === 'Developer' && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <GitFork size={14} className="text-blue-600" />
+                    <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">GitHub Auto-Linking</p>
+                  </div>
+                  <p className="text-[8px] text-blue-600">
+                    We'll automatically search for a GitHub account with the email <strong>{formData.email || '[your email]'}</strong> and link it if found.
+                  </p>
+                </div>
+              )}
+
+              {/* Success message for newly created developer */}
+              {!isEditing && newlyCreatedUser && newlyCreatedUser.role === 'Developer' && (
+                <div className={`rounded-xl p-3 ${newlyCreatedUser.githubLinked ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+                  <div className="flex items-center gap-2">
+                    {newlyCreatedUser.githubLinked ? (
+                      <>
+                        <CheckCircle size={14} className="text-green-600" />
+                        <p className="text-[9px] font-black text-green-700">
+                          ✅ GitHub account linked: {newlyCreatedUser.githubUsername}
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <AlertCircle size={14} className="text-yellow-600" />
+                        <p className="text-[9px] font-black text-yellow-700">
+                          ⚠️ No GitHub account found. You can link it manually from the user list.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
               <button 
-              type="submit" 
-              disabled={loading}
-              className={`w-full py-5 bg-blue-600 text-white rounded-2xl transition-all font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-blue-100 mt-4 ${loading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
-            >
-              {loading ? 'Processing System Access...' : isEditing ? 'Save Changes' : 'Create Account & Notify User'}
-            </button>
+                type="submit" 
+                disabled={submitting}
+                className={`w-full py-5 bg-blue-600 text-white rounded-2xl transition-all font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-blue-100 mt-4 ${submitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
+              >
+                {submitting ? 'Processing...' : isEditing ? 'Save Changes' : 'Create Account'}
+              </button>
             </form>
           </div>
         </div>

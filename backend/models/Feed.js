@@ -1,24 +1,25 @@
+// backend/models/Feed.js - UPDATED
 const mongoose = require('mongoose');
 
 const FeedSchema = new mongoose.Schema({
-  name: {
-    type: String,
-    required: true
+  name: { 
+    type: String, 
+    required: true 
   },
-
-  projectId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Project',
-    required: true
+  
+  projectId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Project', 
+    required: true 
   },
-
-  feedType: {
-    type: String,
+  
+  feedType: { 
+    type: String, 
     required: true,
-    enum: ['Daily', 'Once off', 'Weekly', 'Add hoc'],
-    default: 'Daily'
+    enum: ['Daily', 'Once off', 'Weekly', 'Monthly', 'Add hoc'],
+    default: 'Daily' 
   },
-
+  
   weekDay: {
     type: String,
     enum: [
@@ -33,18 +34,37 @@ const FeedSchema = new mongoose.Schema({
     ],
     default: ''
   },
-
-  assignedDevelopers: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-
-  parameters: {
-    type: Object,
-    default: {}
+  
+  monthDay: {
+    type: Number,
+    min: 1,
+    max: 31,
+    default: null
   },
-
-  // ADD THESE FIELDS FOR COMPLETION TRACKING
+  
+  feedPlatform: {
+    type: String,
+    enum: ['Web', 'App', 'Both'],
+    default: null
+  },
+  
+  webDomain: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  
+  assignedDevelopers: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User' 
+  }],
+  
+  parameters: { 
+    type: Object, 
+    default: {} 
+  },
+  
+  // Completion tracking fields
   completed: {
     type: Boolean,
     default: false
@@ -66,7 +86,6 @@ const FeedSchema = new mongoose.Schema({
     default: ''
   },
 
-  // Track completion history for each day
   completionHistory: [{
     date: {
       type: String,
@@ -85,19 +104,35 @@ const FeedSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
-
-  createdAt: {
+  
+  createdAt: { 
+    type: Date, 
+    default: Date.now 
+  },
+  
+  updatedAt: {
     type: Date,
     default: Date.now
   },
 
-  updatedAt: {
-    type: Date,
-    default: Date.now
+  // NEW: Feed Status Field
+  feedStatus: {
+    type: String,
+    enum: [
+      'New',
+      'Once off[In progress]',
+      'Once off[Delivered]',
+      'Ad hoc In-progress',
+      'Ad hoc delivered',
+      'ON hold[Sales]',
+      'ON hold[Technical]',
+      'ON hold[Client]'
+    ],
+    default: 'New'
   }
 });
 
-// Update the updatedAt timestamp before saving
+// Pre-save middleware to update the updatedAt timestamp
 FeedSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
 });

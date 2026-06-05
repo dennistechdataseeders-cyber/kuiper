@@ -22,7 +22,7 @@ import {
   Logs,
   ChartBar,
   Ticket,
-  Bell
+  Bell,GitFork
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -112,7 +112,8 @@ const Sidebar = () => {
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Explorer' },
-      { path: '/pm/task-progress', icon: <Activity size={18} />, label: 'Task Progress' },
+      // { path: '/pm/task-progress', icon: <Activity size={18} />, label: 'Task Progress' },
+      { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
@@ -136,7 +137,8 @@ const Sidebar = () => {
     'Project Manager': [
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Explorer' },
-      { path: '/pm/task-progress', icon: <Activity size={18} />, label: 'Task Progress' },
+      // { path: '/pm/task-progress', icon: <Activity size={18} />, label: 'Task Progress' },
+      { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
@@ -146,9 +148,9 @@ const Sidebar = () => {
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/developer/bucket', icon: <FolderTree size={18} />, label: 'My Bucket' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
+      { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     ],
-    
     Client: [
       { path: '/client', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
