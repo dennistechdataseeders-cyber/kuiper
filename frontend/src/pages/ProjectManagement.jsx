@@ -29,7 +29,8 @@ import {
   Circle,
   PauseCircle,
   CheckCircle2,
-  Clock
+  Clock,
+  Building2
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
@@ -57,7 +58,7 @@ const ProjectManagement = () => {
   const [projects, setProjects] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [projectManagers, setProjectManagers] = useState([]);
-  const [clients, setClients] = useState([]);
+  const [organizations, setOrganizations] = useState([]);
   const { isCollapsed } = useSidebar();
   
   // --- Pagination State ---
@@ -71,6 +72,12 @@ const ProjectManagement = () => {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showFeedModal, setShowFeedModal] = useState(false);
   const [showTaskModal, setShowTaskModal] = useState(false);
+  const [showNewOrgForm, setShowNewOrgForm] = useState(false);
+  const [newOrgData, setNewOrgData] = useState({
+    companyName: '',
+    website: '',
+    address: ''
+  });
 
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [activeFeed, setActiveFeed] = useState(null);
@@ -79,10 +86,10 @@ const ProjectManagement = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingFeed, setIsEditingFeed] = useState(false);
 
-  // --- Client Search State ---
-  const [clientSearchTerm, setClientSearchTerm] = useState('');
-  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
-  const clientDropdownRef = React.useRef(null);
+  // --- Organization Selection State ---
+  const [orgSearchTerm, setOrgSearchTerm] = useState('');
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const orgDropdownRef = React.useRef(null);
 
   // --- Developer Selection State ---
   const [developerSearchTerm, setDeveloperSearchTerm] = useState('');
@@ -134,7 +141,7 @@ const ProjectManagement = () => {
     description: '',
     country: 'United States',
     industry: 'Tech',
-    clients: []
+    organizations: []  // Changed from 'clients' to 'organizations'
   });
 
   const [feedForm, setFeedForm] = useState({
@@ -218,39 +225,97 @@ const ProjectManagement = () => {
     }
   };
 
-  // Fetch clients (users with role 'Client')
-  const fetchClients = async () => {
+  const fetchOrganizations = async () => {
     try {
-      const res = await axios.get(`${ADMIN_BASE}/users/clients`, authHeader);
-      setClients(res.data);
+      const res = await axios.get(`${ADMIN_BASE}/organizations`, authHeader);
+      setOrganizations(res.data);
     } catch (err) {
-      console.error("Error fetching clients:", err);
-      toast.error("Failed to load clients");
+      console.error("Error fetching organizations:", err);
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/orgs`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setOrganizations(res.data);
+      } catch (fallbackErr) {
+        console.error("Fallback error fetching organizations:", fallbackErr);
+        setOrganizations([]);
+        toast.warning("Unable to load organizations. You can still create projects by selecting existing clients or creating new organizations.", {
+          duration: 5000
+        });
+      }
     }
   };
 
-  // Filter clients based on search term
-  const filteredClients = useMemo(() => {
-    if (!clientSearchTerm.trim()) return clients;
-    const search = clientSearchTerm.toLowerCase();
-    return clients.filter(client => 
-      client.name?.toLowerCase().includes(search) ||
-      client.email?.toLowerCase().includes(search)
-    );
-  }, [clients, clientSearchTerm]);
+  // Create new organization
+  const createNewOrganization = async () => {
+    if (!newOrgData.companyName.trim()) {
+      toast.error("Organization name is required");
+      return null;
+    }
 
-  // Close client dropdown when clicking outside
+    try {
+      const response = await axios.post(`${API_BASE_URL}/api/orgs`, {
+        companyName: newOrgData.companyName,
+        website: newOrgData.website,
+        address: newOrgData.address,
+        pointsOfContact: []
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      toast.success(`Organization "${newOrgData.companyName}" created successfully`);
+      await fetchOrganizations();
+      return response.data;
+    } catch (err) {
+      console.error("Error creating organization:", err);
+      toast.error(err.response?.data?.error || "Failed to create organization");
+      return null;
+    }
+  };
+
+  // Filter organizations based on search term
+  const filteredOrganizations = useMemo(() => {
+    if (!orgSearchTerm.trim()) return organizations;
+    const search = orgSearchTerm.toLowerCase();
+    return organizations.filter(org => 
+      org.companyName?.toLowerCase().includes(search) ||
+      org.website?.toLowerCase().includes(search)
+    );
+  }, [organizations, orgSearchTerm]);
+
+  // Toggle organization selection
+  const toggleOrgSelection = (orgId) => {
+    setProjectForm(prev => {
+      const isSelected = prev.organizations.includes(orgId);
+      return {
+        ...prev,
+        organizations: isSelected 
+          ? prev.organizations.filter(id => id !== orgId)
+          : [...prev.organizations, orgId]
+      };
+    });
+  };
+
+  // Remove organization from selection
+  const removeOrg = (orgId) => {
+    setProjectForm(prev => ({
+      ...prev,
+      organizations: prev.organizations.filter(id => id !== orgId)
+    }));
+  };
+
+  // Close organization dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target)) {
-        setIsClientDropdownOpen(false);
+      if (orgDropdownRef.current && !orgDropdownRef.current.contains(event.target)) {
+        setIsOrgDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Close dropdown when clicking outside
+  // Close developer dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (developerDropdownRef.current && !developerDropdownRef.current.contains(event.target)) {
@@ -263,7 +328,7 @@ const ProjectManagement = () => {
 
   useEffect(() => {
     fetchInitialData();
-    fetchClients();
+    fetchOrganizations();
     fetchStatusOptions();
   }, []);
 
@@ -278,12 +343,6 @@ const ProjectManagement = () => {
       setProjects(projRes.data);
       setDevelopers(devRes.data);
       setProjectManagers(pmRes.data);
-      
-      console.log('Fetched developers:', devRes.data.map(d => ({ 
-        name: d.name, 
-        githubLinked: d.githubLinked, 
-        githubUsername: d.githubUsername 
-      })));
 
     } catch (err) {
       console.error("Data fetch failed:", err);
@@ -300,27 +359,6 @@ const ProjectManagement = () => {
       dev.email?.toLowerCase().includes(search)
     );
   }, [developers, developerSearchTerm]);
-
-  // Toggle client selection
-  const toggleClientSelection = (clientId) => {
-    setProjectForm(prev => {
-      const isSelected = prev.clients.includes(clientId);
-      return {
-        ...prev,
-        clients: isSelected 
-          ? prev.clients.filter(id => id !== clientId)
-          : [...prev.clients, clientId]
-      };
-    });
-  };
-
-  // Remove client from selection
-  const removeClient = (clientId) => {
-    setProjectForm(prev => ({
-      ...prev,
-      clients: prev.clients.filter(id => id !== clientId)
-    }));
-  };
 
   const filteredProjects = useMemo(() => {
     let result = [...projects];
@@ -349,19 +387,24 @@ const ProjectManagement = () => {
       );
     }
 
-    // SEARCH FILTER
+    // SEARCH FILTER - Updated to use organizations field
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase().trim();
 
       result = result.filter((project) => {
-        const clientNames = project.clients?.map(c => c?.name || '').join(' ') || '';
+        const orgNames = (project.organizations || []).map(org => {
+          if (typeof org === 'object') return org?.companyName || '';
+          const orgObj = organizations.find(o => o._id === org);
+          return orgObj?.companyName || '';
+        }).join(' ') || '';
+        
         const searchableFields = [
           project.projectCustomId,
           project.name,
           project.industry,
           project.country,
           project.projectManager?.name,
-          clientNames
+          orgNames
         ]
           .filter(Boolean)
           .join(' ')
@@ -385,6 +428,7 @@ const ProjectManagement = () => {
     return result;
   }, [
     projects,
+    organizations,
     activeFilter,
     currentUserId,
     searchTerm
@@ -425,9 +469,23 @@ const ProjectManagement = () => {
   const handleProjectSubmit = async (e) => {
     e.preventDefault();
 
-    if (projectForm.clients.length === 0) {
-      toast.error("Please select at least one client for this project");
+    if (projectForm.organizations.length === 0 && !showNewOrgForm) {
+      toast.error("Please select at least one client organization for this project, or create a new organization");
       return;
+    }
+
+    let finalOrgId = null;
+    
+    // If creating new organization
+    if (showNewOrgForm && newOrgData.companyName.trim()) {
+      const newOrg = await createNewOrganization();
+      if (newOrg) {
+        finalOrgId = newOrg._id;
+        // Add the new organization to the organizations list
+        projectForm.organizations.push(finalOrgId);
+      } else {
+        return;
+      }
     }
 
     let customId = projectForm.projectCustomId;
@@ -454,7 +512,8 @@ const ProjectManagement = () => {
       name: finalName,
       projectCustomId: customId,
       projectManager: projectForm.projectManager || currentUserId,
-      adminId: currentUserId
+      adminId: currentUserId,
+      organizations: projectForm.organizations
     };
 
     try {
@@ -475,10 +534,12 @@ const ProjectManagement = () => {
         description: '',
         country: '',
         industry: '',
-        clients: []
+        organizations: []
       });
-      setClientSearchTerm('');
-      setIsClientDropdownOpen(false);
+      setOrgSearchTerm('');
+      setIsOrgDropdownOpen(false);
+      setShowNewOrgForm(false);
+      setNewOrgData({ companyName: '', website: '', address: '' });
 
     } catch (err) {
       toast.error(err.response?.data?.error || "Project save failed");
@@ -488,16 +549,18 @@ const ProjectManagement = () => {
   const closeProjectModal = () => {
     setShowProjectModal(false);
     setIsEditing(false);
+    setShowNewOrgForm(false);
     setProjectForm({
       name: '',
       projectManager: '',
       description: '',
       country: 'United States',
       industry: 'Tech',
-      clients: []
+      organizations: []
     });
-    setClientSearchTerm('');
-    setIsClientDropdownOpen(false);
+    setOrgSearchTerm('');
+    setIsOrgDropdownOpen(false);
+    setNewOrgData({ companyName: '', website: '', address: '' });
   };
 
   const handleEditClick = (project) => {
@@ -509,8 +572,9 @@ const ProjectManagement = () => {
       description: project.description || '',
       country: project.country || 'United States',
       industry: project.industry || 'Tech',
-      clients: project.clients?.map(c => c._id || c) || []
+      organizations: (project.organizations || []).map(c => c._id || c) || []
     });
+    setShowNewOrgForm(false);
     setShowProjectModal(true);
   };
 
@@ -747,14 +811,14 @@ const ProjectManagement = () => {
         </div>
       </div>
 
-      {/* TABLE VIEW */}
+      {/* TABLE VIEW - Updated to use organizations field */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1300px]">
             <thead className="bg-[#F8FAFC] border-b border-slate-100">
               <tr>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Project</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">POC</th>
+                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Client Organization</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Industry</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Country</th>
                 <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Feeds</th>
@@ -765,7 +829,7 @@ const ProjectManagement = () => {
             <tbody>
               {currentProjectSlice.map((project) => {
                 const isFromSales = project.projectCustomId?.includes('PRJ');
-                const clientList = project.clients || [];
+                const orgList = project.organizations || [];
                 return (
                   <tr key={project._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-all">
                     <td className="px-6 py-5">
@@ -783,18 +847,21 @@ const ProjectManagement = () => {
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex flex-wrap gap-1">
-                        {clientList.length > 0 ? (
-                          clientList.slice(0, 2).map((client, idx) => (
-                            <span key={idx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-bold">
-                              <Users size={8} />
-                              {client.name || client}
-                            </span>
-                          ))
+                        {orgList.length > 0 ? (
+                          orgList.slice(0, 2).map((org, idx) => {
+                            const orgName = typeof org === 'object' ? org?.companyName : organizations.find(o => o._id === org)?.companyName;
+                            return (
+                              <span key={idx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-bold">
+                                <Building2 size={8} />
+                                {orgName || 'Organization'}
+                              </span>
+                            );
+                          })
                         ) : (
                           <span className="text-slate-400 text-[9px]">No clients</span>
                         )}
-                        {clientList.length > 2 && (
-                          <span className="text-[9px] font-bold text-slate-400">+{clientList.length - 2} more</span>
+                        {orgList.length > 2 && (
+                          <span className="text-[9px] font-bold text-slate-400">+{orgList.length - 2} more</span>
                         )}
                       </div>
                     </td>
@@ -885,7 +952,7 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* PROJECT MODAL WITH CLIENTS */}
+      {/* PROJECT MODAL WITH ORGANIZATION SELECTION - Updated to use organizations */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
@@ -903,25 +970,25 @@ const ProjectManagement = () => {
                 <input type="text" placeholder="Title" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
               </div>
               
-              {/* CLIENTS SELECTION SECTION */}
-              <div className="space-y-2" ref={clientDropdownRef}>
+              {/* ORGANIZATION SELECTION SECTION */}
+              <div className="space-y-2" ref={orgDropdownRef}>
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
-                  <Users size={12} />
-                  Assign Clients (Select at least one) *
+                  <Building2 size={12} />
+                  Assign Client Organizations (Select at least one) *
                 </label>
                 
-                {/* Selected Clients Display */}
-                {projectForm.clients.length > 0 && (
+                {/* Selected Organizations Display */}
+                {projectForm.organizations.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-3 p-3 bg-purple-50 rounded-xl border border-purple-100">
-                    {projectForm.clients.map(clientId => {
-                      const client = clients.find(c => c._id === clientId);
-                      return client ? (
-                        <span key={clientId} className="inline-flex items-center gap-1.5 bg-purple-600 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider">
-                          <Users size={10} />
-                          {client.name}
+                    {projectForm.organizations.map(orgId => {
+                      const org = organizations.find(o => o._id === orgId);
+                      return org ? (
+                        <span key={orgId} className="inline-flex items-center gap-1.5 bg-purple-600 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider">
+                          <Building2 size={10} />
+                          {org.companyName}
                           <button
                             type="button"
-                            onClick={() => removeClient(clientId)}
+                            onClick={() => removeOrg(orgId)}
                             className="hover:text-red-200 transition-colors"
                           >
                             <X size={10} />
@@ -932,57 +999,111 @@ const ProjectManagement = () => {
                   </div>
                 )}
 
-                {/* Search Input for Clients */}
-                <div className="relative">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder="Search clients by name or email..."
-                    value={clientSearchTerm}
-                    onChange={(e) => {
-                      setClientSearchTerm(e.target.value);
-                      setIsClientDropdownOpen(true);
-                    }}
-                    onFocus={() => setIsClientDropdownOpen(true)}
-                    className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-purple-500 bg-slate-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setIsClientDropdownOpen(!isClientDropdownOpen)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                  >
-                    {isClientDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                  </button>
-                </div>
+                {!showNewOrgForm ? (
+                  <>
+                    {/* Search Input for Organizations */}
+                    <div className="relative">
+                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search organizations by name or website..."
+                        value={orgSearchTerm}
+                        onChange={(e) => {
+                          setOrgSearchTerm(e.target.value);
+                          setIsOrgDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsOrgDropdownOpen(true)}
+                        className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-purple-500 bg-slate-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      >
+                        {isOrgDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
 
-                {/* Dropdown List for Clients */}
-                {isClientDropdownOpen && (
-                  <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-50">
-                    {filteredClients.length === 0 ? (
-                      <div className="p-4 text-center text-slate-400 text-xs">No clients found</div>
-                    ) : (
-                      filteredClients.map(client => {
-                        const isSelected = projectForm.clients.includes(client._id);
-                        return (
-                          <div
-                            key={client._id}
-                            onClick={() => toggleClientSelection(client._id)}
-                            className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-purple-50' : ''}`}
-                          >
-                            <div>
-                              <p className="text-sm font-bold text-slate-800">{client.name}</p>
-                              <p className="text-[9px] text-slate-400">{client.email}</p>
-                            </div>
-                            {isSelected && <CheckCircle size={14} className="text-purple-600" />}
-                          </div>
-                        );
-                      })
+                    {/* Dropdown List for Organizations */}
+                    {isOrgDropdownOpen && (
+                      <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-50">
+                        {filteredOrganizations.length === 0 ? (
+                          <div className="p-4 text-center text-slate-400 text-xs">No organizations found</div>
+                        ) : (
+                          filteredOrganizations.map(org => {
+                            const isSelected = projectForm.organizations.includes(org._id);
+                            return (
+                              <div
+                                key={org._id}
+                                onClick={() => toggleOrgSelection(org._id)}
+                                className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-purple-50' : ''}`}
+                              >
+                                <div>
+                                  <p className="text-sm font-bold text-slate-800">{org.companyName}</p>
+                                  <p className="text-[9px] text-slate-400">{org.website || 'No website'}</p>
+                                </div>
+                                {isSelected && <CheckCircle size={14} className="text-purple-600" />}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewOrgForm(true);
+                        setIsOrgDropdownOpen(false);
+                      }}
+                      className="w-full mt-2 py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus size={14} />
+                      Create New Organization
+                    </button>
+                  </>
+                ) : (
+                  <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase text-blue-600 ml-1">New Organization Details</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewOrgForm(false);
+                          setNewOrgData({ companyName: '', website: '', address: '' });
+                        }}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Organization Name *"
+                      required
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-sm"
+                      value={newOrgData.companyName}
+                      onChange={(e) => setNewOrgData({...newOrgData, companyName: e.target.value})}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Website (optional)"
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                      value={newOrgData.website}
+                      onChange={(e) => setNewOrgData({...newOrgData, website: e.target.value})}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Address (optional)"
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                      value={newOrgData.address}
+                      onChange={(e) => setNewOrgData({...newOrgData, address: e.target.value})}
+                    />
                   </div>
                 )}
                 
                 <p className="text-[8px] text-slate-400 mt-1">
-                  {projectForm.clients.length} client(s) selected
+                  {projectForm.organizations.length} client organization(s) selected
                 </p>
               </div>
 
@@ -1002,7 +1123,7 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* FEED MODAL WITH SEARCHABLE DROPDOWN, GITHUB STATUS, MONTHLY OPTION, PLATFORM SELECTION, AND FEED STATUS */}
+      {/* FEED MODAL */}
       {showFeedModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[110] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-10 max-h-[90vh] overflow-y-auto">
@@ -1016,6 +1137,7 @@ const ProjectManagement = () => {
             </div>
 
             <form onSubmit={handleFeedSubmit} className="space-y-6">
+              {/* Feed form content remains the same */}
               <input
                 type="text"
                 placeholder="Stream Name"

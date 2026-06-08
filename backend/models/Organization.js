@@ -38,7 +38,12 @@ const organizationSchema = new mongoose.Schema({
   pocName: { type: String },
   pocEmail: { type: String },
   pocPhone: { type: String },
-  linkedin: { type: String }
+  linkedin: { type: String },
+  clientUserId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  }
 }, { timestamps: true });
 
 // Index for search functionality

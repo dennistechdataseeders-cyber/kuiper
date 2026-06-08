@@ -7,7 +7,7 @@ import {
   Target, User, Mail, Phone, Clock, TrendingUp, Briefcase, 
   Calendar as CalendarIcon, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
   ExternalLink, Upload, FileText, Loader2, ChevronLeft, ChevronDown, ChevronUp, AlertCircle,
-  Send, CalendarDays, Copy, Check, AlertTriangle, Building2
+  Send, CalendarDays, Copy, Check, AlertTriangle, Building2, Search as SearchIcon, Plus
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import tips from '../data/salesTips';
@@ -34,7 +34,6 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal, t
     }
   };
 
-  // Get card background color based on type and overdue status
   const getCardBgColor = () => {
     const isOverdue = lead.followUpDate && new Date(lead.followUpDate) < new Date();
     if (isOverdue) return 'bg-red-100 border-red-300';
@@ -68,7 +67,6 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal, t
               </span>
             </div>
             
-            {/* Organization Name */}
             <div className="flex items-center gap-1 mt-1">
               <Building2 size={12} className="text-slate-500" />
               <span className="text-[10px] font-bold text-slate-700">
@@ -85,7 +83,6 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal, t
                 {lead.leadType}
               </span>
               
-              {/* Show follow-up/feasibility date if available */}
               {lead.followUpDate && (
                 <span className="text-[8px] font-black bg-white/60 px-1.5 py-0.5 rounded-full text-slate-600">
                   📅 {new Date(lead.followUpDate).toLocaleDateString()}
@@ -166,7 +163,6 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal, t
                 <span className="text-[10px] font-bold text-slate-900 uppercase">Created: {new Date(lead.createdAt).toLocaleDateString()}</span>
               </div>
               
-              {/* Show Feasibility ID if available */}
               {lead.feasibilityId && (
                 <div className="flex items-center gap-3">
                   <div className="p-2 bg-white/60 rounded-lg text-purple-600">
@@ -175,7 +171,6 @@ const LeadCard = ({ lead, getStatusStyle, setSelectedLead, setShowActionModal, t
                   <span className="text-[10px] font-black text-purple-700 uppercase tracking-widest">Feasibility ID: {lead.feasibilityId}</span>
                 </div>
               )}
-              
             </div>
           </div>
         </div>
@@ -207,6 +202,17 @@ const SalesDashboard = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [scheduledCurrentPage, setScheduledCurrentPage] = useState(1);
   const scheduledItemsPerPage = 5;
+
+  // Organization selection state for project modal
+  const [organizations, setOrganizations] = useState([]);
+  const [searchOrgTerm, setSearchOrgTerm] = useState('');
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const [showNewOrgForm, setShowNewOrgForm] = useState(false);
+  const [newOrgData, setNewOrgData] = useState({
+    companyName: '',
+    website: '',
+    address: ''
+  });
 
   const today = new Date();
   const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -257,7 +263,6 @@ const SalesDashboard = () => {
     }
   };
 
-  // Check if a scheduled item is overdue (past due date and not completed)
   const isOverdue = (scheduledDate) => {
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
@@ -283,29 +288,24 @@ const SalesDashboard = () => {
       setAllData(data);
 
       const todayStr = new Date().toLocaleDateString('en-CA');
-      const todayDate = new Date();
-      todayDate.setHours(0, 0, 0, 0);
    
       setGeneratedLeads(data.filter(l => 
         new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
         (!l.status || l.status === 'New')
       ));
 
-      // Get ALL pending follow-ups (including past due)
       const allPendingFollowUps = data.filter(l => 
         l.followUpDate && 
         l.status === 'Follow-up Scheduled' &&
-        !l.completedAt // Not completed
+        !l.completedAt
       );
       
-      // Show all pending follow-ups (past due will be marked)
       setFollowUps(allPendingFollowUps);
 
-      // Get ALL pending feasibility tasks (including past due)
       const allPendingFeasibility = data.filter(l => 
         l.followUpDate && 
         l.status === 'Feasibility' &&
-        !l.completedAt // Not completed
+        !l.completedAt
       );
       
       setFeasibilityTasks(allPendingFeasibility);
@@ -324,7 +324,6 @@ const SalesDashboard = () => {
 
       setApproachesToday(filteredApproaches);
 
-      // Build all scheduled items for calendar view
       const scheduledFollowUps = data
         .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled' && !l.completedAt)
         .map(l => ({
@@ -359,49 +358,76 @@ const SalesDashboard = () => {
     }
   };
   
+  const fetchOrganizations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/orgs`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setOrganizations(res.data);
+    } catch (err) {
+      console.error("Error fetching organizations:", err);
+      setOrganizations([]);
+    }
+  };
+
+  const createNewOrganization = async () => {
+    if (!newOrgData.companyName.trim()) {
+      toast.error("Organization name is required");
+      return null;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.post(`${API_BASE_URL}/api/orgs`, {
+        companyName: newOrgData.companyName,
+        website: newOrgData.website,
+        address: newOrgData.address,
+        pointsOfContact: []
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      toast.success(`Organization "${newOrgData.companyName}" created successfully`);
+      await fetchOrganizations();
+      return response.data;
+    } catch (err) {
+      console.error("Error creating organization:", err);
+      toast.error(err.response?.data?.error || "Failed to create organization");
+      return null;
+    }
+  };
+
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [projectManagers, setProjectManagers] = useState([]);
   const [projectForm, setProjectForm] = useState({
     name: '',
-    clients: [],
+    organizationId: '',
     projectManager: '',
     description: '',
     country: '',
     industry: '',
-    organizationId: ''
   });
   
   useEffect(() => {
     const fetchPMs = async () => {
-        const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-        });
-        setProjectManagers(res.data.filter(u => u.role === 'Project Manager'));
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setProjectManagers(res.data.filter(u => u.role === 'Project Manager'));
     };
     fetchPMs();
     fetchData();
+    fetchOrganizations();
     
     const randomIndex = Math.floor(Math.random() * tips.length);
     setRandomTip(tips[randomIndex]);
-  }, [])
-  
-  const [selectedPM, setSelectedPM] = useState('');
-
-  useEffect(() => {
-    const fetchPMs = async () => {
-        try {
-            const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
-                headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-            });
-            const onlyPMs = res.data.filter(user => user.role === 'Project Manager');
-            setProjectManagers(onlyPMs);
-        } catch (err) {
-            console.error("Error fetching PMs", err);
-        }
-    };
-    fetchPMs();
   }, []);
   
+  const filteredOrganizations = organizations.filter(org =>
+    org.companyName?.toLowerCase().includes(searchOrgTerm.toLowerCase())
+  );
+
   const handleFollowUpSubmit = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -410,7 +436,7 @@ const SalesDashboard = () => {
         followUpDate: followUpData.date,
         followUpType: followUpData.type,
         lastInteractionDesc: followUpData.description,
-        completedAt: null // Reset completed status
+        completedAt: null
       }, { headers: { Authorization: `Bearer ${token}` } });
       fetchData(); 
       closeModal();
@@ -623,66 +649,90 @@ const SalesDashboard = () => {
     }
   };
   
-  const handleStatusUpdate = async (leadId, status, extraData = {}) => {
-    if (status === 'Production Ready') {
-        const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
-        setProjectForm({
-          name: selectedLead.companyName || '',
-          clients: [selectedLead.pocName || ''],
-          projectManager: defaultPM,
-          description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
-          country: selectedLead.country || '',
-          industry: selectedLead.industry || '',
-          organizationId: selectedLead.organizationId?._id || selectedLead.organizationId
-        });
-        setShowProjectModal(true);
-        setShowActionModal(false);
-        return;
-      }
-    try {
-      const token = localStorage.getItem('token');
-      await axios.patch(`${API_BASE_URL}/api/leads/${leadId}/action`, {
-        status,
-        ...extraData
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      toast.success("Action recorded!");
-      setIsApproachModalOpen(false);
-      setApproachData({ method: 'Email', summary: '' });
-      fetchData();    
-    } catch (err) {
-      toast.error("Failed to update approach");
-    } finally {
-      setSubmittingApproach(false);
-    }
-  };
+ const handleStatusUpdate = async (leadId, status, extraData = {}) => {
+  if (status === 'Production Ready') {
+    const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
+    setProjectForm({
+      name: selectedLead.companyName || '',
+      organizationId: selectedLead.organizationId?._id || selectedLead.organizationId || '',
+      projectManager: defaultPM,
+      description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
+      country: selectedLead.country || '',
+      industry: selectedLead.industry || '',
+    });
+    setShowProjectModal(true);
+    setShowActionModal(false);
+    return;
+  }
+  // ... rest of the function
+};
   
-  const handleProjectSubmit = async (e) => {
-    if (e) e.preventDefault();
-    if (isSubmittingProject) return;
-    try {
-      setIsSubmittingProject(true);
-      const token = localStorage.getItem('token');
-      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
-        { 
-          status: 'Production Ready',
-          projectManagerId: projectForm.projectManager,
-          industry: projectForm.industry,
-          country: projectForm.country,
-          projectBriefName: projectForm.name 
-        }, 
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      toast.success("Project launched successfully!");
-      setShowProjectModal(false);
-      fetchData(); 
-    } catch (err) {
-      toast.error("Failed to launch project");
-    } finally {
-      setIsSubmittingProject(false);
+const handleProjectSubmit = async (e) => {
+  if (e) e.preventDefault();
+  if (isSubmittingProject) return;
+  
+  let finalOrgId = projectForm.organizationId;
+  
+  if (showNewOrgForm && newOrgData.companyName.trim()) {
+    const newOrg = await createNewOrganization();
+    if (newOrg) {
+      finalOrgId = newOrg._id;
+    } else {
+      return;
     }
-  };
+  }
+  
+  if (!finalOrgId) {
+    toast.error("Please select or create an organization");
+    return;
+  }
+  
+  try {
+    setIsSubmittingProject(true);
+    const token = localStorage.getItem('token');
+    
+    await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
+      { 
+        status: 'Production Ready',
+        projectManagerId: projectForm.projectManager,
+        industry: projectForm.industry,
+        country: projectForm.country,
+        projectBriefName: projectForm.name,
+        organizations: [finalOrgId]
+      }, 
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    
+    toast.success("Project launched successfully!");
+    
+    // Close all modals
+    setShowProjectModal(false);
+    setShowActionModal(false);
+    setShowNewOrgForm(false);
+    setNewOrgData({ companyName: '', website: '', address: '' });
+    setSearchOrgTerm('');
+    
+    // Refresh data
+    await fetchData();
+    
+    // Redirect to project management page (for PM) or admin projects (for Admin)
+    const userRole = localStorage.getItem('role');
+    if (userRole === 'Admin') {
+      navigate('/admin/projects');
+    } else if (userRole === 'Project Manager') {
+      navigate('/admin/projects');
+    } else {
+      // For sales, stay on dashboard but refresh
+      toast.success("Project created! Project Manager can now access it.");
+    }
+    
+  } catch (err) {
+    console.error("Project launch error:", err);
+    toast.error(err.response?.data?.error || "Failed to launch project");
+  } finally {
+    setIsSubmittingProject(false);
+  }
+};
 
   const getItemsForDate = (date) => {
     const dateStr = date.toLocaleDateString('en-CA');
@@ -691,7 +741,6 @@ const SalesDashboard = () => {
     );
   };
 
-  // Paginated scheduled items for modal
   const paginatedScheduledItems = allScheduledItems.slice(
     (scheduledCurrentPage - 1) * scheduledItemsPerPage,
     scheduledCurrentPage * scheduledItemsPerPage
@@ -774,7 +823,7 @@ const SalesDashboard = () => {
               </div>  
             </div>
 
-            {/* SCHEDULED FOR TODAY SECTION - Now shows ALL pending tasks with SLA indicators */}
+            {/* SCHEDULED FOR TODAY SECTION */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* FOLLOW-UPS LIST */}
               <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
@@ -858,52 +907,43 @@ const SalesDashboard = () => {
                     ) : currentFeasibility.map((lead) => {
                       const isOverdueTask = isOverdue(lead.followUpDate);
                       return (
-                         <div key={lead._id} className={`relative p-5 rounded-3xl border flex flex-col transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-100 hover:border-purple-200'}`}>
-  {/* Feasibility ID at top left */}
-  <p className="absolute top-2 left-4 text-[9px] font-black text-purple-700 uppercase tracking-widest">
-    {lead.feasibilityId}
-  </p>
-  
-  {/* Main content wrapper */}
-  <div className="flex items-center justify-between mt-6">
-    <div className="flex items-center gap-4 flex-1">
-      <div className="p-3 bg-white/80 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-        {/* Your icon here */}
-        <Briefcase size={18}/>
-      </div>
-      
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 flex-wrap">
-          <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-          <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
-            {lead.organizationId?.companyName || 'No Org'}
-          </span>
-          {isOverdueTask && (
-            <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-              <AlertTriangle size={8} />
-              Pending SLA
-            </span>
-          )}
-        </div>
-        
-        {/* Remove the ID from here since it's now at the top */}
-        
-        <p className="text-[9px] text-slate-500 mt-1">Due: {new Date(lead.followUpDate).toLocaleDateString()}</p>
-        {lead.lastInteractionDesc && (
-          <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
-            💬 {lead.lastInteractionDesc}
-          </p>
-        )}
-      </div>
-    </div>
-    
-    <div className="flex items-center gap-2">
-      <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors">
-        <ExternalLink size={16}/>
-      </button>
-    </div>
-  </div>
-</div>
+                        <div key={lead._id} className={`relative p-5 rounded-3xl border flex flex-col transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-100 hover:border-purple-200'}`}>
+                          <p className="absolute top-2 left-4 text-[9px] font-black text-purple-700 uppercase tracking-widest">
+                            {lead.feasibilityId}
+                          </p>
+                          <div className="flex items-center justify-between mt-6">
+                            <div className="flex items-center gap-4 flex-1">
+                              <div className="p-3 bg-white/80 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
+                                <Briefcase size={18}/>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
+                                  <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
+                                    {lead.organizationId?.companyName || 'No Org'}
+                                  </span>
+                                  {isOverdueTask && (
+                                    <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                      <AlertTriangle size={8} />
+                                      Pending SLA
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-slate-500 mt-1">Due: {new Date(lead.followUpDate).toLocaleDateString()}</p>
+                                {lead.lastInteractionDesc && (
+                                  <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
+                                    💬 {lead.lastInteractionDesc}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors">
+                                <ExternalLink size={16}/>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
                       );
                     })}
                   </div>
@@ -955,8 +995,8 @@ const SalesDashboard = () => {
             </div>
           </div>
 
-          {/* --- SIDEBAR COLUMN --- */}
-          <div className="xl:col-span-1 space-y-6 ">
+          {/* SIDEBAR COLUMN */}
+          <div className="xl:col-span-1 space-y-6">
             <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl p-4 shadow-sm border border-slate-100 transition-all hover:shadow-md">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -977,7 +1017,7 @@ const SalesDashboard = () => {
             </div>  
             
             {/* LEADS OVERVIEW SELECTOR */}
-            <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl hover:border-indigo-200">
               <div className="flex items-center justify-between mb-8">
                 <div><h3 className="text-lg font-black text-slate-800">Overview</h3><p className="text-[10px] text-slate-900 font-bold uppercase tracking-tight">Lead Volume</p></div>
                 <div className="flex bg-slate-100 p-1 rounded-xl">
@@ -985,7 +1025,7 @@ const SalesDashboard = () => {
                   <button onClick={() => setOverviewRange(30)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 30 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>30D</button>
                 </div>
               </div>
-              <div className="relative group p-4 bg-slate-50 rounded-[2rem] border border-slate-100 transition-all ">
+              <div className="relative group p-4 bg-slate-50 rounded-[2rem] border border-slate-100">
                 <div className="flex items-center justify-between mb-2">
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Leads (Last {overviewRange} Days)</p>
                 </div>
@@ -998,7 +1038,7 @@ const SalesDashboard = () => {
             </div>
             
             {/* PRO TIP CARD */}
-            <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl hover:border-indigo-200 cursor-pointe">
+            <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm">
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-amber-200"><AlertCircle size={18}/></div>
                 <h3 className="text-sm font-black text-amber-900 uppercase tracking-tight">Pro Tip</h3>
@@ -1012,8 +1052,7 @@ const SalesDashboard = () => {
         </div>
       </div>
 
-      {/* [Rest of the modals remain the same as in your original code...] */}
-      {/* --- ACTION MODAL --- */}
+      {/* ACTION MODAL */}
       {showActionModal && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] md:rounded-[3rem] p-6 md:p-10 shadow-2xl relative">
@@ -1046,7 +1085,7 @@ const SalesDashboard = () => {
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-6">Follow-up Details</h2>
                 <div className="space-y-4">
-                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Date</label><input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.date}   min={new Date().toISOString().split('T')[0]} onChange={(e) => setFollowUpData({...followUpData, date: e.target.value})} /></div>
+                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Date</label><input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.date} min={new Date().toISOString().split('T')[0]} onChange={(e) => setFollowUpData({...followUpData, date: e.target.value})} /></div>
                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Method</label><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" value={followUpData.type} onChange={(e) => setFollowUpData({...followUpData, type: e.target.value})}><option value="call">📞 Phone Call</option><option value="email">📧 Email</option><option value="message">💬 Message</option></select></div>
                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes</label><textarea className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.description} onChange={(e) => setFollowUpData({...followUpData, description: e.target.value})} /></div>
                   <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={handleFollowUpSubmit} className="flex-[2] py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-200">Save Schedule</button></div>
@@ -1069,7 +1108,7 @@ const SalesDashboard = () => {
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select a Project Manager or leave blank to keep Unassigned</p>
                 <div className="space-y-4">
                   <div><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label><select required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}><option value="">Select a Manager...</option>{projectManagers.map(pm => (<option key={pm._id} value={pm._id}>{pm.name}</option>))}</select></div>
-                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={() => handleStatusUpdate(selectedLead._id, 'Production Ready', { projectManagerId: selectedPM || null })} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200">{selectedPM ? "Assign & Convert" : "Move to Production"}</button></div>
+                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={() => setShowProjectModal(true)} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200">Launch Project</button></div>
                 </div>
               </div>
             )}
@@ -1077,7 +1116,7 @@ const SalesDashboard = () => {
         </div>
       )}
 
-      {/* --- FEASIBILITY MODAL --- */}
+      {/* FEASIBILITY MODAL */}
       {showFeasibilityModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-lg rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 overflow-hidden">
@@ -1089,7 +1128,7 @@ const SalesDashboard = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility ID</label><input type="text" readOnly className="w-full p-4 bg-purple-50 border border-purple-100 rounded-2xl font-black text-purple-700 outline-none" value={feasibilityData.feasibilityId} /></div>
                 <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility Date</label><input type="date" readOnly className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" value={feasibilityData.feasibilityDate} /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Next Follow-up Date</label><input type="date" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" value={feasibilityData.nextFollowUpDate || ''}  min={new Date().toISOString().split('T')[0]} onChange={(e) => setFeasibilityData({...feasibilityData, nextFollowUpDate: e.target.value})} /><p className="text-[9px] text-slate-400 mt-2 italic">* This task will reappear in your dashboard on this date.</p></div>
+                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Next Follow-up Date</label><input type="date" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" value={feasibilityData.nextFollowUpDate || ''} min={new Date().toISOString().split('T')[0]} onChange={(e) => setFeasibilityData({...feasibilityData, nextFollowUpDate: e.target.value})} /><p className="text-[9px] text-slate-400 mt-2 italic">* This task will reappear in your dashboard on this date.</p></div>
               </div>
               <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Task Details</label><textarea required placeholder="Requirement details..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-medium outline-none h-14 md:h-22 resize-none" value={feasibilityData.taskDetails} onChange={(e) => setFeasibilityData({...feasibilityData, taskDetails: e.target.value})} /></div>
               <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Attachment (PDF/Word)</label><div className="relative group"><input type="file" accept=".pdf,.doc,.docx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => setFeasibilityData({...feasibilityData, attachment: e.target.files[0]})} /><div className="w-full p-6 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-2 group-hover:border-purple-400 transition-colors bg-slate-50"><Upload size={24} className="text-slate-400" /><span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">{feasibilityData.attachment ? feasibilityData.attachment.name : "Click to upload files"}</span></div></div></div>
@@ -1099,25 +1138,225 @@ const SalesDashboard = () => {
         </div>
       )}
 
-      {/* --- PROJECT LAUNCH MODAL --- */}
+      {/* PROJECT LAUNCH MODAL WITH ORGANIZATION SELECTION */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[200] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-10"><h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2><button onClick={() => setShowProjectModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors"><X size={28} /></button></div>
+            <div className="flex justify-between items-center mb-10">
+              <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Launch New Hub</h2>
+              <button 
+                onClick={() => {
+                  setShowProjectModal(false);
+                  setShowNewOrgForm(false);
+                  setNewOrgData({ companyName: '', website: '', address: '' });
+                  setSearchOrgTerm('');
+                }} 
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                <X size={28} />
+              </button>
+            </div>
+            
             <form onSubmit={handleProjectSubmit} className="space-y-6">
-              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label><input type="text" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700" value={projectForm.name} onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} /></div>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label><CreatableSelect isClearable options={INDUSTRY_OPTIONS} value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)} onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })} styles={customSelectStyles} placeholder="Type or select..." /></div>
-                <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label><CreatableSelect isClearable options={POPULAR_COUNTRIES} value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)} onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })} styles={customSelectStyles} placeholder="Select country..." /></div>
+              {/* Project Brief Title */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title *</label>
+                <input 
+                  type="text" 
+                  required 
+                  className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 focus:border-blue-400 transition-all" 
+                  value={projectForm.name} 
+                  onChange={(e) => setProjectForm({...projectForm, name: e.target.value})} 
+                  placeholder="Enter project name"
+                />
               </div>
-              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label><select required className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none" value={projectForm.projectManager} onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}><option value="">Select a Manager...</option>{projectManagers.map(pm => (<option key={pm._id} value={pm._id}>{pm.name}</option>))}</select></div>
-              <button type="submit" disabled={isSubmittingProject} className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${isSubmittingProject ? 'bg-slate-400 cursor-not-allowed' : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'}`}>{isSubmittingProject ? (<div className="flex items-center justify-center gap-2"><Loader2 className="animate-spin" size={20} /><span>Creating Project...</span></div>) : "Confirm & Create Project"}</button>
+
+              {/* Client/Organization Selection */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
+                  <Building2 size={12} />
+                  Client Organization *
+                </label>
+                
+                {!showNewOrgForm ? (
+                  <>
+                    <div className="relative">
+                      <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Search or select organization..."
+                        value={searchOrgTerm}
+                        onChange={(e) => {
+                          setSearchOrgTerm(e.target.value);
+                          setIsOrgDropdownOpen(true);
+                        }}
+                        onFocus={() => setIsOrgDropdownOpen(true)}
+                        className="w-full h-12 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      >
+                        {isOrgDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      </button>
+                    </div>
+
+                    {isOrgDropdownOpen && (
+                      <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-50">
+                        {filteredOrganizations.length === 0 ? (
+                          <div className="p-4 text-center text-slate-400 text-xs">No organizations found</div>
+                        ) : (
+                          filteredOrganizations.map(org => (
+                            <div
+                              key={org._id}
+                              onClick={() => {
+                                setProjectForm({...projectForm, organizationId: org._id});
+                                setSearchOrgTerm(org.companyName);
+                                setIsOrgDropdownOpen(false);
+                              }}
+                              className="flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50"
+                            >
+                              <div>
+                                <p className="text-sm font-bold text-slate-800">{org.companyName}</p>
+                                <p className="text-[9px] text-slate-400">{org.website || 'No website'}</p>
+                              </div>
+                              {projectForm.organizationId === org._id && (
+                                <CheckCircle size={14} className="text-blue-600" />
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowNewOrgForm(true);
+                        setIsOrgDropdownOpen(false);
+                      }}
+                      className="w-full mt-2 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus size={14} />
+                      Create New Organization
+                    </button>
+                  </>
+                ) : (
+                  <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black uppercase text-blue-600 ml-1">New Organization Details</label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowNewOrgForm(false);
+                          setNewOrgData({ companyName: '', website: '', address: '' });
+                        }}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Organization Name *"
+                      required
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-sm"
+                      value={newOrgData.companyName}
+                      onChange={(e) => setNewOrgData({...newOrgData, companyName: e.target.value})}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Website (optional)"
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                      value={newOrgData.website}
+                      onChange={(e) => setNewOrgData({...newOrgData, website: e.target.value})}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Address (optional)"
+                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                      value={newOrgData.address}
+                      onChange={(e) => setNewOrgData({...newOrgData, address: e.target.value})}
+                    />
+                  </div>
+                )}
+                
+                {projectForm.organizationId && !showNewOrgForm && (
+                  <p className="text-[8px] text-green-600 mt-1 flex items-center gap-1">
+                    <CheckCircle size={10} />
+                    Organization selected
+                  </p>
+                )}
+              </div>
+
+              {/* Industry and Country */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label>
+                  <CreatableSelect 
+                    isClearable 
+                    options={INDUSTRY_OPTIONS} 
+                    value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || (projectForm.industry ? { label: projectForm.industry, value: projectForm.industry } : null)} 
+                    onChange={(newValue) => setProjectForm({ ...projectForm, industry: newValue ? newValue.value : '' })} 
+                    styles={customSelectStyles} 
+                    placeholder="Type or select..." 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Country</label>
+                  <CreatableSelect 
+                    isClearable 
+                    options={POPULAR_COUNTRIES} 
+                    value={POPULAR_COUNTRIES.find(opt => opt.value === projectForm.country) || (projectForm.country ? { label: projectForm.country, value: projectForm.country } : null)} 
+                    onChange={(newValue) => setProjectForm({ ...projectForm, country: newValue ? newValue.value : '' })} 
+                    styles={customSelectStyles} 
+                    placeholder="Select country..." 
+                  />
+                </div>
+              </div>
+
+              {/* Project Manager Assignment */}
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager *</label>
+                <select 
+                  required 
+                  className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none cursor-pointer focus:border-blue-400 transition-all" 
+                  value={projectForm.projectManager} 
+                  onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
+                >
+                  <option value="">Select a Manager...</option>
+                  {projectManagers.map(pm => (
+                    <option key={pm._id} value={pm._id}>{pm.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Submit Button */}
+              <button 
+                type="submit" 
+                disabled={isSubmittingProject || (!projectForm.organizationId && !showNewOrgForm)} 
+                className={`w-full py-5 text-white font-black rounded-2xl uppercase tracking-widest shadow-lg transition-all ${
+                  isSubmittingProject || (!projectForm.organizationId && !showNewOrgForm) 
+                    ? 'bg-slate-400 cursor-not-allowed' 
+                    : 'bg-[#111C44] hover:bg-[#1a2b63] active:scale-95'
+                }`}
+              >
+                {isSubmittingProject ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="animate-spin" size={20} />
+                    <span>Creating Project...</span>
+                  </div>
+                ) : (
+                  "Confirm & Create Project"
+                )}
+              </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* --- APPROACH MODAL --- */}
+      {/* APPROACH MODAL */}
       {isApproachModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 text-left">
           <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative border border-slate-100">
@@ -1132,7 +1371,7 @@ const SalesDashboard = () => {
         </div>
       )}
 
-      {/* --- SCHEDULED CALENDAR MODAL WITH PAGINATION AND COMPACT CARDS --- */}
+      {/* SCHEDULED CALENDAR MODAL */}
       {showScheduledModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-5xl rounded-[2.5rem] shadow-2xl p-6 md:p-8 relative max-h-[90vh] overflow-y-auto">
@@ -1141,7 +1380,6 @@ const SalesDashboard = () => {
             <p className="text-slate-400 text-sm mb-6">View all upcoming scheduled tasks</p>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Calendar View */}
               <div>
                 <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-orange-500"></span>Calendar View</h3>
                 <Calendar onChange={setSelectedDate} value={selectedDate} tileContent={tileContent} className="rounded-2xl border-0 shadow-sm w-full" nextLabel={<ChevronRight size={18} />} prevLabel={<ChevronLeft size={18} />} />
@@ -1151,7 +1389,6 @@ const SalesDashboard = () => {
                 </div>
               </div>
 
-              {/* List View for Selected Date with Pagination */}
               <div>
                 <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Tasks for {selectedDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</h3>
                 <div className="space-y-2 max-h-[350px] overflow-y-auto pr-2">
@@ -1186,7 +1423,6 @@ const SalesDashboard = () => {
               </div>
             </div>
 
-            {/* All Scheduled Items Section with Pagination */}
             <div className="mt-8 pt-6 border-t border-slate-100">
               <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-green-500"></span>All Scheduled Tasks ({allScheduledItems.length})</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-[300px] overflow-y-auto p-1">
@@ -1206,7 +1442,6 @@ const SalesDashboard = () => {
                 ))}
               </div>
               
-              {/* Pagination for all scheduled items */}
               {totalScheduledPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-4 pt-3 border-t border-slate-100">
                   <button onClick={() => setScheduledCurrentPage(p => Math.max(1, p - 1))} disabled={scheduledCurrentPage === 1} className="p-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"><ChevronLeft size={14} /></button>

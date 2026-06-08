@@ -8,6 +8,8 @@ const { google } = require('googleapis');
 const { Readable } = require('stream');
 const Prospect = require('../models/Prospect'); 
 const Project = require('../models/Project'); 
+const gitService = require('../services/gitService'); // Add this
+const User = require('../models/User'); // Add this
 
 // --- MULTER CONFIG ---
 const storage = multer.memoryStorage();
@@ -61,42 +63,36 @@ router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) =>
 });
 
 // --- POST: Create a Lead from an Organization ---
-// This is STEP 2 in your flow (Org → Lead)
-// --- POST: Create a Lead from an Organization ---
 router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
   try {
     const { 
       organizationId, 
       leadType, 
       referredBy,
-      pocName,      // Add these fields to accept data from frontend
-      pocEmail,     // Add these fields to accept data from frontend
-      pocPhone,     // Add these fields to accept data from frontend
-      linkedin      // Add these fields to accept data from frontend
+      pocName,
+      pocEmail,
+      pocPhone,
+      linkedin
     } = req.body;
 
     if (!organizationId) {
       return res.status(400).json({ error: "organizationId is required" });
     }
 
-    // Fetch the organization to populate lead data
     const org = await Organization.findById(organizationId);
     if (!org) {
       return res.status(404).json({ error: "Organization not found" });
     }
 
-    // Use provided data or fall back to organization data
     const finalPocName = pocName || org.pocName;
     const finalPocEmail = pocEmail || org.pocEmail;
     const finalPocPhone = pocPhone || org.pocPhone;
     const finalLinkedin = linkedin || org.linkedin;
 
-    // Validate required fields
     if (!finalPocName) {
       return res.status(400).json({ error: "POC Name is required" });
     }
 
-    // Check for existing lead with same POC name and organization
     const existingLead = await LeadGen.findOne({
       organizationId: org._id,
       pocName: { $regex: new RegExp(`^${finalPocName}$`, 'i') }
@@ -108,7 +104,6 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
       });
     }
 
-    // Create the Lead using provided data
     const newLead = new LeadGen({
       organizationId: org._id,
       pocName: finalPocName,
@@ -123,14 +118,12 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
 
     const savedLead = await newLead.save();
 
-    // Update the prospect to mark it as converted to Lead
     if (req.body.prospectId) {
       await Prospect.findByIdAndUpdate(
         req.body.prospectId,
         { $set: { leadId: savedLead._id } }
       );
     } else {
-      // Fallback: find prospect by organizationId
       await Prospect.findOneAndUpdate(
         { organizationId: org._id },
         { $set: { leadId: savedLead._id } }
@@ -141,7 +134,6 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
   } catch (err) {
     console.error("Lead Creation Error:", err);
     
-    // Handle duplicate key error
     if (err.code === 11000) {
       return res.status(400).json({ 
         error: "Duplicate lead: A lead with this POC name already exists for this organization" 
@@ -151,6 +143,7 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
 const COUNTRY_MAP = {
   "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
   "Australia": "AU", "Brazil": "BR", "Canada": "CA", 
@@ -163,8 +156,8 @@ const COUNTRY_MAP = {
   "United Arab Emirates": "AE", "United Kingdom": "GB", 
   "United States": "US", "Vietnam": "VN"
 };
+
 // --- PATCH: Take Action on a Lead ---
-// Add this to your organizationRoutes.js file
 router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), async (req, res) => {
   try {
     const leadId = req.params.id;
@@ -176,7 +169,8 @@ router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), 
         taskDetails, 
         followUpType, 
         lastInteractionDesc,
-        projectManagerId
+        projectManagerId,
+        organizations  // Add this to receive organizations array
     } = req.body;
     
     const lead = await LeadGen.findById(leadId).populate('organizationId');
@@ -201,8 +195,6 @@ router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), 
         console.error("Google Drive Upload Failed:", driveErr.message);
       }
     }
-
-    // --- CONVERSION TO PROJECT LOGIC (STEP 3: Lead → Project) ---
  
     const updatedLead = await LeadGen.findByIdAndUpdate(
       leadId,
@@ -210,47 +202,85 @@ router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), 
       { new: true, runValidators: true }
     );
 
+    // --- CONVERSION TO PROJECT LOGIC WITH GITHUB REPO ---
+    if (status === 'Production Ready') {
+      const existingProject = await Project.findOne({ leadId: lead._id });
+      
+      if (!existingProject) {
+        const projectCount = await Project.countDocuments();
+        const serialNumber = String(projectCount + 1).padStart(4, '0');
+        
+        const country = req.body.country || lead.country || 'Unknown';
+        const industry = req.body.industry || lead.industry || 'General';
+        
+        const countryCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
+        const industryCode = industry.toUpperCase().substring(0, 4);
+        
+        const briefName = req.body.projectBriefName || lead.organizationId?.companyName || "New Project";
+        
+        const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${briefName}`;
+        const organizationIds = organizations || [];
+
+        // Create project
+        const newProject = await Project.create({
+          name: fullFormattedName,
+          projectCustomId: fullFormattedName,
+          clients: lead.organizationId ? [lead.organizationId._id] : [],
+          organizations: organizationIds,
+          projectManager: projectManagerId,
+          country: country,
+          industry: industry,
+          leadId: lead._id,
+          description: `Launched: ${briefName}`,
+          adminId: req.user._id
+        });
+
+        // --- CREATE GITHUB REPOSITORY ---
+        let gitRepo = null;
+        if (process.env.GITHUB_TOKEN) {
+          try {
+            // Get developer IDs from project manager and assigned developers
+            let developerIds = [];
+            if (projectManagerId) {
+              developerIds.push(projectManagerId);
+            }
+            
+            // Create GitHub repository
+            gitRepo = await gitService.createRepository(
+              fullFormattedName,
+              `Project: ${briefName} | Industry: ${industry} | Country: ${country}`,
+              developerIds
+            );
+            
+            if (gitRepo && gitRepo.success) {
+              newProject.gitRepoUrl = gitRepo.repoUrl;
+              newProject.gitRepoName = gitRepo.repoName;
+              await newProject.save();
+              console.log(`✅ GitHub repository created: ${gitRepo.repoName}`);
+            }
+          } catch (gitErr) {
+            console.error("GitHub repo creation error:", gitErr);
+          }
+        }
+
+        updateData.projectId = newProject._id;
+        updateData.lastInteractionDesc = `Project Created: ${fullFormattedName}${gitRepo?.success ? ' ✓ Git repo created' : ''}`;
+        
+        // Log the project creation
+        await Log.create({
+          actionType: 'PROJECT_CREATED_FROM_LEAD',
+          performerId: req.user._id,
+          details: `Created project ${fullFormattedName} from lead ${lead.pocName}${gitRepo?.success ? ' with GitHub repo' : ''}`,
+          timestamp: new Date()
+        });
+      }
+    }
+
     // --- Audit Logging ---
     try {
       let actionType = 'LEAD_UPDATED';
       let logDetail = `Updated lead: ${lead.pocName}`;
-      // Inside router.patch('/:id/action', ...
-// Inside leadgenroutes.js -> router.patch('/:id/action')
-if (status === 'Production Ready') {
-  const existingProject = await Project.findOne({ leadId: lead._id });
-  
-  if (!existingProject) {
-    const projectCount = await Project.countDocuments();
-    const serialNumber = String(projectCount + 1).padStart(4, '0');
-    
-    const country = req.body.country || lead.country || 'Unknown';
-    const industry = req.body.industry || lead.industry || 'General';
-    
-    const countryCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
-    const industryCode = industry.toUpperCase().substring(0, 4);
-    
-    // CHANGE: Use the specific brief name from the frontend
-    const briefName = req.body.projectBriefName || lead.organizationId?.companyName || "New Project";
-    
-    // RESULT: TDS0001-ECOM | AE | Books Data Extraction
-    const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${briefName}`;
-
-    const newProject = await Project.create({
-      name: fullFormattedName,
-      projectCustomId: fullFormattedName,
-      clients: lead.organizationId ? [lead.organizationId._id] : [],
-      projectManager: projectManagerId,
-      country: country,
-      industry: industry,
-      leadId: lead._id,
-      description: `Launched: ${briefName}`,
-      adminId: req.user._id
-    });
-
-    updateData.projectId = newProject._id;
-    updateData.lastInteractionDesc = `Project Created: ${fullFormattedName}`;
-  }
-}
+      
       if (status === 'Follow-up Scheduled') {
         actionType = 'FOLLOW_UP_SET';
         logDetail = `Scheduled ${followUpType} follow-up for ${lead.pocName} on ${followUpDate}`;

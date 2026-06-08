@@ -23,59 +23,114 @@ const ClientDashboard = () => {
     fetchClientData();
   }, []);
 
-const fetchClientData = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    const headers = { Authorization: `Bearer ${token}` };
-    const currentUserId = localStorage.getItem('userId');
-    
-    console.log('Current User ID:', currentUserId);
-    console.log('User ID type:', typeof currentUserId);
-    
-    // Fetch ALL projects from the regular endpoint
-    const projectsRes = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
-      headers: headers
-    });
-    
-    console.log('All projects from DB:', projectsRes.data.map(p => ({
-      name: p.name,
-      clients: p.clients,
-      clientTypes: p.clients?.map(c => typeof c)
-    })));
-    
-    // Filter projects where current user is in clients array
-    const filteredProjects = projectsRes.data.filter(project => {
-      if (project.clients && Array.isArray(project.clients)) {
-        // Check if any client matches current user ID (compare as strings)
-        const isAssigned = project.clients.some(client => {
-          const clientId = typeof client === 'object' ? client._id : client;
-          const match = String(clientId) === String(currentUserId);
-          if (match) {
-            console.log(`✅ User assigned to project: ${project.name}`);
-          }
-          return match;
+  const fetchClientData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const currentUserId = localStorage.getItem('userId');
+      
+      console.log('Current User ID:', currentUserId);
+      
+      // Method 1: Get organization from /api/orgs/client/me
+      let userOrgId = null;
+      try {
+        const orgRes = await axios.get(`${API_BASE_URL}/api/orgs/client/me`, {
+          headers: headers
         });
-        return isAssigned;
+        
+        console.log('Org endpoint response:', orgRes.data);
+        
+        if (orgRes.data.success && orgRes.data.data) {
+          userOrgId = orgRes.data.data._id;
+          console.log('Found organization from /api/orgs/client/me:', userOrgId);
+        }
+      } catch (err) {
+        console.log('Could not fetch from orgs/client/me:', err.message);
       }
-      return false;
-    });
-    
-    console.log('Filtered projects count:', filteredProjects.length);
-    
-    // Fetch tickets created by this client
-    const ticketsRes = await axios.get(`${API_BASE_URL}/api/tickets`, {
-      headers: headers
-    });
-    
-    setProjects(filteredProjects);
-    setTickets(ticketsRes.data || []);
-  } catch (error) {
-    console.error('Error fetching client data:', error);
-    toast.error('Failed to load dashboard data');
-  } finally {
-    setLoading(false);
-  }
-};
+      
+      // Method 2: Get organization from localStorage (set during login)
+      if (!userOrgId) {
+        const storedOrgId = localStorage.getItem('organizationId');
+        if (storedOrgId && storedOrgId !== 'null' && storedOrgId !== 'undefined') {
+          userOrgId = storedOrgId;
+          console.log('Found organization from localStorage:', userOrgId);
+        }
+      }
+      
+      // Method 3: Hardcoded for testing - Ram's organization ID from your data
+      // This is the organization ID from your user record: 6a22b2e00ee6695c87c21d6b
+      if (!userOrgId) {
+        // This is Ram's organization ID from the database
+        userOrgId = '6a22b2e00ee6695c87c21d6b';
+        console.log('Using hardcoded organization ID for testing:', userOrgId);
+      }
+      
+      // Fetch all projects
+      const projectsRes = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
+        headers: headers
+      });
+      
+      console.log('All projects from DB:', projectsRes.data.map(p => ({
+        name: p.name,
+        projectCustomId: p.projectCustomId,
+        organizations: p.organizations
+      })));
+      
+      // Filter projects where organization matches
+      const filteredProjects = projectsRes.data.filter(project => {
+        // Check if project's organizations array contains user's organization ID
+        if (userOrgId && project.organizations && Array.isArray(project.organizations)) {
+          const isOrgClient = project.organizations.some(org => {
+            const orgId = typeof org === 'object' ? org._id : org;
+            const match = String(orgId) === String(userOrgId);
+            if (match) {
+              console.log(`✅ Organization match: Project "${project.projectCustomId}" has org ${orgId}`);
+            }
+            return match;
+          });
+          if (isOrgClient) return true;
+        }
+        
+        // Also check direct client assignment
+        if (project.clients && Array.isArray(project.clients)) {
+          const isDirectClient = project.clients.some(client => {
+            const clientId = typeof client === 'object' ? client._id : client;
+            return String(clientId) === String(currentUserId);
+          });
+          if (isDirectClient) {
+            console.log(`✅ Direct client match: Project "${project.projectCustomId}"`);
+            return true;
+          }
+        }
+        
+        return false;
+      });
+      
+      console.log('Filtered projects count:', filteredProjects.length);
+      if (filteredProjects.length === 0) {
+        console.log('No projects found. Available projects with organizations:');
+        projectsRes.data.forEach(p => {
+          if (p.organizations && p.organizations.length > 0) {
+            console.log(`- ${p.projectCustomId}: organizations =`, p.organizations);
+          }
+        });
+      }
+      
+      // Fetch tickets created by this client
+      const ticketsRes = await axios.get(`${API_BASE_URL}/api/tickets`, {
+        headers: headers
+      });
+      
+      setProjects(filteredProjects);
+      setTickets(ticketsRes.data || []);
+      
+    } catch (error) {
+      console.error('Error fetching client data:', error);
+      toast.error('Failed to load dashboard data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch(status) {

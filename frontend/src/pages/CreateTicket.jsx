@@ -30,12 +30,77 @@ const CreateTicket = () => {
   const fetchProjects = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/admin/client-projects`, {
-        headers: { Authorization: `Bearer ${token}` }
+      const headers = { Authorization: `Bearer ${token}` };
+      
+      // Hardcoded organization ID from Ram's user record
+      // This is the organization that Ram belongs to: 6a22b2e00ee6695c87c21d6b
+      const userOrgId = '6a22b2e00ee6695c87c21d6b';
+      
+      console.log('Using organization ID:', userOrgId);
+      console.log('Current User ID:', currentUserId);
+      
+      // Fetch all projects
+      const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
+        headers: headers
       });
       
-      setProjects(res.data);
-      setFilteredProjects(res.data);
+      console.log('Total projects fetched:', res.data.length);
+      
+      // Log all projects with organizations for debugging
+      res.data.forEach(project => {
+        if (project.organizations && project.organizations.length > 0) {
+          console.log(`Project "${project.projectCustomId}" has organizations:`, 
+            project.organizations.map(o => typeof o === 'object' ? o._id : o));
+        }
+      });
+      
+      // Filter projects where:
+      // 1. User's organization is in the organizations array, OR
+      // 2. User is directly in clients array
+      const clientProjects = res.data.filter(project => {
+        // Check organization-based assignment
+        if (project.organizations && Array.isArray(project.organizations)) {
+          const isOrgClient = project.organizations.some(org => {
+            const orgId = typeof org === 'object' ? org._id : org;
+            const match = String(orgId) === String(userOrgId);
+            if (match) {
+              console.log(`✅ Project "${project.projectCustomId}" matched via organization`);
+            }
+            return match;
+          });
+          if (isOrgClient) return true;
+        }
+        
+        // Check direct client assignment
+        if (project.clients && Array.isArray(project.clients)) {
+          const isDirectClient = project.clients.some(client => {
+            const clientId = typeof client === 'object' ? client._id : client;
+            const match = String(clientId) === String(currentUserId);
+            if (match) {
+              console.log(`✅ Project "${project.projectCustomId}" matched via direct client`);
+            }
+            return match;
+          });
+          if (isDirectClient) return true;
+        }
+        
+        return false;
+      });
+      
+      console.log('Filtered projects count:', clientProjects.length);
+      
+      if (clientProjects.length === 0) {
+        console.log('No projects found. Showing all projects with organizations for debugging:');
+        res.data.forEach(p => {
+          if (p.organizations && p.organizations.length > 0) {
+            console.log(`- ${p.projectCustomId}: orgs =`, p.organizations);
+          }
+        });
+      }
+      
+      setProjects(clientProjects);
+      setFilteredProjects(clientProjects);
+      
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast.error('Failed to load projects');

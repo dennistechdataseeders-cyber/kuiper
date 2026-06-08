@@ -175,22 +175,29 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
 
-    // Generate a write-only token (you need to create this in GitHub)
-    // This token should have ONLY "contents: write" permission for this specific repo
-    const writeToken = process.env.GITHUB_WRITE_TOKEN;
+    // Get write token - if not set, use the main token or provide manual instructions
+    let writeToken = process.env.GITHUB_WRITE_TOKEN;
+    let authenticatedUrl = null;
+    
+    // Create authenticated URL with write token (if available)
+    if (writeToken && writeToken.startsWith('ghp_')) {
+      const repoOwner = project.gitRepoOwner || process.env.GITHUB_OWNER;
+      authenticatedUrl = `https://${writeToken}@github.com/${repoOwner}/${project.gitRepoName}.git`;
+    } else {
+      // If no write token, use the main token or provide manual instructions
+      console.log('⚠️ GITHUB_WRITE_TOKEN not found, using manual instructions mode');
+    }
 
-    // Create authenticated URL with write token
-    const repoOwner = project.gitRepoOwner || process.env.GITHUB_OWNER;
-    const authenticatedUrl = `https://${writeToken}@github.com/${repoOwner}/${project.gitRepoName}.git`;
+    // Generate the secure Python script with fallback mode
+// In backend/routes/developer.js, find the line around 306 and fix the script generation
 
-    // Generate the secure Python script
-    const pythonScript = `#!/usr/bin/env python3
+// REPLACE the entire script generation section with this corrected version:
+
+const pythonScript = `#!/usr/bin/env python3
 """
-SECURE DEPLOYMENT SCRIPT - PUSH ONLY
-- Cannot clone the repository
-- Clears previous files before upload
-- Uploads complete folder structure
-- Token has write-only permissions
+DEPLOYMENT SCRIPT for ${feed.name}
+- Uploads files to GitHub repository
+${authenticatedUrl ? '- Uses secure token authentication' : '- Manual authentication required'}
 """
 
 import os
@@ -201,9 +208,9 @@ from pathlib import Path
 from datetime import datetime
 
 # ============================================
-# CONFIGURATION (DO NOT MODIFY)
+# CONFIGURATION
 # ============================================
-REPO_URL = "${authenticatedUrl}"
+REPO_URL = "${project.gitRepoUrl}"
 REPO_NAME = "${project.gitRepoName}"
 FEED_FOLDER = "${feedFolderName}"
 TARGET_PATH = f"{FEED_FOLDER}/src"
@@ -212,7 +219,7 @@ TARGET_PATH = f"{FEED_FOLDER}/src"
 CURRENT_DIR = Path(__file__).parent.absolute()
 
 print("=" * 70)
-print("🔒 SECURE DEPLOYMENT MODE: PUSH ONLY")
+print("📦 DEPLOYMENT SCRIPT")
 print("📦 Feed: ${feed.name}")
 print(f"👤 Developer: ${req.user.name}")
 print(f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -220,6 +227,10 @@ print("=" * 70)
 print(f"📁 Source: {CURRENT_DIR}")
 print(f"🎯 Target: ${feed.name}/src")
 print()
+
+${authenticatedUrl ? `
+# With token authentication
+AUTH_REPO_URL = "${authenticatedUrl}"
 
 def run_command(cmd, cwd=None, capture=False):
     """Run shell command and return result"""
@@ -232,9 +243,36 @@ def run_command(cmd, cwd=None, capture=False):
             return True, "", ""
     except subprocess.CalledProcessError as e:
         return False, "", str(e)
+` : `
+def run_command(cmd, cwd=None, capture=False, env=None):
+    """Run shell command and return result"""
+    try:
+        if capture:
+            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, env=env)
+            return result.returncode == 0, result.stdout, result.stderr
+        else:
+            subprocess.run(cmd, shell=True, cwd=cwd, check=True, env=env)
+            return True, "", ""
+    except subprocess.CalledProcessError as e:
+        return False, "", str(e)
+
+def check_git_credentials():
+    """Check if git credentials are available"""
+    success, stdout, _ = run_command("git config user.name", capture=True)
+    has_name = success and stdout.strip()
+    success, stdout, _ = run_command("git config user.email", capture=True)
+    has_email = success and stdout.strip()
+    
+    if not has_name or not has_email:
+        print("⚠️ Git user not configured. Please run:")
+        print('  git config --global user.name "Your Name"')
+        print('  git config --global user.email "your.email@example.com"')
+        return False
+    return True
+`}
 
 def create_temp_repo():
-    """Create a temporary repository for pushing (no clone needed)"""
+    """Create a temporary repository for pushing"""
     temp_dir = Path(tempfile.mkdtemp()) / REPO_NAME
     temp_dir.mkdir(parents=True, exist_ok=True)
     
@@ -243,36 +281,39 @@ def create_temp_repo():
     # Initialize git repo
     run_command("git init", cwd=temp_dir)
     
-    # Set up remote (with token)
+${authenticatedUrl ? `
+    # Set up remote with token
+    run_command(f"git remote add origin {AUTH_REPO_URL}", cwd=temp_dir)
+` : `
+    # Set up remote
     run_command(f"git remote add origin {REPO_URL}", cwd=temp_dir)
     
-    # Configure git to use token only for this operation
-    run_command('git config user.name "KUIPER Deployment Bot"', cwd=temp_dir)
+    print("⚠️ You will need to enter your GitHub credentials when pushing")
+`}
+    
+    # Configure git
+    run_command('git config user.name "KUIPER Deployment"', cwd=temp_dir)
     run_command('git config user.email "deploy@kuiper.com"', cwd=temp_dir)
     
     return temp_dir
 
 def create_initial_structure(repo_path):
     """Create the complete folder structure"""
-    # Create the target folder
     target_folder = repo_path / TARGET_PATH
     target_folder.mkdir(parents=True, exist_ok=True)
     
-    # Create README file
     readme_content = f"""# ${feed.name} Feed
 
 ## Deployment Information
 - **Feed ID**: ${feed._id}
 - **Last Deployed**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- **Deployed By**: ${req.user.name} (${req.user.email})
+- **Deployed By**: ${req.user.name}
 
 ## Structure
-- `/src` - Source code files
+- \`/src\` - Source code files
 - This folder is automatically updated on each deployment
-- Previous files are cleared before each upload
 
 ## Auto-generated by KUIPER CRM
-*Do not manually modify files in this folder*
 """
     readme_path = target_folder / "README.md"
     readme_path.write_text(readme_content)
@@ -286,32 +327,22 @@ def clear_previous_files(folder_path):
         print("🗑️  Clearing previous files...")
         for item in folder_path.iterdir():
             if item.name == 'README.md':
-                continue  # Keep README
+                continue
             if item.is_file():
                 item.unlink()
-                print(f"  🗑️  Deleted: {item.name}")
             elif item.is_dir():
                 shutil.rmtree(item)
-                print(f"  🗑️  Deleted folder: {item.name}/")
         print("✓ Previous files cleared")
 
 def copy_new_files(source_dir, target_folder):
     """Copy new files to the target folder"""
     print("📤 Uploading new files...")
     copied = 0
-    skipped = 0
     
-    # Files/folders to exclude
     exclude = {'.git', 'deploy.py', '__pycache__', '.DS_Store', 'venv', '.venv', 'node_modules'}
     
     for item in source_dir.iterdir():
         if item.name in exclude:
-            continue
-        
-        # Skip large files (>100MB)
-        if item.is_file() and item.stat().st_size > 100 * 1024 * 1024:
-            print(f"  ⚠️ Skipping large file: {item.name} (>{100}MB)")
-            skipped += 1
             continue
         
         dest = target_folder / item.name
@@ -327,9 +358,6 @@ def copy_new_files(source_dir, target_folder):
             copied += 1
     
     print(f"✓ Uploaded {copied} items")
-    if skipped > 0:
-        print(f"⚠️ Skipped {skipped} large items")
-    
     return copied
 
 def commit_and_push(repo_path):
@@ -359,20 +387,16 @@ def commit_and_push(repo_path):
     
     # Push to GitHub
     print("🚀 Pushing to GitHub...")
-    success, stdout, stderr = run_command("git push -f origin main", cwd=repo_path, capture=True)
     
-    if success:
-        print("✓ Successfully pushed to GitHub")
-        return True
-    else:
-        # Try with master branch
-        success, stdout, stderr = run_command("git push -f origin master", cwd=repo_path, capture=True)
+    # Try main branch first, then master
+    for branch in ['main', 'master']:
+        success, stdout, stderr = run_command(f"git push -f origin {branch}", cwd=repo_path, capture=True)
         if success:
-            print("✓ Successfully pushed to GitHub")
+            print(f"✓ Successfully pushed to GitHub ({branch} branch)")
             return True
-        else:
-            print(f"❌ Push failed: {stderr}")
-            return False
+    
+    print(f"❌ Push failed: {stderr}")
+    return False
 
 def cleanup_temp_repo(repo_path):
     """Clean up temporary repository"""
@@ -387,6 +411,13 @@ def cleanup_temp_repo(repo_path):
 # ============================================
 
 try:
+${authenticatedUrl ? '' : `
+    # Check git credentials
+    if not check_git_credentials():
+        print("❌ Please configure git credentials first")
+        exit(1)
+`}
+    
     # Step 1: Create temporary repository
     temp_repo = create_temp_repo()
     print(f"✓ Temporary workspace: {temp_repo}")
@@ -409,13 +440,11 @@ try:
             print("=" * 70)
             print("✅ DEPLOYMENT COMPLETE!")
             print(f"📍 Files deployed to: ${feed.name}/src")
-            print("🔒 Previous files have been replaced with new versions")
             print("=" * 70)
         else:
             print()
             print("=" * 70)
             print("❌ DEPLOYMENT FAILED!")
-            print("Please check your internet connection and try again")
             print("=" * 70)
     
     # Step 6: Cleanup
@@ -436,11 +465,12 @@ except Exception as e:
         name: feed.name,
         feedPath: feedFolderName,
         targetPath: `${feedFolderName}/src`
-      }
+      },
+      hasWriteToken: !!writeToken
     });
   } catch (err) {
     console.error('Error generating script:', err);
-    res.status(500).json({ error: 'Failed to generate script' });
+    res.status(500).json({ error: 'Failed to generate script', details: err.message });
   }
 });
 /**

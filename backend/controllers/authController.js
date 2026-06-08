@@ -47,7 +47,12 @@ const login = async (req, res) => {
       process.env.JWT_SECRET || 'your_fallback_secret',
       { expiresIn: '12h' }
     );
-
+    let organizationId = null;
+    if (user.organizationId) {
+      organizationId = typeof user.organizationId === 'object' 
+        ? user.organizationId._id.toString() 
+        : user.organizationId.toString();
+    }
     // Send Response
     res.json({
       token,

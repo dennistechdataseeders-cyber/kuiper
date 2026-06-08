@@ -28,7 +28,8 @@ import NotificationSettings from './pages/NotificationSettings';
 import GitManager from './pages/GitManager';
 import DeveloperGitFeeds from './pages/DeveloperGitFeeds';
 import AdminProjectClients from './pages/AdminProjectClients';  
-
+import DeveloperProjects from './pages/DeveloperProjects';
+import DeveloperFeeds from './pages/DeveloperFeeds';
 import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
@@ -163,6 +164,8 @@ const landingPath = useMemo(() => {
                     <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
                     <Route path="/developer/worklog" element={ <ProtectedRoute allowedRoles={['Developer', 'Admin']}> <Worklog /></ProtectedRoute>}/>    
                     <Route path="/developer/git-feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperGitFeeds /></ProtectedRoute>} />
+                    <Route path="/developer/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperProjects /></ProtectedRoute>} />
+                    <Route path="/developer/feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperFeeds /></ProtectedRoute>} />
                     {/*Client routes*/}
                     <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientDashboard /></ProtectedRoute>} />
 

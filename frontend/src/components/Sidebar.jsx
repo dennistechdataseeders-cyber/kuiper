@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutDashboard,
   Users,
+  File,
   FolderTree,
   Activity,
   LogOut,
@@ -146,8 +147,10 @@ const Sidebar = () => {
 
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/developer/bucket', icon: <FolderTree size={18} />, label: 'My Bucket' },
+      // { path: '/developer/bucket', icon: <FolderTree size={18} />, label: 'My Bucket' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
+      { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+      { path: '/developer//feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     ],

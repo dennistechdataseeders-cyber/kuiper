@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { 
-  Layout, Database, Hash, ExternalLink, ChevronLeft, ChevronRight, 
-  ChevronDown, ChevronUp, User, Globe, Calendar, Clock, Target,
-  CheckCircle, AlertCircle, TrendingUp, Briefcase, Lightbulb, Users,
-  X, Send, Monitor, Smartphone, Globe as GlobeIcon
+  Layout, Database, Calendar, Clock, Target,
+  CheckCircle, AlertCircle, TrendingUp, Briefcase, Lightbulb, 
+  X, Send, Monitor, Smartphone, Globe as GlobeIcon, Hash, 
+  ChevronLeft, ChevronRight, ExternalLink, Users
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import developerTips from '../data/developerTips';
+import io from 'socket.io-client';
 
 const DeveloperDashboard = () => {
   const { isCollapsed } = useSidebar();
@@ -18,15 +19,7 @@ const DeveloperDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [todayFeeds, setTodayFeeds] = useState([]);
   const [randomTip, setRandomTip] = useState('');
-  
-  // Track expanded items
-  const [expandedProjectId, setExpandedProjectId] = useState(null);
-  const [expandedFeedId, setExpandedFeedId] = useState(null);
-
-  // Pagination State
-  const [projectPage, setProjectPage] = useState(1);
-  const [feedPage, setFeedPage] = useState(1);
-  const itemsPerPage = 4;
+  const [socket, setSocket] = useState(null);
 
   // Modal State
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -52,17 +45,14 @@ const DeveloperDashboard = () => {
   // Check if feed is scheduled for today AND not completed today
   const isFeedForToday = (feed) => {
     const today = new Date().toISOString().split('T')[0];
-    const currentDayOfMonth = new Date().getDate(); // 1-31
+    const currentDayOfMonth = new Date().getDate();
     
-    // Check if already completed for today
     const isCompletedToday = feed.completionHistory && 
       Array.isArray(feed.completionHistory) && 
       feed.completionHistory.some(h => h && h.date === today);
     
-    // If completed today, don't show
     if (isCompletedToday) return false;
     
-    // Check if scheduled for today
     if (feed.feedType === 'Daily') return true;
     if (feed.feedType === 'Weekly') {
       return feed.weekDay === getTodayDayName();
@@ -73,7 +63,7 @@ const DeveloperDashboard = () => {
     return false;
   };
 
-  // Check if feed is completed for today (for UI display)
+  // Check if feed is completed for today
   const isFeedCompletedToday = (feed) => {
     const today = new Date().toISOString().split('T')[0];
     if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
@@ -99,29 +89,105 @@ const DeveloperDashboard = () => {
     }
   };
 
+  // Load developer data
+  const loadDevData = async () => {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
+    try {
+      const [projRes, feedRes] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/dev/my-projects`, { headers }),
+        axios.get(`${API_BASE_URL}/api/dev/my-feeds`, { headers })
+      ]);
+      setProjects(projRes.data);
+      setFeeds(feedRes.data);
+      
+      const today = feedRes.data.filter(feed => isFeedForToday(feed));
+      setTodayFeeds(today);
+      
+    } catch (err) { 
+      console.error("Fetch Error:", err);
+      toast.error('Failed to load dashboard data');
+    } finally { 
+      setLoading(false);
+    }
+  };
+
+  // Setup socket connection
   useEffect(() => {
-    const loadDevData = async () => {
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
-      try {
-        const [projRes, feedRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/dev/my-projects`, { headers }),
-          axios.get(`${API_BASE_URL}/api/dev/my-feeds`, { headers })
-        ]);
-        setProjects(projRes.data);
-        setFeeds(feedRes.data);
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    
+    if (!token || !userId) return;
+    
+    const newSocket = io(API_BASE_URL, {
+      transports: ['websocket'],
+      auth: { token }
+    });
+    
+    setSocket(newSocket);
+    
+    newSocket.on('connect', () => {
+      console.log('🔌 Socket connected');
+      newSocket.emit('join-user-room', userId);
+    });
+    
+    // Listen for feed assignments
+    newSocket.on('feed_assigned', (data) => {
+      console.log('📢 New feed assigned:', data);
+      
+      // Show toast notification
+      toast.success(data.message, {
+        duration: 5000,
+        icon: '📋'
+      });
+      
+      // Show desktop notification
+      if (Notification.permission === 'granted') {
+        const notificationBody = data.githubInviteSent 
+          ? `${data.message}\nGitHub invitation has been sent to your email!`
+          : `${data.message}\nCheck with your PM for GitHub access.`;
         
-        // Filter feeds for today (not completed today)
-        const today = feedRes.data.filter(feed => isFeedForToday(feed));
-        setTodayFeeds(today);
-        
-      } catch (err) { 
-        console.error("Fetch Error:", err);
-        toast.error('Failed to load dashboard data');
-      } finally { 
-        setLoading(false);
+        new Notification('New Feed Assignment', {
+          body: notificationBody,
+          icon: '/images/tab_logo.png',
+          tag: `feed-${data.feed._id}`
+        });
       }
+      
+      // Show GitHub invite status
+      if (data.githubInviteSent) {
+        toast.success('GitHub invitation has been sent to your email! Check your inbox (including spam).', {
+          duration: 8000,
+          icon: '🐙'
+        });
+      }
+      
+      // Refresh feeds list
+      loadDevData();
+    });
+    
+    // Listen for task assignments
+    newSocket.on('new_task', (task) => {
+      toast.info(`New task assigned: ${task.name || 'Development Task'}`, {
+        duration: 5000,
+        icon: '📝'
+      });
+      
+      if (Notification.permission === 'granted') {
+        new Notification('New Task Assigned', {
+          body: task.details?.substring(0, 100) || 'You have a new task in your bucket',
+          icon: '/images/tab_logo.png'
+        });
+      }
+    });
+    
+    return () => {
+      if (newSocket) newSocket.disconnect();
     };
+  }, []);
+  
+  // Initial data load
+  useEffect(() => {
     loadDevData();
   }, []);
 
@@ -165,7 +231,6 @@ const DeveloperDashboard = () => {
           : feed
       ));
       
-      // Close modal and reset
       setShowCompleteModal(false);
       setSelectedFeed(null);
       setCompletionDescription('');
@@ -183,12 +248,6 @@ const DeveloperDashboard = () => {
     setShowCompleteModal(true);
     setCompletionDescription('');
   };
-
-  // Pagination Logic
-  const currentProjects = projects.slice((projectPage - 1) * itemsPerPage, projectPage * itemsPerPage);
-  const currentFeeds = feeds.slice((feedPage - 1) * itemsPerPage, feedPage * itemsPerPage);
-  const totalProjectPages = Math.ceil(projects.length / itemsPerPage);
-  const totalFeedPages = Math.ceil(feeds.length / itemsPerPage);
 
   // Get feed type styling
   const getFeedTypeStyle = (type) => {
@@ -244,7 +303,7 @@ const DeveloperDashboard = () => {
               Developer Workspace
             </h1>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 mt-2">
-              Project & Feed Management
+              Today's Schedule & Quick Actions
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -386,7 +445,6 @@ const DeveloperDashboard = () => {
                     </div>
                   </div>
                   
-                  {/* Show domain if Web/Both and has webDomain */}
                   {feed.webDomain && (feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && (
                     <div className="mb-2 text-[8px] text-blue-600 truncate">
                       <GlobeIcon size={8} className="inline mr-1" />
@@ -418,278 +476,29 @@ const DeveloperDashboard = () => {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* QUICK LINKS */}
+      <div className="grid grid-cols-2 gap-4">
+        <button
+          onClick={() => window.location.href = '/developer/projects'}
+          className="bg-white rounded-2xl border border-slate-200 p-6 text-center hover:shadow-md transition-all duration-300 group"
+        >
+          <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+            <Layout size={24} />
+          </div>
+          <h3 className="text-sm font-black text-slate-800">View All Projects</h3>
+          <p className="text-[9px] text-slate-400 mt-1">Browse your assigned projects</p>
+        </button>
         
-        {/* PROJECTS SECTION */}
-        <section>
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-gradient-to-b from-blue-500 to-blue-600 rounded-full"></div>
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Assigned Projects</h2>
-              <span className="text-[9px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">{projects.length}</span>
-            </div>
-            <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-sm">
-              <button 
-                onClick={() => setProjectPage(p => Math.max(1, p - 1))} 
-                disabled={projectPage === 1} 
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-all"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <span className="text-[9px] font-black text-slate-500 px-2">{projectPage}/{totalProjectPages}</span>
-              <button 
-                onClick={() => setProjectPage(p => Math.min(totalProjectPages, p + 1))} 
-                disabled={projectPage === totalProjectPages} 
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-all"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
+        <button
+          onClick={() => window.location.href = '/developer/feeds'}
+          className="bg-white rounded-2xl border border-slate-200 p-6 text-center hover:shadow-md transition-all duration-300 group"
+        >
+          <div className="w-12 h-12 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform">
+            <Database size={24} />
           </div>
-
-          <div className="space-y-3">
-            {currentProjects.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
-                <Briefcase size={32} className="text-slate-300 mx-auto mb-3" />
-                <p className="text-sm font-bold text-slate-500">No projects assigned</p>
-              </div>
-            ) : (
-              currentProjects.map(proj => {
-                const isExpanded = expandedProjectId === proj._id;
-                return (
-                  <div 
-                    key={proj._id} 
-                    className={`bg-white rounded-2xl border transition-all duration-300 ${
-                      isExpanded ? 'border-blue-300 shadow-lg shadow-blue-100/50' : 'border-slate-200 hover:border-slate-300'
-                    }`}
-                  >
-                    <div 
-                      onClick={() => setExpandedProjectId(isExpanded ? null : proj._id)}
-                      className="p-4 flex items-center justify-between cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-3 truncate flex-1">
-                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-100 to-blue-200 flex items-center justify-center text-blue-600 group-hover:scale-110 transition-transform">
-                          <Globe size={16} />
-                        </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-800">{proj.projectCustomId}</p>
-                          <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                            {proj.feeds?.length || 0} Feeds
-                          </p>
-                        </div>
-                      </div>
-                      {isExpanded ? 
-                        <ChevronUp size={16} className="text-slate-400 group-hover:text-blue-600 transition-colors" /> : 
-                        <ChevronDown size={16} className="text-slate-400 group-hover:text-blue-600 transition-colors" />
-                      }
-                    </div>
-                    
-                    {isExpanded && (
-                      <div className="px-4 pb-4 pt-0 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100">
-                          <div className="flex items-center justify-between">
-                            <button 
-                              onClick={() => window.location.href = `/developer/project/${proj._id}`}
-                              className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-blue-600 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all duration-200 text-[9px] font-black uppercase tracking-wider flex items-center gap-1"
-                            >
-                              <ExternalLink size={10} />
-                              View
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-
-        {/* FEEDS SECTION */}
-        <section>
-          <div className="flex justify-between items-center mb-4">
-            <div className="flex items-center gap-2">
-              <div className="w-1 h-4 bg-gradient-to-b from-emerald-500 to-emerald-600 rounded-full"></div>
-              <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">All Feeds</h2>
-              <span className="text-[9px] font-black text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full">{feeds.length}</span>
-            </div>
-            <div className="flex items-center gap-1 bg-white rounded-xl p-1 shadow-sm">
-              <button 
-                onClick={() => setFeedPage(p => Math.max(1, p - 1))} 
-                disabled={feedPage === 1} 
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-all"
-              >
-                <ChevronLeft size={14} />
-              </button>
-              <span className="text-[9px] font-black text-slate-500 px-2">{feedPage}/{totalFeedPages}</span>
-              <button 
-                onClick={() => setFeedPage(p => Math.min(totalFeedPages, p + 1))} 
-                disabled={feedPage === totalFeedPages} 
-                className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-all"
-              >
-                <ChevronRight size={14} />
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-            {currentFeeds.length === 0 ? (
-              <div className="p-12 text-center">
-                <Database size={32} className="text-slate-300 mx-auto mb-3" />
-                <p className="text-sm font-bold text-slate-500">No feeds assigned</p>
-              </div>
-            ) : (
-              currentFeeds.map((feed, idx) => {
-                const isExpanded = expandedFeedId === feed._id;
-                const isToday = isFeedForToday(feed);
-                const isCompletedToday = isFeedCompletedToday(feed);
-                const platformInfo = getPlatformInfo(feed);
-                
-                return (
-                  <div 
-                    key={feed._id} 
-                    className={`border-slate-100 transition-all duration-200 ${
-                      idx !== currentFeeds.length - 1 ? 'border-b' : ''
-                    } ${isToday ? 'bg-amber-50/30' : ''} ${isCompletedToday ? 'bg-emerald-50/20' : ''}`}
-                  >
-                    <div 
-                      onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
-                      className={`p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-all ${
-                        isExpanded ? 'bg-blue-50/50' : ''
-                      } ${isToday ? 'hover:bg-amber-50/50' : ''}`}
-                    >
-                      <div className="flex items-center gap-3 flex-1">
-                        {isToday && !isCompletedToday && (
-                          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                        )}
-                        {isCompletedToday && (
-                          <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                        )}
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${
-                          feed.feedType === 'Daily' ? 'bg-emerald-100' : 
-                          feed.feedType === 'Weekly' ? 'bg-amber-100' : 
-                          feed.feedType === 'Monthly' ? 'bg-purple-100' : 'bg-slate-100'
-                        }`}>
-                          {feed.feedType === 'Daily' ? <Clock size={14} className="text-emerald-600" /> : 
-                           feed.feedType === 'Weekly' ? <Calendar size={14} className="text-amber-600" /> : 
-                           feed.feedType === 'Monthly' ? <Calendar size={14} className="text-purple-600" /> :
-                           <Target size={14} className="text-slate-600" />}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="text-sm font-black text-slate-800">{feed.name}</p>
-                            {isToday && !isCompletedToday && (
-                              <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                                Today
-                              </span>
-                            )}
-                            {isCompletedToday && (
-                              <span className="text-[8px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full uppercase tracking-wider">
-                                Completed
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <Hash size={9} className="text-slate-400" />
-                            <p className="text-[9px] font-bold text-slate-500">
-                              {feed.projectId?.projectCustomId || 'Global'}
-                            </p>
-                            {platformInfo && (
-                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[7px] font-black uppercase tracking-wider ${platformInfo.color}`}>
-                                {platformInfo.icon}
-                                {platformInfo.text}
-                              </span>
-                            )}
-                            {feed.webDomain && (feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && (
-                              <span className="text-[7px] text-blue-500 truncate max-w-[150px]">
-                                {feed.webDomain}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
-                          {getFeedTypeIcon(feed.feedType)}
-                          {getFeedTypeLabel(feed)}
-                        </span>
-                        {isExpanded ? 
-                          <ChevronUp size={14} className="text-slate-400" /> : 
-                          <ChevronDown size={14} className="text-slate-400" />
-                        }
-                      </div>
-                    </div>
-
-                    {isExpanded && (
-                      <div className="px-4 pb-4 pt-0 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <div className="bg-gradient-to-br from-slate-50 to-white p-4 rounded-xl border border-slate-100">
-                          <div className="space-y-2">
-                            {feed.feedType === 'Weekly' && feed.weekDay && (
-                              <div className="flex items-center gap-2">
-                                <Calendar size={10} className="text-amber-500" />
-                                <span className="text-[9px] font-bold text-amber-700 uppercase">
-                                  Every {feed.weekDay}
-                                </span>
-                              </div>
-                            )}
-                            {feed.feedType === 'Monthly' && feed.monthDay && (
-                              <div className="flex items-center gap-2">
-                                <Calendar size={10} className="text-purple-500" />
-                                <span className="text-[9px] font-bold text-purple-700 uppercase">
-                                  Day {feed.monthDay} of each month
-                                </span>
-                              </div>
-                            )}
-                            {feed.feedType === 'Daily' && (
-                              <div className="flex items-center gap-2">
-                                <Clock size={10} className="text-emerald-500" />
-                                <span className="text-[9px] font-bold text-emerald-700 uppercase">
-                                  Daily Schedule
-                                </span>
-                              </div>
-                            )}
-                            {feed.feedType === 'Once off' && (
-                              <div className="flex items-center gap-2">
-                                <Target size={10} className="text-emerald-500" />
-                                <span className="text-[9px] font-bold text-emerald-700 uppercase">
-                                  Once-off
-                                </span>
-                              </div>
-                            )}
-                            {platformInfo && (
-                              <div className="flex items-center gap-2">
-                                {platformInfo.icon}
-                                <span className="text-[9px] font-bold text-slate-600">
-                                  Platform: {platformInfo.text}
-                                </span>
-                              </div>
-                            )}
-                            {feed.webDomain && (feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && (
-                              <div className="flex items-center gap-2">
-                                <GlobeIcon size={10} className="text-blue-500" />
-                                <a 
-                                  href={feed.webDomain} 
-                                  target="_blank" 
-                                  rel="noopener noreferrer"
-                                  className="text-[9px] font-bold text-blue-600 hover:underline truncate"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  {feed.webDomain}
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </section>
-
+          <h3 className="text-sm font-black text-slate-800">View All Feeds</h3>
+          <p className="text-[9px] text-slate-400 mt-1">Browse all your assigned feeds</p>
+        </button>
       </div>
 
       {/* COMPLETION MODAL */}

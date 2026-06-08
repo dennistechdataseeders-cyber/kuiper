@@ -2,8 +2,10 @@ const router = require('express').Router();
 const { authorize } = require('../middleware/roleCheck'); 
 const Organization = require('../models/Organization'); 
 const Prospect = require('../models/Prospect');
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 
-// --- POST: Create Organization (with multiple POCs support) ---
+// --- POST: Create Organization (with multiple POCs support and optional client user creation) ---
 router.post('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { 
@@ -11,8 +13,20 @@ router.post('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) 
       companyName, 
       website, 
       address,
-      pointsOfContact 
+      pointsOfContact,
+      createClientAccount,
+      clientEmail,
+      clientPassword
     } = req.body;
+
+    // Validate required fields
+    if (!companyName) {
+      return res.status(400).json({ error: "Company name is required" });
+    }
+
+    if (createClientAccount && !clientEmail) {
+      return res.status(400).json({ error: "Client email is required when creating a client account" });
+    }
 
     // Get primary POC or first POC for backward compatibility fields
     const primaryPOC = pointsOfContact?.find(p => p.isPrimary) || pointsOfContact?.[0];
@@ -32,6 +46,38 @@ router.post('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) 
       linkedin: primaryPOC?.linkedin
     });
 
+    // Create a client user account for the organization if requested
+    let clientUser = null;
+    if (createClientAccount && clientEmail) {
+      // Check if user already exists
+      const existingUser = await User.findOne({ email: clientEmail });
+      
+      if (existingUser) {
+        // If user exists, link them to this organization
+        existingUser.organizationId = newOrg._id;
+        await existingUser.save();
+        clientUser = existingUser;
+      } else {
+        // Create new client user
+        const tempPassword = clientPassword || Math.random().toString(36).slice(-8);
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(tempPassword, salt);
+        
+        clientUser = await User.create({
+          name: companyName,
+          email: clientEmail,
+          password: hashedPassword,
+          role: 'Client',
+          clientType: 'organization',
+          organizationId: newOrg._id
+        });
+        
+        // Store the client user ID in the organization
+        newOrg.clientUserId = clientUser._id;
+        await newOrg.save();
+      }
+    }
+
     // Update the Prospect to link it to this Organization
     if (prospectId) {
       await Prospect.findByIdAndUpdate(prospectId, {
@@ -39,14 +85,82 @@ router.post('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) 
       });
     }
 
-    res.status(201).json(newOrg);
+    // Return response with client user info if created
+    const response = {
+      ...newOrg.toObject(),
+      clientUser: clientUser ? {
+        _id: clientUser._id,
+        email: clientUser.email,
+        name: clientUser.name,
+        temporaryPassword: clientPassword || (createClientAccount ? 'Password sent via email' : null)
+      } : null
+    };
+
+    res.status(201).json(response);
   } catch (err) {
     console.error("Org Creation Error:", err);
     res.status(400).json({ error: err.message });
   }
 });
+// Add this new route before the existing ones - specifically for clients to get their own organization
 
-// --- GET: View Organizations (with populated data) ---
+// GET /api/orgs/client/me - Get the organization for the current client user
+router.get('/client/me', authorize('Client'), async (req, res) => {
+  try {
+    const clientId = req.user._id;
+    
+    // Find organization where this client is linked
+    const organization = await Organization.findOne({ 
+      clientUserId: clientId 
+    }).populate('clientUserId', 'name email');
+    
+    if (!organization) {
+      return res.json({ success: true, data: null });
+    }
+    
+    res.json({ success: true, data: organization });
+  } catch (err) {
+    console.error("Error fetching client's organization:", err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+// Add this after the existing routes in organizationRoutes.js
+
+// GET /api/orgs/client/me - Get organization for current client
+router.get('/client/me', authorize('Client'), async (req, res) => {
+  try {
+    console.log('Fetching organization for client:', req.user._id);
+    console.log('Client organizationId from user:', req.user.organizationId);
+    
+    // First, try to get organization directly from user's organizationId
+    if (req.user.organizationId) {
+      const organization = await Organization.findById(req.user.organizationId)
+        .populate('clientUserId', 'name email');
+      
+      if (organization) {
+        console.log('Found organization via user.organizationId:', organization.companyName);
+        return res.json({ success: true, data: organization });
+      }
+    }
+    
+    // Fallback: search by clientUserId
+    const organization = await Organization.findOne({ 
+      clientUserId: req.user._id 
+    }).populate('clientUserId', 'name email');
+    
+    if (organization) {
+      console.log('Found organization via clientUserId:', organization.companyName);
+      return res.json({ success: true, data: organization });
+    }
+    
+    console.log('No organization found for client');
+    res.json({ success: true, data: null });
+  } catch (err) {
+    console.error("Error fetching client's organization:", err);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+// --- GET: View Organizations (with populated data including client users) ---
 router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') 
@@ -54,6 +168,7 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) =
       : { salesRepId: req.user._id };
     
     const organizations = await Organization.find(filter)
+      .populate('clientUserId', 'name email githubUsername')
       .sort({ createdAt: -1 })
       .select('-__v');
     
@@ -76,7 +191,9 @@ router.get('/check-existing', authorize('Admin', 'Sales', 'Sales Manager'), asyn
     // Find similar companies (partial match)
     const similarCompanies = await Organization.find({
       companyName: { $regex: companyName, $options: 'i' }
-    }).limit(5);
+    })
+    .populate('clientUserId', 'name email')
+    .limit(5);
     
     if (similarCompanies.length > 0) {
       res.json({
@@ -86,7 +203,8 @@ router.get('/check-existing', authorize('Admin', 'Sales', 'Sales Manager'), asyn
           companyName: org.companyName,
           website: org.website,
           address: org.address,
-          pointsOfContact: org.pointsOfContact || []
+          pointsOfContact: org.pointsOfContact || [],
+          clientUser: org.clientUserId
         }))
       });
     } else {
@@ -108,6 +226,7 @@ router.get('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
     }
     
     const organization = await Organization.findById(req.params.id)
+      .populate('clientUserId', 'name email githubUsername')
       .select('-__v');
     
     if (!organization) {
@@ -128,7 +247,7 @@ router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
       ? { _id: req.params.id } 
       : { _id: req.params.id, salesRepId: req.user._id };
     
-    const { pointsOfContact, companyName, website, address } = req.body;
+    const { pointsOfContact, companyName, website, address, clientUserId } = req.body;
     
     // Get primary POC for backward compatibility fields
     const primaryPOC = pointsOfContact?.find(p => p.isPrimary) || pointsOfContact?.[0];
@@ -145,11 +264,16 @@ router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
       linkedin: primaryPOC?.linkedin
     };
     
+    // Update client user reference if provided
+    if (clientUserId) {
+      updateData.clientUserId = clientUserId;
+    }
+    
     const updatedOrg = await Organization.findOneAndUpdate(
       filter,
       { $set: updateData },
       { new: true, runValidators: true }
-    );
+    ).populate('clientUserId', 'name email');
 
     if (!updatedOrg) {
       return res.status(404).json({ error: "Organization not found or unauthorized" });
@@ -175,6 +299,13 @@ router.delete('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, 
       return res.status(404).json({ error: "Organization not found or unauthorized" });
     }
 
+    // Remove reference from client user if exists
+    if (org.clientUserId) {
+      await User.findByIdAndUpdate(org.clientUserId, {
+        $unset: { organizationId: "" }
+      });
+    }
+
     // Unlink from prospect if exists
     await Prospect.findOneAndUpdate(
       { organizationId: req.params.id },
@@ -187,14 +318,15 @@ router.delete('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, 
     res.status(500).json({ error: "Server error" });
   }
 });
-// Add this endpoint to check if organization already exists
+
+// --- POST: Check if organization already exists ---
 router.post('/check-duplicate', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { companyName, prospectId } = req.body;
     
     const existingOrg = await Organization.findOne({
       companyName: { $regex: `^${companyName}$`, $options: 'i' }
-    });
+    }).populate('clientUserId', 'name email');
     
     if (existingOrg) {
       return res.json({ 
@@ -209,4 +341,214 @@ router.post('/check-duplicate', authorize('Admin', 'Sales', 'Sales Manager'), as
     res.status(500).json({ error: err.message });
   }
 });
+
+// --- POST: Add POC to existing organization (without creating a client user) ---
+router.post('/:id/add-poc', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    const { pocName, pocEmail, pocPhone, linkedin, department, isPrimary } = req.body;
+    
+    if (!pocName) {
+      return res.status(400).json({ error: "POC name is required" });
+    }
+    
+    const organization = await Organization.findById(req.params.id);
+    
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+    
+    // Create new POC
+    const newPOC = {
+      pocName,
+      pocEmail,
+      pocPhone,
+      linkedin,
+      department: department || 'Other',
+      isPrimary: isPrimary || false,
+      addedAt: new Date()
+    };
+    
+    // If this POC is marked as primary, unset other primary POCs
+    if (newPOC.isPrimary) {
+      organization.pointsOfContact.forEach(poc => {
+        poc.isPrimary = false;
+      });
+    }
+    
+    // Add to points of contact array
+    organization.pointsOfContact.push(newPOC);
+    
+    // If this is the first POC or marked as primary, update backward compatibility fields
+    if (organization.pointsOfContact.length === 1 || newPOC.isPrimary) {
+      organization.pocName = newPOC.pocName;
+      organization.pocEmail = newPOC.pocEmail;
+      organization.pocPhone = newPOC.pocPhone;
+      organization.linkedin = newPOC.linkedin;
+    }
+    
+    await organization.save();
+    
+    res.status(201).json({
+      success: true,
+      message: "POC added successfully",
+      poc: newPOC
+    });
+  } catch (err) {
+    console.error("Add POC Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- PUT: Update POC in organization ---
+router.put('/:id/poc/:pocIndex', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    const { pocIndex } = req.params;
+    const { pocName, pocEmail, pocPhone, linkedin, department, isPrimary } = req.body;
+    
+    const organization = await Organization.findById(req.params.id);
+    
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+    
+    const index = parseInt(pocIndex);
+    if (index < 0 || index >= organization.pointsOfContact.length) {
+      return res.status(400).json({ error: "Invalid POC index" });
+    }
+    
+    // Update the POC
+    organization.pointsOfContact[index] = {
+      ...organization.pointsOfContact[index],
+      pocName: pocName || organization.pointsOfContact[index].pocName,
+      pocEmail: pocEmail !== undefined ? pocEmail : organization.pointsOfContact[index].pocEmail,
+      pocPhone: pocPhone !== undefined ? pocPhone : organization.pointsOfContact[index].pocPhone,
+      linkedin: linkedin !== undefined ? linkedin : organization.pointsOfContact[index].linkedin,
+      department: department || organization.pointsOfContact[index].department,
+      isPrimary: isPrimary !== undefined ? isPrimary : organization.pointsOfContact[index].isPrimary
+    };
+    
+    // If this POC is marked as primary, unset other primary POCs
+    if (organization.pointsOfContact[index].isPrimary) {
+      organization.pointsOfContact.forEach((poc, idx) => {
+        if (idx !== index) {
+          poc.isPrimary = false;
+        }
+      });
+      // Update backward compatibility fields
+      organization.pocName = organization.pointsOfContact[index].pocName;
+      organization.pocEmail = organization.pointsOfContact[index].pocEmail;
+      organization.pocPhone = organization.pointsOfContact[index].pocPhone;
+      organization.linkedin = organization.pointsOfContact[index].linkedin;
+    }
+    
+    await organization.save();
+    
+    res.json({
+      success: true,
+      message: "POC updated successfully",
+      poc: organization.pointsOfContact[index]
+    });
+  } catch (err) {
+    console.error("Update POC Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- DELETE: Remove POC from organization ---
+router.delete('/:id/poc/:pocIndex', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    const { pocIndex } = req.params;
+    
+    const organization = await Organization.findById(req.params.id);
+    
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+    
+    const index = parseInt(pocIndex);
+    if (index < 0 || index >= organization.pointsOfContact.length) {
+      return res.status(400).json({ error: "Invalid POC index" });
+    }
+    
+    // Remove the POC
+    organization.pointsOfContact.splice(index, 1);
+    
+    // If there are remaining POCs, update backward compatibility fields with the first one
+    if (organization.pointsOfContact.length > 0) {
+      const firstPOC = organization.pointsOfContact[0];
+      organization.pocName = firstPOC.pocName;
+      organization.pocEmail = firstPOC.pocEmail;
+      organization.pocPhone = firstPOC.pocPhone;
+      organization.linkedin = firstPOC.linkedin;
+      
+      // Ensure at least one POC is marked as primary
+      const hasPrimary = organization.pointsOfContact.some(poc => poc.isPrimary);
+      if (!hasPrimary) {
+        organization.pointsOfContact[0].isPrimary = true;
+      }
+    } else {
+      // Clear backward compatibility fields if no POCs left
+      organization.pocName = undefined;
+      organization.pocEmail = undefined;
+      organization.pocPhone = undefined;
+      organization.linkedin = undefined;
+    }
+    
+    await organization.save();
+    
+    res.json({
+      success: true,
+      message: "POC removed successfully"
+    });
+  } catch (err) {
+    console.error("Remove POC Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- GET: Get all POCs for an organization ---
+router.get('/:id/pocs', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    const organization = await Organization.findById(req.params.id)
+      .select('pointsOfContact companyName');
+    
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+    
+    res.json({
+      success: true,
+      organizationName: organization.companyName,
+      pointsOfContact: organization.pointsOfContact || []
+    });
+  } catch (err) {
+    console.error("Get POCs Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- GET: Get statistics for organizations ---
+router.get('/stats/summary', authorize('Admin', 'Sales Manager'), async (req, res) => {
+  try {
+    const totalOrganizations = await Organization.countDocuments();
+    const organizationsWithClientUsers = await Organization.countDocuments({ clientUserId: { $ne: null } });
+    const totalPOCs = await Organization.aggregate([
+      { $project: { pocCount: { $size: "$pointsOfContact" } } },
+      { $group: { _id: null, total: { $sum: "$pocCount" } } }
+    ]);
+    
+    res.json({
+      success: true,
+      stats: {
+        totalOrganizations,
+        organizationsWithClientUsers,
+        totalPOCs: totalPOCs[0]?.total || 0
+      }
+    });
+  } catch (err) {
+    console.error("Stats Error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
