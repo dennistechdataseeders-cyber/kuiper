@@ -10,7 +10,7 @@ class GitService {
     if (this.token && this.owner && this.token.startsWith('ghp_')) {
       this.octokit = new Octokit({ 
         auth: this.token,
-        userAgent: 'KUIPER-CRM-v1.0'
+        userAgent: 'KUIPER-CRM-v1.0'  
       });
       console.log('✅ GitHub service initialized for:', this.owner);
     } else {
@@ -75,38 +75,60 @@ async getUsernameFromEmail(email) {
 
   // Get detailed GitHub user info including profile URL
   async getDetailedGitHubUser(email) {
-    if (!this.octokit || !email) return null;
+  if (!this.octokit || !email) return null;
+  
+  try {
+    // Try 1: Search by email (only works if user's email is PUBLIC on GitHub)
+    const response = await this.octokit.search.users({
+      q: `${email} in:email`,
+      per_page: 1
+    });
     
-    try {
-      const response = await this.octokit.search.users({
-        q: `${email} in:email`,
-        per_page: 1
-      });
-      
-      if (response.data.total_count > 0 && response.data.items[0]) {
-        const username = response.data.items[0].login;
-        
-        // Get detailed user info
-        const userDetails = await this.octokit.users.getByUsername({
-          username: username
-        });
-        
-        return {
-          username: username,
-          profile_url: userDetails.data.html_url,
-          avatar_url: userDetails.data.avatar_url,
-          name: userDetails.data.name,
-          public_repos: userDetails.data.public_repos,
-          followers: userDetails.data.followers
-        };
-      }
-
-      return null;
-    } catch (error) {
-      console.error(`Error fetching GitHub user details for ${email}:`, error.message);
-      return null;
+    if (response.data.total_count > 0 && response.data.items[0]) {
+      const username = response.data.items[0].login;
+      const userDetails = await this.octokit.users.getByUsername({ username });
+      return {
+        username,
+        profile_url: userDetails.data.html_url,
+        avatar_url: userDetails.data.avatar_url,
+        name: userDetails.data.name,
+        public_repos: userDetails.data.public_repos,
+        followers: userDetails.data.followers
+      };
     }
+
+    // ✅ NEW Try 2: Fallback — try email prefix as GitHub username
+    // Handles the very common case where email is private on GitHub
+    const emailUsername = email.split('@')[0];
+    if (emailUsername && emailUsername.length > 2) {
+      console.log(`⚠️ Email search found nothing. Trying username fallback: ${emailUsername}`);
+      try {
+        const userDetails = await this.octokit.users.getByUsername({
+          username: emailUsername
+        });
+        if (userDetails && userDetails.data) {
+          console.log(`✅ Found GitHub user by username fallback: ${userDetails.data.login}`);
+          return {
+            username: userDetails.data.login,
+            profile_url: userDetails.data.html_url,
+            avatar_url: userDetails.data.avatar_url,
+            name: userDetails.data.name,
+            public_repos: userDetails.data.public_repos,
+            followers: userDetails.data.followers
+          };
+        }
+      } catch (fallbackErr) {
+        console.warn(`No GitHub user found for username: ${emailUsername}`);
+      }
+    }
+
+    console.warn(`⚠️ No public GitHub account found for email: ${email}`);
+    return null;
+  } catch (error) {
+    console.error(`Error fetching GitHub user details for ${email}:`, error.message);
+    return null;
   }
+}
 
   // Link GitHub account to user by updating their record
   async linkGitHubAccountToUser(userId, email) {

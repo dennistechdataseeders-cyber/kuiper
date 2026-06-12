@@ -30,7 +30,9 @@ import {
   PauseCircle,
   CheckCircle2,
   Clock,
-  Building2
+  Building2,
+  Filter
+
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
@@ -63,10 +65,11 @@ const ProjectManagement = () => {
   
   // --- Pagination State ---
   const [currentPage, setCurrentPage] = useState(1);
-  const projectsPerPage = 6;
+  const [itemsPerPage, setItemsPerPage] = useState(6);
 
   // --- Filter State ---
-  const [activeFilter, setActiveFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('Active');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // --- UI State ---
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -105,8 +108,6 @@ const ProjectManagement = () => {
   const token = localStorage.getItem('token');
   const currentUserId = localStorage.getItem('userId');
 
-  const [searchTerm, setSearchTerm] = useState('');
-
   const authHeader = {
     headers: {
       Authorization: `Bearer ${token}`
@@ -141,7 +142,7 @@ const ProjectManagement = () => {
     description: '',
     country: 'United States',
     industry: 'Tech',
-    organizations: []  // Changed from 'clients' to 'organizations'
+    organizations: []
   });
 
   const [feedForm, setFeedForm] = useState({
@@ -186,6 +187,10 @@ const ProjectManagement = () => {
       if (status.includes('Client')) return 'bg-yellow-100 text-yellow-700 border-yellow-200';
     }
     return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
+  const isOnHoldStatus = (status) => {
+    return status && status.includes('ON hold');
   };
 
   // Navigate to Feed Explorer with selected project filter
@@ -370,24 +375,17 @@ const ProjectManagement = () => {
         p.projectManager === currentUserId
     );
 
-    // FILTER BY ASSIGNED / UNASSIGNED
-    if (activeFilter === 'Assigned') {
-      result = result.filter(
-        (p) =>
-          p.country &&
-          p.country.trim() !== '' &&
-          p.country !== 'Not Specified'
-      );
-    } else if (activeFilter === 'Unassigned') {
-      result = result.filter(
-        (p) =>
-          !p.country ||
-          p.country.trim() === '' ||
-          p.country === 'Not Specified'
-      );
+    // FILTER BY STATUS
+    if (statusFilter === 'Active') {
+      result = result.filter(p => p.projectStatus !== 'Closed');
+    } else if (statusFilter === 'Inactive') {
+      result = result.filter(p => p.projectStatus === 'Closed');
+    } else if (statusFilter === 'On Hold') {
+      result = result.filter(p => isOnHoldStatus(p.projectStatus));
     }
+    // 'All' shows everything
 
-    // SEARCH FILTER - Updated to use organizations field
+    // SEARCH FILTER
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase().trim();
 
@@ -429,19 +427,20 @@ const ProjectManagement = () => {
   }, [
     projects,
     organizations,
-    activeFilter,
+    statusFilter,
     currentUserId,
     searchTerm
   ]);
 
+  // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeFilter]);
+  }, [statusFilter, searchTerm, itemsPerPage]);
 
-  const indexOfLastProject = currentPage * projectsPerPage;
-  const indexOfFirstProject = indexOfLastProject - projectsPerPage;
+  const indexOfLastProject = currentPage * itemsPerPage;
+  const indexOfFirstProject = indexOfLastProject - itemsPerPage;
   const currentProjectSlice = filteredProjects.slice(indexOfFirstProject, indexOfLastProject);
-  const totalPages = Math.ceil(filteredProjects.length / projectsPerPage);
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
 
   // --- Quick Link GitHub Handler (for existing developers without GitHub) ---
   const handleQuickLinkGitHub = async (developer, e) => {
@@ -744,10 +743,17 @@ const ProjectManagement = () => {
     })
   };
 
+  // Reset filters handler
+  const resetFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('All');
+    setCurrentPage(1);
+  };
+
   return (
     <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6">
         <div>
           <h1 className="text-4xl font-black tracking-tight text-[#1B2559]">
             Workspace Project
@@ -757,48 +763,31 @@ const ProjectManagement = () => {
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 bg-white p-3 rounded-3xl shadow-sm border border-slate-100">
-          <div className="relative">
-           <input
-              type="text"
-              placeholder="Search by project ID, name, client..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-64 pl-4 pr-4 py-3 rounded-2xl border border-slate-100 bg-slate-200 outline-none font-bold text-sm focus:border-blue-400 transition-all"
-            />
-          </div>
-          
-          <div className="h-6 w-px bg-slate-100 mx-2" />
-          
-          <button
-            onClick={() => {
-              setIsEditing(false);
-              setShowProjectModal(true);
-            }}
-            className="bg-[#111C44] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
-          >
-            <FolderPlus size={16} />
-            New Project
-          </button>
-        </div>
+        <button
+          onClick={() => {
+            setIsEditing(false);
+            setShowProjectModal(true);
+          }}
+          className="bg-[#111C44] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
+        >
+          <FolderPlus size={16} />
+          New Project
+        </button>
       </div>
 
       {/* Stats */}
-      <div className="flex gap-4 mb-8">
-        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm flex-1">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
           <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
             <LayoutGrid size={20} />
           </div>
           <div>
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Projects</p>
-            <p className="text-xl font-black text-[#1B2559]">{projects.length}</p>
+            <p className="text-xl font-black text-[#1B2559]">{filteredProjects.length}</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm flex-1">
+        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
             <Activity size={20} />
           </div>
@@ -809,9 +798,95 @@ const ProjectManagement = () => {
             </p>
           </div>
         </div>
+
+        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
+          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <CheckCircle2 size={20} />
+          </div>
+          <div>
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">On Hold Projects</p>
+            <p className="text-xl font-black text-[#1B2559]">
+              {projects.filter(p => isOnHoldStatus(p.projectStatus)).length}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* TABLE VIEW - Updated to use organizations field */}
+      {/* Filters Bar */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+          {/* Search Input */}
+          <div className="relative md:col-span-4">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              placeholder="Search by project ID, name, or organization..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-medium text-sm focus:border-blue-400 transition-all"
+            />
+          </div>
+
+          {/* Status Filter Dropdown */}
+          <div className="relative md:col-span-3">
+            <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-semibold text-sm text-slate-700 appearance-none cursor-pointer hover:border-blue-400 transition-all"
+            >
+              <option value="All">All Projects</option>
+              <option value="Active">Active </option>
+              <option value="Inactive">Inactive (Closed)</option>
+              <option value="On Hold">On Hold</option>
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+
+          {/* Items Per Page Selector */}
+          <div className="relative md:col-span-3">
+            <div className="flex items-center gap-2 bg-slate-50 rounded-xl border border-slate-200 px-3 py-1.5 h-[42px]">
+              <span className="text-[9px] font-black text-slate-500 uppercase">Show:</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => {
+                  setItemsPerPage(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="flex-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-[9px] font-black text-slate-500">per page</span>
+            </div>
+          </div>
+
+          {/* Reset Button */}
+          {(searchTerm || statusFilter !== 'All') && (
+            <div className="md:col-span-2">
+              <button
+                onClick={resetFilters}
+                className="w-full py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+              >
+                <X size={14} />
+                Reset Filters
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* TABLE VIEW */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1300px]">
@@ -827,132 +902,194 @@ const ProjectManagement = () => {
               </tr>
             </thead>
             <tbody>
-              {currentProjectSlice.map((project) => {
-                const isFromSales = project.projectCustomId?.includes('PRJ');
-                const orgList = project.organizations || [];
-                return (
-                  <tr key={project._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-all">
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-4">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
-                          isFromSales ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
-                        }`}>
-                          {isFromSales ? <ShoppingBag size={20} /> : <Activity size={20} />}
-                        </div>
-                        <div>
-                          <p className="text-sm font-black text-[#1B2559]">{project.projectCustomId || 'NO_ID'}</p>
-                          <p className="text-xs font-bold text-slate-400 mt-1">{project.name}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-wrap gap-1">
-                        {orgList.length > 0 ? (
-                          orgList.slice(0, 2).map((org, idx) => {
-                            const orgName = typeof org === 'object' ? org?.companyName : organizations.find(o => o._id === org)?.companyName;
-                            return (
-                              <span key={idx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-bold">
-                                <Building2 size={8} />
-                                {orgName || 'Organization'}
-                              </span>
-                            );
-                          })
-                        ) : (
-                          <span className="text-slate-400 text-[9px]">No clients</span>
-                        )}
-                        {orgList.length > 2 && (
-                          <span className="text-[9px] font-bold text-slate-400">+{orgList.length - 2} more</span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
-                        <Briefcase size={12} />
-                        {project.industry}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="inline-flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100">
-                        <Globe size={12} />
-                        {POPULAR_COUNTRIES.find(c => c.label === project.country)?.value ||
-                         (project.country?.substring(0, 2).toUpperCase()) || 'XX'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div 
-                        className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
-                        onClick={() => navigateToFeedExplorer(project)}
-                      >
-                        <Hash size={14} className="text-slate-400 group-hover:text-blue-600" />
-                        <span className="text-sm font-black text-[#1B2559] group-hover:text-blue-600">
-                          {project.feeds?.length || 0}
-                        </span>
-                        <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                          View Feeds →
-                        </span>
-                      </div>
-                    </td>
-                    
-                    {/* STATUS COLUMN */}
-                    <td className="px-6 py-5">
-                      <div className="relative">
-                        <select
-                          value={project.projectStatus || 'New'}
-                          onChange={(e) => updateProjectStatus(project._id, e.target.value)}
-                          disabled={updatingStatus[project._id]}
-                          className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-7 ${getProjectStatusColor(project.projectStatus)}`}
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '10px' }}
-                        >
-                          {projectStatuses.map(status => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                        {updatingStatus[project._id] && (
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 mr-2">
-                            <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+              {currentProjectSlice.length > 0 ? (
+                currentProjectSlice.map((project) => {
+                  const isFromSales = project.projectCustomId?.includes('PRJ');
+                  const orgList = project.organizations || [];
+                  return (
+                    <tr key={project._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-all">
+                      <td className="px-6 py-5">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
+                            isFromSales ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
+                          }`}>
+                            {isFromSales ? <ShoppingBag size={20} /> : <Activity size={20} />}
                           </div>
-                        )}
+                          <div>
+                            <p className="text-sm font-black text-[#1B2559]">{project.projectCustomId || 'NO_ID'}</p>
+                            <p className="text-xs font-bold text-slate-400 mt-1">{project.name}</p>
+                          </div>
+                        </div>
+                       </td>
+                      <td className="px-6 py-5">
+                        <div className="flex flex-wrap gap-1">
+                          {orgList.length > 0 ? (
+                            orgList.slice(0, 2).map((org, idx) => {
+                              const orgName = typeof org === 'object' ? org?.companyName : organizations.find(o => o._id === org)?.companyName;
+                              return (
+                                <span key={idx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-bold">
+                                  <Building2 size={8} />
+                                  {orgName || 'Organization'}
+                                </span>
+                              );
+                            })
+                          ) : (
+                            <span className="text-slate-400 text-[9px]">No clients</span>
+                          )}
+                          {orgList.length > 2 && (
+                            <span className="text-[9px] font-bold text-slate-400">+{orgList.length - 2} more</span>
+                          )}
+                        </div>
+                       </td>
+                      <td className="px-6 py-5">
+                        <span className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
+                          <Briefcase size={12} />
+                          {project.industry}
+                        </span>
+                       </td>
+                      <td className="px-6 py-5">
+                        <span className="inline-flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100">
+                          <Globe size={12} />
+                          {POPULAR_COUNTRIES.find(c => c.label === project.country)?.value ||
+                           (project.country?.substring(0, 2).toUpperCase()) || 'XX'}
+                        </span>
+                       </td>
+                      <td className="px-6 py-5">
+                        <div 
+                          className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
+                          onClick={() => navigateToFeedExplorer(project)}
+                        >
+                          <Hash size={14} className="text-slate-400 group-hover:text-blue-600" />
+                          <span className="text-sm font-black text-[#1B2559] group-hover:text-blue-600">
+                            {project.feeds?.length || 0}
+                          </span>
+                          <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            View Feeds →
+                          </span>
+                        </div>
+                       </td>
+                      
+                      {/* STATUS COLUMN */}
+                      <td className="px-6 py-5">
+                        <div className="relative">
+                          <select
+                            value={project.projectStatus || 'New'}
+                            onChange={(e) => updateProjectStatus(project._id, e.target.value)}
+                            disabled={updatingStatus[project._id]}
+                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-7 ${getProjectStatusColor(project.projectStatus)}`}
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '10px' }}
+                          >
+                            {projectStatuses.map(status => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                          {updatingStatus[project._id] && (
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 mr-2">
+                              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                            </div>
+                          )}
+                        </div>
+                       </td>
+                      
+                      <td className="px-6 py-5">
+                        <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => handleEditClick(project)} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all">
+                            <Settings2 size={16} />
+                          </button>
+                          <button onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all">
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                       </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={7} className="px-6 py-16 text-center">
+                    <div className="flex flex-col items-center justify-center">
+                      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                        <Activity size={28} className="text-slate-300" />
                       </div>
-                    </td>
-                    
-                    <td className="px-6 py-5">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleEditClick(project)} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all">
-                          <Settings2 size={16} />
-                        </button>
-                        <button onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all">
-                          <Plus size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      <p className="text-sm font-bold text-slate-500">No projects found</p>
+                      <p className="text-xs text-slate-400 mt-1">Try adjusting your filters</p>
+                    </div>
+                   </td>
+                </tr>
+              )}
             </tbody>
-          </table>
+           </table>
         </div>
       </div>
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="mt-12 flex justify-center items-center gap-3">
-          <button disabled={currentPage === 1} onClick={() => setCurrentPage(prev => prev - 1)} className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-blue-600 disabled:opacity-30">
-            <ChevronLeft size={20} />
-          </button>
-          <div className="flex gap-2 bg-white p-1.5 rounded-[1.5rem] border border-slate-100 shadow-sm">
-            {[...Array(totalPages)].map((_, i) => (
-              <button key={i + 1} onClick={() => setCurrentPage(i + 1)} className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'text-slate-400 hover:bg-slate-50'}`}>
-                {i + 1}
-              </button>
-            ))}
+        <div className="mt-6 flex justify-between items-center">
+          <div className="text-[9px] font-bold text-slate-400">
+            Showing {indexOfFirstProject + 1} to {Math.min(indexOfLastProject, filteredProjects.length)} of {filteredProjects.length} projects
           </div>
-          <button disabled={currentPage === totalPages} onClick={() => setCurrentPage(prev => prev + 1)} className="w-12 h-12 rounded-2xl bg-white border border-slate-100 flex items-center justify-center text-slate-400 hover:text-blue-600 disabled:opacity-30">
-            <ChevronRight size={20} />
-          </button>
+          
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => prev - 1)}
+              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronLeft size={14} />
+            </button>
+
+            <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+              {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                  if (i === 4) pageNum = totalPages;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                  if (i === 0) pageNum = 1;
+                  if (i === 4) pageNum = totalPages;
+                }
+                
+                if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
+                  return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                }
+                
+                if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
+                  return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                      currentPage === pageNum
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* PROJECT MODAL WITH ORGANIZATION SELECTION - Updated to use organizations */}
+      {/* PROJECT MODAL */}
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-6">
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
@@ -1137,7 +1274,6 @@ const ProjectManagement = () => {
             </div>
 
             <form onSubmit={handleFeedSubmit} className="space-y-6">
-              {/* Feed form content remains the same */}
               <input
                 type="text"
                 placeholder="Stream Name"
@@ -1229,7 +1365,7 @@ const ProjectManagement = () => {
                 </div>
               </div>
 
-              {/* DOMAIN FIELD - Only show if Web or Both is selected */}
+              {/* DOMAIN FIELD */}
               {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
                   <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Domain URL</label>

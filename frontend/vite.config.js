@@ -9,7 +9,7 @@ export default defineConfig({
     
     proxy: {
       '/api': {
-        target: 'http://192.168.1.105:5000', // replace with your actual IP from ipconfig
+        target: 'http://192.168.1.8:5000', // replace with your actual IP from ipconfig
         changeOrigin: true,
         secure: false,
       },

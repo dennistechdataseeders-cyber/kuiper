@@ -240,7 +240,6 @@ router.delete('/users/:id', authorize('Admin'), async (req, res) => {
   }
 });
 
-// POST /users/:userId/link-github - Link GitHub account for existing user
 router.post('/users/:userId/link-github', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const { userId } = req.params;
@@ -256,28 +255,54 @@ router.post('/users/:userId/link-github', authorize('Admin', 'Project Manager'),
         error: 'GitHub linking is only available for Developer role' 
       });
     }
+
+    // 🔍 Debug: directly call GitHub search and log the raw result
+    console.log(`🔍 Searching GitHub for email: ${user.email}`);
     
-    const result = await gitService.linkGitHubAccountToUser(userId, user.email);
-    
-    if (result.success && result.githubUsername) {
-      user.githubUsername = result.githubUsername;
-      user.githubLinked = true;
-      await user.save();
-      
-      res.json({
-        success: true,
-        message: `GitHub account ${result.githubUsername} linked successfully`,
-        githubUsername: result.githubUsername,
-        githubLinked: true,
-        profile_url: result.profile_url
-      });
-    } else {
-      res.status(404).json({
+    if (!gitService.octokit) {
+      return res.status(500).json({ success: false, error: 'GitHub service not initialized. Check GITHUB_TOKEN.' });
+    }
+
+    const searchResult = await gitService.octokit.search.users({
+      q: `${user.email} in:email`,
+      per_page: 5
+    });
+
+    console.log(`🔍 GitHub search result for ${user.email}:`);
+    console.log(`   total_count: ${searchResult.data.total_count}`);
+    console.log(`   items: ${JSON.stringify(searchResult.data.items.map(i => ({ login: i.login, id: i.id })))}`);
+
+    if (searchResult.data.total_count === 0) {
+      return res.status(200).json({
         success: false,
-        error: result.message || 'No GitHub account found with this email address',
-        githubLinked: false
+        error: `GitHub returned 0 results for email: ${user.email}. The email is either still private on GitHub or not associated with any account.`,
+        githubLinked: false,
+        debug: {
+          emailSearched: user.email,
+          totalCount: 0,
+          tip: 'Go to github.com/settings/profile and make sure the email is shown in your public profile'
+        }
       });
     }
+
+    const username = searchResult.data.items[0].login;
+    console.log(`✅ Found GitHub user: ${username}`);
+
+    // Get full profile
+    const userDetails = await gitService.octokit.users.getByUsername({ username });
+
+    user.githubUsername = userDetails.data.login;
+    user.githubLinked = true;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: `GitHub account ${userDetails.data.login} linked successfully`,
+      githubUsername: userDetails.data.login,
+      githubLinked: true,
+      profile_url: userDetails.data.html_url
+    });
+
   } catch (error) {
     console.error('Error linking GitHub account:', error);
     res.status(500).json({ success: false, error: error.message });
@@ -1156,9 +1181,9 @@ router.get('/project-status-options', authorize('Admin', 'Project Manager'), asy
 
 router.get('/feed-status-options', authorize('Admin', 'Project Manager'), async (req, res) => {
   const statuses = [
-    'New', 'Once off[In progress]', 'Once off[Delivered]',
-    'Ad hoc In-progress', 'Ad hoc delivered',
-    'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]'
+    'New',  'In process','Once off[In progress]', 'Once off[Delivered]',
+    'Ad hoc In-progress', 'Ad hoc delivered','BAU Initiated',
+    'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]','Closed'
   ];
   res.json(statuses);
 });

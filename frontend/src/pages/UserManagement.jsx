@@ -118,7 +118,6 @@ const UserManagement = () => {
       const res = await axios.get(`${API_BASE_URL}/api/orgs`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log("Fetched organizations:", res.data);
       setOrganizations(res.data);
     } catch (err) {
       console.error("Error fetching organizations:", err);

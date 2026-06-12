@@ -31,7 +31,9 @@ import {
   Ticket,
   Circle,
   PauseCircle,
-  CheckCircle2
+  CheckCircle2,
+  GitFork,
+  ExternalLink
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
@@ -62,11 +64,14 @@ const ProjectFeeds = () => {
 
   // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
-  const feedsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // EDIT MODAL
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingFeedId, setEditingFeedId] = useState(null);
+
+  // State for expanded feed row (for detailed view)
+  const [expandedFeedId, setExpandedFeedId] = useState(null);
 
   const [feedForm, setFeedForm] = useState({
     name: '',
@@ -90,9 +95,6 @@ const ProjectFeeds = () => {
     completedFeedsDetails: []
   });
 
-  // State for expanded developers list
-  const [expandedDeveloperFeedId, setExpandedDeveloperFeedId] = useState(null);
-  
   // State for comment modal
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [selectedCommentFeed, setSelectedCommentFeed] = useState(null);
@@ -269,8 +271,11 @@ const ProjectFeeds = () => {
   const getFeedStatusColor = (status) => {
     if (!status) return 'bg-slate-100 text-slate-700 border-slate-200';
     if (status === 'New') return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (status === 'In process') return 'bg-cyan-100 text-cyan-700 border-cyan-200';
     if (status.includes('In progress')) return 'bg-amber-100 text-amber-700 border-amber-200';
     if (status.includes('Delivered')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (status === 'BAU Initiated') return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+    if (status === 'Closed') return 'bg-slate-100 text-slate-700 border-slate-200';
     if (status.includes('ON hold')) {
       if (status.includes('Sales')) return 'bg-orange-100 text-orange-700 border-orange-200';
       if (status.includes('Technical')) return 'bg-red-100 text-red-700 border-red-200';
@@ -406,10 +411,6 @@ const ProjectFeeds = () => {
       const projectExists = projects.some(p => p._id === location.state.selectedProjectId);
       if (projectExists) {
         setSelectedProject(location.state.selectedProjectId);
-        toast(`Showing feeds for: ${location.state.selectedProjectName}`, {
-          icon: '📁',
-          duration: 3000
-        });
         window.history.replaceState({}, document.title);
       } else {
         console.warn('Project not found:', location.state.selectedProjectId);
@@ -427,7 +428,7 @@ const ProjectFeeds = () => {
   // RESET PAGE
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedProject, searchTerm, feedTypeFilter]);
+  }, [selectedProject, searchTerm, feedTypeFilter, itemsPerPage]);
   
   const fetchData = async () => {
     try {
@@ -452,7 +453,9 @@ const ProjectFeeds = () => {
           ...feed,
           projectId: project._id,
           projectName: project.name,
-          projectCustomId: project.projectCustomId
+          projectCustomId: project.projectCustomId,
+          gitRepoUrl: project.gitRepoUrl,
+          gitRepoName: project.gitRepoName
         }))
       );
 
@@ -501,10 +504,10 @@ const ProjectFeeds = () => {
   }, [feeds, selectedProject, searchTerm, feedTypeFilter]);
 
   // PAGINATION
-  const indexOfLastFeed = currentPage * feedsPerPage;
-  const indexOfFirstFeed = indexOfLastFeed - feedsPerPage;
+  const indexOfLastFeed = currentPage * itemsPerPage;
+  const indexOfFirstFeed = indexOfLastFeed - itemsPerPage;
   const currentFeeds = filteredFeeds.slice(indexOfFirstFeed, indexOfLastFeed);
-  const totalPages = Math.ceil(filteredFeeds.length / feedsPerPage);
+  const totalPages = Math.ceil(filteredFeeds.length / itemsPerPage);
 
   // EDIT FEED
   const handleEditClick = (feed) => {
@@ -738,19 +741,39 @@ const ProjectFeeds = () => {
         </div>
       </div>
 
-      {/* TABLE SECTION */}
+      {/* Items Per Page Selector */}
+      <div className="flex justify-end mb-4">
+        <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-1.5 shadow-sm">
+          <span className="text-[9px] font-black text-slate-500 uppercase">Show:</span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="text-[9px] font-black text-slate-500">per page</span>
+        </div>
+      </div>
+
+      {/* TABLE SECTION - Full view with all columns */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1600px]">
+          <table className="w-full min-w-[1200px]">
             <thead>
               <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed Details</th>
                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Type</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Schedule</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Platform / URL</th>
                 <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Developer</th>
+                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Developers</th>
+                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Git Repository</th>
                 <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
               </tr>
             </thead>
@@ -760,191 +783,228 @@ const ProjectFeeds = () => {
                   const isTodayFeed = isFeedForToday(feed);
                   const completion = getTodayCompletionDetails(feed);
                   const isCompleted = completion.isCompleted;
+                  const isExpanded = expandedFeedId === feed._id;
                   const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
-                  const isExpanded = expandedDeveloperFeedId === feed._id;
-                  const displayDevelopers = isExpanded ? developerNames : developerNames.slice(0, 2);
+                  const displayDevelopers = developerNames.slice(0, 2);
                   const hasMoreDevelopers = developerNames.length > 2;
+                  const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
+                  const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
                   
                   return (
-                    <tr
-                      key={feed._id}
-                      className={`border-b border-slate-100 hover:bg-slate-50/80 transition-all duration-200 ${
-                        idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                      } ${isTodayFeed && !isCompleted ? 'bg-amber-50/20' : ''}`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${
-                            isTodayFeed && !isCompleted 
-                              ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
-                              : isCompleted
-                              ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
-                              : 'bg-gradient-to-br from-slate-800 to-slate-900 text-white'
-                          }`}>
-                            {isCompleted ? <CheckCircle size={12} /> : <Hash size={12} />}
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <p className="text-xs font-bold text-slate-800">{feed.name}</p>
-                              {isTodayFeed && !isCompleted && (
-                                <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">Today</span>
-                              )}
-                              {isCompleted && (
-                                <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full">Done</span>
-                              )}
+                    <React.Fragment key={feed._id}>
+                      {/* Main Row */}
+                      <tr
+                        className={`border-b border-slate-100 hover:bg-slate-50/80 transition-all duration-200 cursor-pointer ${
+                          idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                        } ${isTodayFeed && !isCompleted ? 'bg-amber-50/20' : ''} ${isExpanded ? 'bg-blue-50/40' : ''}`}
+                        onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
+                      >
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${
+                              isTodayFeed && !isCompleted 
+                                ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
+                                : isCompleted
+                                ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+                                : 'bg-gradient-to-br from-slate-800 to-slate-900 text-white'
+                            }`}>
+                              {isCompleted ? <CheckCircle size={12} /> : <Hash size={12} />}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <p className="text-xs font-bold text-slate-800">{feed.name}</p>
+                                {isTodayFeed && !isCompleted && (
+                                  <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">Today</span>
+                                )}
+                                {isCompleted && (
+                                  <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full">Done</span>
+                                )}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-4 py-3">
-                        <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase">
-                          <Briefcase size={8} />
-                          {feed.projectCustomId}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${getFeedTypeColor(feed.feedType)}`}>
-                          {getFeedTypeIcon(feed.feedType)}
-                          {feed.feedType}
-                        </span>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        {feed.feedType === 'Weekly' ? (
-                          <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-2 py-1 rounded-lg text-[8px] font-black border border-amber-200">
-                            <Calendar size={8} />
-                            Every {feed.weekDay?.substring(0, 3)}
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase">
+                            <Briefcase size={8} />
+                            {feed.projectCustomId}
                           </span>
-                        ) : feed.feedType === 'Monthly' ? (
-                          <span className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[8px] font-black border border-purple-200">
-                            <Calendar size={8} />
-                            Day {feed.monthDay}
-                          </span>
-                        ) : feed.feedType === 'Daily' ? (
-                          <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-lg text-[8px] font-black border border-emerald-200">
-                            <Clock size={8} />
-                            Daily
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[8px]">—</span>
-                        )}
-                      </td>
+                        </td>
 
-                      <td className="px-4 py-3">
-                        {feed.feedPlatform ? (
-                          <div className="flex flex-col gap-0.5">
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[7px] font-black uppercase border w-fit ${getPlatformColor(feed.feedPlatform)}`}>
-                              {getPlatformIcon(feed.feedPlatform)}
-                              {feed.feedPlatform}
-                            </span>
-                            {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
-                              <a 
-                                href={feed.webDomain} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-[8px] text-blue-600 hover:text-blue-800 hover:underline truncate max-w-[120px]"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {feed.webDomain.length > 20 ? feed.webDomain.substring(0, 20) + '...' : feed.webDomain}
-                              </a>
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${getFeedTypeColor(feed.feedType)}`}>
+                            {getFeedTypeIcon(feed.feedType)}
+                            {feed.feedType}
+                          </span>
+                        </td>
+
+                        {/* Status Column */}
+                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative min-w-[120px]">
+                            <select
+                              value={feed.feedStatus || 'New'}
+                              onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
+                              disabled={updatingStatus[feed._id]}
+                              className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
+                              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '8px' }}
+                            >
+                              {feedStatuses.map(status => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                            {updatingStatus[feed._id] && (
+                              <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                                <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                              </div>
                             )}
                           </div>
-                        ) : (
-                          <span className="text-[8px] text-slate-400 italic">—</span>
-                        )}
-                      </td>
+                        </td>
 
-                      {/* STATUS COLUMN */}
-                      <td className="px-4 py-3">
-                        <div className="relative min-w-[120px]">
-                          <select
-                            value={feed.feedStatus || 'New'}
-                            onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
-                            disabled={updatingStatus[feed._id]}
-                            className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '8px' }}
-                          >
-                            {feedStatuses.map(status => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                          {updatingStatus[feed._id] && (
-                            <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                              <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                        {/* Developers Column */}
+                        <td className="px-4 py-3">
+                          <div className="space-y-1">
+                            <div className="flex flex-wrap items-center gap-1">
+                              {displayDevelopers.map((devName, devIdx) => (
+                                <span
+                                  key={devIdx}
+                                  className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold"
+                                >
+                                  <Users size={6} />
+                                  {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
+                                </span>
+                              ))}
                             </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td className="px-4 py-3">
-                        <div className="space-y-1">
-                          <div className="flex flex-wrap items-center gap-1">
-                            {displayDevelopers.map((devName, devIdx) => (
-                              <span
-                                key={devIdx}
-                                className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold"
-                              >
-                                <Users size={6} />
-                                {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
+                            {hasMoreDevelopers && (
+                              <span className="text-[7px] font-bold text-blue-500">
+                                +{developerNames.length - 2} more
                               </span>
-                            ))}
+                            )}
+                            {developerNames.length === 0 && (
+                              <span className="text-[7px] font-bold text-slate-400 italic">Unassigned</span>
+                            )}
                           </div>
-                          {hasMoreDevelopers && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setExpandedDeveloperFeedId(isExpanded ? null : feed._id);
-                              }}
-                              className="flex items-center gap-0.5 text-[7px] font-bold text-blue-500 hover:text-blue-700"
-                            >
-                              {isExpanded ? (
-                                <>^ Less</>
-                              ) : (
-                                <>+{developerNames.length - 2} more</>
-                              )}
-                            </button>
-                          )}
-                          {developerNames.length === 0 && (
-                            <span className="text-[7px] font-bold text-slate-400 italic">Unassigned</span>
-                          )}
-                        </div>
-                      </td>
+                        </td>
 
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {isCompleted && (
-                            <button
-                              onClick={() => openCommentModal(feed)}
-                              className="group w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
-                              title="View Comment"
+                        {/* Git Repository Column */}
+                        <td className="px-4 py-3">
+                          {gitUrl ? (
+                            <a 
+                              href={gitUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[8px] text-blue-600 hover:underline"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              <MessageSquare size={12} />
-                            </button>
+                              <GitFork size={10} />
+                              {gitName || 'View Repo'}
+                            </a>
+                          ) : (
+                            <span className="text-[8px] text-slate-400 italic">No Git repo</span>
                           )}
-                          <button
-                            onClick={() => handleEditClick(feed)}
-                            className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
-                            title="Edit Feed"
-                          >
-                            <Edit3 size={12} />
-                          </button>
-                          <button
-                            onClick={() => openTicketModal(feed)}
-                            className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
-                            title="Generate Ticket"
-                          >
-                            <Ticket size={12} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                        </td>
+
+                        {/* Actions Column */}
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
+                              className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                              title={isExpanded ? "Collapse Details" : "Expand Details"}
+                            >
+                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+                            {isCompleted && (
+                              <button
+                                onClick={() => openCommentModal(feed)}
+                                className="group w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
+                                title="View Comment"
+                              >
+                                <MessageSquare size={12} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleEditClick(feed)}
+                              className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                              title="Edit Feed"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                            <button
+                              onClick={() => openTicketModal(feed)}
+                              className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
+                              title="Generate Ticket"
+                            >
+                              <Ticket size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Row with Platform URL and Schedule */}
+                      {isExpanded && (
+                        <tr className="bg-blue-50/30">
+                          <td colSpan={7} className="px-6 py-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {/* Platform URL Details */}
+                              <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                                    <Globe size={12} />
+                                  </div>
+                                  <h4 className="text-[9px] font-black uppercase text-slate-500">Platform & URL</h4>
+                                </div>
+                                {feed.feedPlatform ? (
+                                  <div>
+                                    <p className="text-xs font-bold text-slate-700 mb-1">{feed.feedPlatform}</p>
+                                    {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
+                                      <a 
+                                        href={feed.webDomain} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-[9px] text-blue-600 hover:underline break-all flex items-center gap-1"
+                                      >
+                                        <ExternalLink size={10} />
+                                        {feed.webDomain}
+                                      </a>
+                                    )}
+                                    {feed.feedPlatform === 'App' && (
+                                      <p className="text-[9px] text-slate-500 italic">Mobile application platform</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-slate-400 italic">No platform specified</p>
+                                )}
+                              </div>
+
+                              {/* Schedule Details */}
+                              <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
+                                    <Calendar size={12} />
+                                  </div>
+                                  <h4 className="text-[9px] font-black uppercase text-slate-500">Schedule</h4>
+                                </div>
+                                <p className="text-xs font-bold text-slate-700">{getScheduleDisplay(feed)}</p>
+                                {feed.feedType === 'Weekly' && feed.weekDay && (
+                                  <p className="text-[8px] text-slate-500 mt-1">Every {feed.weekDay}</p>
+                                )}
+                                {feed.feedType === 'Monthly' && feed.monthDay && (
+                                  <p className="text-[8px] text-slate-500 mt-1">Day {feed.monthDay} of each month</p>
+                                )}
+                                {feed.feedType === 'Once off' && (
+                                  <p className="text-[8px] text-slate-500 mt-1">One-time execution</p>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center">
+                  <td colSpan={7} className="py-12 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
                         <Activity size={20} className="text-slate-300" />
@@ -962,62 +1022,68 @@ const ProjectFeeds = () => {
 
       {/* PAGINATION */}
       {totalPages > 1 && (
-        <div className="mt-6 flex justify-center items-center gap-2">
-          <button
-            disabled={currentPage === 1}
-            onClick={() => setCurrentPage(prev => prev - 1)}
-            className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          >
-            <ChevronLeft size={14} />
-          </button>
-
-          <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-            {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-              let pageNum;
-              if (totalPages <= 5) {
-                pageNum = i + 1;
-              } else if (currentPage <= 3) {
-                pageNum = i + 1;
-                if (i === 4) pageNum = totalPages;
-              } else if (currentPage >= totalPages - 2) {
-                pageNum = totalPages - 4 + i;
-              } else {
-                pageNum = currentPage - 2 + i;
-                if (i === 0) pageNum = 1;
-                if (i === 4) pageNum = totalPages;
-              }
-              
-              if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
-              }
-              
-              if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
-              }
-              
-              return (
-                <button
-                  key={pageNum}
-                  onClick={() => setCurrentPage(pageNum)}
-                  className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
-                    currentPage === pageNum
-                      ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
-                      : 'text-slate-500 hover:bg-slate-100'
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              );
-            })}
+        <div className="mt-6 flex justify-between items-center">
+          <div className="text-[9px] font-bold text-slate-400">
+            Showing {indexOfFirstFeed + 1} to {Math.min(indexOfLastFeed, filteredFeeds.length)} of {filteredFeeds.length} feeds
           </div>
+          
+          <div className="flex items-center gap-2">
+            <button
+              disabled={currentPage === 1}
+              onClick={() => setCurrentPage(prev => prev - 1)}
+              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronLeft size={14} />
+            </button>
 
-          <button
-            disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(prev => prev + 1)}
-            className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-          >
-            <ChevronRight size={14} />
-          </button>
+            <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+              {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                let pageNum;
+                if (totalPages <= 5) {
+                  pageNum = i + 1;
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1;
+                  if (i === 4) pageNum = totalPages;
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i;
+                } else {
+                  pageNum = currentPage - 2 + i;
+                  if (i === 0) pageNum = 1;
+                  if (i === 4) pageNum = totalPages;
+                }
+                
+                if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
+                  return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                }
+                
+                if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
+                  return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                }
+                
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setCurrentPage(pageNum)}
+                    className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                      currentPage === pageNum
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
+                        : 'text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              disabled={currentPage === totalPages}
+              onClick={() => setCurrentPage(prev => prev + 1)}
+              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+            >
+              <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
       )}
 

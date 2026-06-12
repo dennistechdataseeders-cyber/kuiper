@@ -120,13 +120,16 @@ const FeedSchema = new mongoose.Schema({
     type: String,
     enum: [
       'New',
+      'In process', 
       'Once off[In progress]',
       'Once off[Delivered]',
       'Ad hoc In-progress',
       'Ad hoc delivered',
+      'BAU Initiated',
       'ON hold[Sales]',
       'ON hold[Technical]',
-      'ON hold[Client]'
+      'ON hold[Client]',
+      'Closed'
     ],
     default: 'New'
   }
