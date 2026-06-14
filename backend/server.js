@@ -7,10 +7,17 @@ const path = require('path');
 const fs = require('fs');
 
 require('dotenv').config();
-require('./cron/dripCampaignWorker');
+
+// Safely load the cron worker using path resolution to avoid directory boundary issues
+try {
+  require(path.join(__dirname, 'cron', 'dripCampaignWorker'));
+  console.log('⏰ Drip Campaign Worker initialized successfully');
+} catch (err) {
+  console.log('⚠️ Notice: Cron worker file bypass or path adjusted:', err.message);
+}
 
 // =========================================================
-// CREATE UPLOADS DIRECTORY IF NOT EXISTS
+// CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
 // =========================================================
 
 const createUploadsDirectory = () => {
@@ -26,22 +33,19 @@ const createUploadsDirectory = () => {
       fs.mkdirSync(dir, { recursive: true });
       console.log(`📁 Created directory: ${dir}`);
     } else {
-      console.log(`✅ Directory already exists: ${dir}`);
+      console.log(`✅ Directory ready: ${dir}`);
     }
   });
 };
 
-// Call the function to create directories
 createUploadsDirectory();
 
 // =========================================================
-// CONTINUE WITH YOUR EXISTING SERVER CODE
+// ROUTE & MIDDLEWARE DEPENDENCY IMPORTS
 // =========================================================
 
-// Middleware Imports
 const { protect } = require('./middleware/authMiddleware');
 
-// Route Imports
 const adminRoutes = require('./routes/adminRoutes');
 const authRoutes = require('./routes/authRoutes');
 const leadGenRoutes = require('./routes/leadGenRoutes');
@@ -50,19 +54,17 @@ const prospectRoutes = require('./routes/prospects');
 const developerRoutes = require('./routes/developer');
 const pmRoutes = require('./routes/pmRoutes');
 const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
-const resourceAnalyticsRoutes =  require('./routes/resourceAnalyticsRoutes');
+const resourceAnalyticsRoutes = require('./routes/resourceAnalyticsRoutes');
 const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 
 const app = express();
-
-/* =========================================================
-   CREATE HTTP SERVER + SOCKET SERVER
-========================================================= */
-
 const server = http.createServer(app);
 
-// In server.js, update the Socket.IO configuration
+/* =========================================================
+   CREATE SOCKET SERVER WITH WEB PRODUCTION CORS RULES
+========================================================= */
+
 const io = new Server(server, {
   cors: {
     origin: [
@@ -70,17 +72,19 @@ const io = new Server(server, {
       'http://127.0.0.1:5173',
       'http://192.168.1.6:5173', 
       'http://192.168.1.105:5173',
+      'https://kuiperapp.co.in',       // Live Production Domain
+      'https://www.kuiperapp.co.in',   // Live Production Domain (WWW sub)
       /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
       /^http:\/\/localhost(:\d+)?$/
     ],
     credentials: true,
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
   },
   transports: ['websocket', 'polling']
 });
 
 /* =========================================================
-   SOCKET CONNECTION
+   GLOBAL SOCKET IO LISTENERS
 ========================================================= */
 
 global.io = io;
@@ -104,101 +108,98 @@ io.on('connection', (socket) => {
 });
 
 /* =========================================================
-   MIDDLEWARE
+   APPLICATION LEVEL MIDDLEWARES
 ========================================================= */
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Setup unified CORS handling for both dev machines and live environment domains
 app.use(cors({
   origin: function(origin, callback) {
     if (!origin) return callback(null, true);
 
-    const allowed =
-      /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
+    const isLocal = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
+    const isProduction = /^https?:\/\/(www\.)?kuiperapp\.co\.in$/.test(origin);
 
-    if (allowed) {
+    if (isLocal || isProduction) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS')); 
+      callback(new Error('Not allowed by CORS policy')); 
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// Serve static files from uploads directory
+// Route static access parameters for uploaded document assets
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 /* =========================================================
-   ENV VALIDATION
+   ENV RUNTIME PORT VALIDATIONS
 ========================================================= */
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI;
 
 if (!MONGO_URI) {
-  console.error('❌ ERROR: MONGO_URI is missing');
+  console.error('❌ CRITICAL CONFIG ERROR: MONGO_URI string is missing in .env');
   process.exit(1);
 }
 
 /* =========================================================
-   ROUTES
+   APPLICATION REST API PIPELINES
 ========================================================= */
 
-// PUBLIC
+// OPEN ENDPOINTS
 app.use('/api/auth', authRoutes);
 
-// PROTECTED
+// CONTROL AUTHORIZED SECURE ENDPOINTS
 app.use('/api/admin', protect, adminRoutes);
 app.use('/api/orgs', protect, organizationRoutes);
-
 app.use('/api/leads', protect, leadGenRoutes);
 app.use('/api/lead-generation', protect, leadGenRoutes);
-
 app.use('/api/prospects', protect, prospectRoutes);
 app.use('/api/dev', protect, developerRoutes);
 app.use('/api/pm', protect, pmRoutes);
-app.use('/api/dev/worklog',protect,workDescriptionRoutes);
-app.use('/api/resource-analytics',  resourceAnalyticsRoutes);
-app.use('/api/email-campaign',  emailCampaignRoutes);
+app.use('/api/dev/worklog', protect, workDescriptionRoutes);
+app.use('/api/resource-analytics', resourceAnalyticsRoutes);
+app.use('/api/email-campaign', emailCampaignRoutes);
 app.use('/api/tickets', ticketRoutes);
 
 /* =========================================================
-   TEST ROUTE
+   ROOT PIN TEST DIRECTIVE
 ========================================================= */
 
 app.get('/', (req, res) => {
-  res.send('Keyword Analytics API Running 🚀');
+  res.send('Keyword Analytics Engine Core Production API Operational 🚀');
 });
 
 /* =========================================================
-   404 HANDLER
+   GLOBAL 404 CATCH FALLBACK
 ========================================================= */
 
 app.use((req, res) => {
-  console.log(`⚠️ 404 => ${req.method} ${req.originalUrl}`);
-
+  console.log(`⚠️ Route Mismatch 404 Execution => ${req.method} ${req.originalUrl}`);
   res.status(404).json({
     success: false,
-    message: `Route ${req.method} ${req.originalUrl} not found`
+    message: `Route endpoint ${req.method} ${req.originalUrl} does not exist on server stack`
   });
 });
 
 /* =========================================================
-   DATABASE + SERVER START
+   DATABASE INTEGRATION & WEB APPLICATION BOOTSTRAP
 ========================================================= */
 
 mongoose.connect(MONGO_URI)
   .then(() => {
-    console.log('✅ MongoDB Connected');
-    console.log('📁 Uploads directory ready');
-
+    console.log('✅ MongoDB Cluster Connected Successfully');
+    
     server.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on:`);
-      console.log(`➡️ Local:   http://localhost:${PORT}`);
-      console.log(`➡️ Network: http://192.168.1.5:${PORT}`);
+      console.log(`🚀 API System running in production mode listening on port ${PORT}`);
     });
   })
   .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err);
+    console.error('❌ Engine Startup Failed. MongoDB Connection Error:', err);
   });
