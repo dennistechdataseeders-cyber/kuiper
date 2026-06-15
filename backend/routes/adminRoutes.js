@@ -20,7 +20,7 @@ const { register, login, forgotPassword, resetPassword } = require('../controlle
 const { authorize } = require('../middleware/roleCheck');
 const getWelcomeTemplate = require('../templates/welcomeEmail');
 
-// --- NODEMAILER TRANSPORTER ---
+// --- NODEMAILER TRANSPORTER (kept for bulk-invite and other emails) ---
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
@@ -36,6 +36,10 @@ const transporter = nodemailer.createTransport({
     rejectUnauthorized: false
   }
 });
+
+// --- RESEND (for invitation emails only) ---
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================
 // USER MANAGEMENT ROUTES
@@ -147,19 +151,17 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     
     console.log("User saved with organizationId:", newUser.organizationId);
 
-    // Send welcome email
+    // Send welcome email via Resend
     const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole, "https://kuiperapp.co.in/login");
-    
-    const mailOptions = {
-      from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
+
+    resend.emails.send({
+      from: 'Kuiper CRM <no-reply@kuiperapp.co.in>',
       to: email,
       subject: 'Your System Access Credentials',
       html: emailHtml
-    };
-
-    transporter.sendMail(mailOptions)
-      .then(info => console.log("✅ Email sent successfully:", info.messageId))
-      .catch(err => console.error("❌ Email failed to send:", err.message));
+    })
+      .then(data => console.log("✅ Invitation email sent:", data.id))
+      .catch(err => console.error("❌ Invitation email failed:", err.message));
 
     // Logging
     try {
@@ -813,10 +815,6 @@ router.get('/projects/:id/repo-contents', authorize('Admin', 'Project Manager'),
 // FEED MANAGEMENT ROUTES
 // ============================================
 
-// In adminRoutes.js, update the feed creation endpoint (around line 500-550)
-
-// Replace your existing feed creation endpoint with this updated version
-
 router.post('/feeds', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const {
@@ -1188,8 +1186,6 @@ router.get('/feed-status-options', authorize('Admin', 'Project Manager'), async 
   res.json(statuses);
 });
 
-// Add this to backend/routes/adminRoutes.js - after your existing routes
-
 // GET /client/projects - Specific endpoint for clients to see their assigned projects
 router.get('/client/projects', authorize('Client'), async (req, res) => {
   try {
@@ -1199,17 +1195,12 @@ router.get('/client/projects', authorize('Client'), async (req, res) => {
     console.log('Fetching projects for client:', clientId);
     console.log('Client organization ID:', clientOrgId);
     
-    // Build query to find projects where:
-    // 1. Client is in clients array, OR
-    // 2. Client's organization is in organizations array
     const query = {
       $or: []
     };
     
-    // Add direct client assignment condition
     query.$or.push({ clients: clientId });
     
-    // Add organization assignment condition if client has an organization
     if (clientOrgId) {
       query.$or.push({ organizations: clientOrgId });
     }
@@ -1237,6 +1228,7 @@ router.get('/client/projects', authorize('Client'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
 // COUNTRY MAP
 const COUNTRY_MAP = {
   "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 

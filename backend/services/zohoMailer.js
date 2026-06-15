@@ -1,44 +1,19 @@
-// backend/services/zohoMailer.js
-//
-// Kept for backward compatibility — anything that does
-// require('../services/zohoMailer') continues to work.
-//
-// Uses Gmail SMTP with credentials from .env:
-//   EMAIL_USER=systempulse.ds@gmail.com
-//   EMAIL_PASS=your_app_password   (Gmail App Password, not your normal password)
-
-const nodemailer = require('nodemailer');
-
-const EMAIL = process.env.EMAIL_USER;
-const PASSWORD = process.env.EMAIL_PASS;
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: EMAIL,
-    pass: PASSWORD
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
-    const info = await transporter.sendMail({
-      from: `"Kuiper CRM" <${EMAIL}>`,
+    const { data, error } = await resend.emails.send({
+      from: 'Kuiper CRM <no-reply@kuiperapp.co.in>',
       to,
       subject,
       html
     });
-
-    console.log('EMAIL SENT:', info.messageId);
-    return info;
+    if (error) throw new Error(JSON.stringify(error));
+    console.log('✅ EMAIL SENT:', data.id);
+    return data;
   } catch (error) {
-    console.error('EMAIL ERROR:', error.message);
+    console.error('❌ EMAIL ERROR:', error.message);
     throw error;
   }
 };

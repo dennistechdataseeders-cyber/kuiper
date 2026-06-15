@@ -147,6 +147,7 @@ frontend/src/pages/Worklog.jsx
 frontend/src/utils/notifications.js
 frontend/tailwind.config.js
 frontend/vite.config.js
+README.md
 </directory_structure>
 
 <files>
@@ -8585,6 +8586,10 @@ export default {
 }
 </file>
 
+<file path="README.md">
+# kuiper
+</file>
+
 <file path="backend/controllers/ticketController.js">
 // backend/controllers/ticketController.js
 
@@ -13762,213 +13767,6 @@ router.delete('/:id', authorize('Admin', 'Sales Manager'), async (req, res) => {
 module.exports = router;
 </file>
 
-<file path="backend/server.js">
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-const fs = require('fs');
-
-require('dotenv').config();
-require('./cron/dripCampaignWorker');
-
-// =========================================================
-// CREATE UPLOADS DIRECTORY IF NOT EXISTS
-// =========================================================
-
-const createUploadsDirectory = () => {
-  const uploadDirs = [
-    path.join(__dirname, 'uploads'),
-    path.join(__dirname, 'uploads/tickets'),
-    path.join(__dirname, 'uploads/profiles'),
-    path.join(__dirname, 'uploads/temp')
-  ];
-  
-  uploadDirs.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`📁 Created directory: ${dir}`);
-    } else {
-      console.log(`✅ Directory already exists: ${dir}`);
-    }
-  });
-};
-
-// Call the function to create directories
-createUploadsDirectory();
-
-// =========================================================
-// CONTINUE WITH YOUR EXISTING SERVER CODE
-// =========================================================
-
-// Middleware Imports
-const { protect } = require('./middleware/authMiddleware');
-
-// Route Imports
-const adminRoutes = require('./routes/adminRoutes');
-const authRoutes = require('./routes/authRoutes');
-const leadGenRoutes = require('./routes/leadGenRoutes');
-const organizationRoutes = require('./routes/organizationRoutes');
-const prospectRoutes = require('./routes/prospects');
-const developerRoutes = require('./routes/developer');
-const pmRoutes = require('./routes/pmRoutes');
-const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
-const resourceAnalyticsRoutes =  require('./routes/resourceAnalyticsRoutes');
-const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
-const ticketRoutes = require('./routes/ticketRoutes');
-
-const app = express();
-
-/* =========================================================
-   CREATE HTTP SERVER + SOCKET SERVER
-========================================================= */
-
-const server = http.createServer(app);
-
-// In server.js, update the Socket.IO configuration
-const io = new Server(server, {
-  cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://192.168.1.6:5173', 
-      'http://192.168.1.105:5173',
-      /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
-      /^http:\/\/localhost(:\d+)?$/
-    ],
-    credentials: true,
-    methods: ["GET", "POST"]
-  },
-  transports: ['websocket', 'polling']
-});
-
-/* =========================================================
-   SOCKET CONNECTION
-========================================================= */
-
-global.io = io;
-app.set('io', io);
-io.on('connection', (socket) => {
-  console.log('🟢 Socket Connected:', socket.id);
-
-  socket.on('join-user-room', (userId) => {
-    socket.join(userId);
-    console.log(`👤 User joined room: ${userId}`);
-  });
-
-  socket.on('join-ticket-room', (ticketId) => {
-    socket.join(`ticket_${ticketId}`);
-    console.log(`🎫 Joined ticket room: ${ticketId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('🔴 Socket Disconnected:', socket.id);
-  });
-});
-
-/* =========================================================
-   MIDDLEWARE
-========================================================= */
-
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-
-    const allowed =
-      /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
-
-    if (allowed) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS')); 
-    }
-  },
-  credentials: true
-}));
-
-// Serve static files from uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-/* =========================================================
-   ENV VALIDATION
-========================================================= */
-
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI;
-
-if (!MONGO_URI) {
-  console.error('❌ ERROR: MONGO_URI is missing');
-  process.exit(1);
-}
-
-/* =========================================================
-   ROUTES
-========================================================= */
-
-// PUBLIC
-app.use('/api/auth', authRoutes);
-
-// PROTECTED
-app.use('/api/admin', protect, adminRoutes);
-app.use('/api/orgs', protect, organizationRoutes);
-
-app.use('/api/leads', protect, leadGenRoutes);
-app.use('/api/lead-generation', protect, leadGenRoutes);
-
-app.use('/api/prospects', protect, prospectRoutes);
-app.use('/api/dev', protect, developerRoutes);
-app.use('/api/pm', protect, pmRoutes);
-app.use('/api/dev/worklog',protect,workDescriptionRoutes);
-app.use('/api/resource-analytics',  resourceAnalyticsRoutes);
-app.use('/api/email-campaign',  emailCampaignRoutes);
-app.use('/api/tickets', ticketRoutes);
-
-/* =========================================================
-   TEST ROUTE
-========================================================= */
-
-app.get('/', (req, res) => {
-  res.send('Keyword Analytics API Running 🚀');
-});
-
-/* =========================================================
-   404 HANDLER
-========================================================= */
-
-app.use((req, res) => {
-  console.log(`⚠️ 404 => ${req.method} ${req.originalUrl}`);
-
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.method} ${req.originalUrl} not found`
-  });
-});
-
-/* =========================================================
-   DATABASE + SERVER START
-========================================================= */
-
-mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log('✅ MongoDB Connected');
-    console.log('📁 Uploads directory ready');
-
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on:`);
-      console.log(`➡️ Local:   http://localhost:${PORT}`);
-      console.log(`➡️ Network: http://192.168.1.5:${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('❌ MongoDB Connection Error:', err);
-  });
-</file>
-
 <file path="backend/templates/welcomeEmail.js">
 // templates/welcomeEmail.js
 
@@ -14863,6 +14661,214 @@ UserSchema.methods.getPOCDetails = async function() {
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);
 </file>
 
+<file path="backend/server.js">
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
+
+require('dotenv').config();
+
+// Safely load the cron worker using path resolution to avoid directory boundary issues
+try {
+  require(path.join(__dirname, 'cron', 'dripCampaignWorker'));
+  console.log('⏰ Drip Campaign Worker initialized successfully');
+} catch (err) {
+  console.log('⚠️ Notice: Cron worker file bypass or path adjusted:', err.message);
+}
+
+// =========================================================
+// CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
+// =========================================================
+
+const createUploadsDirectory = () => {
+  const uploadDirs = [
+    path.join(__dirname, 'uploads'),
+    path.join(__dirname, 'uploads/tickets'),
+    path.join(__dirname, 'uploads/profiles'),
+    path.join(__dirname, 'uploads/temp')
+  ];
+  
+  uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`📁 Created directory: ${dir}`);
+    } else {
+      console.log(`✅ Directory ready: ${dir}`);
+    }
+  });
+};
+
+createUploadsDirectory();
+
+// =========================================================
+// ROUTE & MIDDLEWARE DEPENDENCY IMPORTS
+// =========================================================
+
+const { protect } = require('./middleware/authMiddleware');
+
+const adminRoutes = require('./routes/adminRoutes');
+const authRoutes = require('./routes/authRoutes');
+const leadGenRoutes = require('./routes/leadGenRoutes');
+const organizationRoutes = require('./routes/organizationRoutes');
+const prospectRoutes = require('./routes/prospects');
+const developerRoutes = require('./routes/developer');
+const pmRoutes = require('./routes/pmRoutes');
+const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
+const resourceAnalyticsRoutes = require('./routes/resourceAnalyticsRoutes');
+const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
+
+const app = express();
+const server = http.createServer(app);
+
+/* =========================================================
+   CREATE SOCKET SERVER WITH WEB PRODUCTION CORS RULES
+========================================================= */
+
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://192.168.1.6:5173', 
+      'http://192.168.1.105:5173',
+      'https://kuiperapp.co.in',       // Live Production Domain
+      'https://www.kuiperapp.co.in',   // Live Production Domain (WWW sub)
+      /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
+      /^http:\/\/localhost(:\d+)?$/
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+  },
+  transports: ['websocket', 'polling']
+});
+
+/* =========================================================
+   GLOBAL SOCKET IO LISTENERS
+========================================================= */
+
+global.io = io;
+app.set('io', io);
+io.on('connection', (socket) => {
+  console.log('🟢 Socket Connected:', socket.id);
+
+  socket.on('join-user-room', (userId) => {
+    socket.join(userId);
+    console.log(`👤 User joined room: ${userId}`);
+  });
+
+  socket.on('join-ticket-room', (ticketId) => {
+    socket.join(`ticket_${ticketId}`);
+    console.log(`🎫 Joined ticket room: ${ticketId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔴 Socket Disconnected:', socket.id);
+  });
+});
+
+/* =========================================================
+   APPLICATION LEVEL MIDDLEWARES
+========================================================= */
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Setup unified CORS handling for both dev machines and live environment domains
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+
+    const isLocal = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
+    const isProduction = /^https?:\/\/(www\.)?kuiperapp\.co\.in$/.test(origin);
+
+    if (isLocal || isProduction) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS policy')); 
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
+}));
+
+// Route static access parameters for uploaded document assets
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+/* =========================================================
+   ENV RUNTIME PORT VALIDATIONS
+========================================================= */
+
+const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error('❌ CRITICAL CONFIG ERROR: MONGO_URI string is missing in .env');
+  process.exit(1);
+}
+
+/* =========================================================
+   APPLICATION REST API PIPELINES
+========================================================= */
+
+// OPEN ENDPOINTS
+app.use('/api/auth', authRoutes);
+
+// CONTROL AUTHORIZED SECURE ENDPOINTS
+app.use('/api/admin', protect, adminRoutes);
+app.use('/api/orgs', protect, organizationRoutes);
+app.use('/api/leads', protect, leadGenRoutes);
+app.use('/api/lead-generation', protect, leadGenRoutes);
+app.use('/api/prospects', protect, prospectRoutes);
+app.use('/api/dev', protect, developerRoutes);
+app.use('/api/pm', protect, pmRoutes);
+app.use('/api/dev/worklog', protect, workDescriptionRoutes);
+app.use('/api/resource-analytics', resourceAnalyticsRoutes);
+app.use('/api/email-campaign', emailCampaignRoutes);
+app.use('/api/tickets', ticketRoutes);
+
+/* =========================================================
+   ROOT PIN TEST DIRECTIVE
+========================================================= */
+
+app.get('/', (req, res) => {
+  res.send('Keyword Analytics Engine Core Production API Operational 🚀');
+});
+
+/* =========================================================
+   GLOBAL 404 CATCH FALLBACK
+========================================================= */
+
+app.use((req, res) => {
+  console.log(`⚠️ Route Mismatch 404 Execution => ${req.method} ${req.originalUrl}`);
+  res.status(404).json({
+    success: false,
+    message: `Route endpoint ${req.method} ${req.originalUrl} does not exist on server stack`
+  });
+});
+
+/* =========================================================
+   DATABASE INTEGRATION & WEB APPLICATION BOOTSTRAP
+========================================================= */
+
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log('✅ MongoDB Cluster Connected Successfully');
+    
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 API System running in production mode listening on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error('❌ Engine Startup Failed. MongoDB Connection Error:', err);
+  });
+</file>
+
 <file path="frontend/src/components/KuiperLogo.jsx">
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame, extend } from '@react-three/fiber';
@@ -14983,15 +14989,6 @@ const KuiperLogo = ({ isExpanded }) => {
 };
 
 export default KuiperLogo;
-</file>
-
-<file path="frontend/src/config.js">
-// frontend/src/config.js
-
-// Vite injects variables prefixed with VITE_ during static asset compilation
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-
-export default API_BASE_URL;
 </file>
 
 <file path="frontend/src/pages/AdminDashboard.jsx">
@@ -20609,6 +20606,13 @@ module.exports = router;
 }
 </file>
 
+<file path="frontend/src/config.js">
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+export { API_BASE_URL }; // Supports named imports like: import { API_BASE_URL }
+export default API_BASE_URL; // Supports default imports like: import API_BASE_URL
+</file>
+
 <file path="frontend/src/index.css">
 @import "tailwindcss";
 
@@ -20730,27 +20734,6 @@ body,
 .react-calendar__month-view__days__tile--neighboringMonth {
   color: #CBD5E1 !important;
 }
-</file>
-
-<file path="frontend/vite.config.js">
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    host: '0.0.0.0',  // expose to local network
-    port: 5173,
-    
-    proxy: {
-      '/api': {
-        target: 'http://192.168.1.8:5000', // replace with your actual IP from ipconfig
-        changeOrigin: true,
-        secure: false,
-      },
-    },
-  },
-})
 </file>
 
 <file path="backend/routes/leadGenRoutes.js">
@@ -22095,6 +22078,46 @@ const Prospects = () => {
 };
 
 export default Prospects;
+</file>
+
+<file path="frontend/vite.config.js">
+import { defineConfig, loadEnv } from 'vite';
+import react from '@vitejs/plugin-react';
+
+export default defineConfig(({ mode }) => {
+  // Dynamically load the .env file based on production/development mode
+  const env = loadEnv(mode, process.cwd(), '');
+
+  return {
+    plugins: [react()],
+    base: '/',
+    server: {
+      host: '0.0.0.0',
+      port: 5173,
+      proxy: {
+        '/api': {
+          // Uses VITE_API_URL from your .env file, or falls back to localhost if testing locally
+          target: env.VITE_API_URL || 'http://localhost:5000',
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+    },
+    build: {
+      // Helps optimize chunk sizing and performance logs on build compilation
+      chunkSizeWarningLimit: 1600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              return id.toString().split('node_modules/')[1].split('/')[0].toString();
+            }
+          },
+        },
+      },
+    },
+  };
+});
 </file>
 
 <file path="frontend/src/pages/Login.jsx">
@@ -27448,7 +27471,7 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     console.log("User saved with organizationId:", newUser.organizationId);
 
     // Send welcome email
-    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole, "http://192.168.1.105:5173/");
+    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole, "https://kuiperapp.co.in/login");
     
     const mailOptions = {
       from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
