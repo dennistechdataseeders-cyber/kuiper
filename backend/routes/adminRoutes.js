@@ -148,7 +148,7 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     console.log("User saved with organizationId:", newUser.organizationId);
 
     // Send welcome email
-    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole, "http://192.168.1.105:5173/");
+    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole, "https://kuiperapp.co.in/login");
     
     const mailOptions = {
       from: `"KUIPER SYSTEM" <${process.env.EMAIL_USER}>`,
