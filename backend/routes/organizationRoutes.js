@@ -6,7 +6,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
 // --- POST: Create Organization (with multiple POCs support and optional client user creation) ---
-router.post('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+router.post('/', authorize('Admin', 'Sales', 'Sales Manager','Project Manager'), async (req, res) => {
   try {
     const { 
       prospectId, 

@@ -72,13 +72,14 @@ const io = new Server(server, {
       'http://127.0.0.1:5173',
       'http://192.168.1.6:5173', 
       'http://192.168.1.105:5173',
-      'https://kuiperapp.co.in',       // Live Production Domain
-      'https://www.kuiperapp.co.in',   // Live Production Domain (WWW sub)
+      'https://kuiperapp.co.in',
+      'https://www.kuiperapp.co.in',
       /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
       /^http:\/\/localhost(:\d+)?$/
     ],
     credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
   },
   transports: ['websocket', 'polling']
 });
@@ -114,24 +115,87 @@ io.on('connection', (socket) => {
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Setup unified CORS handling for both dev machines and live environment domains
-app.use(cors({
+// =========================================================
+// UNIFIED CORS CONFIGURATION - FIXES PATCH METHOD ISSUE
+// =========================================================
+
+// Custom CORS middleware - handles all OPTIONS preflight requests
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  
+  // Define allowed origins based on environment
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://192.168.1.105:5173',
+    'http://192.168.1.6:5173',
+    'https://kuiperapp.co.in',
+    'https://www.kuiperapp.co.in'
+  ];
+  
+  // Set CORS headers for all responses
+  if (process.env.NODE_ENV === 'production') {
+    if (origin && allowedOrigins.includes(origin)) {
+      res.header('Access-Control-Allow-Origin', origin);
+    } else {
+      res.header('Access-Control-Allow-Origin', 'https://kuiperapp.co.in');
+    }
+  } else {
+    // In development, allow all origins
+    res.header('Access-Control-Allow-Origin', origin || '*');
+  }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Expose-Headers', 'Content-Length, X-Kuma-Revision');
+  
+  // Handle preflight OPTIONS request
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Max-Age', '86400'); // Cache preflight for 24 hours
+    return res.status(204).end();
+  }
+  
+  next();
+});
+
+// CORS configuration for the cors package
+const corsOptions = {
   origin: function(origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
     if (!origin) return callback(null, true);
-
-    const isLocal = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
-    const isProduction = /^https?:\/\/(www\.)?kuiperapp\.co\.in$/.test(origin);
-
-    if (isLocal || isProduction) {
+    
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://192.168.1.105:5173',
+      'http://192.168.1.6:5173',
+      'https://kuiperapp.co.in',
+      'https://www.kuiperapp.co.in'
+    ];
+    
+    // In development, allow all origins
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS policy')); 
+      callback(new Error('Not allowed by CORS policy'));
     }
   },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS', 'HEAD'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
+  maxAge: 86400 // 24 hours
+};
+
+// Apply cors middleware
+app.use(cors(corsOptions));
+
+// REMOVED: app.options('*', cors(corsOptions)); - This was causing the error
+// The custom middleware above already handles OPTIONS requests
 
 // Route static access parameters for uploaded document assets
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
@@ -198,6 +262,7 @@ mongoose.connect(MONGO_URI)
     
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 API System running in production mode listening on port ${PORT}`);
+      console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   })
   .catch((err) => {
