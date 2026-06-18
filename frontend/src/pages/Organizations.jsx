@@ -25,7 +25,8 @@ import {
   Loader2,
   AlertCircle,
   Users,
-  UserPlus
+  UserPlus,
+  ExternalLink
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -56,6 +57,10 @@ const Organizations = () => {
   // Convert to Lead States
   const [convertToLead, setConvertToLead] = useState(false);
   const [converting, setConverting] = useState(false);
+  
+  // Lead Type States (NEW)
+  const [leadType, setLeadType] = useState('Inbound');
+  const [referredBy, setReferredBy] = useState('');
 
   // Company Search/Duplicate Detection
   const [similarCompanies, setSimilarCompanies] = useState([]);
@@ -189,6 +194,8 @@ const Organizations = () => {
   const openEditModal = (org) => {
     setEditingId(org._id);
     setConvertToLead(false);
+    setLeadType('Inbound');
+    setReferredBy('');
     setSimilarCompanies([]);
     setShowSuggestions(false);
     setFormData({
@@ -204,6 +211,8 @@ const Organizations = () => {
     setEditingId(null);
     setConvertToLead(false);
     setConverting(false);
+    setLeadType('Inbound');
+    setReferredBy('');
     setSimilarCompanies([]);
     setShowSuggestions(false);
     setPointsOfContact([]);
@@ -348,25 +357,35 @@ const Organizations = () => {
 
       fetchOrgs();
 
+      // Updated lead conversion with full lead type functionality
       if (convertToLead && savedOrg && !editingId) {
         const primaryPOC = pointsOfContact.find(p => p.isPrimary) || pointsOfContact[0];
+        
+        // Validate lead type specific fields
+        if (leadType === 'Reference' && !referredBy.trim()) {
+          toast.error('Please provide referral information');
+          setConverting(false);
+          return;
+        }
+        
         const leadPayload = {
-          leadType: 'Inbound',
+          leadType: leadType,
           organizationId: savedOrg._id,
           pocName: primaryPOC.pocName,
-          pocPhone: primaryPOC.pocPhone,
-          pocEmail: primaryPOC.pocEmail,
-          referredBy: ''
+          pocPhone: primaryPOC.pocPhone || '',
+          pocEmail: primaryPOC.pocEmail || '',
+          linkedin: primaryPOC.linkedin || '',
+          referredBy: leadType === 'Reference' ? referredBy : ''
         };
         
         try {
           await axios.post(`${API_BASE_URL}/api/lead-generation`, leadPayload, config);
           toast.success('Lead generated successfully!');
           closeModal();
-          navigate('/sales/lead-generation');
+          navigate('/sales/lead_generation');
         } catch (leadErr) {
           console.error('Lead generation failed:', leadErr);
-          toast.error('Organization saved but lead generation failed');
+          toast.error(leadErr.response?.data?.error || 'Organization saved but lead generation failed');
           closeModal();
         }
       } else {
@@ -395,7 +414,7 @@ const Organizations = () => {
 
     result.sort((a, b) => {
       let aVal = a.companyName || '';
-      let bVal = b.companyName || '';a
+      let bVal = b.companyName || '';
 
       if (sortOrder === 'asc') {
         return aVal.toString().localeCompare(bVal.toString());
@@ -442,6 +461,16 @@ const Organizations = () => {
       default: return 'bg-slate-100 text-slate-600';
     }
   };
+
+  // Lead type options for the dropdown
+  const leadTypeOptions = [
+    { value: 'Inbound', label: 'Inbound' },
+    { value: 'Outbound', label: 'Outbound' },
+    { value: 'Email Marketing', label: 'Email Marketing' },
+    { value: 'LinkedIn', label: 'LinkedIn' },
+    { value: 'Reference', label: 'Reference' },
+    { value: 'Cold Call', label: 'Cold Call' }
+  ];
 
   return (
     <div className={`min-h-screen bg-slate-50 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -744,45 +773,44 @@ const Organizations = () => {
                 />
                 
                 {/* Suggestions Dropdown */}
-               {/* Suggestions Dropdown */}
-{showSuggestions && similarCompanies.length > 0 && (
-  <div className="absolute z-50 w-full mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-64 overflow-y-auto">
-    <div className="p-2 border-b border-slate-100 bg-slate-50">
-      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
-        Similar companies found:
-      </p>
-    </div>
-    {similarCompanies.map((company) => (
-      <div
-        key={company._id}
-        onClick={() => selectExistingCompany(company)}
-        className="w-full p-3 text-left hover:bg-blue-50 transition-all border-b border-slate-50 last:border-0 cursor-pointer flex items-center justify-between group"
-      >
-        <div>
-          <p className="text-sm font-bold text-slate-800">{company.companyName}</p>
-          {company.pointsOfContact && company.pointsOfContact.length > 0 && (
-            <p className="text-[9px] text-slate-500 mt-0.5">
-              {company.pointsOfContact.length} contact(s) • 
-              Primary: {company.pointsOfContact.find(p => p.isPrimary)?.pocName || 'None'}
-            </p>
-          )}
-        </div>
-        <span className="px-2 py-1 bg-blue-600 text-white rounded-lg text-[8px] font-black uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
-          Select
-        </span>
-      </div>
-    ))}
-    <div className="p-2 border-t border-slate-100 bg-slate-50">
-      <button
-        type="button"
-        onClick={() => setShowSuggestions(false)}
-        className="w-full text-center text-[9px] font-bold text-slate-500 hover:text-slate-700"
-      >
-        Create new company instead
-      </button>
-    </div>
-  </div>
-)}
+                {showSuggestions && similarCompanies.length > 0 && (
+                  <div className="absolute z-50 w-full mt-1 bg-white rounded-xl border border-slate-200 shadow-lg max-h-64 overflow-y-auto">
+                    <div className="p-2 border-b border-slate-100 bg-slate-50">
+                      <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
+                        Similar companies found:
+                      </p>
+                    </div>
+                    {similarCompanies.map((company) => (
+                      <div
+                        key={company._id}
+                        onClick={() => selectExistingCompany(company)}
+                        className="w-full p-3 text-left hover:bg-blue-50 transition-all border-b border-slate-50 last:border-0 cursor-pointer flex items-center justify-between group"
+                      >
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{company.companyName}</p>
+                          {company.pointsOfContact && company.pointsOfContact.length > 0 && (
+                            <p className="text-[9px] text-slate-500 mt-0.5">
+                              {company.pointsOfContact.length} contact(s) • 
+                              Primary: {company.pointsOfContact.find(p => p.isPrimary)?.pocName || 'None'}
+                            </p>
+                          )}
+                        </div>
+                        <span className="px-2 py-1 bg-blue-600 text-white rounded-lg text-[8px] font-black uppercase tracking-wider opacity-0 group-hover:opacity-100 transition-opacity">
+                          Select
+                        </span>
+                      </div>
+                    ))}
+                    <div className="p-2 border-t border-slate-100 bg-slate-50">
+                      <button
+                        type="button"
+                        onClick={() => setShowSuggestions(false)}
+                        className="w-full text-center text-[9px] font-bold text-slate-500 hover:text-slate-700"
+                      >
+                        Create new company instead
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -845,20 +873,76 @@ const Organizations = () => {
                 )}
               </div>
 
-              {/* Convert to Lead Checkbox */}
+              {/* Convert to Lead Section with Full Lead Type Selection */}
               {!editingId && pointsOfContact.length > 0 && (
-                <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
-                  <input
-                    type="checkbox"
-                    id="convertToLead"
-                    checked={convertToLead}
-                    onChange={(e) => setConvertToLead(e.target.checked)}
-                    className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="convertToLead" className="flex items-center gap-2 cursor-pointer">
-                    <Target size={14} className="text-blue-600" />
-                    <span className="text-xs font-bold text-blue-700">Directly convert to Lead</span>
-                  </label>
+                <div className="border-t border-slate-100 pt-4 mt-2">
+                  <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-xl border border-blue-100 mb-3">
+                    <input
+                      type="checkbox"
+                      id="convertToLead"
+                      checked={convertToLead}
+                      onChange={(e) => setConvertToLead(e.target.checked)}
+                      className="w-4 h-4 rounded border-blue-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <label htmlFor="convertToLead" className="flex items-center gap-2 cursor-pointer">
+                      <Target size={14} className="text-blue-600" />
+                      <span className="text-xs font-bold text-blue-700">Directly convert to Lead</span>
+                    </label>
+                  </div>
+
+                  {/* Lead Type Selection - Only show when convertToLead is checked */}
+                  {convertToLead && (
+                    <div className="animate-in slide-in-from-top-2 duration-300 space-y-3 bg-slate-50/80 p-4 rounded-xl border border-slate-200">
+                      <div>
+                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1 block mb-1">
+                          Lead Source *
+                        </label>
+                        <select
+                          required
+                          className="w-full p-3 bg-white rounded-xl border-2 border-transparent focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                          value={leadType}
+                          onChange={(e) => setLeadType(e.target.value)}
+                        >
+                          {leadTypeOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Referred By - Only for Reference type */}
+                      {leadType === 'Reference' && (
+                        <div className="animate-in fade-in duration-300">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-blue-600 ml-1 block mb-1">
+                            Referred By *
+                          </label>
+                          <div className="relative">
+                            <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" size={16} />
+                            <input
+                              required
+                              type="text"
+                              placeholder="Who referred this lead?"
+                              className="w-full p-3 pl-10 bg-white rounded-xl border-2 border-blue-100 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                              value={referredBy}
+                              onChange={(e) => setReferredBy(e.target.value)}
+                            />
+                          </div>
+                          <p className="text-[8px] text-slate-400 mt-1 ml-1">Enter the name or reference of the person who referred this lead</p>
+                        </div>
+                      )}
+
+                      {/* Lead Type Info Badge */}
+                      <div className="flex items-center gap-2 p-2 bg-blue-50/50 rounded-lg border border-blue-100">
+                        <AlertCircle size={12} className="text-blue-500" />
+                        <p className="text-[8px] font-medium text-blue-700">
+                          Lead will be created with status: <span className="font-black">New</span> • 
+                          Source: <span className="font-black">{leadType}</span>
+                          {leadType === 'Reference' && referredBy && ` • Referred by: ${referredBy}`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -102,7 +102,6 @@ router.post('/', authorize('Admin', 'Sales', 'Sales Manager','Project Manager'),
     res.status(400).json({ error: err.message });
   }
 });
-// Add this new route before the existing ones - specifically for clients to get their own organization
 
 // GET /api/orgs/client/me - Get the organization for the current client user
 router.get('/client/me', authorize('Client'), async (req, res) => {
@@ -124,50 +123,12 @@ router.get('/client/me', authorize('Client'), async (req, res) => {
     res.status(500).json({ success: false, message: 'Server error' });
   }
 });
-// Add this after the existing routes in organizationRoutes.js
 
-// GET /api/orgs/client/me - Get organization for current client
-router.get('/client/me', authorize('Client'), async (req, res) => {
-  try {
-    console.log('Fetching organization for client:', req.user._id);
-    console.log('Client organizationId from user:', req.user.organizationId);
-    
-    // First, try to get organization directly from user's organizationId
-    if (req.user.organizationId) {
-      const organization = await Organization.findById(req.user.organizationId)
-        .populate('clientUserId', 'name email');
-      
-      if (organization) {
-        console.log('Found organization via user.organizationId:', organization.companyName);
-        return res.json({ success: true, data: organization });
-      }
-    }
-    
-    // Fallback: search by clientUserId
-    const organization = await Organization.findOne({ 
-      clientUserId: req.user._id 
-    }).populate('clientUserId', 'name email');
-    
-    if (organization) {
-      console.log('Found organization via clientUserId:', organization.companyName);
-      return res.json({ success: true, data: organization });
-    }
-    
-    console.log('No organization found for client');
-    res.json({ success: true, data: null });
-  } catch (err) {
-    console.error("Error fetching client's organization:", err);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-});
-// --- GET: View Organizations (with populated data including client users) ---
+// --- GET: View Organizations (ALL sales people can see ALL organizations) ---
 router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
-    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') 
-      ? {} 
-      : { salesRepId: req.user._id };
-    
-    const organizations = await Organization.find(filter)
+    // ✅ REMOVED the salesRepId filter - ALL sales people can see ALL organizations
+    const organizations = await Organization.find({})
       .populate('clientUserId', 'name email githubUsername')
       .sort({ createdAt: -1 })
       .select('-__v');
@@ -240,14 +201,17 @@ router.get('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
   }
 });
 
-// --- PUT: Update Organization (with multiple POCs support) ---
+// --- PUT: Update Organization ---
 router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
-    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') 
-      ? { _id: req.params.id } 
-      : { _id: req.params.id, salesRepId: req.user._id };
-    
     const { pointsOfContact, companyName, website, address, clientUserId } = req.body;
+    
+    // ✅ No salesRepId filter - ANY sales person can update ANY organization
+    const organization = await Organization.findById(req.params.id);
+    
+    if (!organization) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
     
     // Get primary POC for backward compatibility fields
     const primaryPOC = pointsOfContact?.find(p => p.isPrimary) || pointsOfContact?.[0];
@@ -269,16 +233,13 @@ router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
       updateData.clientUserId = clientUserId;
     }
     
-    const updatedOrg = await Organization.findOneAndUpdate(
-      filter,
+    // Update the organization
+    const updatedOrg = await Organization.findByIdAndUpdate(
+      req.params.id,
       { $set: updateData },
       { new: true, runValidators: true }
     ).populate('clientUserId', 'name email');
 
-    if (!updatedOrg) {
-      return res.status(404).json({ error: "Organization not found or unauthorized" });
-    }
-    
     res.json(updatedOrg);
   } catch (err) {
     console.error("Update Organization Error:", err);
@@ -289,14 +250,11 @@ router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
 // --- DELETE: Remove Organization ---
 router.delete('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
-    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') 
-      ? { _id: req.params.id } 
-      : { _id: req.params.id, salesRepId: req.user._id };
-    
-    const org = await Organization.findOneAndDelete(filter);
+    // ✅ No salesRepId filter - ANY sales person can delete ANY organization
+    const org = await Organization.findById(req.params.id);
     
     if (!org) {
-      return res.status(404).json({ error: "Organization not found or unauthorized" });
+      return res.status(404).json({ error: "Organization not found" });
     }
 
     // Remove reference from client user if exists
@@ -311,6 +269,9 @@ router.delete('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, 
       { organizationId: req.params.id },
       { $set: { organizationId: null } }
     );
+
+    // Delete the organization
+    await Organization.findByIdAndDelete(req.params.id);
 
     res.json({ message: "Organization deleted successfully" });
   } catch (err) {
@@ -342,7 +303,7 @@ router.post('/check-duplicate', authorize('Admin', 'Sales', 'Sales Manager'), as
   }
 });
 
-// --- POST: Add POC to existing organization (without creating a client user) ---
+// --- POST: Add POC to existing organization (ALL sales people can add to ANY organization) ---
 router.post('/:id/add-poc', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { pocName, pocEmail, pocPhone, linkedin, department, isPrimary } = req.body;
@@ -351,6 +312,7 @@ router.post('/:id/add-poc', authorize('Admin', 'Sales', 'Sales Manager'), async 
       return res.status(400).json({ error: "POC name is required" });
     }
     
+    // ✅ No salesRepId filter - ANY sales person can add POC to ANY organization
     const organization = await Organization.findById(req.params.id);
     
     if (!organization) {
@@ -405,6 +367,7 @@ router.put('/:id/poc/:pocIndex', authorize('Admin', 'Sales', 'Sales Manager'), a
     const { pocIndex } = req.params;
     const { pocName, pocEmail, pocPhone, linkedin, department, isPrimary } = req.body;
     
+    // ✅ No salesRepId filter - ANY sales person can update POC in ANY organization
     const organization = await Organization.findById(req.params.id);
     
     if (!organization) {
@@ -459,6 +422,7 @@ router.delete('/:id/poc/:pocIndex', authorize('Admin', 'Sales', 'Sales Manager')
   try {
     const { pocIndex } = req.params;
     
+    // ✅ No salesRepId filter - ANY sales person can remove POC from ANY organization
     const organization = await Organization.findById(req.params.id);
     
     if (!organization) {
@@ -509,6 +473,7 @@ router.delete('/:id/poc/:pocIndex', authorize('Admin', 'Sales', 'Sales Manager')
 // --- GET: Get all POCs for an organization ---
 router.get('/:id/pocs', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
+    // ✅ No salesRepId filter - ANY sales person can view POCs in ANY organization
     const organization = await Organization.findById(req.params.id)
       .select('pointsOfContact companyName');
     

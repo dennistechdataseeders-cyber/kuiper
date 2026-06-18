@@ -171,7 +171,7 @@ const landingPath = useMemo(() => {
 
                     {/* Shared */}
                     <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDashboard /></ProtectedRoute>} />
-                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager']}><CreateTicket /></ProtectedRoute>} />
+                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager','Developer']}><CreateTicket /></ProtectedRoute>} />
                     <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDetails /></ProtectedRoute>} />
                     
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />

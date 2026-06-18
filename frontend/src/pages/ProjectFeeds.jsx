@@ -348,7 +348,7 @@ const ProjectFeeds = () => {
     setSelectedTicketFeed(feed);
     setTicketForm({
       title: `Issue with feed: ${feed.name}`,
-      description: `Feed: ${feed.name}\nProject: ${feed.projectCustomId}\n\nPlease describe the issue:`,
+      description: `Feed: ${feed.name}\nProject: ${feed.projectCustomId}\n\nDescription:`,
       priority: 'Medium'
     });
     setShowTicketModal(true);

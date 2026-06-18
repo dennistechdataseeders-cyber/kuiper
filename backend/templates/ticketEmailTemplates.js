@@ -77,10 +77,6 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
                 </tr>
                 ${hasFeed ? `
                 <tr>
-                  <td width="50%" style="padding:16px 20px; border-right:1px solid #e2e8f0; vertical-align: top;">
-                    <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Feed Component</div>
-                    <div style="font-size:14px; font-weight:700; color:#1e40af;">${feedName}</div>
-                  </td>
                   <td width="50%" style="padding:16px 20px; vertical-align: top;">
                     <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Date Created</div>
                     <div style="font-size:13px; font-weight:600; color:#475569;">${currentDate}</div>
@@ -373,9 +369,115 @@ const getPOCNotificationTemplate = (ticket, pocName, projectName, frontendUrl, f
 </html>
   `;
 };
+// Internal-only ticket template (no client/POC emails)
+const getInternalOnlyTicketTemplate = (ticket, creatorName, recipientsList, frontendUrl) => {
+  const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#0f172a; color:#e2e8f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f172a; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; width:100%; background:#1e293b; border-radius:24px; border:1px solid #334155; overflow:hidden;">
+          <tr>
+            <td style="background:#1e293b; padding:32px 36px; border-bottom:1px solid #334155;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#3b82f6;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Internal Task Management</div>
+                  </td>
+                  <td align="right" style="vertical-align: middle;">
+                    <div style="background:#059669; padding:4px 12px; border-radius:12px; font-size:8px; font-weight:700; color:white; text-transform:uppercase; letter-spacing:0.05em;">
+                      Internal
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#1a2332; padding:28px 36px;">
+              <div style="font-size:13px; font-weight:700; color:#94a3b8; letter-spacing:0.06em; text-transform:uppercase;">🔒 Internal Task</div>
+              <div style="font-size:26px; font-weight:800; color:#f1f5f9; margin-top:6px;">${ticket.ticketNumber}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <div style="font-size:18px; font-weight:700; color:#f1f5f9; margin-bottom:20px; line-height:1.4;">${ticket.title}</div>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f172a; border:1px solid #334155; border-radius:12px; border-collapse: separate; margin-bottom:24px;">
+                <tr>
+                  <td width="50%" style="padding:12px 16px; border-bottom:1px solid #334155; border-right:1px solid #334155;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Created By</div>
+                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; margin-top:2px;">${creatorName}</div>
+                  </td>
+                  <td width="50%" style="padding:12px 16px; border-bottom:1px solid #334155;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Priority</div>
+                    <div style="font-size:13px; font-weight:700; color:${ticket.priority === 'Urgent' ? '#ef4444' : ticket.priority === 'High' ? '#f59e0b' : '#60a5fa'}; margin-top:2px;">${ticket.priority}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 16px; border-right:1px solid #334155;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Status</div>
+                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; margin-top:2px;">${ticket.status}</div>
+                  </td>
+                  <td style="padding:12px 16px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Created</div>
+                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; margin-top:2px;">${currentDate}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 28px 36px;">
+              <div style="background:#0f172a; padding:20px 22px; border-radius:12px; border-left:4px solid #3b82f6;">
+                <div style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Description</div>
+                <p style="margin:0; font-size:14px; line-height:1.6; color:#cbd5e1; white-space: pre-line;">${ticket.description}</p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 32px 36px;">
+              <a href="${ticketUrl}" style="display:inline-block; background:#3b82f6; color:white; text-decoration:none; padding:12px 28px; border-radius:40px; font-weight:700; font-size:13px;">View Task →</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#0f172a; padding:24px 36px; text-align:center; border-top:1px solid #334155;">
+              <div style="font-size:10px; color:#475569;">🔒 Internal KUIPER Task • This is an internal notification</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+};
+
+// Export the new template
 module.exports = {
   getTicketCreatedTemplate,
   getInternalTicketTemplate,
-  getPOCNotificationTemplate
+  getPOCNotificationTemplate,
+  getInternalOnlyTicketTemplate  // Add this
 };

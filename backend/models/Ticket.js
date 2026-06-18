@@ -24,6 +24,24 @@ const ticketSchema = new mongoose.Schema({
     enum: ['Low', 'Medium', 'High', 'Urgent'],
     default: 'Medium'
   },
+  // Category fields
+  category: {
+    type: String,
+    enum: ['Finance', 'HR', 'Payroll', 'Sales', 'Production', 'Admin', 'IT', 'Development', ''],
+    default: ''
+  },
+  subcategory: {
+    type: String,
+    default: ''
+  },
+  subItem: {
+    type: String,
+    default: ''
+  },
+  ticketType: {
+    type: String,
+    default: ''
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -37,28 +55,35 @@ const ticketSchema = new mongoose.Schema({
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
-    required: true
+    default: null
   },
   feedId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Feed'
+    ref: 'Feed',
+    default: null
+  },
+  isInternal: {
+    type: Boolean,
+    default: false
   },
   comments: [{
     text: { type: String, default: '' },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     userName: { type: String },
-    images: [{ type: String }], // Array of image URLs
+    images: [{ type: String }],
     createdAt: { type: Date, default: Date.now }
   }],
   resolvedAt: Date,
-  closedAt: Date
+  closedAt: Date,
+  startedAt: Date
 }, { timestamps: true });
 
 // Auto-generate ticket number
 ticketSchema.pre('save', async function(next) {
   if (this.isNew) {
     const count = await this.constructor.countDocuments();
-    this.ticketNumber = `TKT-${String(count + 1).padStart(5, '0')}`;
+    const prefix = this.isInternal ? 'INT' : 'TKT';
+    this.ticketNumber = `${prefix}-${String(count + 1).padStart(5, '0')}`;
   }
 });
 

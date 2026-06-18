@@ -131,7 +131,7 @@ const Login = () => {
       localStorage.setItem('userId', user.id); 
       localStorage.setItem('lastActive', Date.now().toString());
       
-      toast.success(`Welcome back, ${user.name}!`);
+      toast.success(`Welcome , ${user.name}!`);
       
       // TRIGGER ANIMATION
       setIsExiting(true);

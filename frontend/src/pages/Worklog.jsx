@@ -31,7 +31,8 @@ import {
   Wifi,
   WifiOff,
   ShieldCheck,
-  Coffee
+  Coffee,
+  StopCircle
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -58,7 +59,11 @@ const Worklog = () => {
   // Track last notification time for each feed (to avoid spam)
   const lastNotificationTimeRef = useRef({});
 
-  // System Time Mismatch State
+  // Break state
+  const [isBreakMode, setIsBreakMode] = useState(false);
+  const [isStoppingAll, setIsStoppingAll] = useState(false);
+
+  // System Time Mismatch State - REMOVED warning display
   const [timeMismatch, setTimeMismatch] = useState({ 
     isMismatch: false, 
     message: '', 
@@ -171,6 +176,7 @@ const Worklog = () => {
         isStale: false,
       });
 
+      // Still track mismatch internally but don't show warning
       const serverDate = new Date(estimatedServerNow).toISOString().split('T')[0];
       const localDate = new Date(t1).toISOString().split('T')[0];
       const timeDiffMinutes = Math.abs(newOffset) / (1000 * 60);
@@ -238,11 +244,7 @@ const Worklog = () => {
   */
 
   const fetchLogs = async () => {
-    if (timeMismatch.isMismatch) {
-      console.log('Skipping fetch - time mismatch exists');
-      return;
-    }
-    
+    // Don't skip fetch even if mismatch - we'll just use server time internally
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
@@ -256,6 +258,53 @@ const Worklog = () => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  /*
+  ========================================
+  BREAK FUNCTION - Stop all running timers
+  ========================================
+  */
+
+  const handleBreak = async () => {
+    if (isStoppingAll) return;
+    
+    // Check if there are any running timers
+    const hasRunning = logs.some(item => item.worklog.isRunning);
+    if (!hasRunning) {
+      toast.info('No running timers to stop');
+      return;
+    }
+
+    setIsStoppingAll(true);
+    try {
+      // Get all running feed IDs
+      const runningFeeds = logs.filter(item => item.worklog.isRunning);
+      
+      // Stop each running timer
+      for (const item of runningFeeds) {
+        await stopTimer(item.feed._id, true); // silent = true
+        // Small delay between stops to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+      
+      setIsBreakMode(true);
+      toast.success(`🛑 Break started! ${runningFeeds.length} timer(s) stopped`, {
+        duration: 3000,
+        icon: '☕'
+      });
+      
+      // Reset break mode after 5 seconds
+      setTimeout(() => {
+        setIsBreakMode(false);
+      }, 5000);
+      
+    } catch (err) {
+      console.error('Break error:', err);
+      toast.error('Failed to stop all timers');
+    } finally {
+      setIsStoppingAll(false);
     }
   };
 
@@ -316,14 +365,12 @@ const Worklog = () => {
 
   // Run the check every minute
   useEffect(() => {
-    if (!timeMismatch.isMismatch) {
-      const interval = setInterval(() => {
-        checkLongRunningTimers();
-      }, 60000); // Check every minute
-      
-      return () => clearInterval(interval);
-    }
-  }, [checkLongRunningTimers, timeMismatch.isMismatch]);
+    const interval = setInterval(() => {
+      checkLongRunningTimers();
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
+  }, [checkLongRunningTimers]);
 
   /*
   ========================================
@@ -359,12 +406,8 @@ const Worklog = () => {
   }, []);
 
   useEffect(() => {
-    if (!timeMismatch.isMismatch) {
-      fetchLogs();
-    } else {
-      setLogs([]);
-    }
-  }, [timeMismatch.isMismatch]);
+    fetchLogs();
+  }, []);
 
   useEffect(() => {
     let lastToken = localStorage.getItem('token');
@@ -414,11 +457,6 @@ const Worklog = () => {
   const startTimer = async (feedId) => {
     await syncServerTime(false);
     
-    if (timeMismatch.isMismatch) {
-      alert('Warning: Your system time/date does not match the server time. Please sync your system clock before starting the timer.');
-      return;
-    }
-    
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/start/${feedId}`, {}, {
@@ -448,7 +486,7 @@ const Worklog = () => {
       ));
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to start timer');
+      toast.error(err.response?.data?.error || 'Failed to start timer');
     }
   };
 
@@ -476,11 +514,11 @@ const Worklog = () => {
       ));
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to pause timer');
+      toast.error(err.response?.data?.error || 'Failed to pause timer');
     }
   };
 
-  const stopTimer = async (feedId) => {
+  const stopTimer = async (feedId, silent = false) => {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/stop/${feedId}`, {}, {
@@ -507,9 +545,15 @@ const Worklog = () => {
       setLogs(prev => prev.map(item =>
         item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
       ));
+      
+      if (!silent) {
+        toast.success('Timer stopped successfully');
+      }
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to stop timer');
+      if (!silent) {
+        toast.error(err.response?.data?.error || 'Failed to stop timer');
+      }
     }
   };
 
@@ -534,7 +578,10 @@ const Worklog = () => {
   };
 
   const saveWorkDescription = async () => {
-    if (!workDescription.trim()) return alert('Please enter work description');
+    if (!workDescription.trim()) {
+      toast.error('Please enter work description');
+      return;
+    }
 
     try {
       setSubmittingLog(true);
@@ -550,11 +597,11 @@ const Worklog = () => {
         item.feed._id === selectedFeed._id ? { ...item, todayDescription: res.data } : item
       ));
 
-      alert(isEditingLog ? 'Work log updated' : 'Work log saved');
+      toast.success(isEditingLog ? 'Work log updated' : 'Work log saved');
       closeModal();
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || 'Failed to save log');
+      toast.error(err.response?.data?.error || 'Failed to save log');
     } finally {
       setSubmittingLog(false);
     }
@@ -699,6 +746,7 @@ const Worklog = () => {
 
   const handleManualRefresh = () => {
     syncServerTime(false);
+    fetchLogs();
   };
 
   const getCurrentISTTime = () => {
@@ -797,142 +845,108 @@ const Worklog = () => {
         </div>
       </div>
 
-      {/* REST OF YOUR EXISTING COMPONENT CODE... */}
-      {/* The rest of your Worklog component remains the same from here */}
-      
+      {/* Clock offset info - minimal, no warning */}
       {serverSyncStatus.synced && Math.abs(serverSyncStatus.offsetMs) > 1000 && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <div className="flex items-start gap-2">
-            <Info size={14} className="text-blue-600 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">
-                Clock offset detected — server time tracking active
-              </p>
-              <p className="text-[8px] text-blue-600 mt-0.5">
-                Your system clock is {Math.abs(serverSyncStatus.offsetMs) >= 1000
-                  ? `${(Math.abs(serverSyncStatus.offsetMs) / 1000).toFixed(1)}s`
-                  : `${Math.abs(serverSyncStatus.offsetMs)}ms`}{' '}
-                {serverSyncStatus.offsetMs > 0 ? 'behind' : 'ahead'} of the server. 
-                All timer durations are calculated using the server clock to prevent manipulation.
-              </p>
-            </div>
+        <div className="mb-4 p-2 bg-blue-50/50 border border-blue-200/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Info size={12} className="text-blue-500" />
+            <p className="text-[8px] text-blue-600">
+              Server time offset detected: {Math.abs(serverSyncStatus.offsetMs) >= 1000
+                ? `${(Math.abs(serverSyncStatus.offsetMs) / 1000).toFixed(1)}s`
+                : `${Math.abs(serverSyncStatus.offsetMs)}ms`}
+            </p>
           </div>
         </div>
       )}
 
-      {/* SYSTEM TIME MISMATCH WARNING */}
-      {timeMismatch.isMismatch && (
-        <div className="mb-6 p-6 bg-gradient-to-r from-red-50 to-orange-50 border-l-4 border-red-500 rounded-xl shadow-lg">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
-              <Lock size={32} className="text-red-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-black text-red-800 uppercase tracking-wider mb-2">
-                Time Synchronization Required
-              </h3>
-              <p className="text-sm font-medium text-red-700">
-                ⚠️ {timeMismatch.message}
-              </p>
-              
-              <div className="mt-4 bg-white rounded-lg p-4 shadow-sm">
-                <div className="grid grid-cols-2 gap-4 text-left">
-                  <div className="text-center">
-                    <p className="text-[9px] font-black text-green-700 uppercase tracking-wider flex items-center justify-center gap-1">
-                      <Globe size={10} />
-                      Server Time (IST)
-                    </p>
-                    <p className="text-sm font-mono font-bold text-green-700 mt-1">{timeMismatch.serverTime}</p>
-                    <p className="text-[10px] font-bold text-green-700">{timeMismatch.serverDate}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-[9px] font-black text-red-700 uppercase tracking-wider flex items-center justify-center gap-1">
-                      <Clock3 size={10} />
-                      Your System Time
-                    </p>
-                    <p className="text-sm font-mono font-bold text-red-700 mt-1">{timeMismatch.localTime}</p>
-                    <p className="text-[10px] font-bold text-red-700">{timeMismatch.localDate}</p>
-                  </div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 text-center">
-                  <p className="text-[10px] font-bold text-amber-600">
-                    Difference: {timeMismatch.timeDiffMinutes} minutes
-                  </p>
-                </div>
-              </div>
-              
-              <div className="mt-4 p-3 bg-red-100 rounded-lg">
-                <p className="text-[10px] text-red-700 font-medium">
-                  ⚠️ To access worklogs and timer features, please synchronize your system date and time with the server.
-                </p>
-              </div>
-              <button
-                onClick={handleManualRefresh}
-                className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-all flex items-center gap-2 mx-auto"
-              >
-                <RefreshCw size={14} />
-                Check Again
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* BREAK BUTTON - Added here */}
+      <div className="mb-4">
+        <button
+          onClick={handleBreak}
+          disabled={isStoppingAll || activeRunningCount === 0}
+          className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-md ${
+            isBreakMode 
+              ? 'bg-green-500 text-white shadow-green-200' 
+              : isStoppingAll || activeRunningCount === 0
+              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200 hover:shadow-lg active:scale-95'
+          }`}
+        >
+          {isBreakMode ? (
+            <>
+              <Coffee size={18} className="animate-bounce" />
+              Break Taken! ☕
+            </>
+          ) : isStoppingAll ? (
+            <>
+              <RefreshCw size={18} className="animate-spin" />
+              Stopping...
+            </>
+          ) : (
+            <>
+              <Coffee size={18} />
+              Break ({activeRunningCount} running)
+            </>
+          )}
+        </button>
+        <span className="text-[8px] text-slate-400 ml-3">
+          {activeRunningCount === 0 ? 'No timers running' : `Stops ${activeRunningCount} running timer(s)`}
+        </span>
+      </div>
 
       {/* STATS BAR */}
-      {!timeMismatch.isMismatch && (
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Timer size={14} className="text-blue-600" />
-              </div>
-              <div>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Actual Time</p>
-                <p className="text-sm font-black text-blue-700 font-mono">{formatTimeWithSeconds(actualWorkingTime)}</p>
-              </div>
+      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+        <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Timer size={14} className="text-blue-600" />
             </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
-                <AlertCircle size={14} className="text-amber-600" />
-              </div>
-              <div>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Overlap</p>
-                <p className="text-sm font-black text-amber-700 font-mono">{formatTimeWithSeconds(overlapTime)}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Activity size={14} className="text-emerald-600" />
-              </div>
-              <div>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Active Timers</p>
-                <p className="text-sm font-black text-emerald-600">{activeRunningCount}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
-                <Hash size={14} className="text-purple-600" />
-              </div>
-              <div>
-                <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Total Feeds</p>
-                <p className="text-sm font-black text-purple-600">{filteredLogs.length}</p>
-              </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Actual Time</p>
+              <p className="text-sm font-black text-blue-700 font-mono">{formatTimeWithSeconds(actualWorkingTime)}</p>
             </div>
           </div>
         </div>
-      )}
+
+        <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+              <AlertCircle size={14} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Overlap</p>
+              <p className="text-sm font-black text-amber-700 font-mono">{formatTimeWithSeconds(overlapTime)}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <Activity size={14} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Active Timers</p>
+              <p className="text-sm font-black text-emerald-600">{activeRunningCount}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Hash size={14} className="text-purple-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Total Feeds</p>
+              <p className="text-sm font-black text-purple-600">{filteredLogs.length}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* INFO NOTE — multiple timers */}
-      {!timeMismatch.isMismatch && activeRunningCount > 1 && (
+      {activeRunningCount > 1 && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start gap-2">
             <Info size={14} className="text-blue-600 mt-0.5" />
@@ -947,227 +961,205 @@ const Worklog = () => {
       )}
 
       {/* FILTERS & TABLE */}
-      {!timeMismatch.isMismatch ? (
-        <>
-          {/* FILTERS */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
-            <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-              <select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
-              >
-                <option value="all">All Projects</option>
-                {projects.map(project => (
-                  <option key={project._id} value={project._id}>{project.name}</option>
-                ))}
-              </select>
-
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search feed..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-slate-200 pl-9 pr-4 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
-                />
-              </div>
-
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
-              >
-                <option value="all">All Status</option>
-                <option value="running">Running</option>
-                <option value="paused">Paused</option>
-                <option value="stopped">Stopped</option>
-              </select>
-
-              <button
-                onClick={() => { setSelectedProject('all'); setSearchTerm(''); setStatusFilter('all'); handleManualRefresh(); }}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
-              >
-                <X size={12} />
-                Reset Filters
-              </button>
-            </div>
-          </div>
-
-          {/* TABLE */}
-          {loading ? (
-            <div className="flex justify-center py-20 text-slate-400 font-black">LOADING WORKLOGS...</div>
-          ) : filteredLogs.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 font-bold">
-              No feeds found.
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Individual Time</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredLogs.map((item) => {
-                      const feed = item.feed;
-                      const worklog = item.worklog;
-                      const feedTime = getFeedTime(worklog);
-                      const hasTodayLog = item.canEditToday;
-                      const statusType = worklog.isRunning ? 'running' : (worklog.totalTime > 0 ? 'paused' : 'stopped');
-                      const statusData = getStatusBadge(statusType);
-                      
-                      // Calculate if this specific running feed has exceeded 2 hours for badge display
-                      let isLongRunning = false;
-                      let longRunningHours = 0;
-                      let longRunningMinutes = 0;
-                      if (worklog.isRunning && worklog.startedAt) {
-                        const serverNow = getServerNow();
-                        const elapsedSeconds = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
-                        if (elapsedSeconds >= 7200) {
-                          isLongRunning = true;
-                          longRunningHours = Math.floor(elapsedSeconds / 3600);
-                          longRunningMinutes = Math.floor((elapsedSeconds % 3600) / 60);
-                        }
-                      }
-
-                      return (
-                        <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'}`}>
-                                <Hash size={12} className={worklog.isRunning ? 'text-emerald-600' : 'text-slate-400'} />
-                              </div>
-                              <span className="text-sm font-bold text-slate-800">{feed.name}</span>
-                              {hasTodayLog && (
-                                <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1">
-                                  <CheckCircle size={8} />
-                                  Logged
-                                </span>
-                              )}
-                              {isLongRunning && (
-                                <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1 animate-pulse">
-                                  <Coffee size={8} />
-                                  {longRunningHours}h {longRunningMinutes}m
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <Briefcase size={10} className="text-slate-400" />
-                              <span className="text-xs font-medium text-slate-600">{feed.projectId?.name || 'Unknown'}</span>
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1.5">
-                              <Clock3 size={12} className="text-blue-500" />
-                              <span className="text-sm font-black text-blue-700 font-mono">
-                                {formatTimeWithSeconds(feedTime)}
-                              </span>
-                              {worklog.isRunning && (
-                                <span className="text-[7px] font-black bg-emerald-100 text-emerald-600 px-1 py-0.5 rounded uppercase">
-                                  server
-                                </span>
-                              )}
-                            </div>
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusData.bg} ${statusData.text} ${statusData.border}`}>
-                              {statusData.icon}
-                              {statusData.label}
-                            </span>
-                          </td>
-
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              <button
-                                onClick={() => startTimer(feed._id)}
-                                disabled={worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:shadow-md'}`}
-                                title="Start Timer"
-                              >
-                                <Play size={12} />
-                              </button>
-
-                              <button
-                                onClick={() => pauseTimer(feed._id)}
-                                disabled={!worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
-                                title="Pause Timer"
-                              >
-                                <Pause size={12} />
-                              </button>
-
-                              <button
-                                onClick={() => stopTimer(feed._id)}
-                                className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all duration-200 hover:shadow-md"
-                                title="Stop Timer"
-                              >
-                                <Square size={12} />
-                              </button>
-
-                              <div className="w-px h-5 bg-slate-200 mx-1" />
-
-                              {!hasTodayLog ? (
-                                <button
-                                  onClick={() => openLogModal(feed, false)}
-                                  className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all duration-200 hover:shadow-md"
-                                  title="Log Today's Work"
-                                >
-                                  <FileText size={12} />
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => openLogModal(feed, true)}
-                                  className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-600 hover:text-white transition-all duration-200 hover:shadow-md"
-                                  title="Edit Today's Log"
-                                >
-                                  <Pencil size={12} />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
-          <div className="flex flex-col items-center justify-center">
-            <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mb-4">
-              <Lock size={32} className="text-red-500" />
-            </div>
-            <h3 className="text-lg font-black text-slate-800 mb-2">Access Restricted</h3>
-            <p className="text-sm text-slate-500 max-w-md">
-              Worklog access is temporarily disabled due to system time/date mismatch.
-              Please synchronize your system clock with the server time to continue.
-            </p>
-            <button
-              onClick={handleManualRefresh}
-              className="mt-6 px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all flex items-center gap-2"
+      <>
+        {/* FILTERS */}
+        <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+            <select
+              value={selectedProject}
+              onChange={(e) => setSelectedProject(e.target.value)}
+              className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
             >
-              <RefreshCw size={14} />
-              Check Again
+              <option value="all">All Projects</option>
+              {projects.map(project => (
+                <option key={project._id} value={project._id}>{project.name}</option>
+              ))}
+            </select>
+
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search feed..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full h-10 rounded-lg border border-slate-200 pl-9 pr-4 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
+              />
+            </div>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
+            >
+              <option value="all">All Status</option>
+              <option value="running">Running</option>
+              <option value="paused">Paused</option>
+              <option value="stopped">Stopped</option>
+            </select>
+
+            <button
+              onClick={() => { setSelectedProject('all'); setSearchTerm(''); setStatusFilter('all'); handleManualRefresh(); }}
+              className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+            >
+              <X size={12} />
+              Reset Filters
             </button>
           </div>
         </div>
-      )}
+
+        {/* TABLE */}
+        {loading ? (
+          <div className="flex justify-center py-20 text-slate-400 font-black">LOADING WORKLOGS...</div>
+        ) : filteredLogs.length === 0 ? (
+          <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 font-bold">
+            No feeds found.
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Individual Time</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredLogs.map((item) => {
+                    const feed = item.feed;
+                    const worklog = item.worklog;
+                    const feedTime = getFeedTime(worklog);
+                    const hasTodayLog = item.canEditToday;
+                    const statusType = worklog.isRunning ? 'running' : (worklog.totalTime > 0 ? 'paused' : 'stopped');
+                    const statusData = getStatusBadge(statusType);
+                    
+                    // Calculate if this specific running feed has exceeded 2 hours for badge display
+                    let isLongRunning = false;
+                    let longRunningHours = 0;
+                    let longRunningMinutes = 0;
+                    if (worklog.isRunning && worklog.startedAt) {
+                      const serverNow = getServerNow();
+                      const elapsedSeconds = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
+                      if (elapsedSeconds >= 7200) {
+                        isLongRunning = true;
+                        longRunningHours = Math.floor(elapsedSeconds / 3600);
+                        longRunningMinutes = Math.floor((elapsedSeconds % 3600) / 60);
+                      }
+                    }
+
+                    return (
+                      <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'}`}>
+                              <Hash size={12} className={worklog.isRunning ? 'text-emerald-600' : 'text-slate-400'} />
+                            </div>
+                            <span className="text-sm font-bold text-slate-800">{feed.name}</span>
+                            {hasTodayLog && (
+                              <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1">
+                                <CheckCircle size={8} />
+                                Logged
+                              </span>
+                            )}
+                            {isLongRunning && (
+                              <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1 animate-pulse">
+                                <Coffee size={8} />
+                                {longRunningHours}h {longRunningMinutes}m
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <Briefcase size={10} className="text-slate-400" />
+                            <span className="text-xs font-medium text-slate-600">{feed.projectId?.name || 'Unknown'}</span>
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5">
+                            <Clock3 size={12} className="text-blue-500" />
+                            <span className="text-sm font-black text-blue-700 font-mono">
+                              {formatTimeWithSeconds(feedTime)}
+                            </span>
+                            {worklog.isRunning && (
+                              <span className="text-[7px] font-black bg-emerald-100 text-emerald-600 px-1 py-0.5 rounded uppercase">
+                                server
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusData.bg} ${statusData.text} ${statusData.border}`}>
+                            {statusData.icon}
+                            {statusData.label}
+                          </span>
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => startTimer(feed._id)}
+                              disabled={worklog.isRunning}
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:shadow-md'}`}
+                              title="Start Timer"
+                            >
+                              <Play size={12} />
+                            </button>
+
+                            <button
+                              onClick={() => pauseTimer(feed._id)}
+                              disabled={!worklog.isRunning}
+                              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
+                              title="Pause Timer"
+                            >
+                              <Pause size={12} />
+                            </button>
+
+                            <button
+                              onClick={() => stopTimer(feed._id)}
+                              className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                              title="Stop Timer"
+                            >
+                              <Square size={12} />
+                            </button>
+
+                            <div className="w-px h-5 bg-slate-200 mx-1" />
+
+                            {!hasTodayLog ? (
+                              <button
+                                onClick={() => openLogModal(feed, false)}
+                                className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                                title="Log Today's Work"
+                              >
+                                <FileText size={12} />
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => openLogModal(feed, true)}
+                                className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                                title="Edit Today's Log"
+                              >
+                                <Pencil size={12} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </>
 
       {/* MODAL */}
       {showLogModal && (

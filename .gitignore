@@ -47,3 +47,19 @@ uploads/
 !backend/uploads/tickets/.gitkeep
 !backend/uploads/profiles/.gitkeep
 !backend/uploads/temp/.gitkeep
+
+# ========================================
+# PROJECT SPECIFIC FILES - DO NOT TRACK
+# ========================================
+
+# Repomix output file (contains entire codebase)
+repomix-output.xml
+
+# To-do list / notes
+to_do_next_push
+
+# Any other temporary or local files
+*.tmp
+*.temp
+*.bak
+*.backup

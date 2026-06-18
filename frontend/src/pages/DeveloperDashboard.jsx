@@ -20,6 +20,13 @@ const DeveloperDashboard = () => {
   const [todayFeeds, setTodayFeeds] = useState([]);
   const [randomTip, setRandomTip] = useState('');
   const [socket, setSocket] = useState(null);
+  
+  // Server time state
+  const [serverTime, setServerTime] = useState(null);
+  const [serverDate, setServerDate] = useState('');
+  const [serverDayName, setServerDayName] = useState('');
+  const [serverDayOfMonth, setServerDayOfMonth] = useState(0);
+  const [timeOffset, setTimeOffset] = useState(0);
 
   // Modal State
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -36,16 +43,71 @@ const DeveloperDashboard = () => {
     getRandomTip();
   }, []);
 
-  // Get today's day name
-  const getTodayDayName = () => {
+  // Get day name from date object
+  const getDayName = (date) => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[new Date().getDay()];
+    return days[date.getDay()];
   };
 
-  // Check if feed is scheduled for today AND not completed today
+  // Fetch server time
+  const fetchServerTime = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/api/dev/system-time-check`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data && response.data.serverTime) {
+        const serverDateObj = new Date(response.data.serverTime);
+        const clientNow = Date.now();
+        const serverTimestamp = new Date(response.data.serverTime).getTime();
+        const offset = serverTimestamp - clientNow;
+        
+        setTimeOffset(offset);
+        setServerTime(serverDateObj);
+        setServerDate(serverDateObj.toISOString().split('T')[0]);
+        setServerDayName(getDayName(serverDateObj));
+        setServerDayOfMonth(serverDateObj.getDate());
+        
+        // console.log('🕐 Server time fetched:', serverDateObj.toLocaleString());
+        // console.log('📅 Server date:', serverDateObj.toISOString().split('T')[0]);
+        // console.log('⏱️ Time offset:', offset, 'ms');
+      }
+    } catch (err) {
+      console.error('Failed to fetch server time:', err);
+      // Fallback to client time if server time fetch fails
+      const fallbackDate = new Date();
+      setServerTime(fallbackDate);
+      setServerDate(fallbackDate.toISOString().split('T')[0]);
+      setServerDayName(getDayName(fallbackDate));
+      setServerDayOfMonth(fallbackDate.getDate());
+      setTimeOffset(0);
+    }
+  };
+
+  // Get server-corrected "today" date string
+  const getServerToday = () => {
+    if (serverDate) return serverDate;
+    return new Date().toISOString().split('T')[0];
+  };
+
+  // Get server-corrected day name
+  const getServerDayName = () => {
+    if (serverDayName) return serverDayName;
+    return getDayName(new Date());
+  };
+
+  // Get server-corrected day of month
+  const getServerDayOfMonth = () => {
+    if (serverDayOfMonth) return serverDayOfMonth;
+    return new Date().getDate();
+  };
+
+  // Check if feed is scheduled for today using SERVER date
   const isFeedForToday = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    const currentDayOfMonth = new Date().getDate();
+    const today = getServerToday();
+    const currentDayOfMonth = getServerDayOfMonth();
+    const currentDayName = getServerDayName();
     
     const isCompletedToday = feed.completionHistory && 
       Array.isArray(feed.completionHistory) && 
@@ -55,19 +117,10 @@ const DeveloperDashboard = () => {
     
     if (feed.feedType === 'Daily') return true;
     if (feed.feedType === 'Weekly') {
-      return feed.weekDay === getTodayDayName();
+      return feed.weekDay === currentDayName;
     }
     if (feed.feedType === 'Monthly') {
       return feed.monthDay === currentDayOfMonth;
-    }
-    return false;
-  };
-
-  // Check if feed is completed for today
-  const isFeedCompletedToday = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
-      return feed.completionHistory.some(h => h && h.date === today);
     }
     return false;
   };
@@ -94,6 +147,9 @@ const DeveloperDashboard = () => {
     const token = localStorage.getItem('token');
     const headers = { Authorization: `Bearer ${token}` };
     try {
+      // First fetch server time
+      await fetchServerTime();
+      
       const [projRes, feedRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/dev/my-projects`, { headers }),
         axios.get(`${API_BASE_URL}/api/dev/my-feeds`, { headers })
@@ -101,6 +157,7 @@ const DeveloperDashboard = () => {
       setProjects(projRes.data);
       setFeeds(feedRes.data);
       
+      // After feeds are loaded, filter based on server date
       const today = feedRes.data.filter(feed => isFeedForToday(feed));
       setTodayFeeds(today);
       
@@ -129,6 +186,10 @@ const DeveloperDashboard = () => {
     newSocket.on('connect', () => {
       console.log('🔌 Socket connected');
       newSocket.emit('join-user-room', userId);
+    });
+    
+    newSocket.on('connect_error', (error) => {
+      console.log('⚠️ Socket connection error:', error.message);
     });
     
     // Listen for feed assignments
@@ -189,6 +250,13 @@ const DeveloperDashboard = () => {
   // Initial data load
   useEffect(() => {
     loadDevData();
+    
+    // Refresh server time every 5 minutes
+    const interval = setInterval(() => {
+      fetchServerTime();
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Handle feed completion
@@ -225,7 +293,7 @@ const DeveloperDashboard = () => {
               completed: true,
               completionHistory: [
                 ...(feed.completionHistory || []),
-                { date: new Date().toISOString().split('T')[0], description: completionDescription }
+                { date: getServerToday(), description: completionDescription }
               ]
             }
           : feed
@@ -356,8 +424,16 @@ const DeveloperDashboard = () => {
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Day</p>
-              <p className="text-sm font-black text-white">{getTodayDayName()}</p>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">
+                Server Date
+              </p>
+              <p className="text-sm font-black text-white">
+                {serverTime ? serverTime.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric'
+                }) : 'Loading...'}
+              </p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <Clock size={18} className="text-white" />
@@ -395,7 +471,10 @@ const DeveloperDashboard = () => {
               Today's Schedule
             </h2>
             <span className="text-[9px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-              {getTodayDayName()}
+              {getServerDayName()}
+            </span>
+            <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">
+              Server Time
             </span>
           </div>
           <span className="text-[9px] font-bold text-slate-400">{todayFeeds.length} pending</span>
@@ -407,7 +486,9 @@ const DeveloperDashboard = () => {
               <Calendar size={24} className="text-slate-300" />
             </div>
             <p className="text-sm font-bold text-slate-500">No feeds scheduled for today</p>
-            <p className="text-[10px] text-slate-400 mt-1">All caught up! Great job!</p>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Based on server date: {serverDate || 'Loading...'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -544,6 +625,9 @@ const DeveloperDashboard = () => {
                   <span className="text-[8px] font-bold text-slate-400">
                     Project: {selectedFeed.projectId?.projectCustomId || 'Unknown'}
                   </span>
+                  <span className="text-[8px] font-bold text-blue-500">
+                    Date: {serverDate || 'Loading...'}
+                  </span>
                 </div>
               </div>
 
@@ -560,7 +644,7 @@ const DeveloperDashboard = () => {
                   autoFocus
                 />
                 <p className="text-[8px] text-slate-400 mt-2">
-                  This description will be saved as part of the feed completion record.
+                  This description will be saved with the server date ({serverDate || 'Loading...'})
                 </p>
               </div>
             </div>

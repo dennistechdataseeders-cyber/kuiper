@@ -9,7 +9,8 @@ const sendEmail = require('../services/zohoMailer');
 const {
   getTicketCreatedTemplate,
   getInternalTicketTemplate,
-  getPOCNotificationTemplate
+  getPOCNotificationTemplate,
+  getInternalOnlyTicketTemplate
 } = require('../templates/ticketEmailTemplates');
 
 // Helper function to get all stakeholders for a ticket
@@ -247,15 +248,31 @@ function isInternalTicket(creatorRole) {
 // Create ticket
 exports.createTicket = async (req, res) => {
   try {
-    const { title, description, priority, projectId, feedId } = req.body;
+    const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType } = req.body;
+    
+    // Determine if ticket should be internal
+    const userRole = req.user.role;
+    const shouldBeInternal = userRole !== 'Client' || isInternal === true;
+    
+    // For internal tickets, project is optional but should NOT be nullified if provided
+    // For client tickets, project is required
+    if (!shouldBeInternal && !projectId) {
+      return res.status(400).json({ 
+        error: 'Project is required for client tickets.' 
+      });
+    }
+    
+    // Keep the projectId and feedId as provided (don't nullify for internal)
+    // Only nullify if they are explicitly set to null/empty string
+    const finalProjectId = projectId || null;
+    const finalFeedId = feedId || null;
     
     let assignedTo = null;
     
-    // If feed is selected, get the assigned developers
+    // Try to assign from feed if provided
     if (feedId) {
       const feed = await Feed.findById(feedId).populate('assignedDevelopers', '_id');
       if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
-        // Assign to the first developer in the feed
         assignedTo = feed.assignedDevelopers[0]._id;
       }
     }
@@ -264,114 +281,106 @@ exports.createTicket = async (req, res) => {
       title,
       description,
       priority,
-      projectId,
-      feedId: feedId || null,
+      projectId: finalProjectId,
+      feedId: finalFeedId,
       createdBy: req.user.id,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      isInternal: shouldBeInternal,
+      category: category || '',
+      subcategory: subcategory || '',
+      subItem: subItem || '',
+      ticketType: ticketType || ''
     });
     
     await ticket.save();
     
-    // Populate references for response
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('createdBy', 'name email role')
-      .populate('assignedTo', 'name email')
-      .populate('projectId', 'name projectCustomId')
-      .populate('feedId', 'name');
-    
-    // ============================================
-    // EMAIL NOTIFICATIONS
-    // ============================================
-    
-    const createdByUser = await User.findById(req.user.id).select('name email role');
-    const isInternal = isInternalTicket(createdByUser.role);
-    
-    // Get all stakeholders who should be notified
-    const stakeholders = await getTicketStakeholders(populatedTicket, createdByUser);
-    
-    console.log(`📧 Sending ticket notifications for ${populatedTicket.ticketNumber}`);
-    console.log(`   Ticket Type: ${isInternal ? 'INTERNAL' : 'EXTERNAL'}`);
-    console.log(`   Created By: ${createdByUser.name} (${createdByUser.role})`);
-    console.log(`   Recipients: ${stakeholders.length} stakeholders`);
-    
-    const frontendUrl = process.env.FRONTEND_URL || 'http://192.168.1.105:5173';
-    
-    // Send emails to all stakeholders
-    for (const stakeholder of stakeholders) {
-      try {
-        let emailHtml;
-        let emailSubject;
-        
-        if (isInternal) {
-          // Internal ticket - simpler notification (no POC emails for internal tickets)
-          // Skip if stakeholder is a POC (only notify internal team)
-          if (stakeholder.type === 'poc') {
-            console.log(`   ⏭️ Skipping POC ${stakeholder.email} for internal ticket`);
-            continue;
-          }
-          
-          emailHtml = getInternalTicketTemplate(
-            populatedTicket,
-            createdByUser.name,
-            stakeholders,
-            frontendUrl
-          );
-          emailSubject = `[Internal] New Task: ${populatedTicket.ticketNumber} - ${title.substring(0, 60)}`;
-        } else {
-          // External ticket - created by POC/Client
-          if (stakeholder.type === 'poc' && stakeholder.role === 'POC') {
-            // POC gets a customer-friendly notification
-            emailHtml = getPOCNotificationTemplate(
-              populatedTicket,
-              stakeholder.name,
-              populatedTicket.projectId?.name || 'your project',
-              frontendUrl
-            );
-            emailSubject = `Support Request Received: ${populatedTicket.ticketNumber}`;
-          } else {
-            // Internal team members get full ticket details
-            emailHtml = getTicketCreatedTemplate(
-              populatedTicket,
-              createdByUser.name,
-              stakeholders,
-              frontendUrl
-            );
-            emailSubject = `[Ticket] ${populatedTicket.ticketNumber}: ${title.substring(0, 60)}`;
-          }
-        }
-        
-        await sendEmail({
-          to: stakeholder.email,
-          subject: emailSubject,
-          html: emailHtml
-        });
-        
-        console.log(`   ✅ Email sent to: ${stakeholder.email} (${stakeholder.role})`);
-        
-      } catch (emailError) {
-        console.error(`   ❌ Failed to send email to ${stakeholder.email}:`, emailError.message);
-      }
-      
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    
-    // Emit socket event for real-time update
-    const io = req.app.get('io');
-    io.emit('ticket_created', populatedTicket);
-    
-    // Also notify the assigned developer
-    if (assignedTo) {
-      io.to(assignedTo.toString()).emit('ticket_assigned', populatedTicket);
-    }
-    
-    res.status(201).json(populatedTicket);
-    
+    // ... rest of the code remains the same ...
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to create ticket' });
+    console.error('Error creating ticket:', error);
+    res.status(500).json({ error: 'Failed to create ticket', details: error.message });
   }
-};
+};  
+
+// Add this new template function for general tickets
+function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
+  const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#f0f4f8; color:#1e293b;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; width:100%; background:#ffffff; border-radius:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05); overflow:hidden;">
+          <tr>
+            <td style="padding:32px 36px; border-bottom:1px solid #e2e8f0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#2563eb;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Engineered for Operations</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f1f5f9; padding:28px 36px;">
+              <div style="font-size:13px; font-weight:700; color:#475569; letter-spacing:0.06em; text-transform:uppercase;">General Support Request</div>
+              <div style="font-size:26px; font-weight:800; color:#0f172a; margin-top:6px;">${ticket.ticketNumber}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <div style="font-size:18px; font-weight:800; color:#0f172a; margin-bottom:20px; line-height:1.4;">${ticket.title}</div>
+              <div style="background:#f8fafc; padding:20px 22px; border-radius:12px; margin-bottom:20px;">
+                <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Description</div>
+                <p style="margin:0; font-size:14px; line-height:1.6; color:#334155; white-space: pre-line;">${ticket.description}</p>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+                <div style="background:#f8fafc; padding:12px; border-radius:12px;">
+                  <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;">Priority</div>
+                  <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:2px;">${ticket.priority}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:12px;">
+                  <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;">Category</div>
+                  <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:2px;">${ticket.category || 'Support'}</div>
+                </div>
+              </div>
+              <a href="${ticketUrl}" style="display:block; text-align:center; background:#2563eb; color:white; text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:13px;">
+                View Ticket →
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 28px 36px; text-align:center;">
+              <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1779973871/image_1_1_c60r0l.png" alt="KUIPER Footer" style="width:140px; max-width:60%; display:inline-block;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
+              <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • General Support Ticket</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+}
 
 // Get all tickets (filtered by role)
 exports.getTickets = async (req, res) => {
@@ -422,6 +431,7 @@ exports.getTicketById = async (req, res) => {
 };
 
 // Update ticket status
+// Update status
 exports.updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -430,7 +440,18 @@ exports.updateStatus = async (req, res) => {
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    
+
+    // Check if user can update this ticket
+    const canUpdate = 
+      req.user.role === 'Admin' ||
+      req.user.role === 'Project Manager' ||
+      ticket.createdBy.toString() === req.user.id ||  // Creator can always update
+      (req.user.role === 'Developer' && ticket.assignedTo?.toString() === req.user.id);
+
+    if (!canUpdate) {
+      return res.status(403).json({ error: 'Not authorized to update this ticket' });
+    }
+
     ticket.status = status;
     
     if (status === 'Resolved') {

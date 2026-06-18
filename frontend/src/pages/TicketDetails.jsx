@@ -73,11 +73,6 @@ const TicketDetails = () => {
       if (updatedTicket._id === id) {
         const oldStatus = ticket?.status;
         setTicket(updatedTicket);
-        toast(`Ticket status updated to ${updatedTicket.status}`, {
-          icon: '🔄',
-          duration: 3000
-        });
-        
         if (oldStatus && oldStatus !== updatedTicket.status) {
           if (updatedTicket.createdBy?._id === currentUserId || updatedTicket.assignedTo?._id === currentUserId) {
             notificationManager.notifyStatusUpdate(updatedTicket, oldStatus, updatedTicket.status, () => {
@@ -183,23 +178,28 @@ const TicketDetails = () => {
     }
   };
 
-  const closeTicket = async () => {
-    setUpdating(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.patch(`${API_BASE_URL}/api/tickets/${id}/status`, 
-        { status: 'Closed' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setTicket(res.data);
-      toast.success('Ticket closed successfully');
-    } catch (error) {
-      console.error('Error closing ticket:', error);
-      toast.error('Failed to close ticket');
-    } finally {
-      setUpdating(false);
-    }
-  };
+ const closeTicket = async () => {
+  // Add confirmation dialog
+  if (!window.confirm('Are you sure you want to close this ticket? This action cannot be undone.')) {
+    return;
+  }
+  
+  setUpdating(true);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.patch(`${API_BASE_URL}/api/tickets/${id}/status`, 
+      { status: 'Closed' },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setTicket(res.data);
+    toast.success('Ticket closed successfully');
+  } catch (error) {
+    console.error('Error closing ticket:', error);
+    toast.error('Failed to close ticket');
+  } finally {
+    setUpdating(false);
+  }
+};
 
   const assignDeveloper = async (developerId) => {
     if (!developerId) return;
@@ -412,22 +412,32 @@ const TicketDetails = () => {
             </div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{ticket.title}</h1>
           </div>
-          
+
           <div className="flex gap-2 flex-wrap">
-            {userRole === 'Client' && isTicketCreator && ticket.status !== 'Closed' && (
+            {isTicketCreator && ticket.status !== 'Closed' && (
               <button onClick={closeTicket} disabled={updating} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-sm">
                 <XCircle size={16} /> Close Ticket
               </button>
             )}
-            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer') && ticket.status !== 'Closed' && (
+            {/* Allow creator to update status if they're not a Client (or always allow for creators) */}
+            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || isTicketCreator) && 
+            ticket.status !== 'Closed' && (
               <div className="flex gap-2">
                 {ticket.status !== 'In Progress' && (
-                  <button onClick={() => updateStatus('In Progress')} disabled={updating} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm">
+                  <button 
+                    onClick={() => updateStatus('In Progress')} 
+                    disabled={updating} 
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+                  >
                     Start Progress
                   </button>
                 )}
                 {ticket.status !== 'Resolved' && (
-                  <button onClick={() => updateStatus('Resolved')} disabled={updating} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm">
+                  <button 
+                    onClick={() => updateStatus('Resolved')} 
+                    disabled={updating} 
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+                  >
                     Mark Resolved
                   </button>
                 )}
@@ -437,39 +447,129 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Status Progress Map */}
-      <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <CheckCircle size={16} className="text-blue-600" />
-          Ticket Progress
-        </h3>
-        <div className="flex items-center justify-between">
-          {statusFlow.map((status, index) => {
-            const isCompleted = index <= currentStatusIndex;
-            const isCurrent = status === ticket.status;
+     {/* Status Progress Map - Fixed Width Version */}
+{/* Status Progress Map - Fixed Layout */}
+<div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  <h3 className="text-sm font-semibold text-gray-700 mb-6 flex items-center gap-2">
+    <CheckCircle size={16} className="text-blue-600" />
+    Ticket Progress
+  </h3>
+  
+  <div className="relative px-2">
+    {/* Progress Bar Track */}
+    <div className="absolute top-4 left-6 right-6 h-1.5 bg-gray-200 rounded-full" />
+    
+    {/* Progress Bar Fill */}
+    <div 
+      className="absolute top-4 left-6 h-1.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
+      style={{ 
+        width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - ${12}px)` 
+      }}
+    />
+    
+    {/* Status Steps - Using flex with proper spacing */}
+    <div className="flex justify-between items-start relative">
+      {statusFlow.map((status, index) => {
+        const isCompleted = index <= currentStatusIndex;
+        const isCurrent = status === ticket.status;
+        
+        // Get the date when this status was reached
+        let statusDate = null;
+        if (status === 'Open' && ticket.createdAt) {
+          statusDate = ticket.createdAt;
+        } else if (status === 'In Progress' && ticket.startedAt) {
+          statusDate = ticket.startedAt;
+        } else if (status === 'Resolved' && ticket.resolvedAt) {
+          statusDate = ticket.resolvedAt;
+        } else if (status === 'Closed' && ticket.closedAt) {
+          statusDate = ticket.closedAt;
+        }
+        
+        const formattedDate = statusDate 
+          ? new Date(statusDate).toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : null;
+        
+        return (
+          <div 
+            key={status} 
+            className="flex flex-col items-center relative group"
+            style={{ 
+              minWidth: '60px',
+              flex: '1 1 0%'
+            }}
+          >
+            {/* Step Circle */}
+            <div className="relative z-10">
+              <div 
+                className={`
+                  w-8 h-8 rounded-full flex items-center justify-center 
+                  text-sm font-bold transition-all duration-300 cursor-pointer
+                  ${isCompleted 
+                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
+                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                  }
+                  ${isCurrent 
+                    ? 'ring-4 ring-blue-100 ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
+                    : ''
+                  }
+                  hover:scale-110 hover:shadow-xl
+                `}
+              >
+                {isCompleted ? <CheckCircle size={16} className="text-white" /> : index + 1}
+              </div>
+            </div>
             
-            return (
-              <div key={status} className="flex-1 relative">
+            {/* Status Label */}
+            <div className="mt-2 text-center min-h-[40px] flex flex-col items-center">
+              <p className={`
+                text-xs font-semibold transition-colors
+                ${isCompleted ? 'text-green-700' : 'text-gray-400'}
+                ${isCurrent ? 'text-blue-600 font-bold' : ''}
+              `}>
+                {status}
+              </p>
+              
+              {/* Current Indicator */}
+              {isCurrent && (
+                <span className="mt-0.5 text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
+                  ● Current
+                </span>
+              )}
+            </div>
+            
+            {/* Tooltip with Date */}
+            {formattedDate && (
+              <div className="
+                absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full 
+                opacity-0 group-hover:opacity-100 
+                transition-all duration-200
+                pointer-events-none
+                bg-gray-900 text-white 
+                px-3 py-1.5 rounded-lg 
+                text-[10px] font-medium whitespace-nowrap
+                shadow-lg z-20
+                after:content-[''] after:absolute 
+                after:top-full after:left-1/2 after:-translate-x-1/2
+                after:border-4 after:border-transparent 
+                after:border-t-gray-900
+              ">
                 <div className="flex flex-col items-center">
-                  {index < statusFlow.length - 1 && (
-                    <div className={`absolute top-4 left-1/2 w-full h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} 
-                         style={{ width: 'calc(100% - 40px)', left: 'calc(50% + 20px)' }} />
-                  )}
-                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
-                    ${isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}
-                    ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-2 border border-blue-500' : ''}`}>
-                    {isCompleted ? <CheckCircle size={16} /> : index + 1}
-                  </div>
-                  <p className={`mt-2 text-xs font-semibold ${isCompleted ? 'text-green-600' : 'text-gray-400'}`}>
-                    {status}
-                  </p>
-                  {isCurrent && <span className="text-[9px] text-blue-600 font-bold mt-0.5 uppercase tracking-wide">Current</span>}
+                  <span className="font-semibold">{status}</span>
+                  <span className="text-gray-300 text-[9px]">{formattedDate}</span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content Side */}

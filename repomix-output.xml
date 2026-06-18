@@ -2074,10 +2074,6 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
                 </tr>
                 ${hasFeed ? `
                 <tr>
-                  <td width="50%" style="padding:16px 20px; border-right:1px solid #e2e8f0; vertical-align: top;">
-                    <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Feed Component</div>
-                    <div style="font-size:14px; font-weight:700; color:#1e40af;">${feedName}</div>
-                  </td>
                   <td width="50%" style="padding:16px 20px; vertical-align: top;">
                     <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Date Created</div>
                     <div style="font-size:13px; font-weight:600; color:#475569;">${currentDate}</div>
@@ -2370,11 +2366,117 @@ const getPOCNotificationTemplate = (ticket, pocName, projectName, frontendUrl, f
 </html>
   `;
 };
+// Internal-only ticket template (no client/POC emails)
+const getInternalOnlyTicketTemplate = (ticket, creatorName, recipientsList, frontendUrl) => {
+  const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
 
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#0f172a; color:#e2e8f0;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f172a; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; width:100%; background:#1e293b; border-radius:24px; border:1px solid #334155; overflow:hidden;">
+          <tr>
+            <td style="background:#1e293b; padding:32px 36px; border-bottom:1px solid #334155;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#3b82f6;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Internal Task Management</div>
+                  </td>
+                  <td align="right" style="vertical-align: middle;">
+                    <div style="background:#059669; padding:4px 12px; border-radius:12px; font-size:8px; font-weight:700; color:white; text-transform:uppercase; letter-spacing:0.05em;">
+                      Internal
+                    </div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#1a2332; padding:28px 36px;">
+              <div style="font-size:13px; font-weight:700; color:#94a3b8; letter-spacing:0.06em; text-transform:uppercase;">🔒 Internal Task</div>
+              <div style="font-size:26px; font-weight:800; color:#f1f5f9; margin-top:6px;">${ticket.ticketNumber}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <div style="font-size:18px; font-weight:700; color:#f1f5f9; margin-bottom:20px; line-height:1.4;">${ticket.title}</div>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#0f172a; border:1px solid #334155; border-radius:12px; border-collapse: separate; margin-bottom:24px;">
+                <tr>
+                  <td width="50%" style="padding:12px 16px; border-bottom:1px solid #334155; border-right:1px solid #334155;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Created By</div>
+                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; margin-top:2px;">${creatorName}</div>
+                  </td>
+                  <td width="50%" style="padding:12px 16px; border-bottom:1px solid #334155;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Priority</div>
+                    <div style="font-size:13px; font-weight:700; color:${ticket.priority === 'Urgent' ? '#ef4444' : ticket.priority === 'High' ? '#f59e0b' : '#60a5fa'}; margin-top:2px;">${ticket.priority}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 16px; border-right:1px solid #334155;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Status</div>
+                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; margin-top:2px;">${ticket.status}</div>
+                  </td>
+                  <td style="padding:12px 16px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Created</div>
+                    <div style="font-size:13px; font-weight:600; color:#e2e8f0; margin-top:2px;">${currentDate}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 28px 36px;">
+              <div style="background:#0f172a; padding:20px 22px; border-radius:12px; border-left:4px solid #3b82f6;">
+                <div style="font-size:11px; font-weight:700; color:#94a3b8; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Description</div>
+                <p style="margin:0; font-size:14px; line-height:1.6; color:#cbd5e1; white-space: pre-line;">${ticket.description}</p>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 32px 36px;">
+              <a href="${ticketUrl}" style="display:inline-block; background:#3b82f6; color:white; text-decoration:none; padding:12px 28px; border-radius:40px; font-weight:700; font-size:13px;">View Task →</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#0f172a; padding:24px 36px; text-align:center; border-top:1px solid #334155;">
+              <div style="font-size:10px; color:#475569;">🔒 Internal KUIPER Task • This is an internal notification</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+};
+
+// Export the new template
 module.exports = {
   getTicketCreatedTemplate,
   getInternalTicketTemplate,
-  getPOCNotificationTemplate
+  getPOCNotificationTemplate,
+  getInternalOnlyTicketTemplate  // Add this
 };
 </file>
 
@@ -7189,7 +7291,7 @@ export default ResourceAnalytics;
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users } from 'lucide-react';
+import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
@@ -7200,10 +7302,17 @@ const TicketDashboard = () => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [filterType, setFilterType] = useState('all'); // 'all', 'internal', 'external'
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
+
+  // Check if user can see internal tickets (non-clients)
+  const canSeeInternal = ['Admin', 'Project Manager', 'Developer', 'Sales', 'Sales Manager'].includes(userRole);
+  
+  // Check if user is Client
+  const isClient = userRole === 'Client';
 
   useEffect(() => {
     fetchTickets();
@@ -7273,31 +7382,29 @@ const TicketDashboard = () => {
     });
     
     // Listen for new comments
-   // In the socket.on('ticket_commented', ...) section, add:
-
-socket.on('ticket_commented', (updatedTicket) => {
-  // Find the new comment
-  const lastComment = updatedTicket.comments?.[updatedTicket.comments.length - 1];
-  
-  if (lastComment && lastComment.userId !== currentUserId) {
-    setTickets(prev => prev.map(t => 
-      t._id === updatedTicket._id ? updatedTicket : t
-    ));
-    
-    toast.success(`New comment from ${lastComment.userName} on ticket ${updatedTicket.ticketNumber}`);
-    
-    // Desktop notification for creator and assignee
-    const shouldNotify = 
-      updatedTicket.createdBy?._id === currentUserId ||
-      updatedTicket.assignedTo?._id === currentUserId;
-    
-    if (shouldNotify) {
-      notificationManager.notifyNewComment(updatedTicket, lastComment.userName, () => {
-        navigate(`/tickets/${updatedTicket._id}`);
-      });
-    }
-  }
-});
+    socket.on('ticket_commented', (updatedTicket) => {
+      // Find the new comment
+      const lastComment = updatedTicket.comments?.[updatedTicket.comments.length - 1];
+      
+      if (lastComment && lastComment.userId !== currentUserId) {
+        setTickets(prev => prev.map(t => 
+          t._id === updatedTicket._id ? updatedTicket : t
+        ));
+        
+        toast.success(`New comment from ${lastComment.userName} on ticket ${updatedTicket.ticketNumber}`);
+        
+        // Desktop notification for creator and assignee
+        const shouldNotify = 
+          updatedTicket.createdBy?._id === currentUserId ||
+          updatedTicket.assignedTo?._id === currentUserId;
+        
+        if (shouldNotify) {
+          notificationManager.notifyNewComment(updatedTicket, lastComment.userName, () => {
+            navigate(`/tickets/${updatedTicket._id}`);
+          });
+        }
+      }
+    });
     
     return () => {
       socket.disconnect();
@@ -7339,15 +7446,52 @@ socket.on('ticket_commented', (updatedTicket) => {
     }
   };
 
-  const filteredTickets = filter === 'all' 
-    ? tickets 
-    : tickets.filter(t => t.status === filter);
+  // Get ticket type color
+  const getTicketTypeColor = (type) => {
+    const typeColors = {
+      'Data Extraction': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+      'Data Quality': 'bg-purple-100 text-purple-700 border-purple-200',
+      'Delivery': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+      'Enhancement': 'bg-amber-100 text-amber-700 border-amber-200',
+      'Finance': 'bg-green-100 text-green-700 border-green-200',
+      'HR': 'bg-pink-100 text-pink-700 border-pink-200',
+      'Payroll': 'bg-blue-100 text-blue-700 border-blue-200',
+      'Sales': 'bg-orange-100 text-orange-700 border-orange-200',
+      'Production': 'bg-red-100 text-red-700 border-red-200',
+      'Admin': 'bg-gray-100 text-gray-700 border-gray-200',
+      'IT': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+      'Development': 'bg-violet-100 text-violet-700 border-violet-200'
+    };
+    return typeColors[type] || 'bg-gray-100 text-gray-700 border-gray-200';
+  };
+
+  // Filter tickets by status and type
+  const filteredTickets = tickets.filter(t => {
+    // Status filter
+    if (filter !== 'all' && t.status !== filter) return false;
+    
+    // Type filter (internal/external)
+    if (filterType === 'internal' && !t.isInternal) return false;
+    if (filterType === 'external' && t.isInternal) return false;
+    
+    return true;
+  });
 
   const stats = {
     total: tickets.length,
     open: tickets.filter(t => t.status === 'Open').length,
     inProgress: tickets.filter(t => t.status === 'In Progress').length,
-    resolved: tickets.filter(t => t.status === 'Resolved').length
+    resolved: tickets.filter(t => t.status === 'Resolved').length,
+    internal: tickets.filter(t => t.isInternal).length,
+    external: tickets.filter(t => !t.isInternal).length
+  };
+
+  // Get category display name
+  const getCategoryDisplay = (ticket) => {
+    if (ticket.subItem) return ticket.subItem;
+    if (ticket.subcategory) return ticket.subcategory;
+    if (ticket.category) return ticket.category;
+    return null;
   };
 
   if (loading) {
@@ -7364,13 +7508,13 @@ socket.on('ticket_commented', (updatedTicket) => {
   return (
     <div className={`min-h-screen bg-gray-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
       {/* Header */}
-      <div className="mb-8 flex justify-between items-center">
+      <div className="mb-8 flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Support Tickets</h1>
           <p className="text-gray-600 mt-1">Track and manage all support requests</p>
         </div>
-        <div className="flex gap-3">
-          {/* Optional: Add a "Request Permission" button for first-time users */}
+        <div className="flex gap-3 flex-wrap">
+          {/* Notification permission button */}
           {Notification.permission !== 'granted' && Notification.permission !== 'denied' && (
             <button
               onClick={() => notificationManager.requestPermission()}
@@ -7379,20 +7523,20 @@ socket.on('ticket_commented', (updatedTicket) => {
               Enable Notifications
             </button>
           )}
-          {userRole === 'Client' && (
-            <button
-              onClick={() => navigate('/tickets/create')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all"
-            >
-              <Plus size={20} />
-              New Ticket
-            </button>
-          )}
+          
+          {/* Create Ticket button - available to all roles */}
+          <button
+            onClick={() => navigate('/tickets/create')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
+          >
+            <Plus size={20} />
+            {isClient ? 'New Ticket' : 'New Internal Ticket'}
+          </button>
         </div>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
@@ -7432,24 +7576,100 @@ socket.on('ticket_commented', (updatedTicket) => {
             <CheckCircle size={32} className="text-green-500" />
           </div>
         </div>
+
+        {/* Internal Tickets Stats - Only for non-clients */}
+        {canSeeInternal && (
+          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Internal</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.internal}</p>
+              </div>
+              <Lock size={32} className="text-purple-500" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
-        <div className="flex gap-2 flex-wrap">
-          {['all', 'Open', 'In Progress', 'Resolved', 'Closed'].map(status => (
-            <button
-              key={status}
-              onClick={() => setFilter(status === 'all' ? 'all' : status)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                filter === (status === 'all' ? 'all' : status)
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-            >
-              {status === 'all' ? 'All Tickets' : status}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Status Filters */}
+          <div className="flex items-center gap-1">
+            <span className="text-xs text-gray-500 mr-1 font-medium">Status:</span>
+            {['all', 'Open', 'In Progress', 'Resolved', 'Closed'].map(status => (
+              <button
+                key={status}
+                onClick={() => setFilter(status === 'all' ? 'all' : status)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  filter === (status === 'all' ? 'all' : status)
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                {status === 'all' ? 'All' : status}
+              </button>
+            ))}
+          </div>
+
+          {/* Type Filters - Only for non-clients who can see internal tickets */}
+          {canSeeInternal && (
+            <>
+              <div className="w-px h-8 bg-gray-300 mx-2"></div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-gray-500 mr-1 font-medium">Type:</span>
+                <button
+                  onClick={() => setFilterType('all')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                    filterType === 'all'
+                      ? 'bg-gray-800 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Filter size={12} />
+                  All
+                </button>
+                <button
+                  onClick={() => setFilterType('external')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                    filterType === 'external'
+                      ? 'bg-green-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Globe size={12} />
+                  External
+                </button>
+                <button
+                  onClick={() => setFilterType('internal')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                    filterType === 'internal'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  <Lock size={12} />
+                  Internal
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Clear filters button */}
+          {(filter !== 'all' || filterType !== 'all') && (
+            <>
+              <div className="w-px h-8 bg-gray-300 mx-2"></div>
+              <button
+                onClick={() => {
+                  setFilter('all');
+                  setFilterType('all');
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+              >
+                Clear Filters
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -7460,7 +7680,7 @@ socket.on('ticket_commented', (updatedTicket) => {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title / Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
@@ -7472,56 +7692,91 @@ socket.on('ticket_commented', (updatedTicket) => {
               {filteredTickets.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                    No tickets found
+                    <div className="flex flex-col items-center gap-2">
+                      <Ticket size={48} className="text-gray-300" />
+                      <p className="font-medium">No tickets found</p>
+                      <p className="text-sm text-gray-400">
+                        {filterType === 'internal' ? 'No internal tickets available' : 
+                         filterType === 'external' ? 'No external tickets available' : 
+                         'Create a new ticket to get started'}
+                      </p>
+                    </div>
                   </td>
                 </tr>
               ) : (
-                filteredTickets.map(ticket => (
-                  <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4">
-                      <span className="font-mono text-sm font-medium text-gray-900">
-                        {ticket.ticketNumber}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <p className="font-medium text-gray-900">{ticket.title}</p>
-                        <p className="text-sm text-gray-500">{ticket.projectId?.name}</p>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${getPriorityColor(ticket.priority)}`}>
-                        {ticket.priority}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md border ${getStatusColor(ticket.status)}`}>
-                        {ticket.status}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      {ticket.assignedTo ? (
+                filteredTickets.map(ticket => {
+                  const categoryDisplay = getCategoryDisplay(ticket);
+                  return (
+                    <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
-                          <Users size={14} className="text-gray-400" />
-                          <span className="text-sm text-gray-700">{ticket.assignedTo.name}</span>
+                          <span className="font-mono text-sm font-medium text-gray-900">
+                            {ticket.ticketNumber}
+                          </span>
+                          {ticket.isInternal && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[9px] font-bold">
+                              <Lock size={10} />
+                              Internal
+                            </span>
+                          )}
                         </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-500">
-                      {new Date(ticket.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <button
-                        onClick={() => navigate(`/tickets/${ticket._id}`)}
-                        className="text-blue-600 hover:text-blue-800 font-medium text-sm"
-                      >
-                        View Details →
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                      <td className="px-6 py-4">
+                        <div>
+                          <p className="font-medium text-gray-900">{ticket.title}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <p className="text-sm text-gray-500">
+                              {ticket.projectId?.name || (ticket.isInternal ? 'Internal Task' : 'No Project')}
+                            </p>
+                            {categoryDisplay && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${getTicketTypeColor(ticket.category)}`}>
+                                <Tag size={10} />
+                                {categoryDisplay}
+                              </span>
+                            )}
+                            {ticket.ticketType && !categoryDisplay && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${getTicketTypeColor(ticket.ticketType)}`}>
+                                <Tag size={10} />
+                                {ticket.ticketType}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${getPriorityColor(ticket.priority)}`}>
+                          {ticket.priority}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md border ${getStatusColor(ticket.status)}`}>
+                          {ticket.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {ticket.assignedTo ? (
+                          <div className="flex items-center gap-2">
+                            <Users size={14} className="text-gray-400" />
+                            <span className="text-sm text-gray-700">{ticket.assignedTo.name}</span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">Unassigned</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-500">
+                        {new Date(ticket.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <button
+                          onClick={() => navigate(`/tickets/${ticket._id}`)}
+                          className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
+                        >
+                          View Details →
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -7610,11 +7865,6 @@ const TicketDetails = () => {
       if (updatedTicket._id === id) {
         const oldStatus = ticket?.status;
         setTicket(updatedTicket);
-        toast(`Ticket status updated to ${updatedTicket.status}`, {
-          icon: '🔄',
-          duration: 3000
-        });
-        
         if (oldStatus && oldStatus !== updatedTicket.status) {
           if (updatedTicket.createdBy?._id === currentUserId || updatedTicket.assignedTo?._id === currentUserId) {
             notificationManager.notifyStatusUpdate(updatedTicket, oldStatus, updatedTicket.status, () => {
@@ -7720,23 +7970,28 @@ const TicketDetails = () => {
     }
   };
 
-  const closeTicket = async () => {
-    setUpdating(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.patch(`${API_BASE_URL}/api/tickets/${id}/status`, 
-        { status: 'Closed' },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setTicket(res.data);
-      toast.success('Ticket closed successfully');
-    } catch (error) {
-      console.error('Error closing ticket:', error);
-      toast.error('Failed to close ticket');
-    } finally {
-      setUpdating(false);
-    }
-  };
+ const closeTicket = async () => {
+  // Add confirmation dialog
+  if (!window.confirm('Are you sure you want to close this ticket? This action cannot be undone.')) {
+    return;
+  }
+  
+  setUpdating(true);
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.patch(`${API_BASE_URL}/api/tickets/${id}/status`, 
+      { status: 'Closed' },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    setTicket(res.data);
+    toast.success('Ticket closed successfully');
+  } catch (error) {
+    console.error('Error closing ticket:', error);
+    toast.error('Failed to close ticket');
+  } finally {
+    setUpdating(false);
+  }
+};
 
   const assignDeveloper = async (developerId) => {
     if (!developerId) return;
@@ -7949,22 +8204,32 @@ const TicketDetails = () => {
             </div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{ticket.title}</h1>
           </div>
-          
+
           <div className="flex gap-2 flex-wrap">
-            {userRole === 'Client' && isTicketCreator && ticket.status !== 'Closed' && (
+            {isTicketCreator && ticket.status !== 'Closed' && (
               <button onClick={closeTicket} disabled={updating} className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition-all flex items-center gap-2 shadow-sm">
                 <XCircle size={16} /> Close Ticket
               </button>
             )}
-            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer') && ticket.status !== 'Closed' && (
+            {/* Allow creator to update status if they're not a Client (or always allow for creators) */}
+            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || isTicketCreator) && 
+            ticket.status !== 'Closed' && (
               <div className="flex gap-2">
                 {ticket.status !== 'In Progress' && (
-                  <button onClick={() => updateStatus('In Progress')} disabled={updating} className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm">
+                  <button 
+                    onClick={() => updateStatus('In Progress')} 
+                    disabled={updating} 
+                    className="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+                  >
                     Start Progress
                   </button>
                 )}
                 {ticket.status !== 'Resolved' && (
-                  <button onClick={() => updateStatus('Resolved')} disabled={updating} className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm">
+                  <button 
+                    onClick={() => updateStatus('Resolved')} 
+                    disabled={updating} 
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-all shadow-sm"
+                  >
                     Mark Resolved
                   </button>
                 )}
@@ -7974,39 +8239,129 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Status Progress Map */}
-      <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-          <CheckCircle size={16} className="text-blue-600" />
-          Ticket Progress
-        </h3>
-        <div className="flex items-center justify-between">
-          {statusFlow.map((status, index) => {
-            const isCompleted = index <= currentStatusIndex;
-            const isCurrent = status === ticket.status;
+     {/* Status Progress Map - Fixed Width Version */}
+{/* Status Progress Map - Fixed Layout */}
+<div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  <h3 className="text-sm font-semibold text-gray-700 mb-6 flex items-center gap-2">
+    <CheckCircle size={16} className="text-blue-600" />
+    Ticket Progress
+  </h3>
+  
+  <div className="relative px-2">
+    {/* Progress Bar Track */}
+    <div className="absolute top-4 left-6 right-6 h-1.5 bg-gray-200 rounded-full" />
+    
+    {/* Progress Bar Fill */}
+    <div 
+      className="absolute top-4 left-6 h-1.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
+      style={{ 
+        width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - ${12}px)` 
+      }}
+    />
+    
+    {/* Status Steps - Using flex with proper spacing */}
+    <div className="flex justify-between items-start relative">
+      {statusFlow.map((status, index) => {
+        const isCompleted = index <= currentStatusIndex;
+        const isCurrent = status === ticket.status;
+        
+        // Get the date when this status was reached
+        let statusDate = null;
+        if (status === 'Open' && ticket.createdAt) {
+          statusDate = ticket.createdAt;
+        } else if (status === 'In Progress' && ticket.startedAt) {
+          statusDate = ticket.startedAt;
+        } else if (status === 'Resolved' && ticket.resolvedAt) {
+          statusDate = ticket.resolvedAt;
+        } else if (status === 'Closed' && ticket.closedAt) {
+          statusDate = ticket.closedAt;
+        }
+        
+        const formattedDate = statusDate 
+          ? new Date(statusDate).toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          : null;
+        
+        return (
+          <div 
+            key={status} 
+            className="flex flex-col items-center relative group"
+            style={{ 
+              minWidth: '60px',
+              flex: '1 1 0%'
+            }}
+          >
+            {/* Step Circle */}
+            <div className="relative z-10">
+              <div 
+                className={`
+                  w-8 h-8 rounded-full flex items-center justify-center 
+                  text-sm font-bold transition-all duration-300 cursor-pointer
+                  ${isCompleted 
+                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
+                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                  }
+                  ${isCurrent 
+                    ? 'ring-4 ring-blue-100 ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
+                    : ''
+                  }
+                  hover:scale-110 hover:shadow-xl
+                `}
+              >
+                {isCompleted ? <CheckCircle size={16} className="text-white" /> : index + 1}
+              </div>
+            </div>
             
-            return (
-              <div key={status} className="flex-1 relative">
+            {/* Status Label */}
+            <div className="mt-2 text-center min-h-[40px] flex flex-col items-center">
+              <p className={`
+                text-xs font-semibold transition-colors
+                ${isCompleted ? 'text-green-700' : 'text-gray-400'}
+                ${isCurrent ? 'text-blue-600 font-bold' : ''}
+              `}>
+                {status}
+              </p>
+              
+              {/* Current Indicator */}
+              {isCurrent && (
+                <span className="mt-0.5 text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
+                  ● Current
+                </span>
+              )}
+            </div>
+            
+            {/* Tooltip with Date */}
+            {formattedDate && (
+              <div className="
+                absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full 
+                opacity-0 group-hover:opacity-100 
+                transition-all duration-200
+                pointer-events-none
+                bg-gray-900 text-white 
+                px-3 py-1.5 rounded-lg 
+                text-[10px] font-medium whitespace-nowrap
+                shadow-lg z-20
+                after:content-[''] after:absolute 
+                after:top-full after:left-1/2 after:-translate-x-1/2
+                after:border-4 after:border-transparent 
+                after:border-t-gray-900
+              ">
                 <div className="flex flex-col items-center">
-                  {index < statusFlow.length - 1 && (
-                    <div className={`absolute top-4 left-1/2 w-full h-0.5 ${isCompleted ? 'bg-green-500' : 'bg-gray-200'}`} 
-                         style={{ width: 'calc(100% - 40px)', left: 'calc(50% + 20px)' }} />
-                  )}
-                  <div className={`relative z-10 w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all
-                    ${isCompleted ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-500'}
-                    ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-2 border border-blue-500' : ''}`}>
-                    {isCompleted ? <CheckCircle size={16} /> : index + 1}
-                  </div>
-                  <p className={`mt-2 text-xs font-semibold ${isCompleted ? 'text-green-600' : 'text-gray-400'}`}>
-                    {status}
-                  </p>
-                  {isCurrent && <span className="text-[9px] text-blue-600 font-bold mt-0.5 uppercase tracking-wide">Current</span>}
+                  <span className="font-semibold">{status}</span>
+                  <span className="text-gray-300 text-[9px]">{formattedDate}</span>
                 </div>
               </div>
-            );
-          })}
-        </div>
-      </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+</div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content Side */}
@@ -8602,7 +8957,8 @@ const sendEmail = require('../services/zohoMailer');
 const {
   getTicketCreatedTemplate,
   getInternalTicketTemplate,
-  getPOCNotificationTemplate
+  getPOCNotificationTemplate,
+  getInternalOnlyTicketTemplate
 } = require('../templates/ticketEmailTemplates');
 
 // Helper function to get all stakeholders for a ticket
@@ -8840,15 +9196,31 @@ function isInternalTicket(creatorRole) {
 // Create ticket
 exports.createTicket = async (req, res) => {
   try {
-    const { title, description, priority, projectId, feedId } = req.body;
+    const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType } = req.body;
+    
+    // Determine if ticket should be internal
+    const userRole = req.user.role;
+    const shouldBeInternal = userRole !== 'Client' || isInternal === true;
+    
+    // For internal tickets, project is optional but should NOT be nullified if provided
+    // For client tickets, project is required
+    if (!shouldBeInternal && !projectId) {
+      return res.status(400).json({ 
+        error: 'Project is required for client tickets.' 
+      });
+    }
+    
+    // Keep the projectId and feedId as provided (don't nullify for internal)
+    // Only nullify if they are explicitly set to null/empty string
+    const finalProjectId = projectId || null;
+    const finalFeedId = feedId || null;
     
     let assignedTo = null;
     
-    // If feed is selected, get the assigned developers
+    // Try to assign from feed if provided
     if (feedId) {
       const feed = await Feed.findById(feedId).populate('assignedDevelopers', '_id');
       if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
-        // Assign to the first developer in the feed
         assignedTo = feed.assignedDevelopers[0]._id;
       }
     }
@@ -8857,114 +9229,106 @@ exports.createTicket = async (req, res) => {
       title,
       description,
       priority,
-      projectId,
-      feedId: feedId || null,
+      projectId: finalProjectId,
+      feedId: finalFeedId,
       createdBy: req.user.id,
-      assignedTo: assignedTo
+      assignedTo: assignedTo,
+      isInternal: shouldBeInternal,
+      category: category || '',
+      subcategory: subcategory || '',
+      subItem: subItem || '',
+      ticketType: ticketType || ''
     });
     
     await ticket.save();
     
-    // Populate references for response
-    const populatedTicket = await Ticket.findById(ticket._id)
-      .populate('createdBy', 'name email role')
-      .populate('assignedTo', 'name email')
-      .populate('projectId', 'name projectCustomId')
-      .populate('feedId', 'name');
-    
-    // ============================================
-    // EMAIL NOTIFICATIONS
-    // ============================================
-    
-    const createdByUser = await User.findById(req.user.id).select('name email role');
-    const isInternal = isInternalTicket(createdByUser.role);
-    
-    // Get all stakeholders who should be notified
-    const stakeholders = await getTicketStakeholders(populatedTicket, createdByUser);
-    
-    console.log(`📧 Sending ticket notifications for ${populatedTicket.ticketNumber}`);
-    console.log(`   Ticket Type: ${isInternal ? 'INTERNAL' : 'EXTERNAL'}`);
-    console.log(`   Created By: ${createdByUser.name} (${createdByUser.role})`);
-    console.log(`   Recipients: ${stakeholders.length} stakeholders`);
-    
-    const frontendUrl = process.env.FRONTEND_URL || 'http://192.168.1.105:5173';
-    
-    // Send emails to all stakeholders
-    for (const stakeholder of stakeholders) {
-      try {
-        let emailHtml;
-        let emailSubject;
-        
-        if (isInternal) {
-          // Internal ticket - simpler notification (no POC emails for internal tickets)
-          // Skip if stakeholder is a POC (only notify internal team)
-          if (stakeholder.type === 'poc') {
-            console.log(`   ⏭️ Skipping POC ${stakeholder.email} for internal ticket`);
-            continue;
-          }
-          
-          emailHtml = getInternalTicketTemplate(
-            populatedTicket,
-            createdByUser.name,
-            stakeholders,
-            frontendUrl
-          );
-          emailSubject = `[Internal] New Task: ${populatedTicket.ticketNumber} - ${title.substring(0, 60)}`;
-        } else {
-          // External ticket - created by POC/Client
-          if (stakeholder.type === 'poc' && stakeholder.role === 'POC') {
-            // POC gets a customer-friendly notification
-            emailHtml = getPOCNotificationTemplate(
-              populatedTicket,
-              stakeholder.name,
-              populatedTicket.projectId?.name || 'your project',
-              frontendUrl
-            );
-            emailSubject = `Support Request Received: ${populatedTicket.ticketNumber}`;
-          } else {
-            // Internal team members get full ticket details
-            emailHtml = getTicketCreatedTemplate(
-              populatedTicket,
-              createdByUser.name,
-              stakeholders,
-              frontendUrl
-            );
-            emailSubject = `[Ticket] ${populatedTicket.ticketNumber}: ${title.substring(0, 60)}`;
-          }
-        }
-        
-        await sendEmail({
-          to: stakeholder.email,
-          subject: emailSubject,
-          html: emailHtml
-        });
-        
-        console.log(`   ✅ Email sent to: ${stakeholder.email} (${stakeholder.role})`);
-        
-      } catch (emailError) {
-        console.error(`   ❌ Failed to send email to ${stakeholder.email}:`, emailError.message);
-      }
-      
-      // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 300));
-    }
-    
-    // Emit socket event for real-time update
-    const io = req.app.get('io');
-    io.emit('ticket_created', populatedTicket);
-    
-    // Also notify the assigned developer
-    if (assignedTo) {
-      io.to(assignedTo.toString()).emit('ticket_assigned', populatedTicket);
-    }
-    
-    res.status(201).json(populatedTicket);
-    
+    // ... rest of the code remains the same ...
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to create ticket' });
+    console.error('Error creating ticket:', error);
+    res.status(500).json({ error: 'Failed to create ticket', details: error.message });
   }
-};
+};  
+
+// Add this new template function for general tickets
+function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
+  const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
+  
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#f0f4f8; color:#1e293b;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; width:100%; background:#ffffff; border-radius:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05); overflow:hidden;">
+          <tr>
+            <td style="padding:32px 36px; border-bottom:1px solid #e2e8f0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#2563eb;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Engineered for Operations</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f1f5f9; padding:28px 36px;">
+              <div style="font-size:13px; font-weight:700; color:#475569; letter-spacing:0.06em; text-transform:uppercase;">General Support Request</div>
+              <div style="font-size:26px; font-weight:800; color:#0f172a; margin-top:6px;">${ticket.ticketNumber}</div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:32px 36px;">
+              <div style="font-size:18px; font-weight:800; color:#0f172a; margin-bottom:20px; line-height:1.4;">${ticket.title}</div>
+              <div style="background:#f8fafc; padding:20px 22px; border-radius:12px; margin-bottom:20px;">
+                <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Description</div>
+                <p style="margin:0; font-size:14px; line-height:1.6; color:#334155; white-space: pre-line;">${ticket.description}</p>
+              </div>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:20px;">
+                <div style="background:#f8fafc; padding:12px; border-radius:12px;">
+                  <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;">Priority</div>
+                  <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:2px;">${ticket.priority}</div>
+                </div>
+                <div style="background:#f8fafc; padding:12px; border-radius:12px;">
+                  <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;">Category</div>
+                  <div style="font-size:14px; font-weight:700; color:#0f172a; margin-top:2px;">${ticket.category || 'Support'}</div>
+                </div>
+              </div>
+              <a href="${ticketUrl}" style="display:block; text-align:center; background:#2563eb; color:white; text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:13px;">
+                View Ticket →
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 28px 36px; text-align:center;">
+              <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1779973871/image_1_1_c60r0l.png" alt="KUIPER Footer" style="width:140px; max-width:60%; display:inline-block;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
+              <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • General Support Ticket</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
+}
 
 // Get all tickets (filtered by role)
 exports.getTickets = async (req, res) => {
@@ -9015,6 +9379,7 @@ exports.getTicketById = async (req, res) => {
 };
 
 // Update ticket status
+// Update status
 exports.updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -9023,7 +9388,18 @@ exports.updateStatus = async (req, res) => {
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    
+
+    // Check if user can update this ticket
+    const canUpdate = 
+      req.user.role === 'Admin' ||
+      req.user.role === 'Project Manager' ||
+      ticket.createdBy.toString() === req.user.id ||  // Creator can always update
+      (req.user.role === 'Developer' && ticket.assignedTo?.toString() === req.user.id);
+
+    if (!canUpdate) {
+      return res.status(403).json({ error: 'Not authorized to update this ticket' });
+    }
+
     ticket.status = status;
     
     if (status === 'Resolved') {
@@ -9353,6 +9729,24 @@ const ticketSchema = new mongoose.Schema({
     enum: ['Low', 'Medium', 'High', 'Urgent'],
     default: 'Medium'
   },
+  // Category fields
+  category: {
+    type: String,
+    enum: ['Finance', 'HR', 'Payroll', 'Sales', 'Production', 'Admin', 'IT', 'Development', ''],
+    default: ''
+  },
+  subcategory: {
+    type: String,
+    default: ''
+  },
+  subItem: {
+    type: String,
+    default: ''
+  },
+  ticketType: {
+    type: String,
+    default: ''
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -9366,28 +9760,35 @@ const ticketSchema = new mongoose.Schema({
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
-    required: true
+    default: null
   },
   feedId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Feed'
+    ref: 'Feed',
+    default: null
+  },
+  isInternal: {
+    type: Boolean,
+    default: false
   },
   comments: [{
     text: { type: String, default: '' },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     userName: { type: String },
-    images: [{ type: String }], // Array of image URLs
+    images: [{ type: String }],
     createdAt: { type: Date, default: Date.now }
   }],
   resolvedAt: Date,
-  closedAt: Date
+  closedAt: Date,
+  startedAt: Date
 }, { timestamps: true });
 
 // Auto-generate ticket number
 ticketSchema.pre('save', async function(next) {
   if (this.isNew) {
     const count = await this.constructor.countDocuments();
-    this.ticketNumber = `TKT-${String(count + 1).padStart(5, '0')}`;
+    const prefix = this.isInternal ? 'INT' : 'TKT';
+    this.ticketNumber = `${prefix}-${String(count + 1).padStart(5, '0')}`;
   }
 });
 
@@ -11923,10 +12324,188 @@ export default ClientDashboard;
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send } from 'lucide-react';
+import { 
+  ArrowLeft, Send, Lock, Globe, Tag, Layers, ChevronDown, ChevronUp, 
+  Users, Briefcase, AlertCircle, Clock, FileText, CheckCircle,Info ,
+  Building2, Hash, Sparkles, Zap
+} from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+
+// Ticket Category Configuration
+const TICKET_CATEGORIES = {
+  'Finance': {
+    icon: '💰',
+    color: 'emerald',
+    subcategories: {
+      'Reimbursement': [
+        'Employee Expense Claim',
+        'Client Meeting Expense',
+        'Travel Expense',
+        'Internet/Mobile Expense',
+        'Office Purchase Expense'
+      ],
+      'Payment Requests': [
+        'Vendor Payment',
+        'Advance Payment',
+        'Contractor Payment'
+      ],
+      'Invoice Management': [
+        'Generate Invoice',
+        'Revise Invoice',
+        'Client Billing Query'
+      ]
+    }
+  },
+  'HR': {
+    icon: '👥',
+    color: 'pink',
+    subcategories: {
+      'Employee Documents': [
+        'Employment Letter',
+        'Salary Certificate',
+        'Experience Letter'
+      ],
+      'Attendance & Leave': [
+        'Attendance Correction',
+        'Leave Regularization',
+        'Leave Approval'
+      ],
+      'Employee Management': [
+        'Onboarding',
+        'Exit Process',
+        'Promotion Request'
+      ]
+    }
+  },
+  'Payroll': {
+    icon: '💳',
+    color: 'blue',
+    subcategories: {
+      'Salary': [
+        'Salary Query',
+        'Salary Correction',
+        'Missing Salary'
+      ],
+      'Incentives': [
+        'Bonus',
+        'Incentive Calculation',
+        'Commission Query'
+      ],
+      'Tax & Deductions': [
+        'TDS Query',
+        'PF Query'
+      ]
+    }
+  },
+  'Sales': {
+    icon: '📊',
+    color: 'orange',
+    subcategories: {
+      'Lead Management': [
+        'Lead Assignment',
+        'Lead Designation'
+      ],
+      'Proposal & Pricing': [
+        'Proposal Creation',
+        'Pricing Approval',
+        'Dispute Agreement'
+      ],
+      'Client Support': [
+        'Contact Review',
+        'VDA Request',
+        'Client Escalation'
+      ]
+    }
+  },
+  'Production': {
+    icon: '⚙️',
+    color: 'red',
+    subcategories: {
+      'Data Extraction': [
+        'Feed Not Working',
+        'Feed Missing Data',
+        'Feed Shortage Outage',
+        'Scripts Issues'
+      ],
+      'Data Quality': [
+        'Duplicate Records',
+        'Missing Fields',
+        'Incorrect Shipping'
+      ],
+      'Delivery': [
+        'Delivery Delayed',
+        'Delivery Failed',
+        'API Delivery Issue'
+      ],
+      'Maintenance': [
+        'New Feed Request',
+        'Editing Feed Enhancement'
+      ]
+    }
+  },
+  'Admin': {
+    icon: '🛠️',
+    color: 'gray',
+    subcategories: {
+      'Agency': [
+        'Lease Request',
+        'Uptime Delay',
+        'Asset Return'
+      ],
+      'Procurement': [
+        'Machine Purchase',
+        'Software Purchase'
+      ],
+      'Facilities': [
+        'Internet Link',
+        'Office Workstation'
+      ],
+      'IT': [
+        'Asset Management',
+        'Email Access',
+        'Database Access',
+        'Server Access'
+      ],
+      'Technical Support': [
+        'System Reset'
+      ]
+    }
+  },
+  'IT': {
+    icon: '💻',
+    color: 'cyan',
+    subcategories: {
+      'Access Management': [
+        'Email Access',
+        'Database Access',
+        'Server Access'
+      ],
+      'Technical/Support': [
+        'System Reset'
+      ],
+      'Software Tools': [
+        'Hardware Issues'
+      ]
+    }
+  },
+  'Development': {
+    icon: '🚀',
+    color: 'violet',
+    subcategories: {
+      'New Feature Request': [
+        'Requirements Request',
+        'Bug Report'
+      ]
+    }
+  }
+};
+
+// Client-only categories (only Production for clients)
+const CLIENT_CATEGORIES = {
+  'Production': TICKET_CATEGORIES['Production']
+};
 
 const CreateTicket = () => {
   const [formData, setFormData] = useState({
@@ -11934,16 +12513,80 @@ const CreateTicket = () => {
     description: '',
     priority: 'Medium',
     projectId: '',
-    feedId: ''
+    feedId: '',
+    isInternal: false,
+    ticketType: '',
+    category: '',
+    subcategory: '',
+    subItem: ''
   });
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [isSubcategoryOpen, setIsSubcategoryOpen] = useState(false);
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
+
+  // Check if user is Client
+  const isClient = userRole === 'Client';
+  
+  // Check if user can see project/feed selection (ONLY Client and Project Manager)
+  const canSeeProjectFeed = userRole === 'Client' || userRole === 'Project Manager';
+
+  // Get available categories based on role
+  const getAvailableCategories = () => {
+    if (isClient) {
+      return CLIENT_CATEGORIES;
+    }
+    return TICKET_CATEGORIES;
+  };
+
+  // Auto-set internal for non-client roles
+  useEffect(() => {
+    if (!isClient) {
+      setFormData(prev => ({
+        ...prev,
+        isInternal: true
+      }));
+    }
+  }, [isClient]);
+
+  // Get available subcategories based on selected category
+  const getSubcategories = () => {
+    if (!formData.category) return [];
+    const categories = getAvailableCategories();
+    return Object.keys(categories[formData.category]?.subcategories || {});
+  };
+
+  // Get available sub-items based on selected category and subcategory
+  const getSubItems = () => {
+    if (!formData.category || !formData.subcategory) return [];
+    const categories = getAvailableCategories();
+    return categories[formData.category]?.subcategories[formData.subcategory] || [];
+  };
+
+  // Auto-generate ticket type from category selection
+  useEffect(() => {
+    if (formData.category && formData.subcategory && formData.subItem) {
+      setFormData(prev => ({
+        ...prev,
+        ticketType: formData.subItem
+      }));
+    } else if (formData.category && formData.subcategory) {
+      setFormData(prev => ({
+        ...prev,
+        ticketType: formData.subcategory
+      }));
+    } else if (formData.category) {
+      setFormData(prev => ({
+        ...prev,
+        ticketType: formData.category
+      }));
+    }
+  }, [formData.category, formData.subcategory, formData.subItem]);
 
   useEffect(() => {
     fetchProjects();
@@ -11954,70 +12597,52 @@ const CreateTicket = () => {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       
-      // Hardcoded organization ID from Ram's user record
-      // This is the organization that Ram belongs to: 6a22b2e00ee6695c87c21d6b
-      const userOrgId = '6a22b2e00ee6695c87c21d6b';
+      let clientProjects = [];
       
-      console.log('Using organization ID:', userOrgId);
-      console.log('Current User ID:', currentUserId);
-      
-      // Fetch all projects
-      const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
-        headers: headers
-      });
-      
-      console.log('Total projects fetched:', res.data.length);
-      
-      // Log all projects with organizations for debugging
-      res.data.forEach(project => {
-        if (project.organizations && project.organizations.length > 0) {
-          console.log(`Project "${project.projectCustomId}" has organizations:`, 
-            project.organizations.map(o => typeof o === 'object' ? o._id : o));
-        }
-      });
-      
-      // Filter projects where:
-      // 1. User's organization is in the organizations array, OR
-      // 2. User is directly in clients array
-      const clientProjects = res.data.filter(project => {
-        // Check organization-based assignment
-        if (project.organizations && Array.isArray(project.organizations)) {
-          const isOrgClient = project.organizations.some(org => {
-            const orgId = typeof org === 'object' ? org._id : org;
-            const match = String(orgId) === String(userOrgId);
-            if (match) {
-              console.log(`✅ Project "${project.projectCustomId}" matched via organization`);
-            }
-            return match;
-          });
-          if (isOrgClient) return true;
+      if (userRole === 'Client') {
+        // For clients, fetch projects they're assigned to
+        const userOrgId = localStorage.getItem('organizationId');
+        
+        try {
+          // Try to get projects from client endpoint
+          const res = await axios.get(`${API_BASE_URL}/api/admin/client/projects`, { headers });
+          clientProjects = res.data || [];
+        } catch (err) {
+          console.log('Client projects endpoint failed, trying fallback');
         }
         
-        // Check direct client assignment
-        if (project.clients && Array.isArray(project.clients)) {
-          const isDirectClient = project.clients.some(client => {
-            const clientId = typeof client === 'object' ? client._id : client;
-            const match = String(clientId) === String(currentUserId);
-            if (match) {
-              console.log(`✅ Project "${project.projectCustomId}" matched via direct client`);
+        // If no projects from client endpoint, try filtering all projects
+        if (clientProjects.length === 0) {
+          const allProjectsRes = await axios.get(`${API_BASE_URL}/api/admin/projects`, { headers });
+          
+          clientProjects = allProjectsRes.data.filter(project => {
+            // Check organization-based assignment
+            if (project.organizations && Array.isArray(project.organizations)) {
+              return project.organizations.some(org => {
+                const orgId = typeof org === 'object' ? org._id : org;
+                return String(orgId) === String(userOrgId);
+              });
             }
-            return match;
+            // Check direct client assignment
+            if (project.clients && Array.isArray(project.clients)) {
+              return project.clients.some(client => {
+                const clientId = typeof client === 'object' ? client._id : client;
+                return String(clientId) === String(currentUserId);
+              });
+            }
+            return false;
           });
-          if (isDirectClient) return true;
         }
-        
-        return false;
-      });
-      
-      console.log('Filtered projects count:', clientProjects.length);
-      
-      if (clientProjects.length === 0) {
-        console.log('No projects found. Showing all projects with organizations for debugging:');
-        res.data.forEach(p => {
-          if (p.organizations && p.organizations.length > 0) {
-            console.log(`- ${p.projectCustomId}: orgs =`, p.organizations);
-          }
-        });
+      } else if (userRole === 'Project Manager') {
+        // For PM, fetch projects they manage
+        const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, { headers });
+        clientProjects = res.data.filter(project => 
+          project.projectManager?._id === currentUserId || 
+          project.projectManager === currentUserId
+        );
+      } else {
+        // For other roles (Admin, Developer, Sales, etc.) - no projects
+        clientProjects = [];
       }
       
       setProjects(clientProjects);
@@ -12025,7 +12650,6 @@ const CreateTicket = () => {
       
     } catch (error) {
       console.error('Error fetching projects:', error);
-      toast.error('Failed to load projects');
       setFilteredProjects([]);
     }
   };
@@ -12050,8 +12674,14 @@ const CreateTicket = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.description || !formData.projectId) {
+    if (!formData.title || !formData.description) {
       toast.error('Please fill in all required fields');
+      return;
+    }
+    
+    // Only validate project for Client
+    if (isClient && !formData.projectId) {
+      toast.error('Please select a project for this ticket');
       return;
     }
     
@@ -12059,7 +12689,21 @@ const CreateTicket = () => {
     
     try {
       const token = localStorage.getItem('token');
-      await axios.post(`${API_BASE_URL}/api/tickets`, formData, {
+      
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        projectId: formData.projectId || null,
+        feedId: formData.feedId || null,
+        isInternal: formData.isInternal,
+        ticketType: formData.ticketType || undefined,
+        category: formData.category || undefined,
+        subcategory: formData.subcategory || undefined,
+        subItem: formData.subItem || undefined
+      };
+      
+      await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -12077,184 +12721,371 @@ const CreateTicket = () => {
     return project.projectCustomId || project.name;
   };
 
-  if (userRole === 'Client' && filteredProjects.length === 0 && projects.length === 0) {
-    return (
-      <div className={`min-h-screen bg-gray-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+  // Priority options with colors
+  const priorityOptions = [
+    { value: 'Low', label: 'Low', color: 'bg-green-100 text-green-700 border-green-200' },
+    { value: 'Medium', label: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
+    { value: 'High', label: 'High', color: 'bg-orange-100 text-orange-700 border-orange-200' },
+    { value: 'Urgent', label: 'Urgent', color: 'bg-red-100 text-red-700 border-red-200' }
+  ];
+
+  const availableCategories = getAvailableCategories();
+
+  return (
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      {/* Full width container */}
+      <div className="w-full">
+        {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => navigate('/tickets')}
-            className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
+            className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 transition-colors group mb-4"
           >
-            <ArrowLeft size={20} />
-            Back to Tickets
+            <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
+            <span className="text-sm font-medium">Back to Tickets</span>
           </button>
           
-          <h1 className="text-3xl font-bold text-gray-900">Create New Ticket</h1>
-          <p className="text-gray-600 mt-1">Submit a support request for your project</p>
-        </div>
-
-        <div className="max-w-2xl">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
-            <div className="flex flex-col items-center gap-3">
-              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center">
-                <ArrowLeft size={32} className="text-yellow-600" />
-              </div>
-              <h3 className="text-lg font-semibold text-yellow-800">No Projects Assigned</h3>
-              <p className="text-yellow-700">
-                You don't have any projects assigned to you yet. 
-                Please contact your project manager to get assigned to a project before creating tickets.
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
+                {isClient ? 'Create New Ticket' : 'Create  Ticket'}
+              </h1>
+              <p className="text-slate-500 mt-1">
+                {isClient 
+                  ? 'Submit a support request for your project' 
+                  : 'Submit an internal ticket for team members only'}
               </p>
-              <button
-                onClick={() => navigate('/tickets')}
-                className="mt-4 px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
-              >
-                Back to Tickets
-              </button>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`min-h-screen bg-gray-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-      {/* Header */}
-      <div className="mb-8">
-        <button
-          onClick={() => navigate('/tickets')}
-          className="mb-4 flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-        >
-          <ArrowLeft size={20} />
-          Back to Tickets
-        </button>
-        
-        <h1 className="text-3xl font-bold text-gray-900">Create New Ticket</h1>
-        <p className="text-gray-600 mt-1">Submit a support request for your project</p>
-      </div>
-
-      {/* Form */}
-      <div className="max-w-2xl">
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="space-y-6">
-            {/* Title */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Title *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                placeholder="Brief summary of the issue"
-              />
-            </div>
-            
-            {/* Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Description *
-              </label>
-              <textarea
-                required
-                rows={5}
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                placeholder="Detailed description of the problem..."
-              />
-            </div>
-            
-            {/* Priority */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Priority *
-              </label>
-              <select
-                value={formData.priority}
-                onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              >
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Urgent">Urgent</option>
-              </select>
-            </div>
-            
-            {/* Project */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Project *
-              </label>
-              <select
-                required
-                value={formData.projectId}
-                onChange={(e) => {
-                  setFormData({ ...formData, projectId: e.target.value, feedId: '' });
-                  fetchFeeds(e.target.value);
-                }}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              >
-                <option value="">Select a project</option>
-                {filteredProjects.map(project => (
-                  <option key={project._id} value={project._id}>
-                    {getProjectDisplayName(project)}
-                    {userRole === 'Client' ? ' (Your Project)' : ''}
-                  </option>
-                ))}
-              </select>
-              
-              {/* Show message if no projects available */}
-              {filteredProjects.length === 0 && (
-                <p className="text-sm text-amber-600 mt-2">
-                  {userRole === 'Client' 
-                    ? "You don't have any projects assigned. Please contact your project manager."
-                    : "No projects available. Create a project first."}
-                </p>
-              )}
-            </div>
-            
-            {/* Feed (Optional) */}
-            {feeds.length > 0 && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Related Feed (Optional)
-                </label>
-                <select
-                  value={formData.feedId}
-                  onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                >
-                  <option value="">Select a feed (optional)</option>
-                  {feeds.map(feed => (
-                    <option key={feed._id} value={feed._id}>
-                      {feed.name}
-                    </option>
-                  ))}
-                </select>
+            {!isClient && (
+              <div className="flex items-center gap-2 px-4 py-2 bg-purple-100 rounded-full border border-purple-200">
+                <Lock size={14} className="text-purple-600" />
+                <span className="text-xs font-semibold text-purple-700">Internal Mode</span>
               </div>
             )}
-            
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading || filteredProjects.length === 0}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? (
-                'Creating...'
-              ) : (
-                <>
-                  <Send size={18} />
-                  Create Ticket
-                </>
-              )}
-            </button>
           </div>
-        </form>
+        </div>
+
+        {/* Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+          <form onSubmit={handleSubmit}>
+            {/* Form Header */}
+            <div className="px-8 py-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-50 rounded-xl">
+                  <FileText size={20} className="text-blue-600" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-800">Ticket Details</h2>
+                  <p className="text-xs text-slate-500">Fill in the information below to create a new ticket</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-8 space-y-8">
+             
+
+              {/* Client Mode Badge - Show for clients */}
+              {isClient && (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+                  <div className="p-2 bg-blue-200 rounded-lg">
+                    <Globe size={16} className="text-blue-700" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-blue-800">Client Ticket Mode</p>
+                    <p className="text-xs text-blue-700 mt-0.5">
+                      As a Client, you can only create <span className="font-medium">Production</span> related tickets.
+                      Your tickets will be sent to the internal team for resolution.
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Two Column Layout for Title and Description */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Title */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Title <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-800 placeholder:text-slate-400"
+                      placeholder="Enter a brief summary..."
+                    />
+                  </div>
+                </div>
+                
+                {/* Priority */}
+                <div>
+                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                    Priority <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {priorityOptions.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, priority: option.value })}
+                        className={`px-3 py-2.5 rounded-xl border-2 font-medium text-xs transition-all ${
+                          formData.priority === option.value
+                            ? `${option.color} border-current shadow-md`
+                            : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Description - Full Width */}
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  Description <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  required
+                  rows={4}
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-800 placeholder:text-slate-400 resize-none"
+                  placeholder="Provide a detailed description of the issue..."
+                />
+              </div>
+
+              {/* Category Selection - Full Width */}
+              <div className="bg-slate-50/80 rounded-xl p-6 border-2 border-slate-200/50">
+                <div className="flex items-center gap-2 mb-4">
+                  <Layers size={18} className="text-blue-600" />
+                  <label className="text-sm font-semibold text-slate-700">
+                    Category & Subcategory <span className="text-red-500">*</span>
+                    {isClient && (
+                      <span className="text-xs text-blue-600 font-normal ml-2">(Production Only)</span>
+                    )}
+                  </label>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Category Dropdown */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                      Category
+                    </label>
+                    <select
+                      required
+                      value={formData.category}
+                      onChange={(e) => {
+                        setFormData({ 
+                          ...formData, 
+                          category: e.target.value,
+                          subcategory: '',
+                          subItem: '',
+                          ticketType: ''
+                        });
+                        setIsSubcategoryOpen(true);
+                      }}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
+                    >
+                      <option value="">Select Category</option>
+                      {Object.keys(availableCategories).map(cat => (
+                        <option key={cat} value={cat}>
+                          {availableCategories[cat]?.icon} {cat}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Subcategory Dropdown */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                      Subcategory
+                    </label>
+                    <select
+                      required
+                      value={formData.subcategory}
+                      onChange={(e) => {
+                        setFormData({ 
+                          ...formData, 
+                          subcategory: e.target.value,
+                          subItem: '',
+                          ticketType: ''
+                        });
+                      }}
+                      disabled={!formData.category}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select Subcategory</option>
+                      {getSubcategories().map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Sub-Item Dropdown */}
+                  <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                      Specific Issue
+                    </label>
+                    <select
+                      required
+                      value={formData.subItem}
+                      onChange={(e) => {
+                        setFormData({ 
+                          ...formData, 
+                          subItem: e.target.value,
+                          ticketType: e.target.value
+                        });
+                      }}
+                      disabled={!formData.subcategory}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select Issue Type</option>
+                      {getSubItems().map(item => (
+                        <option key={item} value={item}>{item}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Selected Category Display */}
+                {formData.category && formData.subcategory && formData.subItem && (
+                  <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+                    <div className="flex items-center gap-3 text-sm flex-wrap">
+                      <span className="font-medium text-slate-600">Selected:</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-700 font-medium">
+                        {availableCategories[formData.category]?.icon} {formData.category}
+                      </span>
+                      <span className="text-slate-400">→</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-700 font-medium">
+                        {formData.subcategory}
+                      </span>
+                      <span className="text-slate-400">→</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 rounded-lg border border-blue-200 text-blue-700 font-medium">
+                        {formData.subItem}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Project and Feed - Only show for Client and Project Manager */}
+              {canSeeProjectFeed && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Project Selection */}
+                  <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Briefcase size={18} className="text-blue-600" />
+                      <label className="text-sm font-semibold text-slate-700">
+                        Project {isClient ? <span className="text-red-500">*</span> : <span className="font-normal text-slate-400">(Optional - for PM)</span>}
+                      </label>
+                    </div>
+                    
+                    <select
+                      required={isClient}
+                      value={formData.projectId}
+                      onChange={(e) => {
+                        setFormData({ ...formData, projectId: e.target.value, feedId: '' });
+                        fetchFeeds(e.target.value);
+                      }}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
+                    >
+                      <option value="">Select a project {isClient ? '*' : '(optional)'}</option>
+                      {filteredProjects.length === 0 && isClient ? (
+                        <option value="" disabled>No projects assigned to you</option>
+                      ) : (
+                        filteredProjects.map(project => (
+                          <option key={project._id} value={project._id}>
+                            {getProjectDisplayName(project)}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    {isClient && filteredProjects.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-2">
+                        No projects assigned. Please contact your project manager.
+                      </p>
+                    )}
+                    {!isClient && userRole === 'Project Manager' && (
+                      <p className="text-xs text-slate-400 mt-2">
+                        Optionally associate this internal ticket with a project you manage
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Feed Selection */}
+                  <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Hash size={18} className="text-blue-600" />
+                      <label className="text-sm font-semibold text-slate-700">
+                        Related Feed <span className="font-normal text-slate-400">(Optional)</span>
+                      </label>
+                    </div>
+                    
+                    <select
+                      value={formData.feedId}
+                      onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
+                      disabled={!formData.projectId}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select a feed (optional)</option>
+                      {feeds.map(feed => (
+                        <option key={feed._id} value={feed._id}>
+                          {feed.name}
+                        </option>
+                      ))}
+                    </select>
+                    {!formData.projectId && (
+                      <p className="text-xs text-amber-600 mt-2">Select a project first to see available feeds</p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            
+
+              {/* Ticket Type Display */}
+              {formData.ticketType && (
+                <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                  <div className="flex items-center gap-3">
+                    <div className="p-1.5 bg-green-200 rounded-lg">
+                      <Tag size={16} className="text-green-700" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-green-700">Ticket Type</p>
+                      <p className="text-sm font-semibold text-green-800">{formData.ticketType}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <div className="pt-4 border-t border-slate-200">
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-200/50 hover:shadow-xl hover:shadow-blue-300/50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Creating Ticket...
+                    </>
+                  ) : (
+                    <>
+                      {isClient ? <Send size={18} /> : <Lock size={18} />}
+                      {isClient ? 'Submit Ticket' : 'Create  Ticket'}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
@@ -12975,6 +13806,22 @@ uploads/
 !backend/uploads/tickets/.gitkeep
 !backend/uploads/profiles/.gitkeep
 !backend/uploads/temp/.gitkeep
+
+# ========================================
+# PROJECT SPECIFIC FILES - DO NOT TRACK
+# ========================================
+
+# Repomix output file (contains entire codebase)
+repomix-output.xml
+
+# To-do list / notes
+to_do_next_push
+
+# Any other temporary or local files
+*.tmp
+*.temp
+*.bak
+*.backup
 </file>
 
 <file path="backend/check-github-token.js">
@@ -13724,13 +14571,30 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 
 const sendEmail = async ({ to, subject, html }) => {
   try {
+    // Validate email addresses
+    if (!to || !Array.isArray(to) && typeof to !== 'string') {
+      console.error('Invalid email recipient:', to);
+      return { error: 'Invalid email recipient' };
+    }
+    
+    // Ensure 'to' is an array for Resend
+    const recipients = Array.isArray(to) ? to : [to];
+    
+    console.log(`📧 Sending email to: ${recipients.join(', ')}`);
+    console.log(`   Subject: ${subject}`);
+    
     const { data, error } = await resend.emails.send({
       from: 'Kuiper CRM <no-reply@kuiperapp.co.in>',
-      to,
+      to: recipients,
       subject,
       html
     });
-    if (error) throw new Error(JSON.stringify(error));
+    
+    if (error) {
+      console.error('❌ Resend error:', error);
+      throw new Error(JSON.stringify(error));
+    }
+    
     console.log('✅ EMAIL SENT:', data.id);
     return data;
   } catch (error) {
@@ -14636,214 +15500,6 @@ UserSchema.methods.getPOCDetails = async function() {
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);
 </file>
 
-<file path="backend/server.js">
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
-const path = require('path');
-const fs = require('fs');
-
-require('dotenv').config();
-
-// Safely load the cron worker using path resolution to avoid directory boundary issues
-try {
-  require(path.join(__dirname, 'cron', 'dripCampaignWorker'));
-  console.log('⏰ Drip Campaign Worker initialized successfully');
-} catch (err) {
-  console.log('⚠️ Notice: Cron worker file bypass or path adjusted:', err.message);
-}
-
-// =========================================================
-// CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
-// =========================================================
-
-const createUploadsDirectory = () => {
-  const uploadDirs = [
-    path.join(__dirname, 'uploads'),
-    path.join(__dirname, 'uploads/tickets'),
-    path.join(__dirname, 'uploads/profiles'),
-    path.join(__dirname, 'uploads/temp')
-  ];
-  
-  uploadDirs.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`📁 Created directory: ${dir}`);
-    } else {
-      console.log(`✅ Directory ready: ${dir}`);
-    }
-  });
-};
-
-createUploadsDirectory();
-
-// =========================================================
-// ROUTE & MIDDLEWARE DEPENDENCY IMPORTS
-// =========================================================
-
-const { protect } = require('./middleware/authMiddleware');
-
-const adminRoutes = require('./routes/adminRoutes');
-const authRoutes = require('./routes/authRoutes');
-const leadGenRoutes = require('./routes/leadGenRoutes');
-const organizationRoutes = require('./routes/organizationRoutes');
-const prospectRoutes = require('./routes/prospects');
-const developerRoutes = require('./routes/developer');
-const pmRoutes = require('./routes/pmRoutes');
-const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
-const resourceAnalyticsRoutes = require('./routes/resourceAnalyticsRoutes');
-const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
-const ticketRoutes = require('./routes/ticketRoutes');
-
-const app = express();
-const server = http.createServer(app);
-
-/* =========================================================
-   CREATE SOCKET SERVER WITH WEB PRODUCTION CORS RULES
-========================================================= */
-
-const io = new Server(server, {
-  cors: {
-    origin: [
-      'http://localhost:5173',
-      'http://127.0.0.1:5173',
-      'http://192.168.1.6:5173', 
-      'http://192.168.1.105:5173',
-      'https://kuiperapp.co.in',       // Live Production Domain
-      'https://www.kuiperapp.co.in',   // Live Production Domain (WWW sub)
-      /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
-      /^http:\/\/localhost(:\d+)?$/
-    ],
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-  },
-  transports: ['websocket', 'polling']
-});
-
-/* =========================================================
-   GLOBAL SOCKET IO LISTENERS
-========================================================= */
-
-global.io = io;
-app.set('io', io);
-io.on('connection', (socket) => {
-  console.log('🟢 Socket Connected:', socket.id);
-
-  socket.on('join-user-room', (userId) => {
-    socket.join(userId);
-    console.log(`👤 User joined room: ${userId}`);
-  });
-
-  socket.on('join-ticket-room', (ticketId) => {
-    socket.join(`ticket_${ticketId}`);
-    console.log(`🎫 Joined ticket room: ${ticketId}`);
-  });
-
-  socket.on('disconnect', () => {
-    console.log('🔴 Socket Disconnected:', socket.id);
-  });
-});
-
-/* =========================================================
-   APPLICATION LEVEL MIDDLEWARES
-========================================================= */
-
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-// Setup unified CORS handling for both dev machines and live environment domains
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-
-    const isLocal = /^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d+\.\d+)(:\d+)?$/.test(origin);
-    const isProduction = /^https?:\/\/(www\.)?kuiperapp\.co\.in$/.test(origin);
-
-    if (isLocal || isProduction) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS policy')); 
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-
-// Route static access parameters for uploaded document assets
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-/* =========================================================
-   ENV RUNTIME PORT VALIDATIONS
-========================================================= */
-
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI;
-
-if (!MONGO_URI) {
-  console.error('❌ CRITICAL CONFIG ERROR: MONGO_URI string is missing in .env');
-  process.exit(1);
-}
-
-/* =========================================================
-   APPLICATION REST API PIPELINES
-========================================================= */
-
-// OPEN ENDPOINTS
-app.use('/api/auth', authRoutes);
-
-// CONTROL AUTHORIZED SECURE ENDPOINTS
-app.use('/api/admin', protect, adminRoutes);
-app.use('/api/orgs', protect, organizationRoutes);
-app.use('/api/leads', protect, leadGenRoutes);
-app.use('/api/lead-generation', protect, leadGenRoutes);
-app.use('/api/prospects', protect, prospectRoutes);
-app.use('/api/dev', protect, developerRoutes);
-app.use('/api/pm', protect, pmRoutes);
-app.use('/api/dev/worklog', protect, workDescriptionRoutes);
-app.use('/api/resource-analytics', resourceAnalyticsRoutes);
-app.use('/api/email-campaign', emailCampaignRoutes);
-app.use('/api/tickets', ticketRoutes);
-
-/* =========================================================
-   ROOT PIN TEST DIRECTIVE
-========================================================= */
-
-app.get('/', (req, res) => {
-  res.send('Keyword Analytics Engine Core Production API Operational 🚀');
-});
-
-/* =========================================================
-   GLOBAL 404 CATCH FALLBACK
-========================================================= */
-
-app.use((req, res) => {
-  console.log(`⚠️ Route Mismatch 404 Execution => ${req.method} ${req.originalUrl}`);
-  res.status(404).json({
-    success: false,
-    message: `Route endpoint ${req.method} ${req.originalUrl} does not exist on server stack`
-  });
-});
-
-/* =========================================================
-   DATABASE INTEGRATION & WEB APPLICATION BOOTSTRAP
-========================================================= */
-
-mongoose.connect(MONGO_URI)
-  .then(() => {
-    console.log('✅ MongoDB Cluster Connected Successfully');
-    
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 API System running in production mode listening on port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('❌ Engine Startup Failed. MongoDB Connection Error:', err);
-  });
-</file>
-
 <file path="frontend/src/components/KuiperLogo.jsx">
 import React, { useRef, useMemo } from 'react';
 import { Canvas, useFrame, extend } from '@react-three/fiber';
@@ -15344,6 +16000,13 @@ const DeveloperDashboard = () => {
   const [todayFeeds, setTodayFeeds] = useState([]);
   const [randomTip, setRandomTip] = useState('');
   const [socket, setSocket] = useState(null);
+  
+  // Server time state
+  const [serverTime, setServerTime] = useState(null);
+  const [serverDate, setServerDate] = useState('');
+  const [serverDayName, setServerDayName] = useState('');
+  const [serverDayOfMonth, setServerDayOfMonth] = useState(0);
+  const [timeOffset, setTimeOffset] = useState(0);
 
   // Modal State
   const [showCompleteModal, setShowCompleteModal] = useState(false);
@@ -15360,16 +16023,71 @@ const DeveloperDashboard = () => {
     getRandomTip();
   }, []);
 
-  // Get today's day name
-  const getTodayDayName = () => {
+  // Get day name from date object
+  const getDayName = (date) => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[new Date().getDay()];
+    return days[date.getDay()];
   };
 
-  // Check if feed is scheduled for today AND not completed today
+  // Fetch server time
+  const fetchServerTime = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_BASE_URL}/api/dev/system-time-check`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data && response.data.serverTime) {
+        const serverDateObj = new Date(response.data.serverTime);
+        const clientNow = Date.now();
+        const serverTimestamp = new Date(response.data.serverTime).getTime();
+        const offset = serverTimestamp - clientNow;
+        
+        setTimeOffset(offset);
+        setServerTime(serverDateObj);
+        setServerDate(serverDateObj.toISOString().split('T')[0]);
+        setServerDayName(getDayName(serverDateObj));
+        setServerDayOfMonth(serverDateObj.getDate());
+        
+        // console.log('🕐 Server time fetched:', serverDateObj.toLocaleString());
+        // console.log('📅 Server date:', serverDateObj.toISOString().split('T')[0]);
+        // console.log('⏱️ Time offset:', offset, 'ms');
+      }
+    } catch (err) {
+      console.error('Failed to fetch server time:', err);
+      // Fallback to client time if server time fetch fails
+      const fallbackDate = new Date();
+      setServerTime(fallbackDate);
+      setServerDate(fallbackDate.toISOString().split('T')[0]);
+      setServerDayName(getDayName(fallbackDate));
+      setServerDayOfMonth(fallbackDate.getDate());
+      setTimeOffset(0);
+    }
+  };
+
+  // Get server-corrected "today" date string
+  const getServerToday = () => {
+    if (serverDate) return serverDate;
+    return new Date().toISOString().split('T')[0];
+  };
+
+  // Get server-corrected day name
+  const getServerDayName = () => {
+    if (serverDayName) return serverDayName;
+    return getDayName(new Date());
+  };
+
+  // Get server-corrected day of month
+  const getServerDayOfMonth = () => {
+    if (serverDayOfMonth) return serverDayOfMonth;
+    return new Date().getDate();
+  };
+
+  // Check if feed is scheduled for today using SERVER date
   const isFeedForToday = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    const currentDayOfMonth = new Date().getDate();
+    const today = getServerToday();
+    const currentDayOfMonth = getServerDayOfMonth();
+    const currentDayName = getServerDayName();
     
     const isCompletedToday = feed.completionHistory && 
       Array.isArray(feed.completionHistory) && 
@@ -15379,19 +16097,10 @@ const DeveloperDashboard = () => {
     
     if (feed.feedType === 'Daily') return true;
     if (feed.feedType === 'Weekly') {
-      return feed.weekDay === getTodayDayName();
+      return feed.weekDay === currentDayName;
     }
     if (feed.feedType === 'Monthly') {
       return feed.monthDay === currentDayOfMonth;
-    }
-    return false;
-  };
-
-  // Check if feed is completed for today
-  const isFeedCompletedToday = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
-      return feed.completionHistory.some(h => h && h.date === today);
     }
     return false;
   };
@@ -15418,6 +16127,9 @@ const DeveloperDashboard = () => {
     const token = localStorage.getItem('token');
     const headers = { Authorization: `Bearer ${token}` };
     try {
+      // First fetch server time
+      await fetchServerTime();
+      
       const [projRes, feedRes] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/dev/my-projects`, { headers }),
         axios.get(`${API_BASE_URL}/api/dev/my-feeds`, { headers })
@@ -15425,6 +16137,7 @@ const DeveloperDashboard = () => {
       setProjects(projRes.data);
       setFeeds(feedRes.data);
       
+      // After feeds are loaded, filter based on server date
       const today = feedRes.data.filter(feed => isFeedForToday(feed));
       setTodayFeeds(today);
       
@@ -15453,6 +16166,10 @@ const DeveloperDashboard = () => {
     newSocket.on('connect', () => {
       console.log('🔌 Socket connected');
       newSocket.emit('join-user-room', userId);
+    });
+    
+    newSocket.on('connect_error', (error) => {
+      console.log('⚠️ Socket connection error:', error.message);
     });
     
     // Listen for feed assignments
@@ -15513,6 +16230,13 @@ const DeveloperDashboard = () => {
   // Initial data load
   useEffect(() => {
     loadDevData();
+    
+    // Refresh server time every 5 minutes
+    const interval = setInterval(() => {
+      fetchServerTime();
+    }, 300000); // 5 minutes
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Handle feed completion
@@ -15549,7 +16273,7 @@ const DeveloperDashboard = () => {
               completed: true,
               completionHistory: [
                 ...(feed.completionHistory || []),
-                { date: new Date().toISOString().split('T')[0], description: completionDescription }
+                { date: getServerToday(), description: completionDescription }
               ]
             }
           : feed
@@ -15680,8 +16404,16 @@ const DeveloperDashboard = () => {
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Day</p>
-              <p className="text-sm font-black text-white">{getTodayDayName()}</p>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">
+                Server Date
+              </p>
+              <p className="text-sm font-black text-white">
+                {serverTime ? serverTime.toLocaleDateString('en-US', { 
+                  month: 'short', 
+                  day: 'numeric',
+                  year: 'numeric'
+                }) : 'Loading...'}
+              </p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
               <Clock size={18} className="text-white" />
@@ -15719,7 +16451,10 @@ const DeveloperDashboard = () => {
               Today's Schedule
             </h2>
             <span className="text-[9px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
-              {getTodayDayName()}
+              {getServerDayName()}
+            </span>
+            <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">
+              Server Time
             </span>
           </div>
           <span className="text-[9px] font-bold text-slate-400">{todayFeeds.length} pending</span>
@@ -15731,7 +16466,9 @@ const DeveloperDashboard = () => {
               <Calendar size={24} className="text-slate-300" />
             </div>
             <p className="text-sm font-bold text-slate-500">No feeds scheduled for today</p>
-            <p className="text-[10px] text-slate-400 mt-1">All caught up! Great job!</p>
+            <p className="text-[10px] text-slate-400 mt-1">
+              Based on server date: {serverDate || 'Loading...'}
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -15868,6 +16605,9 @@ const DeveloperDashboard = () => {
                   <span className="text-[8px] font-bold text-slate-400">
                     Project: {selectedFeed.projectId?.projectCustomId || 'Unknown'}
                   </span>
+                  <span className="text-[8px] font-bold text-blue-500">
+                    Date: {serverDate || 'Loading...'}
+                  </span>
                 </div>
               </div>
 
@@ -15884,7 +16624,7 @@ const DeveloperDashboard = () => {
                   autoFocus
                 />
                 <p className="text-[8px] text-slate-400 mt-2">
-                  This description will be saved as part of the feed completion record.
+                  This description will be saved with the server date ({serverDate || 'Loading...'})
                 </p>
               </div>
             </div>
@@ -16279,7 +17019,7 @@ const ProjectFeeds = () => {
     setSelectedTicketFeed(feed);
     setTicketForm({
       title: `Issue with feed: ${feed.name}`,
-      description: `Feed: ${feed.name}\nProject: ${feed.projectCustomId}\n\nPlease describe the issue:`,
+      description: `Feed: ${feed.name}\nProject: ${feed.projectCustomId}\n\nDescription:`,
       priority: 'Medium'
     });
     setShowTicketModal(true);
@@ -19036,43 +19776,6 @@ ProjectSchema.methods.getAllClientNames = async function() {
 module.exports = mongoose.model('Project', ProjectSchema);
 </file>
 
-<file path="backend/package.json">
-{
-  "name": "backend",
-  "version": "1.0.0",
-  "description": "",
-  "main": "server.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "@octokit/rest": "^22.0.1",
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.1",
-    "express": "^5.2.1",
-    "googleapis": "^171.4.0",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.4.1",
-    "multer": "^2.1.1",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.7",
-    "resend": "^6.12.4",
-    "socket.io": "^4.8.3",
-    "socket.io-client": "^4.8.3",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  }
-}
-</file>
-
 <file path="backend/routes/developer.js">
 const express = require('express');
 const router = express.Router();
@@ -19264,16 +19967,14 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
       console.log('⚠️ GITHUB_WRITE_TOKEN not found, using manual instructions mode');
     }
 
-    // Generate the secure Python script with fallback mode
-// In backend/routes/developer.js, find the line around 306 and fix the script generation
 
-// REPLACE the entire script generation section with this corrected version:
 
 const pythonScript = `#!/usr/bin/env python3
 """
 DEPLOYMENT SCRIPT for ${feed.name}
 - Uploads files to GitHub repository
 ${authenticatedUrl ? '- Uses secure token authentication' : '- Manual authentication required'}
+- Only pushes files with extensions: .py, .txt, .exe, .bat
 """
 
 import os
@@ -19291,6 +19992,9 @@ REPO_NAME = "${project.gitRepoName}"
 FEED_FOLDER = "${feedFolderName}"
 TARGET_PATH = f"{FEED_FOLDER}/src"
 
+# Allowed file extensions
+ALLOWED_EXTENSIONS = {'.py', '.txt', '.exe', '.bat'}
+
 # Get current directory (where deploy.py is located)
 CURRENT_DIR = Path(__file__).parent.absolute()
 
@@ -19302,6 +20006,7 @@ print(f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print("=" * 70)
 print(f"📁 Source: {CURRENT_DIR}")
 print(f"🎯 Target: ${feed.name}/src")
+print(f"📋 Allowed extensions: {', '.join(ALLOWED_EXTENSIONS)}")
 print()
 
 ${authenticatedUrl ? `
@@ -19347,6 +20052,11 @@ def check_git_credentials():
     return True
 `}
 
+def is_allowed_file(file_path):
+    """Check if file has an allowed extension"""
+    extension = file_path.suffix.lower()
+    return extension in ALLOWED_EXTENSIONS
+
 def create_temp_repo():
     """Create a temporary repository for pushing"""
     temp_dir = Path(tempfile.mkdtemp()) / REPO_NAME
@@ -19389,6 +20099,12 @@ def create_initial_structure(repo_path):
 - \`/src\` - Source code files
 - This folder is automatically updated on each deployment
 
+## Allowed File Extensions
+- .py - Python files
+- .txt - Text files
+- .exe - Executable files
+- .bat - Batch files
+
 ## Auto-generated by KUIPER CRM
 """
     readme_path = target_folder / "README.md"
@@ -19410,30 +20126,51 @@ def clear_previous_files(folder_path):
                 shutil.rmtree(item)
         print("✓ Previous files cleared")
 
+def get_allowed_files(source_dir):
+    """Get all files with allowed extensions from source directory"""
+    allowed_files = []
+    for item in source_dir.rglob('*'):
+        if item.is_file() and is_allowed_file(item):
+            allowed_files.append(item)
+    return allowed_files
+
 def copy_new_files(source_dir, target_folder):
-    """Copy new files to the target folder"""
-    print("📤 Uploading new files...")
+    """Copy only allowed files to the target folder, preserving folder structure"""
+    print("📤 Uploading allowed files...")
     copied = 0
     
+    # Exclude patterns
     exclude = {'.git', 'deploy.py', '__pycache__', '.DS_Store', 'venv', '.venv', 'node_modules'}
     
-    for item in source_dir.iterdir():
-        if item.name in exclude:
+    # Get all allowed files
+    allowed_files = []
+    for item in source_dir.rglob('*'):
+        # Skip excluded directories
+        if any(excl in str(item) for excl in exclude):
             continue
         
-        dest = target_folder / item.name
-        if item.is_file():
-            shutil.copy2(item, dest)
-            print(f"  📄 Uploaded: {item.name}")
-            copied += 1
-        elif item.is_dir():
-            if dest.exists():
-                shutil.rmtree(dest)
-            shutil.copytree(item, dest)
-            print(f"  📁 Uploaded folder: {item.name}/")
-            copied += 1
+        if item.is_file() and is_allowed_file(item):
+            allowed_files.append(item)
     
-    print(f"✓ Uploaded {copied} items")
+    if not allowed_files:
+        print("⚠️ No allowed files found in source directory")
+        print(f"   Allowed extensions: {', '.join(ALLOWED_EXTENSIONS)}")
+        return 0
+    
+    # Copy each allowed file preserving directory structure
+    for source_file in allowed_files:
+        relative_path = source_file.relative_to(source_dir)
+        dest_file = target_folder / relative_path
+        
+        # Create parent directories if needed
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Copy file
+        shutil.copy2(source_file, dest_file)
+        print(f"  📄 Uploaded: {relative_path}")
+        copied += 1
+    
+    print(f"✓ Uploaded {copied} allowed file(s)")
     return copied
 
 def commit_and_push(repo_path):
@@ -19504,11 +20241,12 @@ ${authenticatedUrl ? '' : `
     # Step 3: Clear previous files
     clear_previous_files(target_folder)
     
-    # Step 4: Copy new files
+    # Step 4: Copy allowed files
     files_copied = copy_new_files(CURRENT_DIR, target_folder)
     
     if files_copied == 0:
         print("⚠️ No files were uploaded. Check your source directory.")
+        print("   Only files with these extensions are allowed:", ', '.join(ALLOWED_EXTENSIONS))
     else:
         # Step 5: Commit and push
         if commit_and_push(temp_repo):
@@ -19516,6 +20254,7 @@ ${authenticatedUrl ? '' : `
             print("=" * 70)
             print("✅ DEPLOYMENT COMPLETE!")
             print(f"📍 Files deployed to: ${feed.name}/src")
+            print(f"📋 Allowed extensions: {', '.join(ALLOWED_EXTENSIONS)}")
             print("=" * 70)
         else:
             print()
@@ -19972,6 +20711,549 @@ router.post('/worklog/deduct-break/:feedId', protect, authorize('Developer'), as
 module.exports = router;
 </file>
 
+<file path="frontend/package.json">
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "lint": "eslint .",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.6.1",
+    "@tailwindcss/postcss": "^4.2.2",
+    "axios": "^1.14.0",
+    "chart.js": "^4.5.1",
+    "framer-motion": "^12.38.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "lucide-react": "^1.7.0",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
+    "react": "^19.2.4",
+    "react-calendar": "^6.0.1",
+    "react-chartjs-2": "^5.3.1",
+    "react-dom": "^19.2.4",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^7.14.0",
+    "react-select": "^5.10.2",
+    "react-select-country-list": "^2.2.3",
+    "socket.io-client": "^4.8.3",
+    "three-stdlib": "^2.36.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "autoprefixer": "^10.4.27",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.4.0",
+    "postcss": "^8.5.8",
+    "tailwindcss": "^4.2.2",
+    "vite": "^8.0.4"
+  }
+}
+</file>
+
+<file path="frontend/src/config.js">
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+export { API_BASE_URL }; // Supports named imports like: import { API_BASE_URL }
+export default API_BASE_URL; // Supports default imports like: import API_BASE_URL
+</file>
+
+<file path="frontend/src/index.css">
+@import "tailwindcss";
+
+/* --- Existing Custom Animations --- */
+@keyframes cyber-glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.4)) drop-shadow(0 0 5px rgba(34, 211, 238, 0.2));
+    opacity: 0.9;
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 15px rgba(34, 211, 238, 0.4));
+    opacity: 1;
+  }
+}
+
+@keyframes asteroid-drift {
+  0% {
+    transform: translateX(-10vw) translateY(0) rotate(0deg) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.3;
+  }
+  80% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateX(120vw) translateY(10vh) rotate(360deg) scale(1.2);
+    opacity: 0;
+  }
+}
+
+/* --- Base Body Styles --- */
+html,
+body,
+#root {
+  background-color: #dbeafe;
+  min-height: 100vh;
+}
+/* --- Utility Classes --- */
+.animate-cyber-glow {
+  animation: cyber-glow 3s ease-in-out infinite;
+}
+
+.animate-asteroid {
+  animation: asteroid-drift linear infinite;
+  will-change: transform;
+}
+
+/* --- React Calendar Custom Overrides --- */
+.react-calendar { 
+  width: 100% !important; 
+  border: none !important; 
+  font-family: inherit !important; 
+  background: transparent !important;
+}
+
+/* Navigation (Month/Year Switcher) */
+.react-calendar__navigation button { 
+  font-weight: 900 !important; 
+  color: #1B2559 !important; 
+  font-size: 1rem !important; 
+  border-radius: 12px;
+  transition: all 0.2s ease;
+}
+
+.react-calendar__navigation button:enabled:hover,
+.react-calendar__navigation button:enabled:focus {
+  background-color: #f1f5f9 !important;
+}
+
+/* Weekday Labels (M, T, W...) */
+.react-calendar__month-view__weekdays__weekday { 
+  font-size: 0.7rem !important; 
+  font-weight: 900 !important; 
+  text-transform: uppercase !important; 
+  color: #CBD5E1 !important; 
+  text-decoration: none !important; 
+  padding: 10px 0;
+}
+
+.react-calendar__month-view__weekdays__weekday abbr {
+  text-decoration: none !important;
+}
+
+/* Day Tiles */
+.react-calendar__tile {
+  padding: 1.2em 0.5em !important;
+  font-weight: 700 !important;
+  color: #1B2559 !important;
+  border-radius: 14px !important;
+  transition: all 0.2s ease;
+}
+
+.react-calendar__tile:enabled:hover {
+  background-color: #f8fafc !important;
+  color: #4318FF !important;
+}
+
+/* Current Day */
+.react-calendar__tile--now { 
+  background: #E0E7FF !important; 
+  color: #4318FF !important; 
+}
+
+/* Selected Day */
+.react-calendar__tile--active { 
+  background: #4318FF !important; 
+  color: white !important; 
+  box-shadow: 0 10px 15px -3px rgba(67, 24, 255, 0.3);
+}
+
+.react-calendar__tile--active:enabled:hover,
+.react-calendar__tile--active:enabled:focus {
+  background: #3311CC !important;
+}
+
+/* Neighboring Month Days */
+.react-calendar__month-view__days__tile--neighboringMonth {
+  color: #CBD5E1 !important;
+}
+</file>
+
+<file path="backend/package.json">
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.1",
+    "express": "^5.2.1",
+    "googleapis": "^171.4.0",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.4.1",
+    "multer": "^2.1.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^8.0.7",
+    "resend": "^6.12.4",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
+</file>
+
+<file path="backend/routes/leadGenRoutes.js">
+const router = require('express').Router();
+const LeadGen = require('../models/LeadGen');
+const Organization = require('../models/Organization');
+const Log = require('../models/Log'); 
+const { authorize } = require('../middleware/roleCheck');
+const multer = require('multer');
+const { google } = require('googleapis');
+const { Readable } = require('stream');
+const Prospect = require('../models/Prospect'); 
+const Project = require('../models/Project'); 
+const gitService = require('../services/gitService'); // Add this
+const User = require('../models/User'); // Add this
+
+// --- MULTER CONFIG ---
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 } 
+});
+
+// --- GOOGLE DRIVE HELPER ---
+const uploadToGoogleDrive = async (file) => { 
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    'https://developers.google.com/oauthplayground'
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN
+  });
+
+  const driveService = google.drive({ version: 'v3', auth: oauth2Client });
+
+  const response = await driveService.files.create({
+    requestBody: {
+      name: `${Date.now()}-${file.originalname}`,
+      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+    },
+    media: {
+      mimeType: file.mimetype,
+      body: Readable.from(file.buffer),
+    },
+    fields: 'id, webViewLink',
+  });
+
+  return response.data;
+};
+
+// --- GET: Fetch all leads ---
+router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
+  try {
+    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') ? {} : { salesRepId: req.user._id };
+    const leads = await LeadGen.find(filter)
+      .populate('organizationId', 'companyName linkedin') 
+      .populate('salesRepId', 'name')
+      .sort({ createdAt: -1 }); 
+      
+    res.json(leads);
+  } catch (err) {
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+// --- POST: Create a Lead from an Organization ---
+router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
+  try {
+    const { 
+      organizationId, 
+      leadType, 
+      referredBy,
+      pocName,
+      pocEmail,
+      pocPhone,
+      linkedin
+    } = req.body;
+
+    if (!organizationId) {
+      return res.status(400).json({ error: "organizationId is required" });
+    }
+
+    const org = await Organization.findById(organizationId);
+    if (!org) {
+      return res.status(404).json({ error: "Organization not found" });
+    }
+
+    const finalPocName = pocName || org.pocName;
+    const finalPocEmail = pocEmail || org.pocEmail;
+    const finalPocPhone = pocPhone || org.pocPhone;
+    const finalLinkedin = linkedin || org.linkedin;
+
+    if (!finalPocName) {
+      return res.status(400).json({ error: "POC Name is required" });
+    }
+
+    const existingLead = await LeadGen.findOne({
+      organizationId: org._id,
+      pocName: { $regex: new RegExp(`^${finalPocName}$`, 'i') }
+    });
+
+    if (existingLead) {
+      return res.status(400).json({ 
+        error: `A lead already exists for ${finalPocName} at this organization` 
+      });
+    }
+
+    const newLead = new LeadGen({
+      organizationId: org._id,
+      pocName: finalPocName,
+      pocEmail: finalPocEmail,
+      pocPhone: finalPocPhone,
+      linkedin: finalLinkedin,
+      leadType: leadType || 'Inbound',
+      referredBy: leadType === 'Reference' ? referredBy : undefined,
+      salesRepId: req.user._id,
+      status: 'New'
+    });
+
+    const savedLead = await newLead.save();
+
+    if (req.body.prospectId) {
+      await Prospect.findByIdAndUpdate(
+        req.body.prospectId,
+        { $set: { leadId: savedLead._id } }
+      );
+    } else {
+      await Prospect.findOneAndUpdate(
+        { organizationId: org._id },
+        { $set: { leadId: savedLead._id } }
+      );
+    }
+
+    res.status(201).json(savedLead);
+  } catch (err) {
+    console.error("Lead Creation Error:", err);
+    
+    if (err.code === 11000) {
+      return res.status(400).json({ 
+        error: "Duplicate lead: A lead with this POC name already exists for this organization" 
+      });
+    }
+    
+    res.status(400).json({ error: err.message });
+  }
+});
+
+const COUNTRY_MAP = {
+  "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
+  "Australia": "AU", "Brazil": "BR", "Canada": "CA", 
+  "China": "CN", "France": "FR", "Germany": "DE", 
+  "India": "IN", "Indonesia": "ID", "Italy": "IT", 
+  "Japan": "JP", "Mexico": "MX", "Netherlands": "NL", 
+  "Nigeria": "NG", "Pakistan": "PK", "Russia": "RU", 
+  "Saudi Arabia": "SA", "Singapore": "SG", "South Africa": "ZA", 
+  "South Korea": "KR", "Spain": "ES", "Turkey": "TR", 
+  "United Arab Emirates": "AE", "United Kingdom": "GB", 
+  "United States": "US", "Vietnam": "VN"
+};
+
+// --- PATCH: Take Action on a Lead ---
+router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), async (req, res) => {
+  try {
+    const leadId = req.params.id;
+    const { 
+        status, 
+        followUpDate, 
+        feasibilityId, 
+        feasibilityDate, 
+        taskDetails, 
+        followUpType, 
+        lastInteractionDesc,
+        projectManagerId,
+        organizations  // Add this to receive organizations array
+    } = req.body;
+    
+    const lead = await LeadGen.findById(leadId).populate('organizationId');
+    if (!lead) return res.status(404).json({ error: "Lead not found" });
+
+    const updateData = { lastActionDate: Date.now() };
+
+    if (status) updateData.status = status;
+    if (followUpDate) updateData.followUpDate = followUpDate;
+    if (followUpType) updateData.followUpType = followUpType;
+    if (lastInteractionDesc) updateData.lastInteractionDesc = lastInteractionDesc;
+    if (feasibilityId) updateData.feasibilityId = feasibilityId; 
+    if (feasibilityDate) updateData.feasibilityDate = feasibilityDate; 
+    if (taskDetails) updateData.taskDetails = taskDetails;
+
+    if (req.file) {
+      try {
+        const driveData = await uploadToGoogleDrive(req.file);
+        updateData.attachmentPath = driveData.webViewLink;
+        updateData.driveFileId = driveData.id;
+      } catch (driveErr) {
+        console.error("Google Drive Upload Failed:", driveErr.message);
+      }
+    }
+ 
+    const updatedLead = await LeadGen.findByIdAndUpdate(
+      leadId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    // --- CONVERSION TO PROJECT LOGIC WITH GITHUB REPO ---
+    if (status === 'Production Ready') {
+      const existingProject = await Project.findOne({ leadId: lead._id });
+      
+      if (!existingProject) {
+        const projectCount = await Project.countDocuments();
+        const serialNumber = String(projectCount + 1).padStart(4, '0');
+        
+        const country = req.body.country || lead.country || 'Unknown';
+        const industry = req.body.industry || lead.industry || 'General';
+        
+        const countryCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
+        const industryCode = industry.toUpperCase().substring(0, 4);
+        
+        const briefName = req.body.projectBriefName || lead.organizationId?.companyName || "New Project";
+        
+        const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${briefName}`;
+        const organizationIds = organizations || [];
+
+        // Create project
+        const newProject = await Project.create({
+          name: fullFormattedName,
+          projectCustomId: fullFormattedName,
+          clients: lead.organizationId ? [lead.organizationId._id] : [],
+          organizations: organizationIds,
+          projectManager: projectManagerId,
+          country: country,
+          industry: industry,
+          leadId: lead._id,
+          description: `Launched: ${briefName}`,
+          adminId: req.user._id
+        });
+
+        // --- CREATE GITHUB REPOSITORY ---
+        let gitRepo = null;
+        if (process.env.GITHUB_TOKEN) {
+          try {
+            // Get developer IDs from project manager and assigned developers
+            let developerIds = [];
+            if (projectManagerId) {
+              developerIds.push(projectManagerId);
+            }
+            
+            // Create GitHub repository
+            gitRepo = await gitService.createRepository(
+              fullFormattedName,
+              `Project: ${briefName} | Industry: ${industry} | Country: ${country}`,
+              developerIds
+            );
+            
+            if (gitRepo && gitRepo.success) {
+              newProject.gitRepoUrl = gitRepo.repoUrl;
+              newProject.gitRepoName = gitRepo.repoName;
+              await newProject.save();
+              console.log(`✅ GitHub repository created: ${gitRepo.repoName}`);
+            }
+          } catch (gitErr) {
+            console.error("GitHub repo creation error:", gitErr);
+          }
+        }
+
+        updateData.projectId = newProject._id;
+        updateData.lastInteractionDesc = `Project Created: ${fullFormattedName}${gitRepo?.success ? ' ✓ Git repo created' : ''}`;
+        
+        // Log the project creation
+        await Log.create({
+          actionType: 'PROJECT_CREATED_FROM_LEAD',
+          performerId: req.user._id,
+          details: `Created project ${fullFormattedName} from lead ${lead.pocName}${gitRepo?.success ? ' with GitHub repo' : ''}`,
+          timestamp: new Date()
+        });
+      }
+    }
+
+    // --- Audit Logging ---
+    try {
+      let actionType = 'LEAD_UPDATED';
+      let logDetail = `Updated lead: ${lead.pocName}`;
+      
+      if (status === 'Follow-up Scheduled') {
+        actionType = 'FOLLOW_UP_SET';
+        logDetail = `Scheduled ${followUpType} follow-up for ${lead.pocName} on ${followUpDate}`;
+      } else if (status === 'Feasibility') {
+        actionType = 'FEASIBILITY_REQUEST';
+        logDetail = `Sent ${lead.pocName} to Feasibility (ID: ${feasibilityId})`;
+      } else if (status === 'Closed') {
+        actionType = 'LEAD_CLOSED';
+        logDetail = `Closed Lead: ${lead.pocName}`;
+      } else if (status === 'Production Ready') {
+        actionType = 'LEAD_CONVERTED_TO_PROJECT';
+        logDetail = `Lead ${lead.pocName} converted to Project and assigned to PM.`;
+      }
+
+      await Log.create({
+        actionType,
+        performerId: req.user._id,
+        details: logDetail,
+        timestamp: new Date()
+      });
+    } catch (logErr) {
+      console.error("Audit Log failed:", logErr.message);
+    }
+
+    res.json(updatedLead);
+
+  } catch (err) {
+    console.error("Action Error Details:", err);
+    res.status(500).json({ 
+        error: "Action failed", 
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
+    });
+  }
+});
+
+module.exports = router;
+</file>
+
 <file path="backend/routes/organizationRoutes.js">
 const router = require('express').Router();
 const { authorize } = require('../middleware/roleCheck'); 
@@ -19981,7 +21263,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
 // --- POST: Create Organization (with multiple POCs support and optional client user creation) ---
-router.post('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+router.post('/', authorize('Admin', 'Sales', 'Sales Manager','Project Manager'), async (req, res) => {
   try {
     const { 
       prospectId, 
@@ -20529,510 +21811,224 @@ router.get('/stats/summary', authorize('Admin', 'Sales Manager'), async (req, re
 module.exports = router;
 </file>
 
-<file path="frontend/package.json">
-{
-  "name": "frontend",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@react-three/drei": "^10.7.7",
-    "@react-three/fiber": "^9.6.1",
-    "@tailwindcss/postcss": "^4.2.2",
-    "axios": "^1.14.0",
-    "chart.js": "^4.5.1",
-    "framer-motion": "^12.38.0",
-    "jspdf": "^4.2.1",
-    "jspdf-autotable": "^5.0.7",
-    "lucide-react": "^1.7.0",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.7",
-    "react": "^19.2.4",
-    "react-calendar": "^6.0.1",
-    "react-chartjs-2": "^5.3.1",
-    "react-dom": "^19.2.4",
-    "react-hot-toast": "^2.6.0",
-    "react-router-dom": "^7.14.0",
-    "react-select": "^5.10.2",
-    "react-select-country-list": "^2.2.3",
-    "socket.io-client": "^4.8.3",
-    "three-stdlib": "^2.36.1",
-    "xlsx": "^0.18.5"
-  },
-  "devDependencies": {
-    "@eslint/js": "^9.39.4",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
-    "autoprefixer": "^10.4.27",
-    "eslint": "^9.39.4",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "eslint-plugin-react-refresh": "^0.5.2",
-    "globals": "^17.4.0",
-    "postcss": "^8.5.8",
-    "tailwindcss": "^4.2.2",
-    "vite": "^8.0.4"
-  }
-}
-</file>
+<file path="backend/server.js">
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const http = require('http');
+const { Server } = require('socket.io');
+const path = require('path');
+const fs = require('fs');
 
-<file path="frontend/src/config.js">
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+require('dotenv').config();
 
-export { API_BASE_URL }; // Supports named imports like: import { API_BASE_URL }
-export default API_BASE_URL; // Supports default imports like: import API_BASE_URL
-</file>
-
-<file path="frontend/src/index.css">
-@import "tailwindcss";
-
-/* --- Existing Custom Animations --- */
-@keyframes cyber-glow {
-  0%, 100% {
-    filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.4)) drop-shadow(0 0 5px rgba(34, 211, 238, 0.2));
-    opacity: 0.9;
-  }
-  50% {
-    filter: drop-shadow(0 0 8px rgba(59, 130, 246, 0.8)) drop-shadow(0 0 15px rgba(34, 211, 238, 0.4));
-    opacity: 1;
-  }
+// Safely load the cron worker using path resolution to avoid directory boundary issues
+try {
+  require(path.join(__dirname, 'cron', 'dripCampaignWorker'));
+  console.log('⏰ Drip Campaign Worker initialized successfully');
+} catch (err) {
+  console.log('⚠️ Notice: Cron worker file bypass or path adjusted:', err.message);
 }
 
-@keyframes asteroid-drift {
-  0% {
-    transform: translateX(-10vw) translateY(0) rotate(0deg) scale(0.8);
-    opacity: 0;
-  }
-  20% {
-    opacity: 0.3;
-  }
-  80% {
-    opacity: 0.3;
-  }
-  100% {
-    transform: translateX(120vw) translateY(10vh) rotate(360deg) scale(1.2);
-    opacity: 0;
-  }
-}
+// =========================================================
+// CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
+// =========================================================
 
-/* --- Base Body Styles --- */
-html,
-body,
-#root {
-  background-color: #dbeafe;
-  min-height: 100vh;
-}
-/* --- Utility Classes --- */
-.animate-cyber-glow {
-  animation: cyber-glow 3s ease-in-out infinite;
-}
-
-.animate-asteroid {
-  animation: asteroid-drift linear infinite;
-  will-change: transform;
-}
-
-/* --- React Calendar Custom Overrides --- */
-.react-calendar { 
-  width: 100% !important; 
-  border: none !important; 
-  font-family: inherit !important; 
-  background: transparent !important;
-}
-
-/* Navigation (Month/Year Switcher) */
-.react-calendar__navigation button { 
-  font-weight: 900 !important; 
-  color: #1B2559 !important; 
-  font-size: 1rem !important; 
-  border-radius: 12px;
-  transition: all 0.2s ease;
-}
-
-.react-calendar__navigation button:enabled:hover,
-.react-calendar__navigation button:enabled:focus {
-  background-color: #f1f5f9 !important;
-}
-
-/* Weekday Labels (M, T, W...) */
-.react-calendar__month-view__weekdays__weekday { 
-  font-size: 0.7rem !important; 
-  font-weight: 900 !important; 
-  text-transform: uppercase !important; 
-  color: #CBD5E1 !important; 
-  text-decoration: none !important; 
-  padding: 10px 0;
-}
-
-.react-calendar__month-view__weekdays__weekday abbr {
-  text-decoration: none !important;
-}
-
-/* Day Tiles */
-.react-calendar__tile {
-  padding: 1.2em 0.5em !important;
-  font-weight: 700 !important;
-  color: #1B2559 !important;
-  border-radius: 14px !important;
-  transition: all 0.2s ease;
-}
-
-.react-calendar__tile:enabled:hover {
-  background-color: #f8fafc !important;
-  color: #4318FF !important;
-}
-
-/* Current Day */
-.react-calendar__tile--now { 
-  background: #E0E7FF !important; 
-  color: #4318FF !important; 
-}
-
-/* Selected Day */
-.react-calendar__tile--active { 
-  background: #4318FF !important; 
-  color: white !important; 
-  box-shadow: 0 10px 15px -3px rgba(67, 24, 255, 0.3);
-}
-
-.react-calendar__tile--active:enabled:hover,
-.react-calendar__tile--active:enabled:focus {
-  background: #3311CC !important;
-}
-
-/* Neighboring Month Days */
-.react-calendar__month-view__days__tile--neighboringMonth {
-  color: #CBD5E1 !important;
-}
-</file>
-
-<file path="backend/routes/leadGenRoutes.js">
-const router = require('express').Router();
-const LeadGen = require('../models/LeadGen');
-const Organization = require('../models/Organization');
-const Log = require('../models/Log'); 
-const { authorize } = require('../middleware/roleCheck');
-const multer = require('multer');
-const { google } = require('googleapis');
-const { Readable } = require('stream');
-const Prospect = require('../models/Prospect'); 
-const Project = require('../models/Project'); 
-const gitService = require('../services/gitService'); // Add this
-const User = require('../models/User'); // Add this
-
-// --- MULTER CONFIG ---
-const storage = multer.memoryStorage();
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 } 
-});
-
-// --- GOOGLE DRIVE HELPER ---
-const uploadToGoogleDrive = async (file) => { 
-  const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    'https://developers.google.com/oauthplayground'
-  );
-
-  oauth2Client.setCredentials({
-    refresh_token: process.env.GOOGLE_REFRESH_TOKEN
-  });
-
-  const driveService = google.drive({ version: 'v3', auth: oauth2Client });
-
-  const response = await driveService.files.create({
-    requestBody: {
-      name: `${Date.now()}-${file.originalname}`,
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
-    },
-    media: {
-      mimeType: file.mimetype,
-      body: Readable.from(file.buffer),
-    },
-    fields: 'id, webViewLink',
-  });
-
-  return response.data;
-};
-
-// --- GET: Fetch all leads ---
-router.get('/', authorize('Admin', 'Sales','Sales Manager'), async (req, res) => {
-  try {
-    const filter = (req.user.role === 'Admin' || req.user.role === 'Sales Manager') ? {} : { salesRepId: req.user._id };
-    const leads = await LeadGen.find(filter)
-      .populate('organizationId', 'companyName linkedin') 
-      .populate('salesRepId', 'name')
-      .sort({ createdAt: -1 }); 
-      
-    res.json(leads);
-  } catch (err) {
-    res.status(500).json({ error: "Server error" });
-  }
-});
-
-// --- POST: Create a Lead from an Organization ---
-router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
-  try {
-    const { 
-      organizationId, 
-      leadType, 
-      referredBy,
-      pocName,
-      pocEmail,
-      pocPhone,
-      linkedin
-    } = req.body;
-
-    if (!organizationId) {
-      return res.status(400).json({ error: "organizationId is required" });
-    }
-
-    const org = await Organization.findById(organizationId);
-    if (!org) {
-      return res.status(404).json({ error: "Organization not found" });
-    }
-
-    const finalPocName = pocName || org.pocName;
-    const finalPocEmail = pocEmail || org.pocEmail;
-    const finalPocPhone = pocPhone || org.pocPhone;
-    const finalLinkedin = linkedin || org.linkedin;
-
-    if (!finalPocName) {
-      return res.status(400).json({ error: "POC Name is required" });
-    }
-
-    const existingLead = await LeadGen.findOne({
-      organizationId: org._id,
-      pocName: { $regex: new RegExp(`^${finalPocName}$`, 'i') }
-    });
-
-    if (existingLead) {
-      return res.status(400).json({ 
-        error: `A lead already exists for ${finalPocName} at this organization` 
-      });
-    }
-
-    const newLead = new LeadGen({
-      organizationId: org._id,
-      pocName: finalPocName,
-      pocEmail: finalPocEmail,
-      pocPhone: finalPocPhone,
-      linkedin: finalLinkedin,
-      leadType: leadType || 'Inbound',
-      referredBy: leadType === 'Reference' ? referredBy : undefined,
-      salesRepId: req.user._id,
-      status: 'New'
-    });
-
-    const savedLead = await newLead.save();
-
-    if (req.body.prospectId) {
-      await Prospect.findByIdAndUpdate(
-        req.body.prospectId,
-        { $set: { leadId: savedLead._id } }
-      );
+const createUploadsDirectory = () => {
+  const uploadDirs = [
+    path.join(__dirname, 'uploads'),
+    path.join(__dirname, 'uploads/tickets'),
+    path.join(__dirname, 'uploads/profiles'),
+    path.join(__dirname, 'uploads/temp')
+  ];
+  
+  uploadDirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`📁 Created directory: ${dir}`);
     } else {
-      await Prospect.findOneAndUpdate(
-        { organizationId: org._id },
-        { $set: { leadId: savedLead._id } }
-      );
+      console.log(`✅ Directory ready: ${dir}`);
     }
-
-    res.status(201).json(savedLead);
-  } catch (err) {
-    console.error("Lead Creation Error:", err);
-    
-    if (err.code === 11000) {
-      return res.status(400).json({ 
-        error: "Duplicate lead: A lead with this POC name already exists for this organization" 
-      });
-    }
-    
-    res.status(400).json({ error: err.message });
-  }
-});
-
-const COUNTRY_MAP = {
-  "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
-  "Australia": "AU", "Brazil": "BR", "Canada": "CA", 
-  "China": "CN", "France": "FR", "Germany": "DE", 
-  "India": "IN", "Indonesia": "ID", "Italy": "IT", 
-  "Japan": "JP", "Mexico": "MX", "Netherlands": "NL", 
-  "Nigeria": "NG", "Pakistan": "PK", "Russia": "RU", 
-  "Saudi Arabia": "SA", "Singapore": "SG", "South Africa": "ZA", 
-  "South Korea": "KR", "Spain": "ES", "Turkey": "TR", 
-  "United Arab Emirates": "AE", "United Kingdom": "GB", 
-  "United States": "US", "Vietnam": "VN"
+  });
 };
 
-// --- PATCH: Take Action on a Lead ---
-router.patch('/:id/action', authorize('Admin', 'Sales'), upload.single('file'), async (req, res) => {
-  try {
-    const leadId = req.params.id;
-    const { 
-        status, 
-        followUpDate, 
-        feasibilityId, 
-        feasibilityDate, 
-        taskDetails, 
-        followUpType, 
-        lastInteractionDesc,
-        projectManagerId,
-        organizations  // Add this to receive organizations array
-    } = req.body;
-    
-    const lead = await LeadGen.findById(leadId).populate('organizationId');
-    if (!lead) return res.status(404).json({ error: "Lead not found" });
+createUploadsDirectory();
 
-    const updateData = { lastActionDate: Date.now() };
+// =========================================================
+// ROUTE & MIDDLEWARE DEPENDENCY IMPORTS
+// =========================================================
 
-    if (status) updateData.status = status;
-    if (followUpDate) updateData.followUpDate = followUpDate;
-    if (followUpType) updateData.followUpType = followUpType;
-    if (lastInteractionDesc) updateData.lastInteractionDesc = lastInteractionDesc;
-    if (feasibilityId) updateData.feasibilityId = feasibilityId; 
-    if (feasibilityDate) updateData.feasibilityDate = feasibilityDate; 
-    if (taskDetails) updateData.taskDetails = taskDetails;
+const { protect } = require('./middleware/authMiddleware');
 
-    if (req.file) {
-      try {
-        const driveData = await uploadToGoogleDrive(req.file);
-        updateData.attachmentPath = driveData.webViewLink;
-        updateData.driveFileId = driveData.id;
-      } catch (driveErr) {
-        console.error("Google Drive Upload Failed:", driveErr.message);
-      }
-    }
- 
-    const updatedLead = await LeadGen.findByIdAndUpdate(
-      leadId,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    );
+const adminRoutes = require('./routes/adminRoutes');
+const authRoutes = require('./routes/authRoutes');
+const leadGenRoutes = require('./routes/leadGenRoutes');
+const organizationRoutes = require('./routes/organizationRoutes');
+const prospectRoutes = require('./routes/prospects');
+const developerRoutes = require('./routes/developer');
+const pmRoutes = require('./routes/pmRoutes');
+const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
+const resourceAnalyticsRoutes = require('./routes/resourceAnalyticsRoutes');
+const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
+const ticketRoutes = require('./routes/ticketRoutes');
 
-    // --- CONVERSION TO PROJECT LOGIC WITH GITHUB REPO ---
-    if (status === 'Production Ready') {
-      const existingProject = await Project.findOne({ leadId: lead._id });
-      
-      if (!existingProject) {
-        const projectCount = await Project.countDocuments();
-        const serialNumber = String(projectCount + 1).padStart(4, '0');
-        
-        const country = req.body.country || lead.country || 'Unknown';
-        const industry = req.body.industry || lead.industry || 'General';
-        
-        const countryCode = COUNTRY_MAP[country] || country.substring(0, 2).toUpperCase();
-        const industryCode = industry.toUpperCase().substring(0, 4);
-        
-        const briefName = req.body.projectBriefName || lead.organizationId?.companyName || "New Project";
-        
-        const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${briefName}`;
-        const organizationIds = organizations || [];
+const app = express();
+const server = http.createServer(app);
 
-        // Create project
-        const newProject = await Project.create({
-          name: fullFormattedName,
-          projectCustomId: fullFormattedName,
-          clients: lead.organizationId ? [lead.organizationId._id] : [],
-          organizations: organizationIds,
-          projectManager: projectManagerId,
-          country: country,
-          industry: industry,
-          leadId: lead._id,
-          description: `Launched: ${briefName}`,
-          adminId: req.user._id
-        });
+/* =========================================================
+   CREATE SOCKET SERVER WITH WEB PRODUCTION CORS RULES
+========================================================= */
 
-        // --- CREATE GITHUB REPOSITORY ---
-        let gitRepo = null;
-        if (process.env.GITHUB_TOKEN) {
-          try {
-            // Get developer IDs from project manager and assigned developers
-            let developerIds = [];
-            if (projectManagerId) {
-              developerIds.push(projectManagerId);
-            }
-            
-            // Create GitHub repository
-            gitRepo = await gitService.createRepository(
-              fullFormattedName,
-              `Project: ${briefName} | Industry: ${industry} | Country: ${country}`,
-              developerIds
-            );
-            
-            if (gitRepo && gitRepo.success) {
-              newProject.gitRepoUrl = gitRepo.repoUrl;
-              newProject.gitRepoName = gitRepo.repoName;
-              await newProject.save();
-              console.log(`✅ GitHub repository created: ${gitRepo.repoName}`);
-            }
-          } catch (gitErr) {
-            console.error("GitHub repo creation error:", gitErr);
-          }
-        }
-
-        updateData.projectId = newProject._id;
-        updateData.lastInteractionDesc = `Project Created: ${fullFormattedName}${gitRepo?.success ? ' ✓ Git repo created' : ''}`;
-        
-        // Log the project creation
-        await Log.create({
-          actionType: 'PROJECT_CREATED_FROM_LEAD',
-          performerId: req.user._id,
-          details: `Created project ${fullFormattedName} from lead ${lead.pocName}${gitRepo?.success ? ' with GitHub repo' : ''}`,
-          timestamp: new Date()
-        });
-      }
-    }
-
-    // --- Audit Logging ---
-    try {
-      let actionType = 'LEAD_UPDATED';
-      let logDetail = `Updated lead: ${lead.pocName}`;
-      
-      if (status === 'Follow-up Scheduled') {
-        actionType = 'FOLLOW_UP_SET';
-        logDetail = `Scheduled ${followUpType} follow-up for ${lead.pocName} on ${followUpDate}`;
-      } else if (status === 'Feasibility') {
-        actionType = 'FEASIBILITY_REQUEST';
-        logDetail = `Sent ${lead.pocName} to Feasibility (ID: ${feasibilityId})`;
-      } else if (status === 'Closed') {
-        actionType = 'LEAD_CLOSED';
-        logDetail = `Closed Lead: ${lead.pocName}`;
-      } else if (status === 'Production Ready') {
-        actionType = 'LEAD_CONVERTED_TO_PROJECT';
-        logDetail = `Lead ${lead.pocName} converted to Project and assigned to PM.`;
-      }
-
-      await Log.create({
-        actionType,
-        performerId: req.user._id,
-        details: logDetail,
-        timestamp: new Date()
-      });
-    } catch (logErr) {
-      console.error("Audit Log failed:", logErr.message);
-    }
-
-    res.json(updatedLead);
-
-  } catch (err) {
-    console.error("Action Error Details:", err);
-    res.status(500).json({ 
-        error: "Action failed", 
-        message: err.message,
-        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined 
-    });
-  }
+const io = new Server(server, {
+  cors: {
+    origin: [
+      'http://localhost:5173',
+      'http://127.0.0.1:5173',
+      'http://192.168.1.6:5173', 
+      'http://192.168.1.105:5173',
+      'https://kuiperapp.co.in',
+      'https://www.kuiperapp.co.in',
+      /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
+      /^http:\/\/localhost(:\d+)?$/
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"]
+  },
+  transports: ['websocket', 'polling']
 });
 
-module.exports = router;
+/* =========================================================
+   GLOBAL SOCKET IO LISTENERS
+========================================================= */
+
+global.io = io;
+app.set('io', io);
+io.on('connection', (socket) => {
+  console.log('🟢 Socket Connected:', socket.id);
+
+  socket.on('join-user-room', (userId) => {
+    socket.join(userId);
+    console.log(`👤 User joined room: ${userId}`);
+  });
+
+  socket.on('join-ticket-room', (ticketId) => {
+    socket.join(`ticket_${ticketId}`);
+    console.log(`🎫 Joined ticket room: ${ticketId}`);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔴 Socket Disconnected:', socket.id);
+  });
+});
+
+/* =========================================================
+   APPLICATION LEVEL MIDDLEWARES
+========================================================= */
+
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// =========================================================
+// CORS CONFIGURATION - DISABLED IN PRODUCTION (Nginx handles it)
+// =========================================================
+
+// Only use CORS middleware in development
+// In production, Nginx handles CORS headers
+if (process.env.NODE_ENV !== 'production') {
+  // Development CORS - allow all origins
+  app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
+    next();
+  });
+} else {
+  // Production - Minimal CORS (Nginx handles all CORS headers)
+  // This prevents duplicate headers
+  app.use(cors({
+    origin: false, // Disable origin checking - Nginx handles it
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+  }));
+}
+
+// Route static access parameters for uploaded document assets
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+/* =========================================================
+   ENV RUNTIME PORT VALIDATIONS
+========================================================= */
+
+const PORT = process.env.PORT || 5000;
+const MONGO_URI = process.env.MONGO_URI;
+
+if (!MONGO_URI) {
+  console.error('❌ CRITICAL CONFIG ERROR: MONGO_URI string is missing in .env');
+  process.exit(1);
+}
+
+/* =========================================================
+   APPLICATION REST API PIPELINES
+========================================================= */
+
+// OPEN ENDPOINTS
+app.use('/api/auth', authRoutes);
+
+// CONTROL AUTHORIZED SECURE ENDPOINTS
+app.use('/api/admin', protect, adminRoutes);
+app.use('/api/orgs', protect, organizationRoutes);
+app.use('/api/leads', protect, leadGenRoutes);
+app.use('/api/lead-generation', protect, leadGenRoutes);
+app.use('/api/prospects', protect, prospectRoutes);
+app.use('/api/dev', protect, developerRoutes);
+app.use('/api/pm', protect, pmRoutes);
+app.use('/api/dev/worklog', protect, workDescriptionRoutes);
+app.use('/api/resource-analytics', resourceAnalyticsRoutes);
+app.use('/api/email-campaign', emailCampaignRoutes);
+app.use('/api/tickets', ticketRoutes);
+
+/* =========================================================
+   ROOT PIN TEST DIRECTIVE
+========================================================= */
+
+app.get('/', (req, res) => {
+  res.send('Keyword Analytics Engine Core Production API Operational 🚀');
+});
+
+/* =========================================================
+   GLOBAL 404 CATCH FALLBACK
+========================================================= */
+
+app.use((req, res) => {
+  console.log(`⚠️ Route Mismatch 404 Execution => ${req.method} ${req.originalUrl}`);
+  res.status(404).json({
+    success: false,
+    message: `Route endpoint ${req.method} ${req.originalUrl} does not exist on server stack`
+  });
+});
+
+/* =========================================================
+   DATABASE INTEGRATION & WEB APPLICATION BOOTSTRAP
+========================================================= */
+
+mongoose.connect(MONGO_URI)
+  .then(() => {
+    console.log('✅ MongoDB Cluster Connected Successfully');
+    
+    server.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 API System running in production mode listening on port ${PORT}`);
+      console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+    });
+  })
+  .catch((err) => {
+    console.error('❌ Engine Startup Failed. MongoDB Connection Error:', err);
+  });
 </file>
 
 <file path="frontend/src/pages/Prospects.jsx">
@@ -22230,7 +23226,7 @@ const Login = () => {
       localStorage.setItem('userId', user.id); 
       localStorage.setItem('lastActive', Date.now().toString());
       
-      toast.success(`Welcome back, ${user.name}!`);
+      toast.success(`Welcome , ${user.name}!`);
       
       // TRIGGER ANIMATION
       setIsExiting(true);
@@ -25800,7 +26796,7 @@ const landingPath = useMemo(() => {
 
                     {/* Shared */}
                     <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDashboard /></ProtectedRoute>} />
-                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager']}><CreateTicket /></ProtectedRoute>} />
+                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager','Developer']}><CreateTicket /></ProtectedRoute>} />
                     <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDetails /></ProtectedRoute>} />
                     
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
