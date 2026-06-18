@@ -116,7 +116,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // =========================================================
-// CORS CONFIGURATION - DEFINITIVE FIX
+// CORS CONFIGURATION - CLEAN SOLUTION
 // =========================================================
 
 // Check if we're in production
@@ -137,10 +137,12 @@ if (!isProduction) {
     next();
   });
 } else {
-  // Production - COMPLETELY DISABLE ALL CORS IN EXPRESS
-  console.log('🚀 Production mode: Express CORS COMPLETELY DISABLED');
+  // Production - COMPLETELY DISABLE CORS IN EXPRESS
+  console.log('🚀 Production mode: Express CORS DISABLED');
+  console.log('   Nginx handles all CORS headers');
   
-  // This middleware runs for EVERY request and removes CORS headers
+  // DO NOT USE cors() middleware in production
+  // This middleware removes ALL CORS headers from responses
   app.use((req, res, next) => {
     // Remove ALL CORS headers
     const headersToRemove = [
@@ -156,39 +158,10 @@ if (!isProduction) {
       res.removeHeader(header);
     });
     
-    // For OPTIONS requests, just return 204 without any CORS headers
+    // For OPTIONS requests, return 204
     if (req.method === 'OPTIONS') {
-      res.status(204).end();
-      return;
+      return res.status(204).end();
     }
-    
-    next();
-  });
-  
-  // ADD THIS: Override the response methods to ensure no CORS headers are added
-  app.use((req, res, next) => {
-    // Store the original setHeader method
-    const originalSetHeader = res.setHeader;
-    const originalHeader = res.header;
-    
-    // Override setHeader to block CORS headers
-    res.setHeader = function(name, value) {
-      const lowerName = name.toLowerCase();
-      if (lowerName.startsWith('access-control-allow-')) {
-        // Block CORS headers from being set
-        return this;
-      }
-      return originalSetHeader.call(this, name, value);
-    };
-    
-    // Override header method as well
-    res.header = function(name, value) {
-      const lowerName = name.toLowerCase();
-      if (lowerName.startsWith('access-control-allow-')) {
-        return this;
-      }
-      return originalHeader.call(this, name, value);
-    };
     
     next();
   });
