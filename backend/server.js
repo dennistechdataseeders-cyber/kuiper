@@ -116,12 +116,14 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // =========================================================
-// CORS CONFIGURATION - COMPLETELY DISABLED IN PRODUCTION
+// CORS CONFIGURATION - DEFINITIVE FIX
 // =========================================================
 
-// ONLY use CORS middleware in development
-if (process.env.NODE_ENV !== 'production') {
-  // Development CORS - allow all origins
+// Check if we're in production
+const isProduction = process.env.NODE_ENV === 'production';
+
+if (!isProduction) {
+  // Development - Enable CORS
   console.log('🔧 Development mode: CORS enabled');
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -135,13 +137,12 @@ if (process.env.NODE_ENV !== 'production') {
     next();
   });
 } else {
-  // Production - COMPLETELY DISABLE CORS IN EXPRESS
-  // Nginx handles ALL CORS headers
-  console.log('🚀 Production mode: Express CORS DISABLED - Nginx handles everything');
+  // Production - COMPLETELY DISABLE ALL CORS IN EXPRESS
+  console.log('🚀 Production mode: Express CORS COMPLETELY DISABLED');
   
-  // Use a middleware that removes ALL CORS headers and does NOT add any
+  // This middleware runs for EVERY request and removes CORS headers
   app.use((req, res, next) => {
-    // Remove ALL CORS-related headers that Express might have set
+    // Remove ALL CORS headers
     const headersToRemove = [
       'Access-Control-Allow-Origin',
       'Access-Control-Allow-Methods', 
@@ -157,8 +158,37 @@ if (process.env.NODE_ENV !== 'production') {
     
     // For OPTIONS requests, just return 204 without any CORS headers
     if (req.method === 'OPTIONS') {
-      return res.status(204).end();
+      res.status(204).end();
+      return;
     }
+    
+    next();
+  });
+  
+  // ADD THIS: Override the response methods to ensure no CORS headers are added
+  app.use((req, res, next) => {
+    // Store the original setHeader method
+    const originalSetHeader = res.setHeader;
+    const originalHeader = res.header;
+    
+    // Override setHeader to block CORS headers
+    res.setHeader = function(name, value) {
+      const lowerName = name.toLowerCase();
+      if (lowerName.startsWith('access-control-allow-')) {
+        // Block CORS headers from being set
+        return this;
+      }
+      return originalSetHeader.call(this, name, value);
+    };
+    
+    // Override header method as well
+    res.header = function(name, value) {
+      const lowerName = name.toLowerCase();
+      if (lowerName.startsWith('access-control-allow-')) {
+        return this;
+      }
+      return originalHeader.call(this, name, value);
+    };
     
     next();
   });
