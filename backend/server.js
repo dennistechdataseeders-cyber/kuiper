@@ -116,13 +116,14 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // =========================================================
-// CORS CONFIGURATION - DISABLED IN PRODUCTION (Nginx handles it)
+// CORS CONFIGURATION - FIXED: Only in development, Nginx handles production
 // =========================================================
 
 // Only use CORS middleware in development
-// In production, Nginx handles CORS headers
+// In production, Nginx handles CORS headers to prevent duplicates
 if (process.env.NODE_ENV !== 'production') {
   // Development CORS - allow all origins
+  console.log('🔧 Development mode: CORS enabled');
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD');
@@ -136,12 +137,25 @@ if (process.env.NODE_ENV !== 'production') {
   });
 } else {
   // Production - Minimal CORS (Nginx handles all CORS headers)
-  // This prevents duplicate headers
-  app.use(cors({
-    origin: false, // Disable origin checking - Nginx handles it
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
-  }));
+  // This prevents duplicate headers by not adding any CORS headers from Express
+  console.log('🚀 Production mode: Nginx handles CORS');
+  
+  // Remove any existing CORS headers and let Nginx handle everything
+  app.use((req, res, next) => {
+    // Remove any CORS headers that might have been set
+    res.removeHeader('Access-Control-Allow-Origin');
+    res.removeHeader('Access-Control-Allow-Methods');
+    res.removeHeader('Access-Control-Allow-Headers');
+    res.removeHeader('Access-Control-Allow-Credentials');
+    res.removeHeader('Access-Control-Expose-Headers');
+    
+    // Handle OPTIONS requests without adding CORS headers
+    if (req.method === 'OPTIONS') {
+      // Nginx will handle the OPTIONS response
+      return res.status(204).end();
+    }
+    next();
+  });
 }
 
 // Route static access parameters for uploaded document assets
