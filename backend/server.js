@@ -116,11 +116,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // =========================================================
-// CORS CONFIGURATION - FIXED: Only in development, Nginx handles production
+// CORS CONFIGURATION - COMPLETELY REMOVED IN PRODUCTION
 // =========================================================
 
 // Only use CORS middleware in development
-// In production, Nginx handles CORS headers to prevent duplicates
+// In production, Nginx handles ALL CORS headers
 if (process.env.NODE_ENV !== 'production') {
   // Development CORS - allow all origins
   console.log('🔧 Development mode: CORS enabled');
@@ -136,24 +136,20 @@ if (process.env.NODE_ENV !== 'production') {
     next();
   });
 } else {
-  // Production - Minimal CORS (Nginx handles all CORS headers)
-  // This prevents duplicate headers by not adding any CORS headers from Express
-  console.log('🚀 Production mode: Nginx handles CORS');
+  // Production - REMOVE ALL CORS HEADERS (Nginx handles everything)
+  console.log('🚀 Production mode: Nginx handles CORS - Express adds NO CORS headers');
   
-  // Remove any existing CORS headers and let Nginx handle everything
+  // This middleware removes ALL CORS headers set by Express
   app.use((req, res, next) => {
-    // Remove any CORS headers that might have been set
+    // Remove ALL CORS headers that might have been set
     res.removeHeader('Access-Control-Allow-Origin');
     res.removeHeader('Access-Control-Allow-Methods');
     res.removeHeader('Access-Control-Allow-Headers');
     res.removeHeader('Access-Control-Allow-Credentials');
     res.removeHeader('Access-Control-Expose-Headers');
+    res.removeHeader('Access-Control-Max-Age');
     
-    // Handle OPTIONS requests without adding CORS headers
-    if (req.method === 'OPTIONS') {
-      // Nginx will handle the OPTIONS response
-      return res.status(204).end();
-    }
+    // Pass through - Nginx will add the correct headers
     next();
   });
 }
