@@ -116,11 +116,10 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // =========================================================
-// CORS CONFIGURATION - COMPLETELY REMOVED IN PRODUCTION
+// CORS CONFIGURATION - COMPLETELY DISABLED IN PRODUCTION
 // =========================================================
 
-// Only use CORS middleware in development
-// In production, Nginx handles ALL CORS headers
+// ONLY use CORS middleware in development
 if (process.env.NODE_ENV !== 'production') {
   // Development CORS - allow all origins
   console.log('🔧 Development mode: CORS enabled');
@@ -136,20 +135,31 @@ if (process.env.NODE_ENV !== 'production') {
     next();
   });
 } else {
-  // Production - REMOVE ALL CORS HEADERS (Nginx handles everything)
-  console.log('🚀 Production mode: Nginx handles CORS - Express adds NO CORS headers');
+  // Production - COMPLETELY DISABLE CORS IN EXPRESS
+  // Nginx handles ALL CORS headers
+  console.log('🚀 Production mode: Express CORS DISABLED - Nginx handles everything');
   
-  // This middleware removes ALL CORS headers set by Express
+  // Use a middleware that removes ALL CORS headers and does NOT add any
   app.use((req, res, next) => {
-    // Remove ALL CORS headers that might have been set
-    res.removeHeader('Access-Control-Allow-Origin');
-    res.removeHeader('Access-Control-Allow-Methods');
-    res.removeHeader('Access-Control-Allow-Headers');
-    res.removeHeader('Access-Control-Allow-Credentials');
-    res.removeHeader('Access-Control-Expose-Headers');
-    res.removeHeader('Access-Control-Max-Age');
+    // Remove ALL CORS-related headers that Express might have set
+    const headersToRemove = [
+      'Access-Control-Allow-Origin',
+      'Access-Control-Allow-Methods', 
+      'Access-Control-Allow-Headers',
+      'Access-Control-Allow-Credentials',
+      'Access-Control-Expose-Headers',
+      'Access-Control-Max-Age'
+    ];
     
-    // Pass through - Nginx will add the correct headers
+    headersToRemove.forEach(header => {
+      res.removeHeader(header);
+    });
+    
+    // For OPTIONS requests, just return 204 without any CORS headers
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end();
+    }
+    
     next();
   });
 }
