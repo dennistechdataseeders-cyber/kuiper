@@ -543,7 +543,7 @@ router.patch('/projects/:id/status', authorize('Admin', 'Project Manager'), asyn
     }
     
     const validStatuses = [
-      'New', 'Once off', 'Ad hoc', 'BAU Initiated', 'BAU Not Initiated',
+      'New', 'Once off','Automation', 'Ad hoc', 'BAU Initiated', 'BAU Not Initiated',
       'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]', 'Closed'
     ];
     
@@ -1171,7 +1171,7 @@ router.get('/users/project-managers', authorize('Admin', 'Project Manager'), asy
 
 router.get('/project-status-options', authorize('Admin', 'Project Manager'), async (req, res) => {
   const statuses = [
-    'New', 'Once off', 'Ad hoc', 'BAU Initiated', 'BAU Not Initiated',
+    'New', 'Once off','Automation', 'Ad hoc', 'BAU Initiated', 'BAU Not Initiated',
     'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]', 'Closed'
   ];
   res.json(statuses);
@@ -1179,7 +1179,7 @@ router.get('/project-status-options', authorize('Admin', 'Project Manager'), asy
 
 router.get('/feed-status-options', authorize('Admin', 'Project Manager'), async (req, res) => {
   const statuses = [
-    'New',  'In process','Once off[In progress]', 'Once off[Delivered]',
+    'New',  'In process','Awaiting Client Approval','Once off[In progress]', 'Once off[Delivered]',
     'Ad hoc In-progress', 'Ad hoc delivered','BAU Initiated',
     'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]','Closed'
   ];

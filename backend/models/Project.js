@@ -37,6 +37,7 @@ const ProjectSchema = new mongoose.Schema({
     enum: [
       'New',
       'Once off',
+      'Automation',
       'Ad hoc',
       'BAU Initiated',
       'BAU Not Initiated',

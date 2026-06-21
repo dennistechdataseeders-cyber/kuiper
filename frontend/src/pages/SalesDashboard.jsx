@@ -218,11 +218,11 @@ const SalesDashboard = () => {
   const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
   const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const [followUpData, setFollowUpData] = useState({
-    date: new Date().toISOString().split('T')[0],
-    type: 'call',
-    description: ''
-  });
+const [followUpData, setFollowUpData] = useState({
+  date: new Date().toISOString().split('T')[0],
+  type: 'call',
+  description: ''
+});
   
   const overviewCount = allData.filter(l => {
     const leadDate = new Date(l.createdAt);
@@ -272,92 +272,118 @@ const SalesDashboard = () => {
   };
 
   const fetchData = async () => {
-    setLoading(true);
-    try {
-      const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+  setLoading(true);
+  try {
+    const token = localStorage.getItem('token');
+    const headers = { Authorization: `Bearer ${token}` };
 
-      const [res, prospect_res] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/lead-generation`, { headers }),
-        axios.get(`${API_BASE_URL}/api/prospects`, { headers })
-      ]);
+    const [res, prospect_res] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/lead-generation`, { headers }),
+      axios.get(`${API_BASE_URL}/api/prospects`, { headers })
+    ]);
 
-      const data = Array.isArray(res.data) ? res.data : [];
-      const prospect_data = Array.isArray(prospect_res.data) ? prospect_res.data : [];
+    const data = Array.isArray(res.data) ? res.data : [];
+    const prospect_data = Array.isArray(prospect_res.data) ? prospect_res.data : [];
 
-      setAllData(data);
+    setAllData(data);
 
-      const todayStr = new Date().toLocaleDateString('en-CA');
-   
-      setGeneratedLeads(data.filter(l => 
-        new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
-        (!l.status || l.status === 'New')
-      ));
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    
+    setGeneratedLeads(data.filter(l => 
+      new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
+      (!l.status || l.status === 'New')
+    ));
 
-      const allPendingFollowUps = data.filter(l => 
-        l.followUpDate && 
-        l.status === 'Follow-up Scheduled' &&
-        !l.completedAt
-      );
-      
-      setFollowUps(allPendingFollowUps);
+    // ============================================
+    // FIXED: Only show today's and past follow-ups
+    // ============================================
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-      const allPendingFeasibility = data.filter(l => 
-        l.followUpDate && 
-        l.status === 'Feasibility' &&
-        !l.completedAt
-      );
-      
-      setFeasibilityTasks(allPendingFeasibility);
-
-      const filteredApproaches = prospect_data.filter(item => {
-        const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
-        if (dateValue) {
-          const followUpDate = new Date(dateValue);
-          const todayDate = new Date();
-          followUpDate.setHours(0, 0, 0, 0);
-          todayDate.setHours(0, 0, 0, 0);
-          return followUpDate <= todayDate && item.status === 'Approached';
-        }
+    const allPendingFollowUps = data.filter(l => {
+      if (!l.followUpDate || l.status !== 'Follow-up Scheduled' || l.completedAt) {
         return false;
-      });
+      }
+      
+      const followUpDate = new Date(l.followUpDate);
+      followUpDate.setHours(0, 0, 0, 0);
+      
+      // Only show today's and past (missed) follow-ups
+      return followUpDate <= today;
+    });
+    
+    setFollowUps(allPendingFollowUps);
 
-      setApproachesToday(filteredApproaches);
+    // ============================================
+    // FIXED: Only show today's and past feasibility tasks
+    // ============================================
+    const allPendingFeasibility = data.filter(l => {
+      if (!l.followUpDate || l.status !== 'Feasibility' || l.completedAt) {
+        return false;
+      }
+      
+      const followUpDate = new Date(l.followUpDate);
+      followUpDate.setHours(0, 0, 0, 0);
+      
+      // Only show today's and past (missed) feasibility tasks
+      return followUpDate <= today;
+    });
+    
+    setFeasibilityTasks(allPendingFeasibility);
 
-      const scheduledFollowUps = data
-        .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled' && !l.completedAt)
-        .map(l => ({
-          id: l._id,
-          title: l.pocName,
-          orgName: l.organizationId?.companyName || 'No Org',
-          type: 'followup',
-          date: new Date(l.followUpDate),
-          originalLead: l,
-          isOverdue: isOverdue(l.followUpDate)
-        }));
-      
-      const scheduledFeasibility = data
-        .filter(l => l.followUpDate && l.status === 'Feasibility' && !l.completedAt)
-        .map(l => ({
-          id: l._id,
-          title: l.pocName,
-          orgName: l.organizationId?.companyName || 'No Org',
-          type: 'feasibility',
-          date: new Date(l.followUpDate),
-          originalLead: l,
-          isOverdue: isOverdue(l.followUpDate)
-        }));
-      
-      setAllScheduledItems([...scheduledFollowUps, ...scheduledFeasibility]);
-      
-    } catch (err) {
-      console.error("Fetch error:", err);
-      toast.error("Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  };
-  
+    // ============================================
+    // Approaches filtering - already only shows today's
+    // ============================================
+    const filteredApproaches = prospect_data.filter(item => {
+      const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
+      if (dateValue) {
+        const followUpDate = new Date(dateValue);
+        const todayDate = new Date();
+        followUpDate.setHours(0, 0, 0, 0);
+        todayDate.setHours(0, 0, 0, 0);
+        return followUpDate <= todayDate && item.status === 'Approached';
+      }
+      return false;
+    });
+
+    setApproachesToday(filteredApproaches);
+
+    // ============================================
+    // Scheduled items for calendar - keep all for calendar view
+    // ============================================
+    const scheduledFollowUps = data
+      .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled' && !l.completedAt)
+      .map(l => ({
+        id: l._id,
+        title: l.pocName,
+        orgName: l.organizationId?.companyName || 'No Org',
+        type: 'followup',
+        date: new Date(l.followUpDate),
+        originalLead: l,
+        isOverdue: isOverdue(l.followUpDate)
+      }));
+    
+    const scheduledFeasibility = data
+      .filter(l => l.followUpDate && l.status === 'Feasibility' && !l.completedAt)
+      .map(l => ({
+        id: l._id,
+        title: l.pocName,
+        orgName: l.organizationId?.companyName || 'No Org',
+        type: 'feasibility',
+        date: new Date(l.followUpDate),
+        originalLead: l,
+        isOverdue: isOverdue(l.followUpDate)
+      }));
+    
+    setAllScheduledItems([...scheduledFollowUps, ...scheduledFeasibility]);
+    
+  } catch (err) {
+    console.error("Fetch error:", err);
+    toast.error("Failed to load dashboard data");
+  } finally {
+    setLoading(false);
+  }
+};
   const fetchOrganizations = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -429,19 +455,22 @@ const SalesDashboard = () => {
   );
 
   const handleFollowUpSubmit = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, { 
-        status: 'Follow-up Scheduled',
-        followUpDate: followUpData.date,
-        followUpType: followUpData.type,
-        lastInteractionDesc: followUpData.description,
-        completedAt: null
-      }, { headers: { Authorization: `Bearer ${token}` } });
-      fetchData(); 
-      closeModal();
-    } catch (err) { alert("Follow-up update failed"); }
-  };
+  try {
+    const token = localStorage.getItem('token');
+    await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, { 
+      status: 'Follow-up Scheduled',
+      followUpDate: followUpData.date,
+      followUpType: followUpData.type,
+      lastInteractionDesc: followUpData.description,
+      completedAt: null
+    }, { headers: { Authorization: `Bearer ${token}` } });
+    toast.success('Follow-up scheduled successfully!');
+    fetchData(); 
+    closeModal();
+  } catch (err) { 
+    toast.error(err.response?.data?.error || "Follow-up update failed");
+  }
+};
   
   const handleCompleteTask = async (lead) => {
     try {
@@ -830,7 +859,7 @@ const handleProjectSubmit = async (e) => {
                 <div>
                   <div className="flex items-center justify-between mb-6">
                     <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                      <Clock size={20} className="text-orange-600"/> Pending Follow-ups
+                      <Clock size={20} className="text-orange-600"/>  Follow up Due Today
                     </h2>
                     <button onClick={() => setShowScheduledModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-black transition-all">
                       <CalendarDays size={14} />
@@ -1086,7 +1115,7 @@ const handleProjectSubmit = async (e) => {
                 <h2 className="text-2xl font-black text-slate-900 mb-6">Follow-up Details</h2>
                 <div className="space-y-4">
                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Date</label><input type="date" className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.date} min={new Date().toISOString().split('T')[0]} onChange={(e) => setFollowUpData({...followUpData, date: e.target.value})} /></div>
-                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Method</label><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" value={followUpData.type} onChange={(e) => setFollowUpData({...followUpData, type: e.target.value})}><option value="call">📞 Phone Call</option><option value="email">📧 Email</option><option value="message">💬 Message</option></select></div>
+                  <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Method</label><select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold outline-none" value={followUpData.type} onChange={(e) => setFollowUpData({...followUpData, type: e.target.value})}><option value="call">📞 Phone Call</option><option value="email">📧 Email</option><option value="message">💬 Message</option> <option value="meeting">🤝 Meeting</option> </select></div>
                   <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Notes</label><textarea className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-amber-500/20" value={followUpData.description} onChange={(e) => setFollowUpData({...followUpData, description: e.target.value})} /></div>
                   <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={handleFollowUpSubmit} className="flex-[2] py-4 bg-amber-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-amber-200">Save Schedule</button></div>
                 </div>
@@ -1363,7 +1392,7 @@ const handleProjectSubmit = async (e) => {
             <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full transition-all"><X size={24} /></button>
             <div className="mb-8"><h2 className="text-2xl font-black text-slate-800">Approach Prospect</h2><p className="text-slate-400 text-sm font-medium mt-1">Record the interaction for {selectedProspect?.companyName}.</p></div>
             <form onSubmit={handleApproachSubmit} className="space-y-6">
-              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label><div className="grid grid-cols-2 gap-3">{['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((method) => (<button key={method} type="button" onClick={() => setApproachData({...approachData, method})} className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${approachData.method === method ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-slate-50 text-slate-400'}`}>{method}</button>))}</div></div>
+              <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Approach Method</label><div className="grid grid-cols-2 gap-3">{['Email', 'WhatsApp', 'Message', 'LinkedIn','Meeting'].map((method) => (<button key={method} type="button" onClick={() => setApproachData({...approachData, method})} className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${approachData.method === method ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 bg-slate-50 text-slate-400'}`}>{method}</button>))}</div></div>
               <div className="space-y-2"><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">Summary of Discussion</label><textarea required rows="4" className="w-full p-5 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-medium text-slate-700 transition-all resize-none" placeholder="What was discussed?" value={approachData.summary} onChange={(e) => setApproachData({...approachData, summary: e.target.value})} /></div>
               <button type="submit" disabled={submittingApproach} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 hover:bg-blue-600 disabled:bg-slate-300 flex items-center justify-center gap-2">{submittingApproach ? <Loader2 className="animate-spin" size={20}/> : <Send size={18}/>}Confirm Approach</button>
             </form>

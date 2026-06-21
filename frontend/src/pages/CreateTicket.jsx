@@ -428,7 +428,7 @@ const CreateTicket = () => {
                 {isClient ? 'Create New Ticket' : 'Create  Ticket'}
               </h1>
               <p className="text-slate-500 mt-1">
-                {isClient 
+                {isClient  
                   ? 'Submit a support request for your project' 
                   : 'Submit an internal ticket for team members only'}
               </p>

@@ -121,6 +121,7 @@ const FeedSchema = new mongoose.Schema({
     enum: [
       'New',
       'In process', 
+      'Awaiting Client Approval',
       'Once off[In progress]',
       'Once off[Delivered]',
       'Ad hoc In-progress',

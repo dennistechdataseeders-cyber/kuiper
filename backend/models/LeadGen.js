@@ -34,7 +34,8 @@ const leadGenSchema = new mongoose.Schema({
   lastActionDate: { type: Date, default: Date.now },
 
   followUpDate: { type: Date },
-  followUpType: { type: String, enum: ['call', 'email', 'message', 'custom'] },
+  followUpType: { type: String,
+  enum: ['call', 'email', 'message','meeting' ,'custom'] },
   lastInteractionDesc: { type: String },
 
   feasibilityId: { type: String },
