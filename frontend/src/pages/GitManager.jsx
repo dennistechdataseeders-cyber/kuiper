@@ -357,7 +357,7 @@ const GitManager = () => {
                   className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
                     selectedProject?._id === project._id
                       ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-70'
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
@@ -411,7 +411,7 @@ const GitManager = () => {
                     <>
                       <button
                         onClick={copyInviteLink}
-                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1"
+                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-70 transition-colors flex items-center gap-1"
                         title="Copy invite link"
                       >
                         {copiedInviteLink ? <CheckCircle size={14} className="text-green-600" /> : <LinkIcon size={14} />}

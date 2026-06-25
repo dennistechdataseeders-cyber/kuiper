@@ -1,3 +1,5 @@
+// frontend/src/pages/ProjectFeeds.jsx
+
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
@@ -61,6 +63,7 @@ const ProjectFeeds = () => {
   const [feedTypeFilter, setFeedTypeFilter] = useState('ALL');
   const [selectedProject, setSelectedProject] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
 
   // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
@@ -139,6 +142,15 @@ const ProjectFeeds = () => {
     }
     if (feed.feedType === 'Monthly') {
       return feed.monthDay === getTodayDayOfMonth();
+    }
+    return false;
+  };
+
+  // Check if feed is completed for today
+  const isCompletedToday = (feed) => {
+    const today = new Date().toISOString().split('T')[0];
+    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
+      return feed.completionHistory.some(h => h && h.date === today);
     }
     return false;
   };
@@ -429,7 +441,7 @@ const ProjectFeeds = () => {
   // RESET PAGE
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedProject, searchTerm, feedTypeFilter, itemsPerPage]);
+  }, [selectedProject, searchTerm, feedTypeFilter, showPendingOnly, itemsPerPage]);
   
   const fetchData = async () => {
     try {
@@ -484,6 +496,13 @@ const ProjectFeeds = () => {
       );
     }
 
+    // Filter to show only pending feeds (not completed today)
+    if (showPendingOnly) {
+      result = result.filter(feed => {
+        return isFeedForToday(feed) && !isCompletedToday(feed);
+      });
+    }
+
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
       result = result.filter(feed =>
@@ -502,7 +521,7 @@ const ProjectFeeds = () => {
     );
 
     return result;
-  }, [feeds, selectedProject, searchTerm, feedTypeFilter]);
+  }, [feeds, selectedProject, searchTerm, feedTypeFilter, showPendingOnly]);
 
   // PAGINATION
   const indexOfLastFeed = currentPage * itemsPerPage;
@@ -571,6 +590,12 @@ const ProjectFeeds = () => {
     }
   };
 
+  // 🔥 Toggle pending filter
+  const togglePendingFilter = () => {
+    setShowPendingOnly(!showPendingOnly);
+    setCurrentPage(1);
+  };
+
   return (
     <div
       className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${
@@ -636,7 +661,7 @@ const ProjectFeeds = () => {
         </div>
       </div>
       
-      {/* COMBINED STATS CARD - Today's Progress + Project Stats */}
+      {/* COMBINED STATS CARD - Today's Progress + Project Stats with Clickable Pending */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
         <div className="p-4">
           <div className="flex items-center justify-between mb-3">
@@ -688,7 +713,7 @@ const ProjectFeeds = () => {
             </div>
           </div>
 
-          {/* Stats Grid - Compact */}
+          {/* Stats Grid - Compact with Clickable Pending */}
           <div className="grid grid-cols-3 gap-2">
             <div className="bg-purple-50 rounded-lg p-2 text-center">
               <div className="flex items-center justify-center gap-0.5 mb-0.5">
@@ -706,20 +731,53 @@ const ProjectFeeds = () => {
               <p className="text-lg font-black text-emerald-700">{todayFeedStats.completed}</p>
             </div>
             
-            <div className="bg-amber-50 rounded-lg p-2 text-center">
+            {/* 🔥 CLICKABLE PENDING DIV */}
+            <div 
+              onClick={togglePendingFilter}
+              className={`rounded-lg p-2 text-center cursor-pointer transition-all duration-200 ${
+                showPendingOnly 
+                  ? 'bg-amber-600 ring-2 ring-amber-400 ring-offset-2' 
+                  : 'bg-amber-50 hover:bg-amber-100 hover:scale-105'
+              }`}
+            >
               <div className="flex items-center justify-center gap-0.5 mb-0.5">
-                <AlertCircle size={10} className="text-amber-600" />
-                <p className="text-[7px] font-black text-amber-600 uppercase">Pending</p>
+                <AlertCircle size={10} className={showPendingOnly ? 'text-white' : 'text-amber-600'} />
+                <p className={`text-[7px] font-black uppercase ${showPendingOnly ? 'text-white' : 'text-amber-600'}`}>
+                  Pending
+                </p>
+                {showPendingOnly && (
+                  <X 
+                    size={10} 
+                    className="text-white ml-1 hover:text-amber-200" 
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowPendingOnly(false);
+                    }}
+                  />
+                )}
               </div>
-              <p className="text-lg font-black text-amber-700">{todayFeedStats.pending}</p>
+              <p className={`text-lg font-black ${showPendingOnly ? 'text-white' : 'text-amber-700'}`}>
+                {todayFeedStats.pending}
+              </p>
             </div>
           </div>
 
           {/* Status Messages - Compact */}
-          {todayFeedStats.pending > 0 && (
-            <div className="mt-2 p-1.5 bg-amber-50 rounded-lg border border-amber-100">
+          {todayFeedStats.pending > 0 && !showPendingOnly && (
+            <div 
+              onClick={togglePendingFilter}
+              className="mt-2 p-1.5 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:bg-amber-100 transition-all"
+            >
               <p className="text-[8px] font-bold text-amber-700 text-center">
-                {todayFeedStats.pending} feed(s) remaining for today
+                {todayFeedStats.pending} feed(s) remaining for today — Click to view
+              </p>
+            </div>
+          )}
+
+          {showPendingOnly && todayFeedStats.pending > 0 && (
+            <div className="mt-2 p-1.5 bg-amber-600 rounded-lg border border-amber-500">
+              <p className="text-[8px] font-bold text-white text-center">
+                Showing {todayFeedStats.pending} pending feed(s) — Click the Pending badge again to show all
               </p>
             </div>
           )}
@@ -930,13 +988,7 @@ const ProjectFeeds = () => {
                             >
                               <Edit3 size={12} />
                             </button>
-                            <button
-                              onClick={() => openTicketModal(feed)}
-                              className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
-                              title="Generate Ticket"
-                            >
-                              <Ticket size={12} />
-                            </button>
+                           
                           </div>
                         </td>
                       </tr>
@@ -1010,8 +1062,12 @@ const ProjectFeeds = () => {
                       <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
                         <Activity size={20} className="text-slate-300" />
                       </div>
-                      <p className="text-xs font-bold uppercase text-slate-400">No feeds found</p>
-                      <p className="text-[9px] text-slate-300 mt-0.5">Try adjusting your filters</p>
+                      <p className="text-xs font-bold uppercase text-slate-400">
+                        {showPendingOnly ? 'No pending feeds for today!' : 'No feeds found'}
+                      </p>
+                      <p className="text-[9px] text-slate-300 mt-0.5">
+                        {showPendingOnly ? 'All feeds completed or none scheduled' : 'Try adjusting your filters'}
+                      </p>
                     </div>
                   </td>
                 </tr>

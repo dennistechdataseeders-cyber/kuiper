@@ -1,3 +1,5 @@
+// frontend/src/pages/ResourceAnalytics.jsx
+
 import React, {
   useEffect,
   useMemo,
@@ -11,15 +13,17 @@ import {
   Search,
   Download,
   PieChart,
-  BarChart3
+  BarChart3,
+  Clock,
+  TrendingUp,
+  AlertCircle,
+  Info
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-
-import html2canvas from 'html2canvas';
 
 import {
   Pie,
@@ -48,7 +52,6 @@ ChartJS.register(
 );
 
 const ResourceAnalytics = () => {
-
   /*
   ========================================
   REFS
@@ -70,6 +73,15 @@ const ResourceAnalytics = () => {
   const [feeds, setFeeds] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState({
+    totalLogs: 0,
+    totalFeeds: 0,
+    totalNetHours: 0,
+    totalNetTimeFormatted: '0h 0m 0s',
+    totalOverlapHours: 0,
+    totalOverlapTimeFormatted: '0h 0m 0s',
+    totalRawHours: 0
+  });
 
   /*
   ========================================
@@ -120,12 +132,6 @@ const ResourceAnalytics = () => {
   const formatTime = (seconds = 0) => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
-    return `${hrs}h ${mins}m`;
-  };
-
-  const formatTimeDetailed = (seconds = 0) => {
-    const hrs = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
     if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
     if (mins > 0) return `${mins}m ${secs}s`;
@@ -153,10 +159,16 @@ const ResourceAnalytics = () => {
         params
       });
 
+      console.log('API Response:', res.data);
+
       setAnalytics(Array.isArray(res.data.analyticsData) ? res.data.analyticsData : []);
       setProjects(Array.isArray(res.data.projects) ? res.data.projects : []);
       setFeeds(Array.isArray(res.data.feeds) ? res.data.feeds : []);
       setDevelopers(Array.isArray(res.data.developers) ? res.data.developers : []);
+      
+      if (res.data.summary) {
+        setSummary(res.data.summary);
+      }
 
     } catch (err) {
       console.error('Analytics Error:', err);
@@ -172,64 +184,31 @@ const ResourceAnalytics = () => {
 
   /*
   ========================================
-  AGGREGATED DATA (ACCUMULATED BY FEED)
+  FILTERED DATA - Only include feeds with netTime > 0
   ========================================
   */
 
-  const aggregatedData = useMemo(() => {
-    // Group by feed ID to accumulate total time
-    const feedMap = new Map();
+  const filteredData = useMemo(() => {
+    let result = [...analytics];
 
-    analytics.forEach(item => {
-      const feedId = item.feed?._id;
-      const feedName = item.feed?.name || 'Unknown';
-      const projectName = item.project?.name || 'Unknown';
-      const developerName = item.developer?.name || 'Unknown';
-      const totalHours = Number(((item.totalTime || 0) / 3600).toFixed(2));
+    // 🔥 FIX: Filter out feeds with 0 net time
+    result = result.filter(item => (item.netTime || 0) > 0);
 
-      if (!feedMap.has(feedId)) {
-        feedMap.set(feedId, {
-          feedId: feedId,
-          feedName: feedName,
-          projectName: projectName,
-          developerName: developerName,
-          totalTime: 0,
-          totalHours: 0,
-          description: item.description || '',
-          lastDate: item.date || ''
-        });
-      }
-
-      const existing = feedMap.get(feedId);
-      existing.totalTime += item.totalTime || 0;
-      existing.totalHours += totalHours;
-      if (item.date > existing.lastDate) {
-        existing.lastDate = item.date;
-      }
-    });
-
-    // Convert map to array
-    let result = Array.from(feedMap.values()).map(item => ({
-      ...item,
-      totalHours: Number(item.totalHours.toFixed(2))
-    }));
-
-    // Apply search filter
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
       result = result.filter(item =>
-        item.feedName.toLowerCase().includes(search) ||
-        item.projectName.toLowerCase().includes(search) ||
-        item.developerName.toLowerCase().includes(search)
+        item.feedName?.toLowerCase().includes(search) ||
+        item.projectName?.toLowerCase().includes(search) ||
+        item.developerName?.toLowerCase().includes(search)
       );
     }
 
     // Apply sorting
     result.sort((a, b) => {
       if (sortType === 'highest') {
-        return b.totalTime - a.totalTime;
+        return b.netTime - a.netTime;
       }
-      return a.totalTime - b.totalTime;
+      return a.netTime - b.netTime;
     });
 
     return result;
@@ -237,29 +216,30 @@ const ResourceAnalytics = () => {
 
   /*
   ========================================
-  TOTAL TIME
+  CHART DATA - Using seconds directly
   ========================================
   */
 
-  const totalSeconds = aggregatedData.reduce((acc, item) => acc + (item.totalTime || 0), 0);
-
-  /*
-  ========================================
-  CHART DATA (USING AGGREGATED DATA)
-  ========================================
-  */
-
-  const chartLabels = aggregatedData.map(item => item.feedName);
-  const chartValues = aggregatedData.map(item => item.totalHours);
+  const chartLabels = filteredData.map(item => item.feedName || 'Unknown Feed');
   
-  // Create a map for tooltip data
-  const feedMetadata = aggregatedData.reduce((acc, item, index) => {
+  // 🔥 FIX: Use netTime in seconds directly (don't divide by 3600)
+  const chartValues = filteredData.map(item => item.netTime || 0);
+
+  // Calculate total for percentage
+  const totalNetSeconds = filteredData.reduce((sum, item) => sum + (item.netTime || 0), 0);
+
+  // Create metadata for tooltips
+  const feedMetadata = filteredData.reduce((acc, item, index) => {
     acc[index] = {
       feedName: item.feedName,
       projectName: item.projectName,
       developerName: item.developerName,
-      totalHours: item.totalHours,
-      totalTimeFormatted: formatTime(item.totalTime)
+      netSeconds: item.netTime || 0,
+      formattedNetTime: item.formattedNetTime || formatTime(item.netTime || 0),
+      formattedTotalTime: item.formattedTotalTime || formatTime(item.totalTime || 0),
+      formattedOverlapTime: item.formattedOverlapTime || formatTime(item.overlapTime || 0),
+      description: item.description,
+      logCount: item.logCount
     };
     return acc;
   }, {});
@@ -267,27 +247,31 @@ const ResourceAnalytics = () => {
   const pieData = {
     labels: chartLabels,
     datasets: [{
-      label: 'Hours',
+      label: 'Net Time (seconds)',
       data: chartValues,
       backgroundColor: chartLabels.map((_, index) => chartColors[index % chartColors.length]),
-      borderWidth: 1
+      borderWidth: 2,
+      borderColor: '#ffffff'
     }]
   };
 
   const barData = {
     labels: chartLabels,
-    datasets: [{
-      label: 'Hours Spent',
-      data: chartValues,
-      backgroundColor: chartLabels.map((_, index) => chartColors[index % chartColors.length]),
-      borderRadius: 8
-    }]
+    datasets: [
+      {
+        label: 'Net Time (seconds)',
+        data: chartValues,
+        backgroundColor: chartLabels.map((_, index) => chartColors[index % chartColors.length]),
+        borderRadius: 6,
+        borderColor: '#ffffff',
+        borderWidth: 2
+      }
+    ]
   };
 
-  // Custom tooltip for Pie Chart
-  const pieTooltipOptions = {
+  // 🔥 FIX: Custom tooltip with better formatting
+  const chartTooltipOptions = {
     responsive: true,
-    animation: false,
     maintainAspectRatio: true,
     plugins: {
       tooltip: {
@@ -295,18 +279,21 @@ const ResourceAnalytics = () => {
           title: function(context) {
             const index = context[0].dataIndex;
             const metadata = feedMetadata[index];
-            return metadata?.feedName || context[0].label;
+            return metadata?.feedName || context[0].label || 'Unknown Feed';
           },
           label: function(context) {
             const index = context.dataIndex;
             const metadata = feedMetadata[index];
-            const hours = context.raw;
-            const percentage = ((hours / chartValues.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+            const seconds = context.raw || 0;
+            const percentage = totalNetSeconds > 0 ? ((seconds / totalNetSeconds) * 100).toFixed(1) : 0;
             
             return [
-              `  Hours: ${hours} hrs (${percentage}%)`,
+              `  Net Time: ${metadata?.formattedNetTime || formatTime(seconds)}`,
+              `  Percentage: ${percentage}%`,
               `  Project: ${metadata?.projectName || 'Unknown'}`,
-              `  Developer: ${metadata?.developerName || 'Unknown'}`
+              `  Developer: ${metadata?.developerName || 'Unknown'}`,
+              `  Raw Time: ${metadata?.formattedTotalTime || '0s'}`,
+              `  Logs: ${metadata?.logCount || 0}`
             ];
           }
         }
@@ -315,11 +302,12 @@ const ResourceAnalytics = () => {
         position: 'bottom',
         labels: { 
           font: { size: 10 }, 
-          boxWidth: 10,
+          boxWidth: 12,
+          padding: 20,
           generateLabels: function(chart) {
             const original = ChartJS.defaults.plugins.legend.labels.generateLabels(chart);
             original.forEach(label => {
-              if (label.text.length > 30) {
+              if (label.text && label.text.length > 30) {
                 label.text = label.text.substring(0, 27) + '...';
               }
             });
@@ -327,56 +315,14 @@ const ResourceAnalytics = () => {
           }
         }
       }
-    }
-  };
-
-  // Custom tooltip for Bar Chart
-  const barTooltipOptions = {
-    responsive: true,
-    animation: false,
-    maintainAspectRatio: false,
-    plugins: {
-      tooltip: {
-        callbacks: {
-          title: function(context) {
-            const index = context[0].dataIndex;
-            const metadata = feedMetadata[index];
-            return metadata?.feedName || context[0].label;
-          },
-          label: function(context) {
-            const index = context.dataIndex;
-            const metadata = feedMetadata[index];
-            const hours = context.raw;
-            
-            return [
-              `  Hours: ${hours} hrs`,
-              `  Project: ${metadata?.projectName || 'Unknown'}`,
-              `  Developer: ${metadata?.developerName || 'Unknown'}`
-            ];
-          }
-        }
-      },
-      legend: {
-        position: 'bottom',
-        labels: { 
-          font: { size: 10 }, 
-          boxWidth: 10
-        }
-      }
     },
     scales: {
       y: {
-        title: {
-          display: true,
-          text: 'Hours Spent',
-          font: { size: 10, weight: 'bold' }
-        }
-      },
-      x: {
+        beginAtZero: true,
         ticks: {
-          maxRotation: 45,
-          minRotation: 45,
-          font: { size: 9 }
+          callback: function(value) {
+            return formatTime(value);
+          }
         }
       }
     }
@@ -429,7 +375,7 @@ const ResourceAnalytics = () => {
 
       pdf.setFontSize(22);
       pdf.setTextColor(37, 99, 235);
-      pdf.text('Resource Analytics Report', 14, 20);
+      pdf.text('Resource Analytics Report (Net Time)', 14, 20);
 
       pdf.setDrawColor(220, 220, 220);
       pdf.line(14, 24, 195, 24);
@@ -438,8 +384,9 @@ const ResourceAnalytics = () => {
       pdf.setTextColor(30, 41, 59);
       pdf.text(`Start Date: ${startDate}`, 14, 35);
       pdf.text(`End Date: ${endDate}`, 14, 42);
-      pdf.text(`Total Time: ${formatTime(totalSeconds)}`, 14, 49);
-      pdf.text(`Total Feeds: ${aggregatedData.length}`, 14, 56);
+      pdf.text(`Total Net Time: ${summary.totalNetTimeFormatted}`, 14, 49);
+      pdf.text(`Total Overlap: ${summary.totalOverlapTimeFormatted}`, 14, 56);
+      pdf.text(`Total Feeds: ${filteredData.length}`, 14, 63);
 
       // Capture pie chart
       if (pieChartRef.current) {
@@ -448,8 +395,8 @@ const ResourceAnalytics = () => {
           if (pieCanvas) {
             const pieImgData = pieCanvas.toDataURL('image/png');
             pdf.setFontSize(16);
-            pdf.text('Feed Distribution', 14, 70);
-            pdf.addImage(pieImgData, 'PNG', 14, 75, 80, 60);
+            pdf.text('Feed Distribution (Net Time)', 14, 77);
+            pdf.addImage(pieImgData, 'PNG', 14, 82, 80, 60);
           }
         } catch (err) {
           console.error('Pie chart capture error:', err);
@@ -463,31 +410,33 @@ const ResourceAnalytics = () => {
           if (barCanvas) {
             const barImgData = barCanvas.toDataURL('image/png');
             pdf.setFontSize(16);
-            pdf.text('Feed Comparison', 105, 70);
-            pdf.addImage(barImgData, 'PNG', 105, 75, 85, 60);
+            pdf.text('Feed Comparison (Net Time)', 105, 77);
+            pdf.addImage(barImgData, 'PNG', 105, 82, 85, 60);
           }
         } catch (err) {
           console.error('Bar chart capture error:', err);
         }
       }
 
-      // Table with aggregated data
+      // Table with filtered data
       autoTable(pdf, {
-        startY: 150,
-        head: [['Feed', 'Project', 'Developer', 'Total Time', 'Last Activity']],
-        body: aggregatedData.map(item => [
-          item.feedName,
-          item.projectName,
-          item.developerName,
-          formatTime(item.totalTime),
-          item.lastDate || '-'
+        startY: 155,
+        head: [['Feed', 'Project', 'Developer', 'Net Time', 'Raw Time', 'Overlap', 'Logs']],
+        body: filteredData.map(item => [
+          item.feedName || 'Unknown',
+          item.projectName || 'Unknown',
+          item.developerName || 'Unknown',
+          item.formattedNetTime || formatTime(item.netTime || 0),
+          item.formattedTotalTime || formatTime(item.totalTime || 0),
+          item.formattedOverlapTime || formatTime(item.overlapTime || 0),
+          item.logCount || 0
         ]),
-        styles: { fontSize: 9, cellPadding: 3 },
+        styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [37, 99, 235] }
       });
 
       document.body.removeChild(pdfContainer);
-      pdf.save(`resource-analytics-${Date.now()}.pdf`);
+      pdf.save(`resource-analytics-net-time-${Date.now()}.pdf`);
 
       toast.dismiss(loadingToast);
       toast.success('Report downloaded successfully!');
@@ -505,9 +454,9 @@ const ResourceAnalytics = () => {
       {/* HEADER */}
       <div className="flex justify-between items-center mb-8">
         <div>
-          <h1 className="text-4xl font-black">Resource Analytics</h1>
+          <h1 className="text-3xl font-black">Resource Analytics</h1>
           <p className="text-xs uppercase tracking-[0.3em] text-blue-600 font-black mt-2">
-            Project Time Monitoring
+            Net Time Without Overlap
           </p>
         </div>
         <button
@@ -517,6 +466,28 @@ const ResourceAnalytics = () => {
           <Download size={18} />
           Download PDF
         </button>
+      </div>
+
+      {/* INFO BANNER */}
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-3">
+        <Info size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-semibold text-blue-800">Net Time Calculation</p>
+          <p className="text-xs text-blue-700">
+            This report shows <strong>net time without overlap</strong>. If a developer worked on multiple feeds simultaneously, 
+            the overlapping time is counted only once. Raw time shows the sum of all individual timers.
+          </p>
+          <div className="flex items-center gap-4 mt-2 text-xs">
+            <span className="flex items-center gap-1">
+              <Clock size={12} className="text-green-600" />
+              <span className="font-medium text-green-700">Net Time: Actual work time</span>
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock size={12} className="text-amber-600" />
+              <span className="font-medium text-amber-700">Overlap: Duplicate time</span>
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* FILTERS */}
@@ -598,8 +569,8 @@ const ResourceAnalytics = () => {
               onChange={(e) => setSortType(e.target.value)}
               className="h-12 border rounded-2xl px-4 w-full"
             >
-              <option value="highest">Most Time</option>
-              <option value="lowest">Least Time</option>
+              <option value="highest">Most Net Time</option>
+              <option value="lowest">Least Net Time</option>
             </select>
           </div>
         </div>
@@ -620,23 +591,27 @@ const ResourceAnalytics = () => {
       {/* SUMMARY CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
         <div className="bg-white p-6 rounded-[2rem] border">
-          <p className="text-xs uppercase font-black text-slate-400">Total Time</p>
-          <h2 className="text-3xl font-black mt-2">{formatTime(totalSeconds)}</h2>
+          <p className="text-xs uppercase font-black text-slate-400">Total Net Time</p>
+          <h2 className="text-3xl font-black mt-2 text-green-600">{summary.totalNetTimeFormatted || '0h 0m 0s'}</h2>
+          <p className="text-[10px] text-slate-400 mt-1">Actual work time</p>
+        </div>
+
+        <div className="bg-white p-6 rounded-[2rem] border">
+          <p className="text-xs uppercase font-black text-slate-400">Total Overlap</p>
+          <h2 className="text-3xl font-black mt-2 text-amber-600">{summary.totalOverlapTimeFormatted || '0h 0m 0s'}</h2>
+          <p className="text-[10px] text-slate-400 mt-1">Duplicate/overlapping time</p>
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] border">
           <p className="text-xs uppercase font-black text-slate-400">Total Feeds</p>
-          <h2 className="text-3xl font-black mt-2">{aggregatedData.length}</h2>
+          <h2 className="text-3xl font-black mt-2">{filteredData.length}</h2>
+          <p className="text-[10px] text-slate-400 mt-1">Unique feeds analyzed</p>
         </div>
 
         <div className="bg-white p-6 rounded-[2rem] border">
-          <p className="text-xs uppercase font-black text-slate-400">Total Records</p>
-          <h2 className="text-3xl font-black mt-2">{analytics.length}</h2>
-        </div>
-
-        <div className="bg-white p-6 rounded-[2rem] border">
-          <p className="text-xs uppercase font-black text-slate-400">Developers</p>
-          <h2 className="text-3xl font-black mt-2">{developers.length}</h2>
+          <p className="text-xs uppercase font-black text-slate-400">Total Logs</p>
+          <h2 className="text-3xl font-black mt-2">{summary.totalLogs || 0}</h2>
+          <p className="text-[10px] text-slate-400 mt-1">Individual time entries</p>
         </div>
       </div>
 
@@ -647,10 +622,16 @@ const ResourceAnalytics = () => {
         <div ref={pieChartRef} className="bg-white p-4 rounded-[2rem] border lg:col-span-1">
           <div className="flex items-center gap-2 mb-3">
             <PieChart className="text-blue-600" size={20} />
-            <h2 className="text-lg font-black">Feed Distribution (Accumulated)</h2>
+            <h2 className="text-lg font-black">Feed Distribution (Net Time)</h2>
           </div>
-          <div className="max-w-xs mx-auto">
-            <Pie data={pieData} options={pieTooltipOptions} />
+          <div className="max-w-xs mx-auto" style={{ height: '280px' }}>
+            {filteredData.length > 0 ? (
+              <Pie data={pieData} options={chartTooltipOptions} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+                No data to display
+              </div>
+            )}
           </div>
           <p className="text-center text-[10px] text-slate-400 mt-3">
             Hover on segments to see project & developer details
@@ -661,10 +642,16 @@ const ResourceAnalytics = () => {
         <div ref={barChartRef} className="bg-white p-4 rounded-[2rem] border lg:col-span-2">
           <div className="flex items-center gap-2 mb-3">
             <BarChart3 className="text-blue-600" size={20} />
-            <h2 className="text-lg font-black">Feed Comparison (Accumulated)</h2>
+            <h2 className="text-lg font-black">Feed Comparison (Net Time)</h2>
           </div>
           <div className="h-80">
-            <Bar data={barData} options={barTooltipOptions} />
+            {filteredData.length > 0 ? (
+              <Bar data={barData} options={chartTooltipOptions} />
+            ) : (
+              <div className="flex items-center justify-center h-full text-slate-400 text-sm">
+                No data to display
+              </div>
+            )}
           </div>
           <p className="text-center text-[10px] text-slate-400 mt-3">
             Hover on bars to see project & developer details
@@ -672,7 +659,7 @@ const ResourceAnalytics = () => {
         </div>
       </div>
 
-      {/* TABLE - AGGREGATED VIEW */}
+      {/* TABLE - Shows Net Time vs Raw Time */}
       <div className="bg-white rounded-[2rem] border overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
@@ -681,24 +668,30 @@ const ResourceAnalytics = () => {
                 <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Feed</th>
                 <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Project</th>
                 <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Developer</th>
-                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Total Time</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Net Time</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Raw Time</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Overlap</th>
+                <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Logs</th>
                 <th className="px-6 py-4 text-left text-xs font-black uppercase tracking-wider">Last Activity</th>
               </tr>
             </thead>
             <tbody>
-              {aggregatedData.length === 0 ? (
+              {filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-slate-400">
+                  <td colSpan={8} className="px-6 py-12 text-center text-slate-400">
                     No data found for the selected filters
                   </td>
                 </tr>
               ) : (
-                aggregatedData.map((item, index) => (
+                filteredData.map((item, index) => (
                   <tr key={item.feedId || index} className="border-t hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium">{item.feedName}</td>
-                    <td className="px-6 py-4">{item.projectName}</td>
-                    <td className="px-6 py-4">{item.developerName}</td>
-                    <td className="px-6 py-4 font-bold text-blue-700">{formatTime(item.totalTime)}</td>
+                    <td className="px-6 py-4 font-medium">{item.feedName || 'Unknown'}</td>
+                    <td className="px-6 py-4">{item.projectName || 'Unknown'}</td>
+                    <td className="px-6 py-4">{item.developerName || 'Unknown'}</td>
+                    <td className="px-6 py-4 font-bold text-green-700">{item.formattedNetTime || formatTime(item.netTime || 0)}</td>
+                    <td className="px-6 py-4 text-slate-600">{item.formattedTotalTime || formatTime(item.totalTime || 0)}</td>
+                    <td className="px-6 py-4 text-amber-600">{item.formattedOverlapTime || formatTime(item.overlapTime || 0)}</td>
+                    <td className="px-6 py-4 text-slate-600">{item.logCount || 0}</td>
                     <td className="px-6 py-4 text-slate-500 text-sm">{item.lastDate || '-'}</td>
                   </tr>
                 ))
