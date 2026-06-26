@@ -30,16 +30,30 @@ const UserManagement = () => {
   const [selectedRole, setSelectedRole] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Modal key to force re-render
+  const [modalKey, setModalKey] = useState(0);
+  
+  // Read-only states to prevent autofill
+  const [emailReadOnly, setEmailReadOnly] = useState(true);
+  const [passwordReadOnly, setPasswordReadOnly] = useState(true);
+  
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
   const { isCollapsed } = useSidebar();
   
+  // Default role based on current user's role
+  const getDefaultRole = () => {
+    if (userRole === 'Sales Manager') return 'Sales';
+    if (userRole === 'Project Manager') return 'Client';
+    return 'Client';
+  };
+
   const [formData, setFormData] = useState({ 
     name: '', 
     email: '', 
     password: '', 
-    role: userRole === 'Sales Manager' ? 'Sales' : 'Client',
+    role: getDefaultRole(),
     organizationId: '',
     department: 'Other',
     isPrimaryPOC: false
@@ -51,7 +65,7 @@ const UserManagement = () => {
   const API_BASE = `${API_BASE_URL}/api/admin`;
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-  // Available roles for filter
+  // Available roles for filter - ADD Team Lead
   const roleOptions = useMemo(() => {
     const roles = [...new Set(users.map(user => user.role))];
     return ['ALL', ...roles];
@@ -81,7 +95,8 @@ const UserManagement = () => {
       result = result.filter(user => user.role === 'Sales');
     }
     if (userRole === 'Project Manager') {
-      result = result.filter(user => user.role === 'Client');
+      // PM can see Clients and Team Leads
+      result = result.filter(user => user.role === 'Client' || user.role === 'Team Lead');
     }
     
     return result;
@@ -130,16 +145,20 @@ const UserManagement = () => {
     setIsEditing(true);
     setCurrentUserId(user._id);
     setFormData({
-      name: user.name,
-      email: user.email,
-      password: '',
-      role: user.role,
+      name: user.name || '',
+      email: user.email || '',
+      password: '', // Always empty for edit
+      role: user.role || 'Client',
       organizationId: user.organizationId?._id || user.organizationId || '',
       department: user.department || 'Other',
       isPrimaryPOC: user.isPrimaryPOC || false
     });
+    setEmailReadOnly(true);
+    setPasswordReadOnly(true);
     setShowNewOrgForm(false);
     setSearchOrgTerm('');
+    setNewlyCreatedUser(null);
+    setModalKey(prev => prev + 1);
     setShowModal(true);
   };
 
@@ -304,20 +323,50 @@ const UserManagement = () => {
     setNewlyCreatedUser(null);
     setShowNewOrgForm(false);
     setSearchOrgTerm('');
+    setEmailReadOnly(true);
+    setPasswordReadOnly(true);
     setNewOrgData({
       companyName: '',
       website: '',
       address: ''
     });
+    // Reset form data to default values
     setFormData({ 
       name: '', 
       email: '', 
       password: '', 
-      role: userRole === 'Sales Manager' ? 'Sales' : 'Client',
+      role: getDefaultRole(),
       organizationId: '',
       department: 'Other',
       isPrimaryPOC: false
     });
+  };
+
+  // Reset form for new user creation
+  const openCreateModal = () => {
+    setFormData({ 
+      name: '', 
+      email: '', 
+      password: '', 
+      role: getDefaultRole(),
+      organizationId: '',
+      department: 'Other',
+      isPrimaryPOC: false
+    });
+    setEmailReadOnly(true);
+    setPasswordReadOnly(true);
+    setModalKey(prev => prev + 1);
+    setIsEditing(false);
+    setCurrentUserId(null);
+    setShowNewOrgForm(false);
+    setSearchOrgTerm('');
+    setNewOrgData({
+      companyName: '',
+      website: '',
+      address: ''
+    });
+    setNewlyCreatedUser(null);
+    setShowModal(true);
   };
 
   // Filter organizations based on search term
@@ -328,6 +377,7 @@ const UserManagement = () => {
   // Helper to get role display name
   const getRoleDisplayName = (role) => {
     if (role === 'Client') return 'POC';
+    if (role === 'Team Lead') return 'Team Lead';
     return role;
   };
 
@@ -339,6 +389,7 @@ const UserManagement = () => {
       case 'Sales Manager': return 'bg-orange-100 text-orange-700';
       case 'Project Manager': return 'bg-cyan-100 text-cyan-700';
       case 'Client': return 'bg-slate-100 text-slate-700';
+      case 'Team Lead': return 'bg-indigo-100 text-indigo-700';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
@@ -361,6 +412,18 @@ const UserManagement = () => {
     setCurrentPage(1);
   };
 
+  // Available roles for creation dropdown - ADD Team Lead
+  const getAvailableRoles = () => {
+    if (userRole === 'Sales Manager') {
+      return ['Sales'];
+    }
+    if (userRole === 'Project Manager') {
+      return ['Client', 'Team Lead']; // PM can create Client and Team Lead
+    }
+    // Admin can create all roles
+    return ['Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead', 'Admin'];
+  };
+
   return (
     <div
       className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
@@ -377,20 +440,20 @@ const UserManagement = () => {
             {userRole === 'Sales Manager' 
               ? 'Manage your sales representatives.' 
               : userRole === 'Project Manager'
-              ? 'Manage points of contact for client organizations.'
+              ? 'Manage points of contact and team leads for client organizations.'
               : 'Manage system-wide access levels and points of contact.'}
           </p>
         </div>
         <button 
-          onClick={() => setShowModal(true)}
+          onClick={openCreateModal}
           className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
         >
           <UserPlus size={20} /> Add New {userRole === 'Sales Manager' ? 'Sales Rep' : 'User'}
         </button>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      {/* Stats Cards - ADD Team Lead count */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -432,6 +495,18 @@ const UserManagement = () => {
             <div>
               <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Sales Team</p>
               <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Sales' || u.role === 'Sales Manager').length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+              <Users size={18} className="text-white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Team Leads</p>
+              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Team Lead').length}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
               <Users size={18} className="text-white" />
@@ -517,6 +592,7 @@ const UserManagement = () => {
             <tbody className="divide-y divide-slate-50">
               {currentUsers.length > 0 ? currentUsers.map((user) => {
                 const isPOC = user.role === 'Client';
+                const isTeamLead = user.role === 'Team Lead';
                 return (
                   <tr key={user._id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="p-5">
@@ -533,6 +609,12 @@ const UserManagement = () => {
                             <span className="inline-flex items-center gap-1 text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
                               <CheckCircle size={8} />
                               Primary POC
+                            </span>
+                          )}
+                          {isTeamLead && (
+                            <span className="inline-flex items-center gap-1 text-[8px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                              <Users size={8} />
+                              Team Lead
                             </span>
                           )}
                           {user.role === 'Developer' && (
@@ -680,7 +762,10 @@ const UserManagement = () => {
 
       {/* Modal - Add/Edit User Form */}
       {showModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[100] p-4">
+        <div 
+          key={modalKey}
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[100] p-4"
+        >
           <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative max-h-[90vh] overflow-y-auto">
             <button onClick={closeModal} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
               <X size={20} />
@@ -722,6 +807,9 @@ const UserManagement = () => {
                 <input 
                   type="email" 
                   required 
+                  autoComplete="off"
+                  readOnly={emailReadOnly}
+                  onFocus={() => setEmailReadOnly(false)}
                   className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all"
                   value={formData.email} 
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
@@ -738,6 +826,9 @@ const UserManagement = () => {
                   <input 
                     type={showPassword ? "text" : "password"} 
                     required={!isEditing}
+                    autoComplete="off"
+                    readOnly={passwordReadOnly}
+                    onFocus={() => setPasswordReadOnly(false)}
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 pr-12 transition-all"
                     value={formData.password} 
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
@@ -757,7 +848,7 @@ const UserManagement = () => {
                 )}
               </div>
 
-              {/* Role Selection */}
+              {/* Role Selection - UPDATED with Team Lead */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">User Type *</label>
                 <select 
@@ -776,18 +867,11 @@ const UserManagement = () => {
                     setSearchOrgTerm('');
                   }}
                 >
-                  {userRole === 'Sales Manager' ? (
-                    <option value="Sales">Sales</option>
-                  ) : (
-                    <>
-                      <option value="Client">Point of Contact (POC)</option>
-                      <option value="Developer">Developer</option>
-                      <option value="Sales">Sales</option>
-                      <option value="Project Manager">Project Manager</option>
-                      <option value="Sales Manager">Sales Manager</option>
-                      <option value="Admin">Admin</option>
-                    </>
-                  )}
+                  {getAvailableRoles().map(role => (
+                    <option key={role} value={role}>
+                      {role === 'Client' ? 'Point of Contact (POC)' : role}
+                    </option>
+                  ))}
                 </select>
               </div>
 
@@ -975,6 +1059,19 @@ const UserManagement = () => {
                 </div>
               )}
 
+              {/* Info for Team Lead Role */}
+              {!isEditing && formData.role === 'Team Lead' && (
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Users size={14} className="text-indigo-600" />
+                    <p className="text-[9px] font-black text-indigo-700 uppercase tracking-wider">Team Lead Account</p>
+                  </div>
+                  <p className="text-[8px] text-indigo-600">
+                    Team Leads can manage projects, assign developers to feeds, and view project tickets.
+                  </p>
+                </div>
+              )}
+
               {/* Info for POC */}
               {!isEditing && formData.role === 'Client' && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
@@ -1028,6 +1125,18 @@ const UserManagement = () => {
                         : 'Organization'}
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Success message for newly created Team Lead */}
+              {!isEditing && newlyCreatedUser && newlyCreatedUser.role === 'Team Lead' && (
+                <div className="rounded-xl p-3 bg-indigo-50 border border-indigo-200">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle size={14} className="text-indigo-600" />
+                    <p className="text-[9px] font-black text-indigo-700">
+                      ✅ Team Lead account created successfully for {newlyCreatedUser.name}!
+                    </p>
+                  </div>
                 </div>
               )}
 

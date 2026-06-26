@@ -1,3 +1,4 @@
+// frontend/src/pages/ProjectManagement.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import {
@@ -31,14 +32,15 @@ import {
   CheckCircle2,
   Clock,
   Building2,
-  Filter
-
+  Filter,
+  MessageSquare
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import CommentSection from '../components/CommentSection';
 
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
@@ -60,6 +62,7 @@ const ProjectManagement = () => {
   const [projects, setProjects] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [projectManagers, setProjectManagers] = useState([]);
+  const [teamLeads, setTeamLeads] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const { isCollapsed } = useSidebar();
   
@@ -89,6 +92,11 @@ const ProjectManagement = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingFeed, setIsEditingFeed] = useState(false);
 
+  // --- Comment Modal State ---
+  const [showProjectCommentModal, setShowProjectCommentModal] = useState(false);
+  const [selectedProjectForComments, setSelectedProjectForComments] = useState(null);
+  const [commentRefreshTrigger, setCommentRefreshTrigger] = useState(0);
+
   // --- Organization Selection State ---
   const [orgSearchTerm, setOrgSearchTerm] = useState('');
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
@@ -107,6 +115,8 @@ const ProjectManagement = () => {
   const ADMIN_BASE = `${API_BASE_URL}/api/admin`;
   const token = localStorage.getItem('token');
   const currentUserId = localStorage.getItem('userId');
+  const userName = localStorage.getItem('userName') || 'User';
+  const userRole = localStorage.getItem('role') || 'User';
 
   const authHeader = {
     headers: {
@@ -166,7 +176,6 @@ const ProjectManagement = () => {
       case 'New': return 'bg-blue-100 text-blue-700 border-blue-200';
       case 'Once off': return 'bg-purple-100 text-purple-700 border-purple-200';
       case 'Automation': return 'bg-teal-100 text-teal-700 border-teal-200';  
-
       case 'Ad hoc': return 'bg-amber-100 text-amber-700 border-amber-200';
       case 'BAU Initiated': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
       case 'BAU Not Initiated': return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -229,6 +238,20 @@ const ProjectManagement = () => {
       toast.error(err.response?.data?.error || 'Failed to update project status');
     } finally {
       setUpdatingStatus(prev => ({ ...prev, [projectId]: false }));
+    }
+  };
+
+  const updateTeamLead = async (projectId, teamLeadId) => {
+    try {
+      await axios.post(`${ADMIN_BASE}/projects/${projectId}/assign-teamlead`,
+        { teamLeadId: teamLeadId || null },
+        authHeader
+      );
+      toast.success('Team Lead updated successfully');
+      fetchInitialData();
+    } catch (err) {
+      console.error('Error updating Team Lead:', err);
+      toast.error(err.response?.data?.error || 'Failed to update Team Lead');
     }
   };
 
@@ -341,15 +364,17 @@ const ProjectManagement = () => {
 
   const fetchInitialData = async () => {
     try {
-      const [projRes, devRes, pmRes] = await Promise.all([
+      const [projRes, devRes, pmRes, tlRes] = await Promise.all([
         axios.get(`${ADMIN_BASE}/projects`, authHeader),
         axios.get(`${ADMIN_BASE}/users/developers`, authHeader),
-        axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader)
+        axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader),
+        axios.get(`${ADMIN_BASE}/users/teamleads`, authHeader)
       ]);
 
       setProjects(projRes.data);
       setDevelopers(devRes.data);
       setProjectManagers(pmRes.data);
+      setTeamLeads(tlRes.data);
 
     } catch (err) {
       console.error("Data fetch failed:", err);
@@ -892,15 +917,16 @@ const ProjectManagement = () => {
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1300px]">
-            <thead className="bg-[#F8FAFC] border-b border-slate-100">
+            <thead className="bg-[#F8FAFC] border-b-2 border-slate-100">
               <tr>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Project</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Client Organization</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Industry</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Country</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Feeds</th>
-                <th className="text-left px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Status</th>
-                <th className="text-right px-6 py-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Actions</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[240px]">Project</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[160px]">Client Organization</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[120px]">Industry</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[110px]">Country</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[90px]">Feeds</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[180px]">TL</th>
+                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[180px]">Status</th>
+                <th className="text-right px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[130px]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -909,77 +935,91 @@ const ProjectManagement = () => {
                   const isFromSales = project.projectCustomId?.includes('PRJ');
                   const orgList = project.organizations || [];
                   return (
-                    <tr key={project._id} className="border-b border-slate-50 hover:bg-slate-50/60 transition-all">
-                      <td className="px-6 py-5">
+                    <tr key={project._id} className="border-b border-slate-100 hover:bg-slate-50/70 transition-all">
+                      <td className="px-8 py-6">
                         <div className="flex items-center gap-4">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0 ${
                             isFromSales ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
                           }`}>
-                            {isFromSales ? <ShoppingBag size={20} /> : <Activity size={20} />}
+                            {isFromSales ? <ShoppingBag size={22} /> : <Activity size={22} />}
                           </div>
                           <div>
-                            <p className="text-sm font-black text-[#1B2559]">{project.projectCustomId || 'NO_ID'}</p>
-                            <p className="text-xs font-bold text-slate-400 mt-1">{project.name}</p>
+                            <p className="text-sm font-black text-[#1B2559] leading-tight">{project.projectCustomId || 'NO_ID'}</p>
                           </div>
                         </div>
-                       </td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-wrap gap-1">
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex flex-wrap gap-1.5">
                           {orgList.length > 0 ? (
                             orgList.slice(0, 2).map((org, idx) => {
                               const orgName = typeof org === 'object' ? org?.companyName : organizations.find(o => o._id === org)?.companyName;
                               return (
-                                <span key={idx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[9px] font-bold">
-                                  <Building2 size={8} />
+                                <span key={idx} className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 px-2.5 py-1.5 rounded-lg text-[9px] font-bold">
+                                  <Building2 size={9} />
                                   {orgName || 'Organization'}
                                 </span>
                               );
                             })
                           ) : (
-                            <span className="text-slate-400 text-[9px]">No clients</span>
+                            <span className="text-slate-400 text-[10px] font-medium">No clients</span>
                           )}
                           {orgList.length > 2 && (
                             <span className="text-[9px] font-bold text-slate-400">+{orgList.length - 2} more</span>
                           )}
                         </div>
-                       </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100">
+                      </td>
+                      <td className="px-8 py-6">
+                        <span className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100 whitespace-nowrap">
                           <Briefcase size={12} />
                           {project.industry}
                         </span>
-                       </td>
-                      <td className="px-6 py-5">
-                        <span className="inline-flex items-center gap-2 bg-slate-50 text-slate-600 px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100">
+                      </td>
+                      <td className="px-8 py-6">
+                        <span className="inline-flex items-center gap-2 bg-slate-50 text-slate-600 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100 whitespace-nowrap">
                           <Globe size={12} />
                           {POPULAR_COUNTRIES.find(c => c.label === project.country)?.value ||
                            (project.country?.substring(0, 2).toUpperCase()) || 'XX'}
                         </span>
-                       </td>
-                      <td className="px-6 py-5">
+                      </td>
+                      <td className="px-8 py-6">
                         <div 
                           className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
                           onClick={() => navigateToFeedExplorer(project)}
                         >
                           <Hash size={14} className="text-slate-400 group-hover:text-blue-600" />
-                          <span className="text-sm font-black text-[#1B2559] group-hover:text-blue-600">
+                          <span className="text-base font-black text-[#1B2559] group-hover:text-blue-600">
                             {project.feeds?.length || 0}
                           </span>
-                          <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                            View Feeds →
+                          <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                            View →
                           </span>
                         </div>
-                       </td>
+                      </td>
                       
+                      {/* TL COLUMN */}
+                      <td className="px-8 py-6">
+                        <select
+                          value={project.teamLead?._id || project.teamLead || ''}
+                          onChange={(e) => updateTeamLead(project._id, e.target.value)}
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-8 bg-indigo-50 text-indigo-700 border-indigo-200 min-w-[140px]"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '10px' }}
+                        >
+                          <option value="">— None —</option>
+                          {teamLeads.map(tl => (
+                            <option key={tl._id} value={tl._id}>{tl.name}</option>
+                          ))}
+                        </select>
+                      </td>
+
                       {/* STATUS COLUMN */}
-                      <td className="px-6 py-5">
+                      <td className="px-8 py-6">
                         <div className="relative">
                           <select
                             value={project.projectStatus || 'New'}
                             onChange={(e) => updateProjectStatus(project._id, e.target.value)}
                             disabled={updatingStatus[project._id]}
-                            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-[9px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-7 ${getProjectStatusColor(project.projectStatus)}`}
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center', backgroundSize: '10px' }}
+                            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-8 min-w-[140px] ${getProjectStatusColor(project.projectStatus)}`}
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '10px' }}
                           >
                             {projectStatuses.map(status => (
                               <option key={status} value={status}>{status}</option>
@@ -991,24 +1031,43 @@ const ProjectManagement = () => {
                             </div>
                           )}
                         </div>
-                       </td>
+                      </td>
                       
-                      <td className="px-6 py-5">
-                        <div className="flex items-center justify-end gap-2">
-                          <button onClick={() => handleEditClick(project)} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all">
+                      <td className="px-8 py-6">
+                        <div className="flex items-center justify-end gap-2.5">
+                          <button 
+                            onClick={() => handleEditClick(project)} 
+                            className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"
+                            title="Edit Project"
+                          >
                             <Settings2 size={16} />
                           </button>
-                          <button onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all">
+                          <button 
+                            onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }} 
+                            className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm"
+                            title="Add Feed"
+                          >
                             <Plus size={16} />
                           </button>
+                          <button 
+                            onClick={() => {
+                              setSelectedProjectForComments(project);
+                              setShowProjectCommentModal(true);
+                              setCommentRefreshTrigger(prev => prev + 1);
+                            }}
+                            className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-purple-50 hover:text-purple-600 transition-all shadow-sm"
+                            title="View Comments"
+                          >
+                            <MessageSquare size={16} />
+                          </button>
                         </div>
-                       </td>
+                      </td>
                     </tr>
                   );
                 })
               ) : (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                         <Activity size={28} className="text-slate-300" />
@@ -1016,11 +1075,11 @@ const ProjectManagement = () => {
                       <p className="text-sm font-bold text-slate-500">No projects found</p>
                       <p className="text-xs text-slate-400 mt-1">Try adjusting your filters</p>
                     </div>
-                   </td>
+                  </td>
                 </tr>
               )}
             </tbody>
-           </table>
+          </table>
         </div>
       </div>
 
@@ -1569,6 +1628,41 @@ const ProjectManagement = () => {
                 Push to Bucket
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* PROJECT COMMENT MODAL */}
+      {showProjectCommentModal && selectedProjectForComments && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[150] p-6">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-[#1B2559]">Project Comments</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {selectedProjectForComments.projectCustomId || selectedProjectForComments.name}
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowProjectCommentModal(false);
+                  setSelectedProjectForComments(null);
+                }}
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                <X size={28} />
+              </button>
+            </div>
+            
+            <CommentSection
+              type="project"
+              entityId={selectedProjectForComments._id}
+              userRole={userRole}
+              userId={currentUserId}
+              currentUserName={userName}
+              canComment={userRole === 'Admin' || userRole === 'Project Manager'}
+              refreshTrigger={commentRefreshTrigger}
+            />
           </div>
         </div>
       )}

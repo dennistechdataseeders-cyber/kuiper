@@ -115,7 +115,7 @@ const FeedSchema = new mongoose.Schema({
     default: Date.now
   },
 
-  // NEW: Feed Status Field
+  // Feed Status Field
   feedStatus: {
     type: String,
     enum: [
@@ -133,12 +133,22 @@ const FeedSchema = new mongoose.Schema({
       'Closed'
     ],
     default: 'New'
-  }
+  },
+
+  // ✅ FIX: Comments field at the top level (NOT inside feedStatus)
+  comments: [{
+    text: { type: String, required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    userName: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+  }]
 });
 
 // Pre-save middleware to update the updatedAt timestamp
 FeedSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  
 });
 
 module.exports = mongoose.model('Feed', FeedSchema);

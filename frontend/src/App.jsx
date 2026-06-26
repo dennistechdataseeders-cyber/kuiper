@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import { useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -30,6 +31,11 @@ import DeveloperGitFeeds from './pages/DeveloperGitFeeds';
 import AdminProjectClients from './pages/AdminProjectClients';  
 import DeveloperProjects from './pages/DeveloperProjects';
 import DeveloperFeeds from './pages/DeveloperFeeds';
+import TeamLeadDashboard from './pages/TeamLeadDashboard';
+import TeamLeadProjects from './pages/TeamLeadProjects';
+import TeamLeadDevelopers from './pages/TeamLeadDevelopers';
+import TeamLeadFeeds from './pages/TeamLeadFeeds';
+
 import { AnimatePresence } from 'framer-motion';
 
 const SessionManager = ({ children }) => {
@@ -74,7 +80,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       'Sales': '/sales',
       'Developer': '/developer',
       'Project Manager': '/admin/projects',
-      'Client': '/client',  // ADD THIS LINE
+      'Client': '/client', 
+      'Team Lead': '/teamlead',
     };
     
     const fallbackPath = rolePaths[userRole] || '/login';
@@ -95,16 +102,13 @@ const landingPath = useMemo(() => {
   if (userRole === 'Sales') return '/sales';
   if (userRole === 'Project Manager') return '/admin/projects';
   if (userRole === 'Developer') return '/developer';
-  if (userRole === 'Client') return '/client';  // ADD THIS LINE
+  if (userRole === 'Client') return '/client';
+  if (userRole === 'Team Lead') return '/teamlead';
   return '/login';
 }, [userRole]);
 
   return (
     <SessionManager>
-      {/* 
-          AnimatePresence must be given the current location and a unique key 
-          (usually location.pathname) so it knows when a route change occurs.
-      */}
       <AnimatePresence mode="wait">
         <Routes location={location} key={location.pathname}>
           <Route 
@@ -166,15 +170,21 @@ const landingPath = useMemo(() => {
                     <Route path="/developer/git-feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperGitFeeds /></ProtectedRoute>} />
                     <Route path="/developer/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperProjects /></ProtectedRoute>} />
                     <Route path="/developer/feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperFeeds /></ProtectedRoute>} />
+                    
+                    {/* Team Lead */}
+                    <Route path="/teamlead" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDashboard /></ProtectedRoute>} />
+                    <Route path="/teamlead/projects" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadProjects /></ProtectedRoute>} />
+                    <Route path="/teamlead/developers" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDevelopers /></ProtectedRoute>} />
+                    <Route path="/teamlead/feeds" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadFeeds /></ProtectedRoute>} />
                     {/*Client routes*/}
                     <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientDashboard /></ProtectedRoute>} />
 
                     {/* Shared */}
-                    <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDashboard /></ProtectedRoute>} />
-                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager','Developer']}><CreateTicket /></ProtectedRoute>} />
-                    <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}><TicketDetails /></ProtectedRoute>} />
+                    <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDashboard /></ProtectedRoute>} />
+                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead']}><CreateTicket /></ProtectedRoute>} />
+                    <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDetails /></ProtectedRoute>} />
                     
-                    <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager']}><ViewAnalytics /></ProtectedRoute>} />
+                    <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
                     <Route path="/notifications" element={

@@ -92,12 +92,12 @@ router.get('/:id', ticketController.getTicketById);
 
 // Ticket actions
 router.patch('/:id/status', ticketController.updateStatus);
-router.patch('/:id/assign', authorize('Project Manager', 'Admin'), ticketController.assignTicket);
+router.patch('/:id/assign', authorize('Project Manager', 'Admin', 'Team Lead'), ticketController.assignTicket);
 router.post('/:id/comments', ticketController.addComment);
 
 // Helper endpoints for dropdowns
 router.get('/projects/list', ticketController.getProjects);
 router.get('/feeds/:projectId', ticketController.getFeeds);
-router.get('/developers/list', authorize('Project Manager', 'Admin'), ticketController.getDevelopers);
+router.get('/developers/list', authorize('Project Manager', 'Admin','Team Lead'), ticketController.getDevelopers);
 
 module.exports = router;

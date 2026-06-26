@@ -57,6 +57,8 @@ const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
 const resourceAnalyticsRoutes = require('./routes/resourceAnalyticsRoutes');
 const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
+const commentRoutes = require('./routes/commentRoutes');
+const teamLeadRoutes = require('./routes/teamLeadRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -201,6 +203,8 @@ app.use('/api/dev/worklog', protect, workDescriptionRoutes);
 app.use('/api/resource-analytics', resourceAnalyticsRoutes);
 app.use('/api/email-campaign', emailCampaignRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/comments', protect, commentRoutes);
+app.use('/api/teamlead', protect, teamLeadRoutes);
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE

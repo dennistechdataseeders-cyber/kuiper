@@ -14,6 +14,9 @@ const {
 } = require('../templates/ticketEmailTemplates');
 
 // Helper function to get all stakeholders for a ticket
+// backend/controllers/ticketController.js
+
+// Helper function to get all stakeholders for a ticket
 async function getTicketStakeholders(ticket, createdByUser) {
   const stakeholders = new Map(); // Use Map to avoid duplicates by email
 
@@ -43,80 +46,41 @@ async function getTicketStakeholders(ticket, createdByUser) {
   // 3. Get project details
   const project = await Project.findById(ticket.projectId)
     .populate('projectManager', 'name email role')
+    .populate('teamLead', 'name email role')  // IMPORTANT: Populate teamLead
     .populate('clients', 'name email role');
 
-  // 4. Add Project Manager
+  // 4. Add Project Manager (if exists and not already added)
   if (project && project.projectManager) {
     const pm = project.projectManager;
-    stakeholders.set(pm.email, {
-      name: pm.name,
-      email: pm.email,
-      role: 'Project Manager',
-      type: 'project_manager'
-    });
-  }
-
-  // 5. Add POC (Client) users from the project
-  if (project && project.clients && project.clients.length > 0) {
-    for (const client of project.clients) {
-      const clientUser = await User.findById(client._id || client).select('name email role organizationId');
-      if (clientUser) {
-        // If ticket is created by a Client, don't email them again (they already got a confirmation)
-        const isCreator = clientUser._id.toString() === createdByUser?._id.toString();
-        
-        if (!isCreator) {
-          stakeholders.set(clientUser.email, {
-            name: clientUser.name,
-            email: clientUser.email,
-            role: 'POC',
-            type: 'poc'
-          });
-        }
-      }
+    if (!stakeholders.has(pm.email)) {
+      stakeholders.set(pm.email, {
+        name: pm.name,
+        email: pm.email,
+        role: 'Project Manager',
+        type: 'project_manager'
+      });
     }
   }
 
-  // 6. Also get POCs from organizations associated with the project
-  if (project && project.organizations && project.organizations.length > 0) {
-    for (const orgId of project.organizations) {
-      const org = await Organization.findById(orgId).select('pointsOfContact clientUserId');
-      if (org) {
-        // Get client user associated with organization
-        if (org.clientUserId) {
-          const clientUser = await User.findById(org.clientUserId).select('name email role');
-          if (clientUser && clientUser.email !== createdByUser?.email) {
-            stakeholders.set(clientUser.email, {
-              name: clientUser.name,
-              email: clientUser.email,
-              role: 'POC',
-              type: 'poc'
-            });
-          }
-        }
-        
-        // Also add all points of contact
-        if (org.pointsOfContact && org.pointsOfContact.length > 0) {
-          for (const poc of org.pointsOfContact) {
-            if (poc.pocEmail && poc.pocEmail !== createdByUser?.email) {
-              stakeholders.set(poc.pocEmail, {
-                name: poc.pocName,
-                email: poc.pocEmail,
-                role: 'POC',
-                type: 'poc'
-              });
-            }
-          }
-        }
-      }
+  // 5. Add Team Lead (if exists and not already added)
+  if (project && project.teamLead) {
+    const tl = project.teamLead;
+    if (!stakeholders.has(tl.email)) {
+      stakeholders.set(tl.email, {
+        name: tl.name,
+        email: tl.email,
+        role: 'Team Lead',
+        type: 'team_lead'
+      });
     }
   }
 
-  // 7. Add developers assigned to the feed (if feed exists)
+  // 6. Add developers assigned to the feed (if feed exists)
   if (ticket.feedId) {
     const feed = await Feed.findById(ticket.feedId).populate('assignedDevelopers', 'name email role');
     if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
       for (const dev of feed.assignedDevelopers) {
-        if (dev.email !== createdByUser?.email) {
+        if (!stakeholders.has(dev.email)) {
           stakeholders.set(dev.email, {
             name: dev.name,
             email: dev.email,
@@ -128,9 +92,68 @@ async function getTicketStakeholders(ticket, createdByUser) {
     }
   }
 
+  // 7. Add POC (Client) users from the project (for client-created tickets)
+  if (project && project.clients && project.clients.length > 0) {
+    for (const client of project.clients) {
+      const clientUser = await User.findById(client._id || client).select('name email role organizationId');
+      if (clientUser) {
+        // Don't send email to the creator if they are a client (they already got a confirmation)
+        const isCreator = clientUser._id.toString() === createdByUser?._id.toString();
+        if (!isCreator && !stakeholders.has(clientUser.email)) {
+          stakeholders.set(clientUser.email, {
+            name: clientUser.name,
+            email: clientUser.email,
+            role: 'POC',
+            type: 'poc'
+          });
+        }
+      }
+    }
+  }
+
+  // 8. Also get POCs from organizations associated with the project
+  if (project && project.organizations && project.organizations.length > 0) {
+    for (const orgId of project.organizations) {
+      const org = await Organization.findById(orgId).select('pointsOfContact clientUserId');
+      if (org) {
+        // Get client user associated with organization
+        if (org.clientUserId) {
+          const clientUser = await User.findById(org.clientUserId).select('name email role');
+          if (clientUser && !stakeholders.has(clientUser.email)) {
+            const isCreator = clientUser._id.toString() === createdByUser?._id.toString();
+            if (!isCreator) {
+              stakeholders.set(clientUser.email, {
+                name: clientUser.name,
+                email: clientUser.email,
+                role: 'POC',
+                type: 'poc'
+              });
+            }
+          }
+        }
+        
+        // Also add all points of contact
+        if (org.pointsOfContact && org.pointsOfContact.length > 0) {
+          for (const poc of org.pointsOfContact) {
+            if (poc.pocEmail && !stakeholders.has(poc.pocEmail)) {
+              const isCreator = poc.pocEmail === createdByUser?.email;
+              if (!isCreator) {
+                stakeholders.set(poc.pocEmail, {
+                  name: poc.pocName,
+                  email: poc.pocEmail,
+                  role: 'POC',
+                  type: 'poc'
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   return Array.from(stakeholders.values());
 }
-
 // Helper function to send comment notifications
 async function notifyCommentStakeholders(ticket, commentAuthor, commentText, hasImages) {
   const project = await Project.findById(ticket.projectId)
@@ -230,7 +253,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
         html: emailHtml
       });
       
-      console.log(`   📧 Comment notification sent to: ${stakeholder.email}`);
     } catch (err) {
       console.error(`   ❌ Failed to send comment email to ${stakeholder.email}:`, err.message);
     }
@@ -240,15 +262,15 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
   }
 }
 
-// Determine if this is an internal ticket (PM/Admin/Developer created)
+// Determine if this is an internal ticket (PM/Admin/Developer/Team Lead created)
 function isInternalTicket(creatorRole) {
-  return ['Admin', 'Project Manager', 'Developer'].includes(creatorRole);
+  return ['Admin', 'Project Manager', 'Developer', 'Team Lead'].includes(creatorRole);
 }
 
 // Create ticket
 exports.createTicket = async (req, res) => {
   try {
-    const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType } = req.body;
+    const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType, assignedTo } = req.body;
     
     // Determine if ticket should be internal
     const userRole = req.user.role;
@@ -262,21 +284,54 @@ exports.createTicket = async (req, res) => {
       });
     }
     
+    // ✅ TEAM LEAD VERIFICATION: If Team Lead is creating a ticket, verify they are the Team Lead for that project
+    if (userRole === 'Team Lead' && projectId) {
+      const project = await Project.findOne({ 
+        _id: projectId, 
+        teamLead: req.user.id 
+      });
+      if (!project) {
+        return res.status(403).json({ 
+          error: 'You are not the Team Lead for this project. You can only create tickets for projects you manage.' 
+        });
+      }
+    }
+    
     // Keep the projectId and feedId as provided (don't nullify for internal)
     // Only nullify if they are explicitly set to null/empty string
     const finalProjectId = projectId || null;
     const finalFeedId = feedId || null;
     
-    let assignedTo = null;
+    let finalAssignedTo = null;
     
-    // Try to assign from feed if provided
-    if (feedId) {
-      const feed = await Feed.findById(feedId).populate('assignedDevelopers', '_id');
-      if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
-        assignedTo = feed.assignedDevelopers[0]._id;
+    // ✅ FIX: Check if assignedTo is provided in the request body
+    if (assignedTo) {
+      // Verify the assigned user exists and is a Developer
+      const developer = await User.findOne({ _id: assignedTo, role: 'Developer' });
+      if (developer) {
+        finalAssignedTo = developer._id;
+        console.log(`   ✅ Assigned developer set: ${developer.name} (${developer._id})`);
+      } else {
+        console.log(`   ⚠️ Assigned developer not found or not a Developer role: ${assignedTo}`);
       }
     }
     
+    // If still no assignedTo and feed is provided, try to assign from feed
+    if (!finalAssignedTo && feedId) {
+      const feed = await Feed.findById(feedId).populate('assignedDevelopers', '_id');
+      if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
+        finalAssignedTo = feed.assignedDevelopers[0]._id;
+        console.log(`   Assigned from feed: ${finalAssignedTo}`);
+      }
+    }
+    
+    // If user is Developer and no assignedTo was set, assign to themselves
+    if (!finalAssignedTo && userRole === 'Developer') {
+      finalAssignedTo = req.user.id;
+      console.log(`   Auto-assigned ticket to creator (Developer): ${req.user.id}`);
+    }
+    
+    // Create the ticket
     const ticket = new Ticket({
       title,
       description,
@@ -284,7 +339,7 @@ exports.createTicket = async (req, res) => {
       projectId: finalProjectId,
       feedId: finalFeedId,
       createdBy: req.user.id,
-      assignedTo: assignedTo,
+      assignedTo: finalAssignedTo,
       isInternal: shouldBeInternal,
       category: category || '',
       subcategory: subcategory || '',
@@ -294,13 +349,152 @@ exports.createTicket = async (req, res) => {
     
     await ticket.save();
     
-    // ... rest of the code remains the same ...
+    // --- GET CREATOR USER ---
+    const creatorUser = await User.findById(req.user.id).select('name email role');
+    
+    // --- GET PROJECT DETAILS (for email templates) ---
+    let projectName = 'Unknown Project';
+    let projectCustomId = 'N/A';
+    let projectData = null;
+    if (finalProjectId) {
+      projectData = await Project.findById(finalProjectId).select('name projectCustomId teamLead projectManager');
+      if (projectData) {
+        projectName = projectData.name || 'Unknown Project';
+        projectCustomId = projectData.projectCustomId || 'N/A';
+      }
+    }
+    
+    // --- GET FEED NAME (for email templates) ---
+    let feedName = null;
+    if (finalFeedId) {
+      const feed = await Feed.findById(finalFeedId).select('name');
+      feedName = feed?.name || null;
+    }
+    
+    // --- GET FRONTEND URL ---
+    const frontendUrl = process.env.FRONTEND_URL || 'http://192.168.1.105:5173';
+    
+    // --- GET ALL STAKEHOLDERS ---
+    const stakeholders = await getTicketStakeholders(ticket, creatorUser);
+    
+    // --- SEND EMAILS TO ALL STAKEHOLDERS ---
+    console.log(`📧 Sending ticket notifications for ${ticket.ticketNumber} to ${stakeholders.length} recipients...`);
+    console.log(`   Project: ${projectName} (${projectCustomId})`);
+    console.log(`   Created by: ${creatorUser?.name} (${creatorUser?.role})`);
+    
+    for (const stakeholder of stakeholders) {
+      try {
+        let emailHtml;
+        let subject;
+        
+        // Different templates based on role
+        if (stakeholder.type === 'poc') {
+          // POC gets a client-friendly notification - use the actual project name
+          emailHtml = getPOCNotificationTemplate(
+            ticket,
+            stakeholder.name,
+            projectName,  // Use the actual project name
+            frontendUrl,
+            feedName
+          );
+          subject = `📋 Support Ticket: ${ticket.ticketNumber} - ${ticket.title}`;
+        } else if (ticket.isInternal) {
+          // Internal ticket template for team members
+          emailHtml = getInternalTicketTemplate(
+            ticket,
+            creatorUser?.name || 'System',
+            stakeholders,
+            frontendUrl,
+            feedName,
+            projectName  // Pass project name to template
+          );
+          subject = `🔒 Internal Ticket: ${ticket.ticketNumber} - ${ticket.title}`;
+        } else {
+          // General ticket template
+          emailHtml = getTicketCreatedTemplate(
+            ticket,
+            creatorUser?.name || 'System',
+            stakeholders,
+            frontendUrl,
+            feedName,
+            projectName  // Pass project name to template
+          );
+          subject = `📋 New Ticket: ${ticket.ticketNumber} - ${ticket.title}`;
+        }
+        
+        await sendEmail({
+          to: stakeholder.email,
+          subject: subject,
+          html: emailHtml
+        });
+        
+        console.log(`   📧 Email sent to: ${stakeholder.email} (${stakeholder.type})`);
+      } catch (err) {
+        console.error(`   ❌ Failed to send email to ${stakeholder.email}:`, err.message);
+      }
+      
+      // Small delay to avoid rate limiting
+      await new Promise(resolve => setTimeout(resolve, 200));
+    }
+    
+    // --- SEND SOCKET NOTIFICATIONS ---
+    const io = req.app.get('io');
+    if (io) {
+      // Populate ticket for socket
+      const populatedTicket = await Ticket.findById(ticket._id)
+        .populate('createdBy', 'name email role')
+        .populate('assignedTo', 'name email')
+        .populate('projectId', 'name projectCustomId')
+        .populate('feedId', 'name');
+      
+      // Emit to all relevant rooms
+      io.emit('ticket_created', populatedTicket);
+      
+      // Emit to creator's room
+      if (ticket.createdBy) {
+        io.to(ticket.createdBy.toString()).emit('ticket_created', populatedTicket);
+      }
+      
+      // Emit to assignee's room
+      if (ticket.assignedTo) {
+        io.to(ticket.assignedTo.toString()).emit('ticket_created', populatedTicket);
+      }
+      
+      // Emit to project manager's room
+      if (finalProjectId) {
+        const project = await Project.findById(finalProjectId).populate('projectManager', '_id');
+        if (project?.projectManager) {
+          io.to(project.projectManager._id.toString()).emit('ticket_created', populatedTicket);
+        }
+      }
+      
+      // Emit to team lead's room
+      if (finalProjectId) {
+        const project = await Project.findById(finalProjectId).populate('teamLead', '_id');
+        if (project?.teamLead) {
+          io.to(project.teamLead._id.toString()).emit('ticket_created', populatedTicket);
+        }
+      }
+      
+      console.log(`📡 Socket notifications sent for ticket: ${ticket.ticketNumber}`);
+    }
+    
+    // --- RETURN SUCCESS RESPONSE ---
+    return res.status(201).json({
+      success: true,
+      message: 'Ticket created successfully',
+      ticket: ticket,
+      emailsSent: stakeholders.length
+    });
+    
   } catch (error) {
     console.error('Error creating ticket:', error);
-    res.status(500).json({ error: 'Failed to create ticket', details: error.message });
+    return res.status(500).json({ 
+      error: 'Failed to create ticket', 
+      details: error.message 
+    });
   }
-};  
-
+};
 // Add this new template function for general tickets
 function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
   const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
@@ -382,29 +576,81 @@ function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
   `;
 }
 
-// Get all tickets (filtered by role)
 exports.getTickets = async (req, res) => {
   try {
     let filter = {};
     const userRole = req.user.role;
-    
+    const userId = req.user.id;
+
     if (userRole === 'Client') {
-      filter.createdBy = req.user.id;
+      // Client sees tickets they created OR tickets assigned to them
+      filter = {
+        $or: [
+          { createdBy: userId },
+          { assignedTo: userId }
+        ]
+      };
     } else if (userRole === 'Developer') {
-      filter.assignedTo = req.user.id;
+      // Developer sees: tickets assigned to them, tickets they created, and unassigned tickets
+      filter = {
+        $or: [
+          { assignedTo: userId },
+          { createdBy: userId },
+          { assignedTo: null }
+        ]
+      };
+    } else if (userRole === 'Project Manager') {
+      // Get all projects managed by this PM
+      const pmProjects = await Project.find({ projectManager: userId }).select('_id');
+      const projectIds = pmProjects.map(p => p._id);
+
+      // PM sees:
+      // 1. Tickets from their projects
+      // 2. ALL Feasibility tickets (projectId: null, category: Production, subcategory: Feasibility) - regardless of assignment
+      // 3. Tickets created by the PM
+      // 4. Tickets assigned to the PM
+      filter = {
+        $or: [
+          // Tickets from PM's projects
+          { projectId: { $in: projectIds } },
+          // ALL Feasibility tickets - show all of them to PMs
+          { 
+            $and: [
+              { projectId: null },
+              { category: 'Production' },
+              { subcategory: 'Feasibility' }
+            ]
+          },
+          // Tickets created by the PM
+          { createdBy: userId },
+          // Tickets assigned to the PM
+          { assignedTo: userId }
+        ]
+      };
+    } else if (userRole === 'Team Lead') {
+      // Team Lead sees tickets from their projects + tickets they created + tickets assigned to them
+      const tlProjects = await Project.find({ teamLead: userId }).select('_id');
+      const projectIds = tlProjects.map(p => p._id);
+      filter = {
+        $or: [
+          { projectId: { $in: projectIds } },
+          { createdBy: userId },
+          { assignedTo: userId }
+        ]
+      };
     }
-    // Admin and PM see all tickets
-    
+    // Admin sees all tickets (no filter)
+
     const tickets = await Ticket.find(filter)
       .populate('createdBy', 'name email role')
       .populate('assignedTo', 'name email')
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name')
       .sort({ createdAt: -1 });
-    
+
     res.json(tickets);
   } catch (error) {
-    console.error(error);
+    console.error('Error fetching tickets:', error);
     res.status(500).json({ error: 'Failed to fetch tickets' });
   }
 };
@@ -431,7 +677,6 @@ exports.getTicketById = async (req, res) => {
 };
 
 // Update ticket status
-// Update status
 exports.updateStatus = async (req, res) => {
   try {
     const { status } = req.body;
@@ -445,6 +690,7 @@ exports.updateStatus = async (req, res) => {
     const canUpdate = 
       req.user.role === 'Admin' ||
       req.user.role === 'Project Manager' ||
+      req.user.role === 'Team Lead' ||
       ticket.createdBy.toString() === req.user.id ||  // Creator can always update
       (req.user.role === 'Developer' && ticket.assignedTo?.toString() === req.user.id);
 
@@ -635,7 +881,7 @@ exports.getDevelopers = async (req, res) => {
   try {
     const User = require('../models/User');
     const developers = await User.find({ role: 'Developer' })
-      .select('name email _id');
+      .select('name email _id githubUsername githubLinked');
     
     res.json(developers);
   } catch (error) {

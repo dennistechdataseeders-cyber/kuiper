@@ -46,9 +46,12 @@ exports.getDeveloperBucket = async (req, res) => {
   }
 };
 
+
+// Update the createProject function:
+
 exports.createProject = async (req, res) => {
   try {
-    const { name, clients, projectManager, description, country, industry, organizationId } = req.body;
+    const { name, clients, projectManager, description, country, industry, organizationId, teamLead } = req.body;
 
     // 1. Generate Serial Number (TDS + 4 digits)
     const projectCount = await Project.countDocuments();
@@ -64,10 +67,11 @@ exports.createProject = async (req, res) => {
     const fullFormattedName = `TDS${serialNumber}-${industryCode} | ${countryCode} | ${name}`;
 
     const newProject = new Project({
-      name: fullFormattedName,              // Store FULL formatted string
-      projectCustomId: fullFormattedName,   // Store SAME formatted string
+      name: fullFormattedName,
+      projectCustomId: fullFormattedName,
       clients,
       projectManager: projectManager || req.user.id,
+      teamLead: teamLead || null,  // ADD THIS LINE
       description,
       country,
       industry,

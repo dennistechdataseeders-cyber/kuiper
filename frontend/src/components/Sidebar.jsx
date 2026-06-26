@@ -23,7 +23,8 @@ import {
   Logs,
   ChartBar,
   Ticket,
-  Bell,GitFork
+  Bell,
+  GitFork
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -98,6 +99,8 @@ const Sidebar = () => {
         return 'from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-400/20';
       case 'Developer':
         return 'from-blue-500/20 to-indigo-500/20 text-blue-300 border-blue-400/20';
+      case 'Team Lead':
+        return 'from-indigo-500/20 to-purple-500/20 text-indigo-300 border-indigo-400/20';
       default:
         return 'from-blue-500/20 to-purple-500/20 text-blue-300 border-blue-400/20';
     }
@@ -112,8 +115,7 @@ const Sidebar = () => {
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Explorer' },
-      // { path: '/pm/task-progress', icon: <Activity size={18} />, label: 'Task Progress' },
+      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
@@ -137,23 +139,31 @@ const Sidebar = () => {
 
     'Project Manager': [
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Explorer' },
-      // { path: '/pm/task-progress', icon: <Activity size={18} />, label: 'Task Progress' },
+      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     ],
 
+    'Team Lead': [
+      { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+      { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
+      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+    ],
+
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      // { path: '/developer/bucket', icon: <FolderTree size={18} />, label: 'My Bucket' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
       { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/developer//feeds', icon: <File size={18} />, label: 'Feeds' },
+      { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     ],
+
     Client: [
       { path: '/client', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
@@ -168,6 +178,7 @@ const Sidebar = () => {
     if (path === '/sales-manager') return location.pathname === '/sales-manager';
     if (path === '/developer') return location.pathname === '/developer';
     if (path === '/admin') return location.pathname === '/admin';
+    if (path === '/teamlead') return location.pathname === '/teamlead';
     return location.pathname.startsWith(path);
   };
 

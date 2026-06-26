@@ -41,6 +41,7 @@ import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import CommentSection from '../components/CommentSection';
 
 const weekDays = [
   'Monday',
@@ -102,6 +103,11 @@ const ProjectFeeds = () => {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [selectedCommentFeed, setSelectedCommentFeed] = useState(null);
 
+  // State for Feed Comments Modal (NEW)
+  const [showFeedCommentModal, setShowFeedCommentModal] = useState(false);
+  const [selectedFeedForComments, setSelectedFeedForComments] = useState(null);
+  const [commentRefreshTrigger, setCommentRefreshTrigger] = useState(0);
+
   // State for Generate Ticket Modal
   const [showTicketModal, setShowTicketModal] = useState(false);
   const [selectedTicketFeed, setSelectedTicketFeed] = useState(null);
@@ -114,6 +120,8 @@ const ProjectFeeds = () => {
 
   const token = localStorage.getItem('token');
   const currentUserId = localStorage.getItem('userId');
+  const userName = localStorage.getItem('userName') || 'User';
+  const userRole = localStorage.getItem('role') || 'User';
 
   const ADMIN_BASE = `${API_BASE_URL}/api/admin`;
 
@@ -356,6 +364,19 @@ const ProjectFeeds = () => {
     }
   };
 
+  // Open Feed Comment Modal (NEW)
+  const openFeedCommentModal = (feed) => {
+    setSelectedFeedForComments(feed);
+    setShowFeedCommentModal(true);
+    setCommentRefreshTrigger(prev => prev + 1);
+  };
+
+  // Close Feed Comment Modal (NEW)
+  const closeFeedCommentModal = () => {
+    setShowFeedCommentModal(false);
+    setSelectedFeedForComments(null);
+  };
+
   // Open Generate Ticket Modal
   const openTicketModal = (feed) => {
     setSelectedTicketFeed(feed);
@@ -590,7 +611,7 @@ const ProjectFeeds = () => {
     }
   };
 
-  // 🔥 Toggle pending filter
+  // Toggle pending filter
   const togglePendingFilter = () => {
     setShowPendingOnly(!showPendingOnly);
     setCurrentPage(1);
@@ -731,7 +752,7 @@ const ProjectFeeds = () => {
               <p className="text-lg font-black text-emerald-700">{todayFeedStats.completed}</p>
             </div>
             
-            {/* 🔥 CLICKABLE PENDING DIV */}
+            {/* CLICKABLE PENDING DIV */}
             <div 
               onClick={togglePendingFilter}
               className={`rounded-lg p-2 text-center cursor-pointer transition-all duration-200 ${
@@ -972,13 +993,20 @@ const ProjectFeeds = () => {
                             >
                               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                             </button>
+                            <button
+                              onClick={() => openFeedCommentModal(feed)}
+                              className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-purple-50 hover:text-purple-600 transition-all"
+                              title="View Comments"
+                            >
+                              <MessageSquare size={12} />
+                            </button>
                             {isCompleted && (
                               <button
                                 onClick={() => openCommentModal(feed)}
                                 className="group w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
-                                title="View Comment"
+                                title="View Completion Comment"
                               >
-                                <MessageSquare size={12} />
+                                <CheckCircle size={12} />
                               </button>
                             )}
                             <button
@@ -988,12 +1016,18 @@ const ProjectFeeds = () => {
                             >
                               <Edit3 size={12} />
                             </button>
-                           
+                            <button
+                              onClick={() => openTicketModal(feed)}
+                              className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
+                              title="Generate Ticket"
+                            >
+                              <Ticket size={12} />
+                            </button>
                           </div>
                         </td>
                       </tr>
 
-                      {/* Expanded Row with Platform URL and Schedule */}
+                      {/* Expanded Row with Platform URL, Schedule, and Comments */}
                       {isExpanded && (
                         <tr className="bg-blue-50/30">
                           <td colSpan={7} className="px-6 py-4">
@@ -1048,6 +1082,25 @@ const ProjectFeeds = () => {
                                   <p className="text-[8px] text-slate-500 mt-1">One-time execution</p>
                                 )}
                               </div>
+                            </div>
+
+                            {/* Feed Comments Section */}
+                            <div className="mt-4 bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
+                                  <MessageSquare size={12} />
+                                </div>
+                                <h4 className="text-[9px] font-black uppercase text-slate-500">Feed Comments</h4>
+                              </div>
+                              <CommentSection
+                                type="feed"
+                                entityId={feed._id}
+                                userRole={userRole}
+                                userId={currentUserId}
+                                currentUserName={userName}
+                                canComment={true}
+                                refreshTrigger={commentRefreshTrigger}
+                              />
                             </div>
                           </td>
                         </tr>
@@ -1325,6 +1378,41 @@ const ProjectFeeds = () => {
         </div>
       )}
 
+      {/* FEED COMMENT MODAL (NEW) */}
+      {showFeedCommentModal && selectedFeedForComments && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[140] p-6">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-[#1B2559]">Feed Comments</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {selectedFeedForComments.name}
+                  <span className="text-[9px] text-slate-400 ml-2">
+                    {selectedFeedForComments.projectCustomId}
+                  </span>
+                </p>
+              </div>
+              <button 
+                onClick={closeFeedCommentModal}
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                <X size={28} />
+              </button>
+            </div>
+            
+            <CommentSection
+              type="feed"
+              entityId={selectedFeedForComments._id}
+              userRole={userRole}
+              userId={currentUserId}
+              currentUserName={userName}
+              canComment={true}
+              refreshTrigger={commentRefreshTrigger}
+            />
+          </div>
+        </div>
+      )}
+
       {/* GENERATE TICKET MODAL */}
       {showTicketModal && selectedTicketFeed && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-4">
@@ -1407,13 +1495,13 @@ const ProjectFeeds = () => {
         </div>
       )}
 
-      {/* COMMENT VIEW MODAL */}
+      {/* COMMENT VIEW MODAL (Completion Comment) */}
       {showCommentModal && selectedCommentFeed && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[130] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center">
               <div className="flex items-center gap-1.5">
-                <MessageSquare size={16} className="text-emerald-600" />
+                <CheckCircle size={16} className="text-emerald-600" />
                 <h3 className="text-base font-black text-slate-800">Completion Comment</h3>
               </div>
               <button onClick={() => setShowCommentModal(false)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">

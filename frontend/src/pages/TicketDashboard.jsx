@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter } from 'lucide-react';
+import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
@@ -19,7 +19,7 @@ const TicketDashboard = () => {
   const currentUserId = localStorage.getItem('userId');
 
   // Check if user can see internal tickets (non-clients)
-  const canSeeInternal = ['Admin', 'Project Manager', 'Developer', 'Sales', 'Sales Manager'].includes(userRole);
+  const canSeeInternal = ['Admin', 'Project Manager', 'Developer', 'Sales', 'Sales Manager', 'Team Lead'].includes(userRole);
   
   // Check if user is Client
   const isClient = userRole === 'Client';
@@ -41,8 +41,8 @@ const TicketDashboard = () => {
       setTickets(prev => [newTicket, ...prev]);
       toast.success(`New ticket: ${newTicket.title}`);
       
-      // Desktop notification for PMs, Admins, and if assigned to current user
-      if (userRole === 'Project Manager' || userRole === 'Admin') {
+      // Desktop notification for PMs, Admins, Team Leads, and if assigned to current user
+      if (userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') {
         notificationManager.notifyNewTicket(newTicket, () => {
           navigate(`/tickets/${newTicket._id}`);
         });
@@ -170,7 +170,8 @@ const TicketDashboard = () => {
       'Production': 'bg-red-100 text-red-700 border-red-200',
       'Admin': 'bg-gray-100 text-gray-700 border-gray-200',
       'IT': 'bg-cyan-100 text-cyan-700 border-cyan-200',
-      'Development': 'bg-violet-100 text-violet-700 border-violet-200'
+      'Development': 'bg-violet-100 text-violet-700 border-violet-200',
+      'Feasibility': 'bg-indigo-100 text-indigo-700 border-indigo-200'
     };
     return typeColors[type] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
@@ -193,7 +194,8 @@ const TicketDashboard = () => {
     inProgress: tickets.filter(t => t.status === 'In Progress').length,
     resolved: tickets.filter(t => t.status === 'Resolved').length,
     internal: tickets.filter(t => t.isInternal).length,
-    external: tickets.filter(t => !t.isInternal).length
+    external: tickets.filter(t => !t.isInternal).length,
+    feasibility: tickets.filter(t => t.category === 'Production' && t.subcategory === 'Feasibility').length
   };
 
   // Get category display name
@@ -202,6 +204,11 @@ const TicketDashboard = () => {
     if (ticket.subcategory) return ticket.subcategory;
     if (ticket.category) return ticket.category;
     return null;
+  };
+
+  // Check if ticket is a Feasibility ticket
+  const isFeasibilityTicket = (ticket) => {
+    return ticket.category === 'Production' && ticket.subcategory === 'Feasibility';
   };
 
   if (loading) {
@@ -234,14 +241,25 @@ const TicketDashboard = () => {
             </button>
           )}
           
-          {/* Create Ticket button - available to all roles */}
-          <button
-            onClick={() => navigate('/tickets/create')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
-          >
-            <Plus size={20} />
-            {isClient ? 'New Ticket' : 'New Internal Ticket'}
-          </button>
+          {/* Create Ticket button - available to all roles except Client (they have their own) */}
+          {userRole !== 'Client' && (
+            <button
+              onClick={() => navigate('/tickets/create')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
+            >
+              <Plus size={20} />
+              New Internal Ticket
+            </button>
+          )}
+          {userRole === 'Client' && (
+            <button
+              onClick={() => navigate('/tickets/create')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
+            >
+              <Plus size={20} />
+              New Ticket
+            </button>
+          )}
         </div>
       </div>
 
@@ -300,6 +318,8 @@ const TicketDashboard = () => {
           </div>
         )}
       </div>
+
+     
 
       {/* Filters */}
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
@@ -394,6 +414,7 @@ const TicketDashboard = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
               </tr>
@@ -401,7 +422,7 @@ const TicketDashboard = () => {
             <tbody className="divide-y divide-gray-200">
               {filteredTickets.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-2">
                       <Ticket size={48} className="text-gray-300" />
                       <p className="font-medium">No tickets found</p>
@@ -416,6 +437,8 @@ const TicketDashboard = () => {
               ) : (
                 filteredTickets.map(ticket => {
                   const categoryDisplay = getCategoryDisplay(ticket);
+                  const isFeasibility = isFeasibilityTicket(ticket);
+                  
                   return (
                     <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
@@ -427,6 +450,12 @@ const TicketDashboard = () => {
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[9px] font-bold">
                               <Lock size={10} />
                               Internal
+                            </span>
+                          )}
+                          {isFeasibility && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-md text-[9px] font-bold">
+                              <UserCheck size={10} />
+                              Feasibility
                             </span>
                           )}
                         </div>
@@ -472,6 +501,11 @@ const TicketDashboard = () => {
                         ) : (
                           <span className="text-sm text-gray-400">Unassigned</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm text-gray-600">
+                          {ticket.projectId?.projectCustomId || 'General'}
+                        </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
                         {new Date(ticket.createdAt).toLocaleDateString()}

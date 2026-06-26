@@ -162,5 +162,49 @@ router.post('/users/:userId/link-github', authorize('Admin', 'Project Manager'),
     res.status(500).json({ success: false, error: error.message });
   }
 });
+// backend/routes/pmRoutes.js - Add Team Lead assignment
 
+// Add this endpoint:
+router.post('/projects/:projectId/assign-teamlead', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const { teamLeadId } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Validate Team Lead exists and has correct role
+    const teamLead = await User.findOne({ _id: teamLeadId, role: 'Team Lead' });
+    if (!teamLead) {
+      return res.status(400).json({ error: 'User not found or not a Team Lead' });
+    }
+    
+    project.teamLead = teamLeadId;
+    await project.save();
+    
+    await Log.create({
+      actionType: 'TEAM_LEAD_ASSIGNED',
+      performerId: req.user._id,
+      details: `Assigned ${teamLead.name} as Team Lead for project ${project.projectCustomId}`,
+      timestamp: new Date()
+    });
+    
+    res.json({ success: true, message: 'Team Lead assigned successfully', project });
+  } catch (err) {
+    console.error('Error assigning Team Lead:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add endpoint to get Team Leads list
+router.get('/teamleads', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const teamLeads = await User.find({ role: 'Team Lead' }).select('name email _id');
+    res.json({ success: true, teamLeads });
+  } catch (err) {
+    console.error('Error fetching Team Leads:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 module.exports = router;

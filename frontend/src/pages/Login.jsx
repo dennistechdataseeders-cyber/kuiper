@@ -137,14 +137,15 @@ const Login = () => {
       setIsExiting(true);
 
       const role = user.role.toLowerCase();
-      let targetRoute = role === 'admin' ? '/admin' : 
-                        role === 'developer' ? '/developer' : 
-                        role === 'sales' ? '/sales' : '/login';
-                        role === 'client' ? '/client' : '/client';
-                      
+      let targetRoute = role === 'admin' ? '/admin' :
+                    role === 'developer' ? '/developer' :
+                    role === 'sales' ? '/sales' :
+                    role === 'sales manager' ? '/sales-manager' :
+                    role === 'project manager' ? '/admin/projects' :
+                    role === 'team lead' ? '/teamlead' :
+                    role === 'client' ? '/client' : '/login';
 
-      // Wait for the smooth lerp and warp to peak before navigating
-      setTimeout(() => navigate(targetRoute, { replace: true }), 1500);
+    setTimeout(() => navigate(targetRoute, { replace: true }), 1500);
     } catch (err) {
       toast.error(err.response?.data?.error || "Login failed");
       setIsSubmitting(false);

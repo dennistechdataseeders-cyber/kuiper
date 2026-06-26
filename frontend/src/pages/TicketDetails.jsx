@@ -3,8 +3,8 @@ import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, User, Calendar, MessageSquare, Send, Users, 
-  CheckCircle, XCircle, Clock, Image, X, 
-  Loader2, Eye, Download, UploadCloud
+  CheckCircle, XCircle, Clock, Image, X,AlertCircle, 
+  Loader2, Eye, Download, UploadCloud, GitFork
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -147,7 +147,8 @@ const TicketDetails = () => {
   };
 
   const fetchDevelopers = async () => {
-    if (userRole !== 'Project Manager' && userRole !== 'Admin') return;
+    // Allow PM, Admin, and Team Lead to fetch developers
+    if (userRole !== 'Project Manager' && userRole !== 'Admin' && userRole !== 'Team Lead') return;
     
     try {
       const token = localStorage.getItem('token');
@@ -374,6 +375,9 @@ const TicketDetails = () => {
     }
   };
 
+  // Check if user can see developer assignment (for Feasibility tickets)
+  const canAssignDeveloper = userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead';
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-gray-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -409,6 +413,16 @@ const TicketDetails = () => {
               <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${getPriorityColor(ticket.priority)}`}>
                 {ticket.priority}
               </span>
+              {ticket.isInternal && (
+                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-md bg-purple-100 text-purple-700">
+                  Internal
+                </span>
+              )}
+              {ticket.category === 'Production' && ticket.subcategory === 'Feasibility' && (
+                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-md bg-indigo-100 text-indigo-700">
+                  🔬 Feasibility
+                </span>
+              )}
             </div>
             <h1 className="text-3xl font-bold text-gray-900 tracking-tight">{ticket.title}</h1>
           </div>
@@ -420,7 +434,7 @@ const TicketDetails = () => {
               </button>
             )}
             {/* Allow creator to update status if they're not a Client (or always allow for creators) */}
-            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || isTicketCreator) && 
+            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
             ticket.status !== 'Closed' && (
               <div className="flex gap-2">
                 {ticket.status !== 'In Progress' && (
@@ -447,8 +461,7 @@ const TicketDetails = () => {
         </div>
       </div>
 
-     {/* Status Progress Map - Fixed Width Version */}
-{/* Status Progress Map - Fixed Layout */}
+     {/* Status Progress Map */}
 <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
   <h3 className="text-sm font-semibold text-gray-700 mb-6 flex items-center gap-2">
     <CheckCircle size={16} className="text-blue-600" />
@@ -467,13 +480,12 @@ const TicketDetails = () => {
       }}
     />
     
-    {/* Status Steps - Using flex with proper spacing */}
+    {/* Status Steps */}
     <div className="flex justify-between items-start relative">
       {statusFlow.map((status, index) => {
         const isCompleted = index <= currentStatusIndex;
         const isCurrent = status === ticket.status;
         
-        // Get the date when this status was reached
         let statusDate = null;
         if (status === 'Open' && ticket.createdAt) {
           statusDate = ticket.createdAt;
@@ -503,7 +515,6 @@ const TicketDetails = () => {
               flex: '1 1 0%'
             }}
           >
-            {/* Step Circle */}
             <div className="relative z-10">
               <div 
                 className={`
@@ -524,7 +535,6 @@ const TicketDetails = () => {
               </div>
             </div>
             
-            {/* Status Label */}
             <div className="mt-2 text-center min-h-[40px] flex flex-col items-center">
               <p className={`
                 text-xs font-semibold transition-colors
@@ -533,31 +543,14 @@ const TicketDetails = () => {
               `}>
                 {status}
               </p>
-              
-              {/* Current Indicator */}
               {isCurrent && (
                 <span className="mt-0.5 text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
                   ● Current
                 </span>
               )}
             </div>
-            
-            {/* Tooltip with Date */}
             {formattedDate && (
-              <div className="
-                absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full 
-                opacity-0 group-hover:opacity-100 
-                transition-all duration-200
-                pointer-events-none
-                bg-gray-900 text-white 
-                px-3 py-1.5 rounded-lg 
-                text-[10px] font-medium whitespace-nowrap
-                shadow-lg z-20
-                after:content-[''] after:absolute 
-                after:top-full after:left-1/2 after:-translate-x-1/2
-                after:border-4 after:border-transparent 
-                after:border-t-gray-900
-              ">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-gray-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap shadow-lg z-20 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-gray-900">
                 <div className="flex flex-col items-center">
                   <span className="font-semibold">{status}</span>
                   <span className="text-gray-300 text-[9px]">{formattedDate}</span>
@@ -676,7 +669,7 @@ const TicketDetails = () => {
               )}
             </div>
             
-            {/* Form Box + Aligned Interactive Row */}
+            {/* Form Box */}
             <div className="border-t border-gray-200 bg-white p-4">
               {imagePreview && (
                 <div className="mb-3 p-2 bg-gray-50 rounded-lg border border-gray-200 relative inline-block shadow-sm">
@@ -691,9 +684,7 @@ const TicketDetails = () => {
                 </div>
               )}
               
-              {/* Perfectly Aligned Form Row Container */}
               <div className="flex items-center gap-2 w-full bg-gray-50 border border-gray-300 rounded-lg p-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
-                {/* 1. Dynamic Resizing Textarea Component */}
                 <textarea
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
@@ -708,7 +699,6 @@ const TicketDetails = () => {
                   }}
                 />
                 
-                {/* 2. Attachment Icon Trigger Component */}
                 <div className="flex items-center self-center h-full px-1">
                   <input
                     ref={fileInputRef}
@@ -728,7 +718,6 @@ const TicketDetails = () => {
                   </button>
                 </div>
                 
-                {/* 3. Action Submittal Button Component */}
                 <button
                   type="button"
                   onClick={() => addComment()}
@@ -767,9 +756,35 @@ const TicketDetails = () => {
                   <span className="text-sm text-gray-800 font-medium">{new Date(ticket.createdAt).toLocaleString()}</span>
                 </div>
               </div>
+              
+              {/* Show Assigned Developer - Always visible for everyone */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned Developer</p>
+                <div className="mt-1.5">
+                  {ticket.assignedTo ? (
+                    <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                        {ticket.assignedTo.name?.charAt(0).toUpperCase() || 'D'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{ticket.assignedTo.name}</p>
+                        <p className="text-xs text-gray-500">{ticket.assignedTo.email}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
+                      <AlertCircle size={16} className="text-amber-600" />
+                      <span className="text-sm text-amber-700 font-medium">Unassigned</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Project Scope</p>
-                <p className="text-sm text-gray-800 font-medium mt-1.5 bg-gray-50 px-2.5 py-1.5 rounded-md border border-gray-200">{ticket.projectId?.name}</p>
+                <p className="text-sm text-gray-800 font-medium mt-1.5 bg-gray-50 px-2.5 py-1.5 rounded-md border border-gray-200">
+                  {ticket.projectId?.name || (ticket.category === 'Production' && ticket.subcategory === 'Feasibility' ? '🔬 General (Feasibility)' : 'General')}
+                </p>
               </div>
               {ticket.feedId && (
                 <div>
@@ -792,31 +807,39 @@ const TicketDetails = () => {
             </div>
           </div>
           
-          {/* Conditional Assignment Dashboard Element */}
-          {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer') && (
+          {/* Assignment Section - Show for PM, Admin, Team Lead (and Developer if they are the assignee) */}
+          {(canAssignDeveloper || (userRole === 'Developer' && ticket.assignedTo?._id === currentUserId)) && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
-                <Users size={16} className="text-gray-500" /> Operational Assignment
+                <Users size={16} className="text-gray-500" /> Assignment Management
               </h3>
               {ticket.assignedTo ? (
                 <div className="mb-4 p-3 bg-green-50/70 border border-green-200 rounded-lg">
-                  <p className="text-xs text-green-700 font-semibold mb-1">Assigned Developer:</p>
+                  <p className="text-xs text-green-700 font-semibold mb-1">Currently Assigned:</p>
                   <p className="font-semibold text-gray-900 text-sm">{ticket.assignedTo.name}</p>
                   <p className="text-xs text-gray-500 mt-0.5">{ticket.assignedTo.email}</p>
+                  {ticket.assignedTo.githubUsername && (
+                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
+                      <GitFork size={12} />
+                      <span>GitHub: {ticket.assignedTo.githubUsername}</span>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded-lg font-medium">
-                  This work ticket is currently unassigned.
+                  {ticket.category === 'Production' && ticket.subcategory === 'Feasibility' 
+                    ? 'This feasibility ticket needs a developer assigned.' 
+                    : 'This ticket is currently unassigned.'}
                 </div>
               )}
-              {(userRole === 'Project Manager' || userRole === 'Admin') && (
+              {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') && (
                 <select 
                   onChange={(e) => assignDeveloper(e.target.value)} 
                   disabled={assigning} 
                   className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm cursor-pointer" 
                   defaultValue=""
                 >
-                  <option value="">Reassign developer...</option>
+                  <option value="">{ticket.assignedTo ? 'Reassign developer...' : 'Assign developer...'}</option>
                   {developers.map(dev => (
                     <option key={dev._id} value={dev._id}>{dev.name} ({dev.email})</option>
                   ))}
@@ -824,7 +847,7 @@ const TicketDetails = () => {
               )}
               {userRole === 'Developer' && ticket.assignedTo?._id === currentUserId && (
                 <div className="mt-2 text-xs text-green-600 font-medium flex items-center gap-1.5">
-                  <CheckCircle size={14} /> You are actively managing this task item.
+                  <CheckCircle size={14} /> You are assigned to this ticket.
                 </div>
               )}
             </div>

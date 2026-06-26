@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
+import { Copy, Check, X, MessageSquare } from 'lucide-react';
+import CommentSection from '../components/CommentSection';
+
 import { 
   Database, Hash, Clock, Calendar, Target, Globe, Smartphone, Monitor,
-  ChevronLeft, ChevronRight, Search, X, ExternalLink,
+  ChevronLeft, ChevronRight, Search, ExternalLink,
   Briefcase, CheckCircle, AlertCircle
 } from 'lucide-react';
 import API_BASE_URL from '../config';
@@ -19,6 +22,17 @@ const DeveloperFeeds = () => {
   const [selectedType, setSelectedType] = useState('ALL');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+  const [copiedId, setCopiedId] = useState(null);
+  
+  // Comment Modal State
+  const [showFeedCommentModal, setShowFeedCommentModal] = useState(false);
+  const [selectedFeedForComments, setSelectedFeedForComments] = useState(null);
+  const [commentRefreshTrigger, setCommentRefreshTrigger] = useState(0);
+
+  // Get user info from localStorage
+  const userRole = localStorage.getItem('role') || 'Developer';
+  const currentUserId = localStorage.getItem('userId');
+  const userName = localStorage.getItem('userName') || 'Developer';
 
   useEffect(() => {
     fetchFeeds();
@@ -37,6 +51,19 @@ const DeveloperFeeds = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Open Feed Comment Modal
+  const openFeedCommentModal = (feed) => {
+    setSelectedFeedForComments(feed);
+    setShowFeedCommentModal(true);
+    setCommentRefreshTrigger(prev => prev + 1);
+  };
+
+  // Close Feed Comment Modal
+  const closeFeedCommentModal = () => {
+    setShowFeedCommentModal(false);
+    setSelectedFeedForComments(null);
   };
 
   const getPlatformInfo = (feed) => {
@@ -91,6 +118,13 @@ const DeveloperFeeds = () => {
   );
 
   const feedTypes = ['ALL', 'Daily', 'Weekly', 'Monthly', 'Once off'];
+
+  const handleCopyId = (id) => {
+    navigator.clipboard.writeText(id);
+    setCopiedId(id);
+    toast.success('Feed ID copied to clipboard!');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
 
   if (loading) {
     return (
@@ -235,6 +269,8 @@ const DeveloperFeeds = () => {
                     <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
                     <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Type</th>
                     <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Platform</th>
+                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">ID</th>
+                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -280,6 +316,36 @@ const DeveloperFeeds = () => {
                           ) : (
                             <span className="text-[8px] text-slate-400 italic">—</span>
                           )}
+                        </td>
+                        
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
+                              {feed._id}
+                            </span>
+                            <button
+                              onClick={() => handleCopyId(feed._id)}
+                              className="p-1 rounded-lg hover:bg-slate-200 transition-colors text-slate-400 hover:text-slate-600"
+                              title="Copy Feed ID"
+                            >
+                              {copiedId === feed._id ? (
+                                <Check size={14} className="text-green-600" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                        
+                        <td className="px-6 py-4">
+                          <button
+                            onClick={() => openFeedCommentModal(feed)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"
+                            title="View Comments"
+                          >
+                            <MessageSquare size={14} />
+                            Comments
+                          </button>
                         </td>
                       </tr>
                     );
@@ -342,6 +408,41 @@ const DeveloperFeeds = () => {
             </div>
           )}
         </>
+      )}
+
+      {/* FEED COMMENT MODAL */}
+      {showFeedCommentModal && selectedFeedForComments && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[150] p-6">
+          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-2xl font-black text-[#1B2559]">Feed Comments</h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  {selectedFeedForComments.name}
+                  <span className="text-[9px] text-slate-400 ml-2">
+                    {selectedFeedForComments.projectCustomId}
+                  </span>
+                </p>
+              </div>
+              <button 
+                onClick={closeFeedCommentModal}
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                <X size={28} />
+              </button>
+            </div>
+            
+            <CommentSection
+              type="feed"
+              entityId={selectedFeedForComments._id}
+              userRole={userRole}
+              userId={currentUserId}
+              currentUserName={userName}
+              canComment={true}
+              refreshTrigger={commentRefreshTrigger}
+            />
+          </div>
+        </div>
       )}
     </div>
   );

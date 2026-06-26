@@ -473,7 +473,9 @@ const DeveloperDashboard = () => {
             <span className="text-[9px] font-black text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">
               {getServerDayName()}
             </span>
-           
+            <span className="text-[8px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">
+              Server Time
+            </span>
           </div>
           <span className="text-[9px] font-bold text-slate-400">{todayFeeds.length} pending</span>
         </div>
@@ -494,7 +496,6 @@ const DeveloperDashboard = () => {
               const platformInfo = getPlatformInfo(feed);
               return (
                 <div key={feed._id} className="bg-white rounded-2xl border border-slate-200 p-4 hover:shadow-lg transition-all duration-300 hover:scale-[1.02] group">
-                <p className="text-sm font-black text-slate-500">id:{feed._id}</p>
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <div className={`p-2 rounded-xl ${
@@ -508,12 +509,11 @@ const DeveloperDashboard = () => {
                          <Target size={14} className="text-slate-600" />}
                       </div>
                       <div>
-                        <p className="text-sm font-black text-slate-800">{feed.name} </p>
+                        <p className="text-sm font-black text-slate-800">{feed.name}</p>
                         <div className="flex items-center gap-1 flex-wrap">
                           <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
                             {getFeedTypeLabel(feed)}
-                            
                           </span>
                           {platformInfo && (
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider ${platformInfo.color}`}>
@@ -535,13 +535,11 @@ const DeveloperDashboard = () => {
                   
                   <div className="pt-3 border-t border-slate-100">
                     <div className="flex items-center justify-between">
-                      
                       <div className="flex items-center gap-2">
                         <Hash size={10} className="text-slate-400" />
                         <p className="text-[9px] font-bold text-slate-500 uppercase">
                           {feed.projectId?.projectCustomId || 'Unknown'}
                         </p>
-                        
                       </div>
                       <button
                         onClick={() => openCompleteModal(feed)}
@@ -550,7 +548,6 @@ const DeveloperDashboard = () => {
                         <CheckCircle size={10} />
                         Complete
                       </button>
-                      
                     </div>
                   </div>
                 </div>
@@ -559,7 +556,7 @@ const DeveloperDashboard = () => {
           </div>
         )}
       </div>
-        
+
       {/* QUICK LINKS */}
       <div className="grid grid-cols-2 gap-4">
         <button

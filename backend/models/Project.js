@@ -47,7 +47,20 @@ const ProjectSchema = new mongoose.Schema({
       'Closed'
     ],
     default: 'New'
-  }
+  },
+  teamLead: { 
+  type: mongoose.Schema.Types.ObjectId, 
+  ref: 'User',
+  default: null 
+},
+  // ✅ FIX: Comments field at the top level (NOT inside projectStatus)
+  comments: [{
+    text: { type: String, required: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    userName: { type: String, required: true },
+    createdAt: { type: Date, default: Date.now },
+    updatedAt: { type: Date, default: Date.now }
+  }]
 }, { timestamps: true });
 
 // Method to update project status based on feed statuses
@@ -117,5 +130,11 @@ ProjectSchema.methods.getAllClientNames = async function() {
   
   return clientNames;
 };
+ProjectSchema.virtual('teamLeadDetails', {
+  ref: 'User',
+  localField: 'teamLead',
+  foreignField: '_id',
+  justOne: true
+});
 
 module.exports = mongoose.model('Project', ProjectSchema);

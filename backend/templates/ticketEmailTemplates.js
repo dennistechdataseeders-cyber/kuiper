@@ -1,6 +1,6 @@
 // backend/templates/ticketEmailTemplates.js
 
-const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendUrl, feedName) => {
+const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendUrl, feedName, projectName) => {
   const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
   const currentDate = new Date().toLocaleDateString('en-US', {
     day: 'numeric',
@@ -11,6 +11,8 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
   // Filter out POC from team display for internal emails
   const internalTeam = recipientsList.filter(r => r.type !== 'poc');
   const hasFeed = feedName && feedName !== 'null' && feedName !== 'undefined';
+  // ✅ Use the passed projectName
+  const displayProjectName = projectName || 'Unknown Project';
 
   return `
 <!DOCTYPE html>
@@ -62,7 +64,7 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
                   </td>
                   <td width="50%" style="padding:16px 20px; border-bottom:1px solid #e2e8f0; vertical-align: top;">
                     <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Project Name</div>
-                    <div style="font-size:14px; font-weight:600; color:#334155;">${ticket.projectId?.name || 'Unknown Project'}</div>
+                    <div style="font-size:14px; font-weight:600; color:#334155;">${displayProjectName}</div>
                   </td>
                 </tr>
                 <tr>
@@ -77,6 +79,10 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
                 </tr>
                 ${hasFeed ? `
                 <tr>
+                  <td width="50%" style="padding:16px 20px; vertical-align: top;">
+                    <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Feed</div>
+                    <div style="font-size:13px; font-weight:600; color:#475569;">${feedName}</div>
+                  </td>
                   <td width="50%" style="padding:16px 20px; vertical-align: top;">
                     <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Date Created</div>
                     <div style="font-size:13px; font-weight:600; color:#475569;">${currentDate}</div>
@@ -144,7 +150,7 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
   `;
 };
 
-const getInternalTicketTemplate = (ticket, creatorName, recipientsList, frontendUrl, feedName) => {
+const getInternalTicketTemplate = (ticket, creatorName, recipientsList, frontendUrl, feedName, projectName) => {
   const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
   const currentDate = new Date().toLocaleDateString('en-US', {
     day: 'numeric',
@@ -152,6 +158,8 @@ const getInternalTicketTemplate = (ticket, creatorName, recipientsList, frontend
     year: 'numeric'
   });
   const hasFeed = feedName && feedName !== 'null' && feedName !== 'undefined';
+  // ✅ Use the passed projectName
+  const displayProjectName = projectName || 'Unknown Project';
 
   return `
 <!DOCTYPE html>
@@ -201,7 +209,7 @@ const getInternalTicketTemplate = (ticket, creatorName, recipientsList, frontend
                 <tr>
                   <td width="50%" style="padding:12px 16px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
                     <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;">Project</div>
-                    <div style="font-size:13px; font-weight:600; color:#1e293b; margin-top:2px;">${ticket.projectId?.name || 'Unknown Project'}</div>
+                    <div style="font-size:13px; font-weight:600; color:#1e293b; margin-top:2px;">${displayProjectName}</div>
                   </td>
                   <td width="50%" style="padding:12px 16px; border-bottom:1px solid #e2e8f0;">
                     <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase;">Feed Component</div>
@@ -261,6 +269,8 @@ const getInternalTicketTemplate = (ticket, creatorName, recipientsList, frontend
 const getPOCNotificationTemplate = (ticket, pocName, projectName, frontendUrl, feedName) => {
   const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
   const hasFeed = feedName && feedName !== 'null' && feedName !== 'undefined';
+  // ✅ Use the passed projectName
+  const displayProjectName = projectName || 'Unknown Project';
 
   return `
 <!DOCTYPE html>
@@ -298,7 +308,7 @@ const getPOCNotificationTemplate = (ticket, pocName, projectName, frontendUrl, f
           <tr>
             <td style="background:linear-gradient(135deg, #1e293b 0%, #0f172a 100%); padding:36px;">
               <div style="font-size:22px; font-weight:800; color:white; margin-bottom:6px;">Support Request Acknowledged</div>
-              <div style="font-size:13px; color:#cbd5e1; font-weight:500;">Project Scope: ${projectName}</div>
+              <div style="font-size:13px; color:#cbd5e1; font-weight:500;">Project Scope: ${displayProjectName}</div>
             </td>
           </tr>
 
@@ -314,8 +324,7 @@ const getPOCNotificationTemplate = (ticket, pocName, projectName, frontendUrl, f
                     <div style="font-size:16px; font-weight:800; color:#1e293b; margin-top:2px;">${ticket.ticketNumber}</div>
                   </td>
                   <td width="50%" style="padding:16px 20px; border-bottom:1px solid #e2e8f0;">
-                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Assigned
-                     Feed</div>
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Assigned Feed</div>
                     <div style="font-size:13px; font-weight:700; color:#1e40af; margin-top:2px;">${hasFeed ? feedName : 'General Stream'}</div>
                   </td>
                 </tr>
@@ -369,6 +378,7 @@ const getPOCNotificationTemplate = (ticket, pocName, projectName, frontendUrl, f
 </html>
   `;
 };
+
 // Internal-only ticket template (no client/POC emails)
 const getInternalOnlyTicketTemplate = (ticket, creatorName, recipientsList, frontendUrl) => {
   const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
@@ -474,10 +484,10 @@ const getInternalOnlyTicketTemplate = (ticket, creatorName, recipientsList, fron
   `;
 };
 
-// Export the new template
+// Export the templates
 module.exports = {
   getTicketCreatedTemplate,
   getInternalTicketTemplate,
   getPOCNotificationTemplate,
-  getInternalOnlyTicketTemplate  // Add this
+  getInternalOnlyTicketTemplate
 };

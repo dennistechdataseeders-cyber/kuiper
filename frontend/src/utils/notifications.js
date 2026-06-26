@@ -1,5 +1,6 @@
 // Frontend notification manager
 // Location: frontend/src/utils/notifications.js
+import toast from 'react-hot-toast';
 
 class NotificationManager {
   constructor() {

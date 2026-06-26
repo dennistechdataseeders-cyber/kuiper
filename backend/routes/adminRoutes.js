@@ -46,7 +46,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ============================================
 
 // GET /users - Fetch all users
-router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager', 'Sales'), async (req, res) => {
+router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager', 'Sales','Team Lead'), async (req, res) => {
   try {
     let filter = {};
     if (req.user.role === 'Sales Manager') {
@@ -109,9 +109,13 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
     if (req.user.role === 'Sales Manager') {
       finalRole = 'Sales'; 
     } else if (req.user.role === 'Project Manager') {
-      finalRole = 'Client'; 
+      // PM can create: Client OR Team Lead
+      if (role === 'Team Lead') {
+        finalRole = 'Team Lead';
+      } else {
+        finalRole = 'Client';
+      }
     }
-
     const existingUser = await User.findOne({ email });
     if (existingUser) return res.status(400).json({ error: "Email already in use" });
 
@@ -405,12 +409,66 @@ router.get('/client-projects', authorize('Admin', 'Project Manager', 'Client'), 
 });
 
 // GET /projects - General projects route
-router.get('/projects', authorize('Admin', 'Project Manager', 'Client'), async (req, res) => {
+router.get('/projects', authorize('Admin', 'Project Manager', 'Client', 'Team Lead'), async (req, res) => {
   try {
-    const data = await Project.find()
+    let query = {};
+    
+    // Role-based filtering
+    if (req.user.role === 'Team Lead') {
+      query = { teamLead: req.user._id };
+    } else if (req.user.role === 'Project Manager') {
+      query = { projectManager: req.user._id };
+    } else if (req.user.role === 'Client') {
+      // Client logic - get projects where they are a client or their organization is assigned
+      const clientIdStr = req.user._id.toString();
+      const clientOrgId = req.user.organizationId;
+      
+      const projects = await Project.aggregate([
+        {
+          $addFields: {
+            clientIdsAsString: {
+              $map: {
+                input: "$clients",
+                as: "client",
+                in: { $toString: "$$client" }
+              }
+            }
+          }
+        },
+        {
+          $match: {
+            $or: [
+              { $expr: { $in: [clientIdStr, "$clientIdsAsString"] } },
+              ...(clientOrgId ? [{ organizations: clientOrgId }] : [])
+            ]
+          }
+        }
+      ]);
+      
+      const populatedProjects = await Project.populate(projects, [
+        { path: 'clients', select: 'name email role' },
+        { path: 'organizations', select: 'companyName' },
+        { path: 'projectManager', select: 'name email' },
+        { path: 'teamLead', select: 'name email' },
+        {
+          path: 'feeds',
+          populate: {
+            path: 'assignedDevelopers',
+            select: 'name email',
+            model: 'User'
+          }
+        }
+      ]);
+      
+      return res.json(populatedProjects);
+    }
+    // Admin sees all (query remains empty)
+    
+    const data = await Project.find(query)
       .populate('clients', 'name email role')
       .populate('organizations', 'companyName website address')
       .populate('projectManager', 'name email')
+      .populate('teamLead', 'name email')  // IMPORTANT: Populate teamLead
       .populate({
         path: 'feeds',
         populate: {
@@ -418,9 +476,12 @@ router.get('/projects', authorize('Admin', 'Project Manager', 'Client'), async (
           select: 'name email',
           model: 'User'
         }
-      });
+      })
+      .sort({ createdAt: -1 });
+      
     res.json(data);
   } catch (err) {
+    console.error('Error in /projects route:', err);
     res.status(500).json({ message: err.message });
   }
 });
@@ -1148,7 +1209,7 @@ router.get('/users/clients', authorize('Admin', 'Sales', 'Project Manager', 'Sal
   }
 });
 
-router.get('/users/developers', authorize('Admin', 'Project Manager'), async (req, res) => {
+router.get('/users/developers', authorize('Admin', 'Project Manager','Team Lead'), async (req, res) => {
   try {
     const developers = await User.find({ role: 'Developer' })
       .select('name email _id githubUsername githubLinked');
@@ -1228,7 +1289,114 @@ router.get('/client/projects', authorize('Client'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// Add this after the existing routes
+// ============================================
+// TEAM LEAD ASSIGNMENT ROUTES
+// ============================================
 
+// POST /projects/:projectId/assign-teamlead - Assign Team Lead to project
+router.post('/projects/:projectId/assign-teamlead', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const { teamLeadId } = req.body;
+    const project = await Project.findById(req.params.projectId);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    // Validate Team Lead exists and has correct role
+    const teamLead = await User.findOne({ _id: teamLeadId, role: 'Team Lead' });
+    if (!teamLead) {
+      return res.status(400).json({ error: 'User not found or not a Team Lead' });
+    }
+    
+    project.teamLead = teamLeadId;
+    await project.save();
+    
+    await Log.create({
+      actionType: 'TEAM_LEAD_ASSIGNED',
+      performerId: req.user._id,
+      details: `Assigned ${teamLead.name} as Team Lead for project ${project.projectCustomId}`,
+      timestamp: new Date()
+    });
+    
+    res.json({ 
+      success: true, 
+      message: 'Team Lead assigned successfully', 
+      project: {
+        _id: project._id,
+        projectCustomId: project.projectCustomId,
+        teamLead: teamLead
+      }
+    });
+  } catch (err) {
+    console.error('Error assigning Team Lead:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /teamleads - Get all Team Leads (for dropdown)
+router.get('/teamleads', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const teamLeads = await User.find({ role: 'Team Lead' })
+      .select('name email _id')
+      .sort({ name: 1 });
+    res.json({ success: true, teamLeads });
+  } catch (err) {
+    console.error('Error fetching Team Leads:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /projects/teamlead/:teamLeadId - Get all projects for a specific Team Lead
+router.get('/projects/teamlead/:teamLeadId', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const projects = await Project.find({ teamLead: req.params.teamLeadId })
+      .populate('projectManager', 'name email')
+      .populate('teamLead', 'name email')
+      .populate('clients', 'name email')
+      .populate('organizations', 'companyName');
+    
+    res.json({ success: true, projects });
+  } catch (err) {
+    console.error('Error fetching Team Lead projects:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+// GET /users/teamleads - Get all Team Leads
+router.get('/users/teamleads', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const teamLeads = await User.find({ role: 'Team Lead' })
+      .select('name email _id');
+    res.json(teamLeads);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+// GET /projects/teamlead - Get projects for Team Lead (alternative endpoint)
+router.get('/projects/teamlead', authorize('Team Lead'), async (req, res) => {
+  try {
+    const projects = await Project.find({ teamLead: req.user._id })
+      .populate('clients', 'name email role')
+      .populate('organizations', 'companyName website address')
+      .populate('projectManager', 'name email')
+      .populate('teamLead', 'name email')
+      .populate({
+        path: 'feeds',
+        populate: {
+          path: 'assignedDevelopers',
+          select: 'name email',
+          model: 'User'
+        }
+      })
+      .sort({ createdAt: -1 });
+    
+    res.json({ success: true, projects });
+  } catch (err) {
+    console.error('Error fetching Team Lead projects:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 // COUNTRY MAP
 const COUNTRY_MAP = {
   "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
