@@ -1,12 +1,34 @@
-import React, { useState, useEffect } from 'react';
-import { Bell, BellOff, CheckCircle, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock } from 'lucide-react';
+import axios from 'axios';
+import API_BASE_URL from '../config';
 import notificationManager from '../utils/notifications';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const NotificationBell = () => {
   const [permission, setPermission] = useState('default');
   const [isSupported, setIsSupported] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  
+  const navigate = useNavigate();
+  const dropdownRef = useRef(null);
+  const buttonRef = useRef(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     setIsSupported('Notification' in window);
@@ -15,12 +37,17 @@ const NotificationBell = () => {
     if (Notification.permission === 'granted') {
       notificationManager.permission = 'granted';
     }
+    
+    fetchNotificationCount();
+    
+    const interval = setInterval(fetchNotificationCount, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (showDropdown && !event.target.closest('.notification-dropdown')) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setShowDropdown(false);
       }
     };
@@ -29,7 +56,128 @@ const NotificationBell = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showDropdown]);
+  }, []);
+
+  const calculateDropdownPosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const dropdownWidth = isMobile ? window.innerWidth - 32 : 380;
+      const maxWidth = Math.min(dropdownWidth, 400);
+      
+      let right = window.innerWidth - rect.right;
+      let top = rect.bottom + 8;
+      
+      if (top + 500 > window.innerHeight) {
+        top = rect.top - 500 - 8;
+        if (top < 10) {
+          top = 10;
+        }
+      }
+      
+      if (right < 10) {
+        right = 10;
+      }
+      if (right + maxWidth > window.innerWidth - 10) {
+        right = window.innerWidth - maxWidth - 10;
+      }
+      
+      setDropdownPosition({ top, right });
+    }
+  }, [isMobile]);
+
+  const fetchNotificationCount = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      const res = await axios.get(`${API_BASE_URL}/api/notifications/count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setNotificationCount(res.data.total || 0);
+    } catch (error) {
+      console.error('Error fetching notification count:', error);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setNotifications(res.data.notifications || []);
+      setNotificationCount(res.data.unreadCount || 0);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBellClick = () => {
+    if (permission !== 'granted') {
+      requestNotificationPermission();
+      return;
+    }
+    
+    const newShowState = !showDropdown;
+    setShowDropdown(newShowState);
+    if (newShowState) {
+      calculateDropdownPosition();
+      fetchNotifications();
+    }
+  };
+
+  const markAsRead = async (notificationId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE_URL}/api/notifications/${notificationId}/read`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setNotifications(prev => 
+        prev.map(n => n._id === notificationId ? { ...n, read: true } : n)
+      );
+      setNotificationCount(prev => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE_URL}/api/notifications/mark-all-read`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      setNotificationCount(0);
+      toast.success('All notifications marked as read');
+    } catch (error) {
+      console.error('Error marking all as read:', error);
+      toast.error('Failed to mark all as read');
+    }
+  };
+
+  const handleNotificationClick = (notification) => {
+    if (notification.ticketId) {
+      const ticketId = typeof notification.ticketId === 'object' 
+        ? notification.ticketId._id 
+        : notification.ticketId;
+      
+      // Mark as read if it's a notification
+      if (notification._id && !notification._id.toString().startsWith('open_')) {
+        markAsRead(notification._id);
+      }
+      
+      setShowDropdown(false);
+      navigate(`/tickets/${ticketId}`);
+    }
+  };
 
   const requestNotificationPermission = async () => {
     const granted = await notificationManager.requestPermission();
@@ -48,11 +196,15 @@ const NotificationBell = () => {
     }
   };
 
-  const getStatusIcon = () => {
-    if (!isSupported) return <BellOff size={18} className="text-gray-400" />;
-    if (permission === 'granted') return <Bell size={18} className="text-green-500" />;
-    if (permission === 'denied') return <BellOff size={18} className="text-red-500" />;
-    return <Bell size={18} className="text-yellow-500 animate-pulse" />;
+  const getNotificationIcon = (type) => {
+    switch(type) {
+      case 'ticket_created': return '🎫';
+      case 'ticket_assigned': return '📋';
+      case 'ticket_commented': return '💬';
+      case 'ticket_status_updated': return '🔄';
+      case 'open_ticket': return '📌';
+      default: return '🔔';
+    }
   };
 
   const getStatusColor = () => {
@@ -62,130 +214,199 @@ const NotificationBell = () => {
     return 'bg-yellow-100';
   };
 
+  const getTimeAgo = (date) => {
+    if (!date) return '';
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Yesterday';
+    return `${days}d ago`;
+  };
+
+  const renderDropdown = () => {
+    if (!showDropdown || permission !== 'granted') return null;
+
+    const dropdownWidth = isMobile ? window.innerWidth - 32 : 380;
+    const maxWidth = Math.min(dropdownWidth, 400);
+    const isMobileFull = isMobile;
+
+    return createPortal(
+      <>
+        <div 
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[99998] sm:hidden"
+          onClick={() => setShowDropdown(false)}
+        />
+        
+        <div 
+          ref={dropdownRef}
+          className="bg-white rounded-lg shadow-2xl border border-gray-200 overflow-hidden flex flex-col"
+          style={{
+            position: 'fixed',
+            top: isMobileFull ? '60px' : `${dropdownPosition.top}px`,
+            right: isMobileFull ? '50%' : `${dropdownPosition.right}px`,
+            left: isMobileFull ? '50%' : 'auto',
+            transform: isMobileFull ? 'translateX(-50%)' : 'none',
+            width: isMobileFull ? 'calc(100vw - 32px)' : `${maxWidth}px`,
+            maxWidth: '400px',
+            minWidth: isMobileFull ? 'calc(100vw - 32px)' : '320px',
+            zIndex: 99999,
+            transformOrigin: 'top right',
+            maxHeight: '90vh',
+          }}
+        >
+          <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white flex justify-between items-center sticky top-0 bg-white z-10">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-gray-800">Notifications</span>
+              {notificationCount > 0 && (
+                <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
+                  {notificationCount}
+                </span>
+              )}
+            </div>
+            
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            {loading ? (
+              <div className="p-8 text-center">
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p className="text-xs text-gray-400 mt-2">Loading...</p>
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="p-8 text-center">
+                <Bell size={32} className="text-gray-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-gray-500">No notifications</p>
+                <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
+              </div>
+            ) : (
+              notifications.map((notification, index) => {
+                const isRead = notification.read || false;
+                const isOpenTicket = notification.type === 'open_ticket';
+                const ticketTitle = typeof notification.ticketId === 'object' 
+                  ? notification.ticketId?.title || notification.message 
+                  : notification.message;
+                const hasComments = notification.hasComments || (notification.ticketId?.comments && notification.ticketId.comments.length > 0);
+                const lastComment = notification.lastComment || 
+                  (notification.ticketId?.comments && notification.ticketId.comments.length > 0 
+                    ? notification.ticketId.comments[notification.ticketId.comments.length - 1] 
+                    : null);
+                
+                return (
+                  <div
+                    key={notification._id || index}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-all ${
+                      !isRead ? 'bg-blue-50/50 border-l-4 border-l-blue-500' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 text-lg mt-0.5">
+                        {notification.type === 'ticket_commented' ? (
+                          <MessageSquare size={16} className="text-purple-500" />
+                        ) : (
+                          getNotificationIcon(notification.type)
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-sm ${!isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                            {ticketTitle || notification.message}
+                          </p>
+                          <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
+                            {getTimeAgo(notification.createdAt)}
+                          </span>
+                        </div>
+                        
+                        {/* Show comment preview if available */}
+                        {notification.type === 'ticket_commented' && lastComment && (
+                          <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-semibold text-gray-600">
+                                {lastComment.userName || 'User'}:
+                              </span>
+                              <span className="text-xs text-gray-600 line-clamp-2">
+                                {lastComment.text || 'No text'}
+                              </span>
+                            </div>
+                            {notification.hasAttachments && (
+                              <div className="mt-1 text-[10px] text-purple-500">
+                                📎 Has attachments
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {notification.ticketId && typeof notification.ticketId === 'object' && notification.ticketId.ticketNumber && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {notification.ticketId.ticketNumber}
+                            {notification.ticketId.status && (
+                              <span className={`ml-2 px-1.5 py-0.5 rounded text-[8px] font-medium ${
+                                notification.ticketId.status === 'Open' ? 'bg-blue-100 text-blue-700' :
+                                notification.ticketId.status === 'In Progress' ? 'bg-yellow-100 text-yellow-700' :
+                                notification.ticketId.status === 'Resolved' ? 'bg-green-100 text-green-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {notification.ticketId.status}
+                              </span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                      {!isRead && (
+                        <div className="flex-shrink-0 w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          
+          <div className="p-2 border-t border-gray-100 bg-gray-50">
+            <button
+              onClick={() => {
+                setShowDropdown(false);
+                navigate('/tickets');
+              }}
+              className="w-full text-center text-xs font-medium text-blue-600 hover:text-blue-800 py-1"
+            >
+              View all tickets →
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
+    );
+  };
+
   return (
-      <div className="relative notification-dropdown overflow-visible">
-          <button
-        onClick={() => {
-          if (permission !== 'granted') {
-            requestNotificationPermission();
-          } else {
-            setShowDropdown(!showDropdown);
-          }
-        }}
+    <div className="relative inline-block">
+      <button
+        ref={buttonRef}
+        onClick={handleBellClick}
         className={`relative p-1.5 rounded-lg transition-colors group ${getStatusColor()}`}
         title={permission === 'granted' ? 'Notifications Active' : 'Notifications Disabled'}
       >
-        {getStatusIcon()}
-        {permission !== 'granted' && permission !== 'denied' && (
-          <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+        {permission === 'granted' ? (
+          <Bell size={18} className="text-green-500" />
+        ) : permission === 'denied' ? (
+          <BellOff size={18} className="text-red-500" />
+        ) : (
+          <Bell size={18} className="text-yellow-500 animate-pulse" />
+        )}
+        
+        {notificationCount > 0 && (
+          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-md">
+            {notificationCount > 99 ? '99+' : notificationCount}
+          </span>
         )}
       </button>
 
-      {/* Dropdown - positioned to the right side */}
-      {showDropdown && permission === 'granted' && (
-        <div className="absolute left-full top-0 ml-3 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
-          <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-green-50 to-white">
-            <div className="flex items-center gap-2">
-              <CheckCircle size={16} className="text-green-600" />
-              <span className="text-sm font-semibold text-gray-800">Notifications Active</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">You'll receive real-time updates</p>
-          </div>
-          
-          <div className="p-3 space-y-2">
-            <div className="text-xs text-gray-600">
-              <div className="flex items-center justify-between py-1">
-                <span>🔔 New Tickets</span>
-                <span className="text-green-600">On</span>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <span>📋 Assignments</span>
-                <span className="text-green-600">On</span>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <span>💬 Comments</span>
-                <span className="text-green-600">On</span>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <span>🔊 Sound Alerts</span>
-                <span className="text-green-600">On</span>
-              </div>
-            </div>
-          </div>
-          
-          <button
-            onClick={() => {
-              notificationManager.show({
-                title: 'Test Notification',
-                body: 'Your notifications are working!',
-                icon: '/images/tab_logo.png', 
-                silent: false
-              });
-              setShowDropdown(false);
-            }}
-            className="w-full p-2 text-center text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors border-t border-gray-100"
-          >
-            Send Test Notification
-          </button>
-        </div>
-      )}
-
-      {/* Denied state dropdown - positioned to the right side */}
-      {showDropdown && permission === 'denied' && (
-<div className="absolute left-full top-0 ml-3 w-80 bg-white rounded-lg shadow-2xl border border-gray-200 z-[9999] overflow-hidden animate-in slide-in-from-left-2 duration-200">         <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-red-50 to-white">
-            <div className="flex items-center gap-2">
-              <AlertCircle size={16} className="text-red-600" />
-              <span className="text-sm font-semibold text-gray-800">Notifications Blocked</span>
-            </div>
-            <p className="text-xs text-gray-500 mt-1">Please enable notifications in your browser</p>
-          </div>
-          
-          <div className="p-3">
-            <div className="bg-blue-50 rounded-lg p-3 mb-3">
-              <p className="text-xs font-semibold text-blue-800 mb-2">How to enable:</p>
-              <ol className="text-xs text-blue-700 space-y-1 list-decimal list-inside">
-                <li>Click the <strong>lock icon</strong> 🔒 in the address bar</li>
-                <li>Go to <strong>Site settings</strong></li>
-                <li>Find <strong>Notifications</strong> and change to <strong>Allow</strong></li>
-                <li>Refresh this page</li>
-              </ol>
-            </div>
-            <button
-              onClick={() => setShowDropdown(false)}
-              className="w-full py-2 text-center text-xs font-medium text-gray-600 hover:bg-gray-50 transition-colors rounded-lg"
-            >
-              Got it
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Default state dropdown - when permission not yet set */}
-      {showDropdown && permission !== 'granted' && permission !== 'denied' && (
-        <div className="absolute top-full right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 z-50 overflow-hidden">
-          <div className="p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Bell size={24} className="text-blue-500" />
-              <div>
-                <h4 className="font-semibold text-gray-800">Enable Notifications</h4>
-                <p className="text-xs text-gray-500">Get real-time updates</p>
-              </div>
-            </div>
-            <button
-              onClick={requestNotificationPermission}
-              className="w-full py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              Enable Notifications
-            </button>
-            <button
-              onClick={() => setShowDropdown(false)}
-              className="w-full mt-2 py-2 text-center text-xs font-medium text-gray-500 hover:bg-gray-50 transition-colors rounded-lg"
-            >
-              Maybe later
-            </button>
-          </div>
-        </div>
-      )}
+      {renderDropdown()}
     </div>
   );
 };

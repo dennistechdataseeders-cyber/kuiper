@@ -71,6 +71,13 @@ const ticketSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     userName: { type: String },
     images: [{ type: String }],
+    files: [{ 
+    url: { type: String },
+    filename: { type: String },
+    originalName: { type: String },
+    size: { type: Number },
+    type: { type: String } // 'image' or 'document'
+  }],
     createdAt: { type: Date, default: Date.now }
   }],
   resolvedAt: Date,

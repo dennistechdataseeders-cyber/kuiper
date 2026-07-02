@@ -35,6 +35,14 @@ import TeamLeadDashboard from './pages/TeamLeadDashboard';
 import TeamLeadProjects from './pages/TeamLeadProjects';
 import TeamLeadDevelopers from './pages/TeamLeadDevelopers';
 import TeamLeadFeeds from './pages/TeamLeadFeeds';
+import TicketAssignmentRules from './pages/TicketAssignmentRules';
+import ClientFeedDelivery from './pages/ClientFeedDelivery';
+import ClientProjectFeeds from './pages/ClientProjectFeeds';
+import ClientFeedDetails from './pages/ClientFeedDetails';
+
+
+// Import the new Notification component
+import NotificationBell from './components/NotificationBell';
 
 import { AnimatePresence } from 'framer-motion';
 
@@ -95,18 +103,18 @@ function AppContent() {
   const token = localStorage.getItem('token');
   const location = useLocation(); // Required for AnimatePresence to track key changes
 
-const landingPath = useMemo(() => {
-  if (!userRole) return '/login';
-  if (userRole === 'Admin') return '/admin';
-  if (userRole === 'Sales Manager') return '/sales-manager';
-  if (userRole === 'Sales') return '/sales';
-  if (userRole === 'Project Manager') return '/admin/projects';
-  if (userRole === 'Developer') return '/developer';
-  if (userRole === 'Client') return '/client';
-  if (userRole === 'Team Lead') return '/teamlead';
-  return '/login';
-}, [userRole]);
-
+  const landingPath = useMemo(() => {
+    if (!userRole) return '/login';
+    if (userRole === 'Admin') return '/admin';
+    if (userRole === 'Sales Manager') return '/sales-manager';
+    if (userRole === 'Sales') return '/sales';
+    if (userRole === 'Project Manager') return '/admin/projects';
+    if (userRole === 'Developer') return '/developer';
+    if (userRole === 'Client') return '/client';
+    if (userRole === 'Team Lead') return '/teamlead';
+    return '/login';
+  }, [userRole]);
+  
   return (
     <SessionManager>
       <AnimatePresence mode="wait">
@@ -126,6 +134,14 @@ const landingPath = useMemo(() => {
 
                     {/* Dashboards */}
                     <Route path="/admin" element={<ProtectedRoute allowedRoles={['Admin']}><AdminDashboard /></ProtectedRoute>} />
+                    <Route 
+                        path="/admin/ticket-rules" 
+                        element={
+                          <ProtectedRoute allowedRoles={['Admin']}>
+                            <TicketAssignmentRules />
+                          </ProtectedRoute>
+                        } 
+                      />
                     <Route path="/sales-manager" element={<ProtectedRoute allowedRoles={['Sales Manager']}><SalesManagerDashboard /></ProtectedRoute>} />
                     <Route path="/sales" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
                     
@@ -177,8 +193,10 @@ const landingPath = useMemo(() => {
                     <Route path="/teamlead/developers" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDevelopers /></ProtectedRoute>} />
                     <Route path="/teamlead/feeds" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadFeeds /></ProtectedRoute>} />
                     {/*Client routes*/}
-                    <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientDashboard /></ProtectedRoute>} />
-
+                    <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientFeedDelivery /></ProtectedRoute>} />
+                    <Route path="/client/projects/:projectId/feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientProjectFeeds /></ProtectedRoute>} />
+                    <Route path="/client/feeds/:feedId" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientFeedDetails /></ProtectedRoute>} />
+                    
                     {/* Shared */}
                     <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDashboard /></ProtectedRoute>} />
                     <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead']}><CreateTicket /></ProtectedRoute>} />

@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
+Mail,
   AlertTriangle,
   User,
   FileText,
@@ -118,6 +119,7 @@ const Sidebar = () => {
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
+      { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
 
@@ -165,7 +167,8 @@ const Sidebar = () => {
     ],
 
     Client: [
-      { path: '/client', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      // { path: '/client', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' }, // This should point to the new dashboard
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
     ],
   };

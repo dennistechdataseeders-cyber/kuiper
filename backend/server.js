@@ -59,6 +59,9 @@ const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const teamLeadRoutes = require('./routes/teamLeadRoutes');
+const ticketAssignmentRoutes = require('./routes/ticketAssignmentRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+const clientRoutes = require('./routes/clientRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -92,12 +95,24 @@ const io = new Server(server, {
 
 global.io = io;
 app.set('io', io);
+
 io.on('connection', (socket) => {
   console.log('🟢 Socket Connected:', socket.id);
 
   socket.on('join-user-room', (userId) => {
     socket.join(userId);
     console.log(`👤 User joined room: ${userId}`);
+  });
+
+  // NEW: Join project-specific room
+  socket.on('join-project-room', (projectId) => {
+    socket.join(`project_${projectId}`);
+    console.log(`📁 User joined project room: ${projectId}`);
+  });
+
+  socket.on('leave-project-room', (projectId) => {
+    socket.leave(`project_${projectId}`);
+    console.log(`📁 User left project room: ${projectId}`);
   });
 
   socket.on('join-ticket-room', (ticketId) => {
@@ -205,6 +220,9 @@ app.use('/api/email-campaign', emailCampaignRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/comments', protect, commentRoutes);
 app.use('/api/teamlead', protect, teamLeadRoutes);
+app.use('/api/admin', protect, ticketAssignmentRoutes);
+app.use('/api/notifications', protect, notificationRoutes);
+app.use('/api/client', protect, clientRoutes);
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE

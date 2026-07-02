@@ -36,6 +36,7 @@ body,
   background-color: #dbeafe;
   min-height: 100vh;
 }
+
 /* --- Utility Classes --- */
 .animate-cyber-glow {
   animation: cyber-glow 3s ease-in-out infinite;
@@ -117,4 +118,77 @@ body,
 /* Neighboring Month Days */
 .react-calendar__month-view__days__tile--neighboringMonth {
   color: #CBD5E1 !important;
+}
+
+/* ============================================
+   FIX: NOTIFICATION DROPDOWN VISIBILITY
+   ============================================ */
+
+/* Ensure sidebar allows overflow for dropdowns */
+aside {
+  overflow: visible !important;
+}
+
+/* Prevent nav from clipping absolutely positioned elements */
+aside nav {
+  overflow-x: visible !important;
+}
+
+/* Ensure notification dropdown container doesn't clip children */
+aside .relative {
+  overflow: visible !important;
+}
+
+/* Fix for notification dropdown container */
+.notification-dropdown {
+  overflow: visible !important;
+}
+
+/* Ensure the dropdown is always on top */
+.notification-dropdown > div:last-child {
+  z-index: 9999 !important;
+}
+
+/* Mobile responsive fix for notification dropdown */
+@media (max-width: 640px) {
+  .notification-dropdown > div:last-child {
+    position: fixed !important;
+    top: 60px !important;
+    left: 16px !important;
+    right: 16px !important;
+    width: calc(100vw - 32px) !important;
+    max-width: 400px !important;
+    margin: 0 auto !important;
+  }
+}
+
+/* Fix for sidebar toggle button z-index */
+button.fixed {
+  z-index: 60 !important;
+}
+
+/* Ensure dropdown backdrop covers properly */
+.fixed.inset-0.bg-black\/20 {
+  z-index: 9998 !important;
+}
+
+/* Fix for user menu popover */
+.absolute.bottom-full {
+  z-index: 61 !important;
+}
+
+/* Scrollbar styling for sidebar nav */
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  background: transparent;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Prevent horizontal scroll on body when dropdown is open */
+body.dropdown-open {
+  overflow: hidden !important;
 }

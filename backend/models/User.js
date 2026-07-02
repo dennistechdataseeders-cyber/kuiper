@@ -69,6 +69,40 @@ const UserSchema = new mongoose.Schema({
     default: true
   },
   
+  // ============================================
+  // NOTIFICATION FIELDS
+  // ============================================
+  notificationCount: {
+    type: Number,
+    default: 0
+  },
+  lastReadAt: {
+    type: Date,
+    default: Date.now
+  },
+  unreadNotifications: [{
+    type: {
+      type: String,
+      enum: ['ticket_created', 'ticket_assigned', 'ticket_commented', 'ticket_status_updated', 'open_ticket']
+    },
+    ticketId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Ticket'
+    },
+    message: {
+      type: String,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    },
+    read: {
+      type: Boolean,
+      default: false
+    }
+  }],
+  
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -76,6 +110,7 @@ const UserSchema = new mongoose.Schema({
 // Middleware to update the updatedAt timestamp
 UserSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  
 });
 
 // Middleware to ensure only one primary POC per organization
@@ -108,6 +143,63 @@ UserSchema.virtual('organizationName').get(function() {
 // Index for efficient queries on POCs by organization
 UserSchema.index({ organizationId: 1, role: 1 });
 UserSchema.index({ isPrimaryPOC: 1, organizationId: 1 });
+
+// ============================================
+// NOTIFICATION METHODS
+// ============================================
+
+// Method to add a notification
+UserSchema.methods.addNotification = function(notificationData) {
+  if (!this.unreadNotifications) {
+    this.unreadNotifications = [];
+  }
+  
+  this.unreadNotifications.push({
+    type: notificationData.type || 'ticket_created',
+    ticketId: notificationData.ticketId,
+    message: notificationData.message,
+    createdAt: new Date(),
+    read: false
+  });
+  
+  this.notificationCount = (this.notificationCount || 0) + 1;
+  return this.save();
+};
+
+// Method to mark a notification as read
+UserSchema.methods.markNotificationAsRead = function(notificationId) {
+  const notification = this.unreadNotifications?.find(
+    n => n._id.toString() === notificationId.toString()
+  );
+  
+  if (notification && !notification.read) {
+    notification.read = true;
+    this.notificationCount = Math.max(0, (this.notificationCount || 0) - 1);
+    return this.save();
+  }
+  return Promise.resolve(this);
+};
+
+// Method to mark all notifications as read
+UserSchema.methods.markAllNotificationsAsRead = function() {
+  if (this.unreadNotifications) {
+    this.unreadNotifications.forEach(n => n.read = true);
+    this.notificationCount = 0;
+    return this.save();
+  }
+  return Promise.resolve(this);
+};
+
+// Method to get unread notification count
+UserSchema.methods.getUnreadCount = function() {
+  return this.unreadNotifications?.filter(n => !n.read).length || 0;
+};
+
+// Method to get all notifications with ticket details populated
+UserSchema.methods.getNotificationsWithDetails = async function() {
+  await this.populate('unreadNotifications.ticketId', 'title ticketNumber status createdAt');
+  return this.unreadNotifications || [];
+};
 
 // Method to check if user is a POC
 UserSchema.methods.isPOC = function() {

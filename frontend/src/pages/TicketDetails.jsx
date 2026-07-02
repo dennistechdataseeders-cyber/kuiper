@@ -3,8 +3,10 @@ import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, User, Calendar, MessageSquare, Send, Users, 
-  CheckCircle, XCircle, Clock, Image, X,AlertCircle, 
-  Loader2, Eye, Download, UploadCloud, GitFork
+  CheckCircle, XCircle, Clock, Image, X, AlertCircle, 
+  Loader2, Eye, Download, UploadCloud, GitFork, Paperclip,
+  File, FileText, FileArchive, FileSpreadsheet, FileVideo, FileAudio,
+  FileCode, FileJson
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -18,9 +20,9 @@ const TicketDetails = () => {
   const [ticket, setTicket] = useState(null);
   const [loading, setLoading] = useState(true);
   const [newComment, setNewComment] = useState('');
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
   const [developers, setDevelopers] = useState([]);
   const [assigning, setAssigning] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -34,20 +36,281 @@ const TicketDetails = () => {
   const currentUserId = localStorage.getItem('userId');
   const currentUserName = localStorage.getItem('userName');
 
+  // ============================================
+  // FILE CONFIGURATION - EXTENDED SUPPORT
+  // ============================================
+
+  // Max file sizes
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+  // Allowed file extensions (primary validation)
+  const ALLOWED_EXTENSIONS = [
+    // Images
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
+    // Documents
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+    // Archives
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+    // Presentations
+    '.ppt', '.pptx', '.odp',
+    // Video
+    '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
+    // Audio
+    '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
+    // Code/Config
+    '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
+    '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
+    '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
+    '.sh', '.bash', '.bat', '.ps1', '.cmd',
+    // Executables
+    '.exe',
+    // Python specific
+    '.pyc', '.pyo', '.pyd', '.whl'
+  ];
+
+  // Allowed MIME types (fallback validation)
+  const ALLOWED_MIME_TYPES = [
+    // Images
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml',
+    // Documents
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/plain', 'text/csv', 'text/x-csv', 'application/csv',
+    'application/zip', 'application/x-zip-compressed',
+    'application/x-rar-compressed', 'application/x-7z-compressed',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    // Video
+    'video/mp4', 'video/avi', 'video/x-msvideo', 'video/mkv', 'video/quicktime',
+    'video/x-ms-wmv', 'video/flv', 'video/webm',
+    // Audio
+    'audio/mpeg', 'audio/wav', 'audio/aac', 'audio/ogg', 'audio/flac',
+    // Code/Config
+    'application/json', 'application/xml', 'text/xml', 'text/yaml',
+    'text/javascript', 'application/javascript', 'text/css',
+    'text/x-python', 'text/x-java', 'text/x-c', 'text/x-c++',
+    'text/x-ruby', 'text/x-php', 'text/x-go', 'text/x-rust'
+  ];
+
   const statusFlow = ['Open', 'In Progress', 'Resolved', 'Closed'];
   const currentStatusIndex = ticket ? statusFlow.indexOf(ticket.status) : -1;
 
-  const showCommentNotification = (ticketData, commentAuthor, imageCount = 0) => {
+  // ============================================
+  // FILE HELPER FUNCTIONS - FIXED
+  // ============================================
+
+  const getFileExtension = (filename) => {
+    if (!filename) return '';
+    const name = typeof filename === 'string' ? filename : String(filename);
+    const ext = name.split('.').pop()?.toLowerCase();
+    return ext ? '.' + ext : '';
+  };
+
+  const isImageFile = (filename) => {
+    const name = typeof filename === 'string' ? filename : (filename?.originalName || filename?.filename || filename?.name || '');
+    if (!name) return false;
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
+    return imageExtensions.includes(getFileExtension(name));
+  };
+
+  const isVideoFile = (filename) => {
+    const name = typeof filename === 'string' ? filename : (filename?.originalName || filename?.filename || filename?.name || '');
+    if (!name) return false;
+    const videoExtensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
+    return videoExtensions.includes(getFileExtension(name));
+  };
+
+  const isAudioFile = (filename) => {
+    const name = typeof filename === 'string' ? filename : (filename?.originalName || filename?.filename || filename?.name || '');
+    if (!name) return false;
+    const audioExtensions = ['.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma'];
+    return audioExtensions.includes(getFileExtension(name));
+  };
+
+  const isCodeFile = (file) => {
+    const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
+    if (!filename) return false;
+    
+    const codeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass', 
+                           '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
+                           '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
+                           '.sh', '.bash', '.bat', '.ps1', '.cmd'];
+    return codeExtensions.includes(getFileExtension(filename));
+  };
+
+  const isAllowedFile = (file) => {
+    // First check by extension
+    const ext = getFileExtension(file.name);
+    if (ALLOWED_EXTENSIONS.includes(ext)) {
+      return true;
+    }
+    
+    // Fallback to MIME type check
+    if (ALLOWED_MIME_TYPES.includes(file.type)) {
+      return true;
+    }
+    
+    // Special case for text files with generic MIME types
+    if (file.type.startsWith('text/')) {
+      return true;
+    }
+    
+    // Special case for application/octet-stream (unknown files)
+    // Allow these if the extension is in our allowed list
+    if (file.type === 'application/octet-stream' && ALLOWED_EXTENSIONS.includes(ext)) {
+      return true;
+    }
+    
+    return false;
+  };
+
+  const validateFile = (file) => {
+    // Check file type
+    if (!isAllowedFile(file)) {
+      const ext = getFileExtension(file.name);
+      const isAllowedExt = ALLOWED_EXTENSIONS.includes(ext);
+      
+      if (!isAllowedExt) {
+        toast.error(`File type "${file.name}" is not supported. Please upload images, documents, archives, or media files.`);
+        return false;
+      }
+      
+      // If extension is allowed but MIME type check failed, allow it
+      console.log(`⚠️ File "${file.name}" has allowed extension but unrecognized MIME type: ${file.type} - allowing anyway`);
+    }
+
+    // Check file size
+    const isImage = isImageFile(file.name);
+    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+    
+    if (file.size > maxSize) {
+      const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+      const maxSizeInMB = isImage ? '5MB' : '50MB';
+      toast.error(`${file.name} (${sizeInMB}MB) exceeds the ${maxSizeInMB} size limit.`);
+      return false;
+    }
+
+    return true;
+  };
+
+  const getFileIcon = (file) => {
+    const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
+    if (!filename) return <File size={16} className="text-slate-400" />;
+    
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    
+    // Image types
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
+      return <Image size={16} className="text-blue-500" />;
+    }
+    // PDF
+    if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
+    // Word documents
+    if (['doc', 'docx', 'odt'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
+    // Excel/Spreadsheets
+    if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
+    // Archives
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
+    // Text/Config files
+    if (['txt', 'json', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf'].includes(ext)) {
+      return <FileCode size={16} className="text-slate-600" />;
+    }
+    // Code files
+    if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'scss', 'sass'].includes(ext)) {
+      return <FileCode size={16} className="text-purple-500" />;
+    }
+    if (['py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs'].includes(ext)) {
+      return <FileCode size={16} className="text-orange-500" />;
+    }
+    // Scripts
+    if (['sh', 'bash', 'bat', 'ps1', 'cmd'].includes(ext)) {
+      return <FileCode size={16} className="text-green-700" />;
+    }
+    // Audio
+    if (['mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a', 'wma'].includes(ext)) {
+      return <FileAudio size={16} className="text-pink-500" />;
+    }
+    // Video
+    if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpg', 'mpeg'].includes(ext)) {
+      return <FileVideo size={16} className="text-indigo-500" />;
+    }
+    // Presentations
+    if (['ppt', 'pptx', 'odp'].includes(ext)) {
+      return <FileText size={16} className="text-orange-600" />;
+    }
+    return <File size={16} className="text-slate-400" />;
+  };
+
+  const getFileTypeLabel = (file) => {
+    const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
+    if (!filename) return 'File';
+    
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    const typeMap = {
+      // Images
+      'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 
+      'webp': 'Image', 'bmp': 'Image', 'svg': 'Image', 'ico': 'Icon',
+      // Documents
+      'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word', 'odt': 'Word',
+      'xls': 'Excel', 'xlsx': 'Excel', 'csv': 'CSV', 'ods': 'Excel',
+      'txt': 'Text', 'rtf': 'Rich Text',
+      // Archives
+      'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z', 'tar': 'TAR', 'gz': 'GZ', 'bz2': 'BZ2',
+      // Code/Config
+      'json': 'JSON', 'xml': 'XML', 'yaml': 'YAML', 'yml': 'YAML',
+      'ini': 'Config', 'cfg': 'Config', 'conf': 'Config',
+      'js': 'JavaScript', 'jsx': 'React', 'ts': 'TypeScript', 'tsx': 'React TS',
+      'html': 'HTML', 'css': 'CSS', 'scss': 'SCSS', 'sass': 'SASS',
+      'py': 'Python', 'java': 'Java', 'cpp': 'C++', 'c': 'C', 'h': 'C Header',
+      'php': 'PHP', 'rb': 'Ruby', 'go': 'Go', 'rs': 'Rust',
+      'sh': 'Shell', 'bash': 'Bash', 'bat': 'Batch', 'ps1': 'PowerShell', 'cmd': 'Command',
+      // Video
+      'mp4': 'Video', 'avi': 'Video', 'mkv': 'Video', 'mov': 'Video',
+      'wmv': 'Video', 'flv': 'Video', 'webm': 'Video', 'm4v': 'Video',
+      'mpg': 'Video', 'mpeg': 'Video',
+      // Audio
+      'mp3': 'Audio', 'wav': 'Audio', 'aac': 'Audio', 'ogg': 'Audio',
+      'flac': 'Audio', 'm4a': 'Audio', 'wma': 'Audio',
+      // Presentations
+      'ppt': 'PowerPoint', 'pptx': 'PowerPoint', 'odp': 'Presentation'
+    };
+    return typeMap[ext] || 'File';
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
+
+  // ============================================
+  // NOTIFICATION & SOCKET FUNCTIONS
+  // ============================================
+
+  const showCommentNotification = (ticketData, commentAuthor, fileCount = 0, imageCount = 0) => {
     if (commentAuthor === currentUserName || commentAuthor === currentUserId) return;
     
     const isCreator = ticketData.createdBy?._id === currentUserId || ticketData.createdBy === currentUserId;
     const isAssignee = ticketData.assignedTo?._id === currentUserId || ticketData.assignedTo === currentUserId;
     
     if (isCreator || isAssignee) {
-      const imageText = imageCount > 0 ? ` 📷 +${imageCount} image(s)` : '';
+      let attachmentText = '';
+      if (fileCount > 0) {
+        const parts = [];
+        if (imageCount > 0) parts.push(`📷 ${imageCount} image(s)`);
+        const docCount = fileCount - imageCount;
+        if (docCount > 0) parts.push(`📎 ${docCount} file(s)`);
+        attachmentText = ` (${parts.join(', ')})`;
+      }
+      
       notificationManager.show({
         title: '💬 New Comment on Ticket',
-        body: `${commentAuthor} commented${imageText}: "${ticketData.title.substring(0, 50)}"`,
+        body: `${commentAuthor} commented${attachmentText}: "${ticketData.title.substring(0, 50)}"`,
         icon: '/images/login_img.png',
         tag: `comment-${ticketData._id}`,
         data: { ticketId: ticketData._id, type: 'ticket' },
@@ -58,6 +321,10 @@ const TicketDetails = () => {
       });
     }
   };
+
+  // ============================================
+  // API CALLS
+  // ============================================
 
   useEffect(() => {
     fetchTicketDetails();
@@ -95,13 +362,25 @@ const TicketDetails = () => {
           setTicket(updatedTicket);
           
           if (commentUserId !== currentUserId) {
+            const fileCount = lastComment.files?.length || 0;
             const imageCount = lastComment.images?.length || 0;
-            toast(`${commentUserName} commented${imageCount > 0 ? ` 📷 +${imageCount} image(s)` : ''}: ${lastComment.text?.substring(0, 50) || ''}`, {
+            const totalAttachments = fileCount || imageCount;
+            
+            let attachmentText = '';
+            if (totalAttachments > 0) {
+              const parts = [];
+              if (imageCount > 0) parts.push(`📷 ${imageCount} image(s)`);
+              const docCount = fileCount - imageCount;
+              if (docCount > 0) parts.push(`📎 ${docCount} file(s)`);
+              attachmentText = ` ${parts.join(', ')}`;
+            }
+            
+            toast(`${commentUserName} commented${attachmentText}: ${lastComment.text?.substring(0, 50) || ''}`, {
               icon: '💬',
               duration: 4000
             });
             
-            showCommentNotification(updatedTicket, commentUserName, imageCount);
+            showCommentNotification(updatedTicket, commentUserName, totalAttachments, imageCount);
           }
         }
       }
@@ -147,7 +426,6 @@ const TicketDetails = () => {
   };
 
   const fetchDevelopers = async () => {
-    // Allow PM, Admin, and Team Lead to fetch developers
     if (userRole !== 'Project Manager' && userRole !== 'Admin' && userRole !== 'Team Lead') return;
     
     try {
@@ -160,6 +438,10 @@ const TicketDetails = () => {
       console.error('Error fetching developers:', error);
     }
   };
+
+  // ============================================
+  // TICKET ACTION FUNCTIONS
+  // ============================================
 
   const updateStatus = async (newStatus) => {
     setUpdating(true);
@@ -179,28 +461,27 @@ const TicketDetails = () => {
     }
   };
 
- const closeTicket = async () => {
-  // Add confirmation dialog
-  if (!window.confirm('Are you sure you want to close this ticket? This action cannot be undone.')) {
-    return;
-  }
-  
-  setUpdating(true);
-  try {
-    const token = localStorage.getItem('token');
-    const res = await axios.patch(`${API_BASE_URL}/api/tickets/${id}/status`, 
-      { status: 'Closed' },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-    setTicket(res.data);
-    toast.success('Ticket closed successfully');
-  } catch (error) {
-    console.error('Error closing ticket:', error);
-    toast.error('Failed to close ticket');
-  } finally {
-    setUpdating(false);
-  }
-};
+  const closeTicket = async () => {
+    if (!window.confirm('Are you sure you want to close this ticket? This action cannot be undone.')) {
+      return;
+    }
+    
+    setUpdating(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.patch(`${API_BASE_URL}/api/tickets/${id}/status`, 
+        { status: 'Closed' },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTicket(res.data);
+      toast.success('Ticket closed successfully');
+    } catch (error) {
+      console.error('Error closing ticket:', error);
+      toast.error('Failed to close ticket');
+    } finally {
+      setUpdating(false);
+    }
+  };
 
   const assignDeveloper = async (developerId) => {
     if (!developerId) return;
@@ -222,26 +503,57 @@ const TicketDetails = () => {
     }
   };
 
-  const validateAndProcessFile = (file) => {
-    if (file && file.type.startsWith('image/')) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('Image size should be less than 5MB');
-        return;
+  // ============================================
+  // FILE PROCESSING FUNCTIONS
+  // ============================================
+
+  const processFiles = (files) => {
+    const validFiles = [];
+    const validPreviews = [];
+
+    files.forEach(file => {
+      if (validateFile(file)) {
+        validFiles.push(file);
+        
+        let previewUrl = null;
+        if (isImageFile(file.name)) {
+          previewUrl = URL.createObjectURL(file);
+        }
+        
+        validPreviews.push({
+          file: file,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          preview: previewUrl,
+          id: Date.now() + Math.random().toString(36).substr(2, 9)
+        });
       }
-      setSelectedImage(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result);
-      };
-      reader.readAsDataURL(file);
-    } else {
-      toast.error('Please select or drop a valid image file');
+    });
+
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      setFilePreviews(prev => [...prev, ...validPreviews]);
+      
+      const imageCount = validFiles.filter(f => isImageFile(f.name)).length;
+      const docCount = validFiles.filter(f => !isImageFile(f.name)).length;
+      
+      let message = `${validFiles.length} file(s) added`;
+      if (imageCount > 0 && docCount > 0) {
+        message = `${imageCount} image(s) and ${docCount} document(s) added`;
+      } else if (imageCount > 0) {
+        message = `${imageCount} image(s) added`;
+      } else {
+        message = `${docCount} document(s) added`;
+      }
+      toast.success(message);
     }
   };
 
-  const handleImageSelect = (e) => {
-    const file = e.target.files[0];
-    validateAndProcessFile(file);
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    processFiles(files);
+    e.target.value = '';
   };
 
   const handleDragOver = (e) => {
@@ -257,57 +569,84 @@ const TicketDetails = () => {
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    validateAndProcessFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    processFiles(files);
   };
 
-  const removeSelectedImage = () => {
-    setSelectedImage(null);
-    setImagePreview(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setFilePreviews(prev => {
+      const removed = prev[index];
+      if (removed && removed.preview) {
+        URL.revokeObjectURL(removed.preview);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
-  const uploadImage = async (imageFile) => {
-    const formData = new FormData();
-    formData.append('image', imageFile);
+  const uploadFiles = async () => {
+    if (selectedFiles.length === 0) return [];
     
-    try {
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-image`, formData, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
+    const uploadedUrls = [];
+    setUploadingFiles(true);
+
+    const token = localStorage.getItem('token');
+
+    for (const file of selectedFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data.success) {
+          uploadedUrls.push({
+            url: response.data.url,
+            filename: response.data.filename,
+            originalName: response.data.originalName,
+            size: response.data.size,
+            type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
+          });
         }
-      });
-      return response.data.url;
-    } catch (error) {
-      console.error('Image upload failed:', error);
-      throw new Error(error.response?.data?.error || 'Failed to upload image');
+      } catch (error) {
+        console.error('File upload failed:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+      }
     }
+
+    setUploadingFiles(false);
+    return uploadedUrls;
   };
+
+  // ============================================
+  // COMMENT FUNCTION
+  // ============================================
 
   const addComment = async (e) => {
     if (e) e.preventDefault();
-    if (!newComment.trim() && !selectedImage) {
-      toast.error('Please enter a comment or select an image');
+    if (!newComment.trim() && selectedFiles.length === 0) {
+      toast.error('Please enter a comment or attach a file');
       return;
     }
     
     try {
       const token = localStorage.getItem('token');
-      let imageUrl = null;
+      let uploadedFiles = [];
       
-      if (selectedImage) {
-        setUploadingImage(true);
-        imageUrl = await uploadImage(selectedImage);
-        setUploadingImage(false);
+      if (selectedFiles.length > 0) {
+        setUploadingFiles(true);
+        uploadedFiles = await uploadFiles();
+        setUploadingFiles(false);
       }
       
       const payload = {
-        text: newComment.trim() || '📷 Image attached',
-        images: imageUrl ? [imageUrl] : []
+        text: newComment.trim() || '📎 File(s) attached',
+        files: uploadedFiles
       };
       
       const res = await axios.post(`${API_BASE_URL}/api/tickets/${id}/comments`,
@@ -317,14 +656,24 @@ const TicketDetails = () => {
       
       setTicket(res.data);
       setNewComment('');
-      removeSelectedImage();
-      toast.success('Comment added');
+      setSelectedFiles([]);
+      setFilePreviews([]);
+      
+      if (uploadedFiles.length > 0) {
+        toast.success(`Comment added with ${uploadedFiles.length} attachment(s)`);
+      } else {
+        toast.success('Comment added');
+      }
     } catch (error) {
       console.error('Error adding comment:', error);
       toast.error(error.response?.data?.error || 'Failed to add comment');
-      setUploadingImage(false);
+      setUploadingFiles(false);
     }
   };
+
+  // ============================================
+  // UI HELPER FUNCTIONS
+  // ============================================
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -375,8 +724,11 @@ const TicketDetails = () => {
     }
   };
 
-  // Check if user can see developer assignment (for Feasibility tickets)
   const canAssignDeveloper = userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead';
+
+  // ============================================
+  // RENDER
+  // ============================================
 
   if (loading) {
     return (
@@ -433,7 +785,6 @@ const TicketDetails = () => {
                 <XCircle size={16} /> Close Ticket
               </button>
             )}
-            {/* Allow creator to update status if they're not a Client (or always allow for creators) */}
             {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
             ticket.status !== 'Closed' && (
               <div className="flex gap-2">
@@ -461,108 +812,104 @@ const TicketDetails = () => {
         </div>
       </div>
 
-     {/* Status Progress Map */}
-<div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-  <h3 className="text-sm font-semibold text-gray-700 mb-6 flex items-center gap-2">
-    <CheckCircle size={16} className="text-blue-600" />
-    Ticket Progress
-  </h3>
-  
-  <div className="relative px-2">
-    {/* Progress Bar Track */}
-    <div className="absolute top-4 left-6 right-6 h-1.5 bg-gray-200 rounded-full" />
-    
-    {/* Progress Bar Fill */}
-    <div 
-      className="absolute top-4 left-6 h-1.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
-      style={{ 
-        width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - ${12}px)` 
-      }}
-    />
-    
-    {/* Status Steps */}
-    <div className="flex justify-between items-start relative">
-      {statusFlow.map((status, index) => {
-        const isCompleted = index <= currentStatusIndex;
-        const isCurrent = status === ticket.status;
+      {/* Status Progress Map */}
+      <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <h3 className="text-sm font-semibold text-gray-700 mb-6 flex items-center gap-2">
+          <CheckCircle size={16} className="text-blue-600" />
+          Ticket Progress
+        </h3>
         
-        let statusDate = null;
-        if (status === 'Open' && ticket.createdAt) {
-          statusDate = ticket.createdAt;
-        } else if (status === 'In Progress' && ticket.startedAt) {
-          statusDate = ticket.startedAt;
-        } else if (status === 'Resolved' && ticket.resolvedAt) {
-          statusDate = ticket.resolvedAt;
-        } else if (status === 'Closed' && ticket.closedAt) {
-          statusDate = ticket.closedAt;
-        }
-        
-        const formattedDate = statusDate 
-          ? new Date(statusDate).toLocaleString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              hour: '2-digit',
-              minute: '2-digit'
-            })
-          : null;
-        
-        return (
+        <div className="relative px-2">
+          <div className="absolute top-4 left-6 right-6 h-1.5 bg-gray-200 rounded-full" />
           <div 
-            key={status} 
-            className="flex flex-col items-center relative group"
+            className="absolute top-4 left-6 h-1.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
             style={{ 
-              minWidth: '60px',
-              flex: '1 1 0%'
+              width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - ${12}px)` 
             }}
-          >
-            <div className="relative z-10">
-              <div 
-                className={`
-                  w-8 h-8 rounded-full flex items-center justify-center 
-                  text-sm font-bold transition-all duration-300 cursor-pointer
-                  ${isCompleted 
-                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
-                    : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                  }
-                  ${isCurrent 
-                    ? 'ring-4 ring-blue-100 ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
-                    : ''
-                  }
-                  hover:scale-110 hover:shadow-xl
-                `}
-              >
-                {isCompleted ? <CheckCircle size={16} className="text-white" /> : index + 1}
-              </div>
-            </div>
-            
-            <div className="mt-2 text-center min-h-[40px] flex flex-col items-center">
-              <p className={`
-                text-xs font-semibold transition-colors
-                ${isCompleted ? 'text-green-700' : 'text-gray-400'}
-                ${isCurrent ? 'text-blue-600 font-bold' : ''}
-              `}>
-                {status}
-              </p>
-              {isCurrent && (
-                <span className="mt-0.5 text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
-                  ● Current
-                </span>
-              )}
-            </div>
-            {formattedDate && (
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-gray-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap shadow-lg z-20 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-gray-900">
-                <div className="flex flex-col items-center">
-                  <span className="font-semibold">{status}</span>
-                  <span className="text-gray-300 text-[9px]">{formattedDate}</span>
+          />
+          
+          <div className="flex justify-between items-start relative">
+            {statusFlow.map((status, index) => {
+              const isCompleted = index <= currentStatusIndex;
+              const isCurrent = status === ticket.status;
+              
+              let statusDate = null;
+              if (status === 'Open' && ticket.createdAt) {
+                statusDate = ticket.createdAt;
+              } else if (status === 'In Progress' && ticket.startedAt) {
+                statusDate = ticket.startedAt;
+              } else if (status === 'Resolved' && ticket.resolvedAt) {
+                statusDate = ticket.resolvedAt;
+              } else if (status === 'Closed' && ticket.closedAt) {
+                statusDate = ticket.closedAt;
+              }
+              
+              const formattedDate = statusDate 
+                ? new Date(statusDate).toLocaleString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })
+                : null;
+              
+              return (
+                <div 
+                  key={status} 
+                  className="flex flex-col items-center relative group"
+                  style={{ 
+                    minWidth: '60px',
+                    flex: '1 1 0%'
+                  }}
+                >
+                  <div className="relative z-10">
+                    <div 
+                      className={`
+                        w-8 h-8 rounded-full flex items-center justify-center 
+                        text-sm font-bold transition-all duration-300 cursor-pointer
+                        ${isCompleted 
+                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
+                          : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+                        }
+                        ${isCurrent 
+                          ? 'ring-4 ring-blue-100 ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
+                          : ''
+                        }
+                        hover:scale-110 hover:shadow-xl
+                      `}
+                    >
+                      {isCompleted ? <CheckCircle size={16} className="text-white" /> : index + 1}
+                    </div>
+                  </div>
+                  
+                  <div className="mt-2 text-center min-h-[40px] flex flex-col items-center">
+                    <p className={`
+                      text-xs font-semibold transition-colors
+                      ${isCompleted ? 'text-green-700' : 'text-gray-400'}
+                      ${isCurrent ? 'text-blue-600 font-bold' : ''}
+                    `}>
+                      {status}
+                    </p>
+                    {isCurrent && (
+                      <span className="mt-0.5 text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
+                        ● Current
+                      </span>
+                    )}
+                  </div>
+                  {formattedDate && (
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-gray-900 text-white px-3 py-1.5 rounded-lg text-[10px] font-medium whitespace-nowrap shadow-lg z-20 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-gray-900">
+                      <div className="flex flex-col items-center">
+                        <span className="font-semibold">{status}</span>
+                        <span className="text-gray-300 text-[9px]">{formattedDate}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })}
           </div>
-        );
-      })}
-    </div>
-  </div>
-</div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Content Side */}
@@ -586,8 +933,8 @@ const TicketDetails = () => {
                 <div className="bg-white p-4 rounded-full shadow-lg flex items-center justify-center animate-bounce mb-2">
                   <UploadCloud size={32} className="text-blue-600" />
                 </div>
-                <p className="text-blue-700 font-bold text-lg">Drop your screenshot here to attach</p>
-                <p className="text-blue-600/80 text-xs">Supports PNG, JPG, JPEG (Max 5MB)</p>
+                <p className="text-blue-700 font-bold text-lg">Drop your files here to attach</p>
+                <p className="text-blue-600/80 text-xs">Supports images, documents, archives, code, and media (Max 50MB)</p>
               </div>
             )}
 
@@ -596,7 +943,7 @@ const TicketDetails = () => {
                 <MessageSquare size={20} className="text-gray-500" />
                 Conversation ({ticket.comments?.length || 0})
               </h2>
-              <p className="text-xs text-gray-500 mt-1">Discuss this ticket with the team or drag images over this window to upload</p>
+              <p className="text-xs text-gray-500 mt-1">Discuss this ticket with the team or drag files to upload</p>
             </div>
             
             <div className="flex-1 max-h-[400px] overflow-y-auto p-6 space-y-4 bg-gray-50/50">
@@ -608,6 +955,7 @@ const TicketDetails = () => {
                     const userInitial = commentUser.charAt(0).toUpperCase();
                     const commentTime = formatCommentTime(comment.createdAt);
                     const hasImages = comment.images && comment.images.length > 0;
+                    const hasFiles = comment.files && comment.files.length > 0;
                     
                     return (
                       <div key={idx} className={`flex gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''}`}>
@@ -629,6 +977,8 @@ const TicketDetails = () => {
                                 {comment.text}
                               </p>
                             )}
+                            
+                            {/* Images */}
                             {hasImages && (
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {comment.images.map((img, imgIdx) => (
@@ -647,6 +997,55 @@ const TicketDetails = () => {
                                     </button>
                                   </div>
                                 ))}
+                              </div>
+                            )}
+                            
+                            {/* Files - Now includes code files too */}
+                            {hasFiles && (
+                              <div className="mt-2 space-y-2">
+                                {comment.files.map((file, fileIdx) => {
+                                  const isCode = isCodeFile(file);
+                                  const isVideo = isVideoFile(file);
+                                  const isAudio = isAudioFile(file);
+                                  
+                                  return (
+                                    <div key={fileIdx} className="flex items-center gap-3 p-2 bg-white/10 rounded-lg border border-gray-200/20 hover:bg-white/20 transition-all group">
+                                      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                                        {file.type === 'image' ? (
+                                          <img 
+                                            src={file.url} 
+                                            alt={file.originalName || 'Attachment'}
+                                            className="w-full h-full object-cover rounded-lg"
+                                          />
+                                        ) : (
+                                          getFileIcon(file)
+                                        )}
+                                      </div>
+                                      <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-semibold text-gray-700 truncate">
+                                          {file.originalName || file.filename}
+                                        </p>
+                                        <p className="text-[8px] text-gray-400 flex items-center gap-2">
+                                          <span>{formatFileSize(file.size)}</span>
+                                          <span>•</span>
+                                          <span>{getFileTypeLabel(file)}</span>
+                                          {isCode && <span className="text-purple-500">• Code</span>}
+                                          {isVideo && <span className="text-indigo-500">• Video</span>}
+                                          {isAudio && <span className="text-pink-500">• Audio</span>}
+                                        </p>
+                                      </div>
+                                      <a
+                                        href={file.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-600 transition-all"
+                                        title="Download or view file"
+                                      >
+                                        <Download size={14} />
+                                      </a>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             )}
                           </div>
@@ -671,16 +1070,37 @@ const TicketDetails = () => {
             
             {/* Form Box */}
             <div className="border-t border-gray-200 bg-white p-4">
-              {imagePreview && (
-                <div className="mb-3 p-2 bg-gray-50 rounded-lg border border-gray-200 relative inline-block shadow-sm">
-                  <img src={imagePreview} alt="Preview" className="max-w-[100px] max-h-[80px] rounded object-cover" />
-                  <button
-                    type="button"
-                    onClick={removeSelectedImage}
-                    className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md"
-                  >
-                    <X size={12} />
-                  </button>
+              {/* File Previews */}
+              {filePreviews.length > 0 && (
+                <div className="mb-3 flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
+                  {filePreviews.map((preview, idx) => (
+                    <div key={preview.id || idx} className="relative group">
+                      <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                          {preview.file.type?.startsWith('image/') || isImageFile(preview.name) ? (
+                            <img 
+                              src={preview.preview || URL.createObjectURL(preview.file)} 
+                              alt={preview.name}
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          ) : (
+                            getFileIcon(preview.file)
+                          )}
+                        </div>
+                        <div className="min-w-0 max-w-[120px]">
+                          <p className="text-[10px] font-semibold text-gray-700 truncate">{preview.name}</p>
+                          <p className="text-[8px] text-gray-400">{formatFileSize(preview.size)}</p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(idx)}
+                        className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md opacity-0 group-hover:opacity-100"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
               
@@ -694,44 +1114,49 @@ const TicketDetails = () => {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      if (newComment.trim() || selectedImage) addComment();
+                      if (newComment.trim() || selectedFiles.length > 0) addComment();
                     }
                   }}
                 />
                 
-                <div className="flex items-center self-center h-full px-1">
+                <div className="flex items-center self-center h-full px-1 gap-1">
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept="image/*"
-                    onChange={handleImageSelect}
+                    multiple
+                    onChange={handleFileSelect}
                     className="hidden"
                   />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current.click()}
-                    disabled={uploadingImage}
+                    disabled={uploadingFiles}
                     className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 rounded-md transition-colors flex items-center justify-center disabled:opacity-50"
-                    title="Attach image"
+                    title="Attach files (images up to 5MB, files up to 50MB)"
                   >
-                    <Image size={18} />
+                    <Paperclip size={18} />
                   </button>
                 </div>
                 
                 <button
                   type="button"
                   onClick={() => addComment()}
-                  disabled={(!newComment.trim() && !selectedImage) || uploadingImage}
+                  disabled={(!newComment.trim() && selectedFiles.length === 0) || uploadingFiles}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 text-white rounded-md transition-all flex items-center gap-1.5 font-medium text-sm shadow-sm h-[36px] self-center disabled:shadow-none"
                 >
-                  {uploadingImage ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                  {uploadingFiles ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
                   <span>Send</span>
                 </button>
               </div>
               
               <div className="flex justify-between text-[11px] text-gray-400 mt-2 px-1">
                 <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for a new line</span>
-                <span>Drag & Drop images or <button type="button" onClick={() => fileInputRef.current.click()} className="text-blue-500 hover:underline">browse files</button> (max 5MB)</span>
+                <span>
+                  <button type="button" onClick={() => fileInputRef.current.click()} className="text-blue-500 hover:underline">
+                    Attach files
+                  </button>
+                  {' '}(Images: 5MB • Files: 50MB)
+                </span>
               </div>
             </div>
           </div>
@@ -757,7 +1182,6 @@ const TicketDetails = () => {
                 </div>
               </div>
               
-              {/* Show Assigned Developer - Always visible for everyone */}
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned Developer</p>
                 <div className="mt-1.5">
@@ -807,7 +1231,7 @@ const TicketDetails = () => {
             </div>
           </div>
           
-          {/* Assignment Section - Show for PM, Admin, Team Lead (and Developer if they are the assignee) */}
+          {/* Assignment Section */}
           {(canAssignDeveloper || (userRole === 'Developer' && ticket.assignedTo?._id === currentUserId)) && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
@@ -855,13 +1279,12 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Full Screen Image Viewer Modal Overlay Component */}
+      {/* Full Screen Image Viewer */}
       {showImageViewer && (
         <div className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-4" onClick={() => setShowImageViewer(null)}>
           <div className="relative max-w-4xl max-h-[85vh]" onClick={(e) => e.stopPropagation()}>
             <img src={showImageViewer} alt="Full size view" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
             
-            {/* Modal Actions */}
             <div className="absolute -top-12 right-0 flex items-center gap-3">
               <a 
                 href={showImageViewer} 
