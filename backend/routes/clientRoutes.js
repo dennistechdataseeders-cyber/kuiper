@@ -4,25 +4,57 @@ const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const Project = require('../models/Project');
+const Feed = require('../models/Feed'); // Added for Developer role check
 const FeedStatus = require('../models/FeedStatus');
 const feedStatusService = require('../services/feedStatusService');
 
 // ============================================
 // GET /api/client/projects
+// ✅ Role-aware: Clients, Developers, PMs, Team Leads, Admins
 // ============================================
 router.get('/projects', protect, async (req, res) => {
   try {
     const userId = req.user._id;
+    const userRole = req.user.role;
     const userOrganizationId = req.user.organizationId;
 
-    const query = {
-      $or: [
-        { clients: userId }
-      ]
-    };
+    let query = {};
 
-    if (userOrganizationId) {
-      query.$or.push({ organizations: userOrganizationId });
+    if (userRole === 'Client') {
+      // Clients: check clients OR organizations
+      query.$or = [
+        { clients: userId }
+      ];
+      if (userOrganizationId) {
+        query.$or.push({ organizations: userOrganizationId });
+      }
+    } else if (userRole === 'Developer') {
+      // Developers: get projects where they are assigned to feeds
+      const feeds = await Feed.find({ assignedDevelopers: userId }).select('projectId');
+      const projectIds = [...new Set(feeds.map(f => f.projectId.toString()))];
+      
+      if (projectIds.length === 0) {
+        return res.status(200).json([]);
+      }
+      query = { _id: { $in: projectIds } };
+      
+    } else if (userRole === 'Project Manager') {
+      // PMs: projects they manage OR where they are the team lead
+      query.$or = [
+        { projectManager: userId },
+        { teamLead: userId }
+      ];
+      
+    } else if (userRole === 'Team Lead') {
+      // Team Leads: projects where they are the team lead
+      query = { teamLead: userId };
+      
+    } else if (userRole === 'Admin') {
+      // Admins: all projects
+      query = {};
+      
+    } else {
+      return res.status(200).json([]);
     }
 
     const projects = await Project.find(query)
@@ -36,36 +68,64 @@ router.get('/projects', protect, async (req, res) => {
 
     res.status(200).json(projects);
   } catch (error) {
-    console.error('Error fetching client projects:', error);
+    console.error('Error fetching projects:', error);
     res.status(500).json({ error: 'Failed to fetch projects' });
   }
 });
 
 // ============================================
 // GET /api/client/projects/:projectId/feeds
-// ✅ Reads from FeedStatus table in client_feed_dashboard DB
+// ✅ Reads from FeedStatus table - Role Aware
 // ============================================
 router.get('/projects/:projectId/feeds', protect, async (req, res) => {
   try {
     const { projectId } = req.params;
     const userId = req.user._id;
+    const userRole = req.user.role;
     const userOrganizationId = req.user.organizationId;
 
-    // Verify project belongs to client
-    const query = {
-      _id: projectId,
-      $or: [
-        { clients: userId }
-      ]
-    };
-
-    if (userOrganizationId) {
-      query.$or.push({ organizations: userOrganizationId });
+    // First, get the project to check access
+    const project = await Project.findById(projectId);
+    
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
     }
 
-    const project = await Project.findOne(query);
+    let hasAccess = false;
 
-    if (!project) {
+    // Role-based access check
+    if (userRole === 'Admin') {
+      hasAccess = true;
+      
+    } else if (userRole === 'Client') {
+      // Check if client is assigned directly or through organization
+      const isClient = project.clients.some(id => id.toString() === userId.toString());
+      const isOrgClient = userOrganizationId && project.organizations.some(id => id.toString() === userOrganizationId.toString());
+      hasAccess = isClient || isOrgClient;
+      
+    } else if (userRole === 'Developer') {
+      // Check if developer is assigned to any feed in this project
+      const feedCount = await Feed.countDocuments({
+        projectId: projectId,
+        assignedDevelopers: userId
+      });
+      hasAccess = feedCount > 0;
+      
+    } else if (userRole === 'Project Manager') {
+      // Check if PM manages this project OR is the team lead
+      const isPM = project.projectManager && project.projectManager.toString() === userId.toString();
+      const isTeamLead = project.teamLead && project.teamLead.toString() === userId.toString();
+      hasAccess = isPM || isTeamLead;
+      
+    } else if (userRole === 'Team Lead') {
+      // Check if Team Lead is assigned to this project
+      hasAccess = project.teamLead && project.teamLead.toString() === userId.toString();
+      
+    } else {
+      hasAccess = false;
+    }
+
+    if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied to this project' });
     }
 
@@ -75,7 +135,7 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
     console.log(`📊 Project name: "${project.name}"`);
     console.log(`📊 Project Custom ID: "${project.projectCustomId}"`);
     console.log(`📊 Today's date: ${today}`);
-    console.log(`📊 FeedStatus DB URI: ${process.env.FEED_STATUS_MONGO_URI || 'Not set'}`);
+    console.log(`📊 Role: ${userRole}`);
     
     // ✅ Query FeedStatus table in client_feed_dashboard DB
     const feedStatuses = await FeedStatus.find({ 
@@ -121,7 +181,7 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
       let status = feed.status || 'Pending';
       
       if (feed.stages && typeof feed.stages === 'object') {
-        const totalStages = 5; // Updated to 5 stages
+        const totalStages = 5;
         const completedStages = Object.values(feed.stages).filter(
           s => s && s.completed === true
         ).length;
@@ -157,7 +217,6 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
         feedStatus: status,
         feedType: feed.feed_type || 'Daily',
         output_path: feed.output_path || null,
-        // ✅ FIX: Include record_count in the response
         record_count: feed.record_count !== undefined && feed.record_count !== null ? feed.record_count : null
       };
     });
@@ -220,7 +279,6 @@ router.get('/feeds/status/:feedName', async (req, res) => {
       error_message: feed.error_message,
       updated_at: feed.updated_at,
       output_path: feed.output_path || null,
-      // ✅ FIX: Include record_count in the response
       record_count: feed.record_count !== undefined && feed.record_count !== null ? feed.record_count : null
     });
   } catch (error) {
@@ -244,7 +302,7 @@ router.post('/feeds/update', async (req, res) => {
       client,
       path,   
       paths,  
-      count, // ➕ NEW: Accept a row/item count metric from python tracking pipeline
+      count,
     } = req.body;
 
     if (!project_id || !feed_name || !stage) {
@@ -272,7 +330,7 @@ router.post('/feeds/update', async (req, res) => {
         failed: false,
         error_message: '',
         output_path: '',
-        record_count: null, // ➕ Initialize
+        record_count: null,
         stages: {
           extraction_done: { completed: false, completed_at: null },
           file_generated: { completed: false, completed_at: null },
@@ -292,13 +350,11 @@ router.post('/feeds/update', async (req, res) => {
       completed_at: timestamp || new Date().toISOString()
     };
 
-    // ➕ NEW: If updating file_integrity, record the captured processing metrics
     if (stage === 'file_integrity' && count !== undefined) {
       feed.record_count = Number(count);
       console.log(`📊 Integrity metric verified for ${feed_name}: ${count} records calculated.`);
     }
 
-    // If this is process_complete, assign paths array or fallback to single string path
     if (stage === 'process_complete') {
       if (Array.isArray(paths) && paths.length > 0) {
         feed.output_path = paths;
@@ -320,7 +376,6 @@ router.post('/feeds/update', async (req, res) => {
     feed.status = progress === 100 ? 'Completed' : (progress > 0 ? 'In Progress' : 'Pending');
     feed.updated_at = new Date();
 
-    // Save the document
     await feed.save();
 
     console.log(`✅ Feed "${feed_name}" updated: ${stage} → ${progress}% (${feed.status})`);
@@ -338,7 +393,7 @@ router.post('/feeds/update', async (req, res) => {
         error_message: feed.error_message || '',
         updated_at: feed.updated_at,
         output_path: feed.output_path,
-        record_count: feed.record_count // Send out count transparently over WebSocket connection
+        record_count: feed.record_count
       };
 
       io.emit('feed_status_updated', eventData);
@@ -379,7 +434,6 @@ router.get('/feeds/:feedId', protect, async (req, res) => {
     
     console.log(`📊 Fetching feed details for: ${feedId}`);
     
-    // Find in FeedStatus table by feed_name
     let feedStatus = await FeedStatus.findOne({ 
       feed_name: feedId,
       date: today
@@ -399,12 +453,10 @@ router.get('/feeds/:feedId', protect, async (req, res) => {
       return res.status(404).json({ error: 'Feed not found' });
     }
     
-    // Enrich with project details
     const project = await Project.findOne({ name: feedStatus.project });
     
-    // Calculate progress
     const stages = feedStatus.stages || {};
-    const totalStages = 5; // Updated to 5 stages
+    const totalStages = 5;
     const completedStages = Object.values(stages).filter(
       (s) => s && s.completed === true
     ).length;
@@ -440,7 +492,6 @@ router.get('/feeds/:feedId', protect, async (req, res) => {
       feedStatus: status,
       feedType: feedStatus.feed_type || 'Daily',
       output_path: feedStatus.output_path || null,
-      // ✅ FIX: Include record_count in the response
       record_count: feedStatus.record_count !== undefined && feedStatus.record_count !== null ? feedStatus.record_count : null
     };
 
@@ -479,12 +530,10 @@ router.post('/feeds/:feedId/status', protect, async (req, res) => {
       error_message: error_message || ''
     };
     
-    // Include output_path if provided
     if (output_path !== undefined) {
       updateData.output_path = output_path;
     }
     
-    // ✅ Include record_count if provided
     if (record_count !== undefined && record_count !== null) {
       updateData.record_count = record_count;
       console.log(`📊 Setting record_count to: ${record_count}`);
@@ -504,7 +553,6 @@ router.post('/feeds/:feedId/status', protect, async (req, res) => {
         failed: updatedFeed.failed,
         error_message: updatedFeed.error_message,
         updated_at: updatedFeed.updated_at,
-        // ✅ Include record_count in WebSocket event
         record_count: updatedFeed.record_count !== undefined && updatedFeed.record_count !== null ? updatedFeed.record_count : null
       };
       
@@ -551,12 +599,10 @@ router.post('/feeds/status/notify', async (req, res) => {
       error_message: error_message || ''
     };
     
-    // Include output_path if provided
     if (output_path !== undefined) {
       updateData.output_path = output_path;
     }
     
-    // ✅ Include record_count if provided
     if (record_count !== undefined && record_count !== null) {
       updateData.record_count = record_count;
       console.log(`📊 Setting record_count to: ${record_count}`);
@@ -575,7 +621,6 @@ router.post('/feeds/status/notify', async (req, res) => {
         failed: updatedFeed.failed,
         error_message: updatedFeed.error_message,
         updated_at: updatedFeed.updated_at,
-        // ✅ Include record_count in WebSocket event
         record_count: updatedFeed.record_count !== undefined && updatedFeed.record_count !== null ? updatedFeed.record_count : null
       };
       
@@ -613,13 +658,10 @@ router.post('/feeds/status/notify', async (req, res) => {
 // ============================================================
 router.get('/debug/feedstatus', async (req, res) => {
   try {
-    // Check connection status
     const isConnected = FeedStatus.db ? FeedStatus.db.readyState === 1 : false;
     
-    // Get a sample count
     const count = await FeedStatus.countDocuments();
     
-    // Get sample records
     const samples = await FeedStatus.find().limit(5);
     
     res.json({

@@ -1,9 +1,15 @@
-// frontend/src/pages/ClientProjectFeeds.jsx
+// frontend/src/pages/ProjectFeedStatus.jsx
+// (Renamed from ClientProjectFeeds.jsx to reflect multi-role support)
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { ChevronLeft, Activity, Clock, CheckCircle, XCircle, AlertCircle, Filter, Info, ChevronDown, ChevronUp, Copy, Check, Hash } from 'lucide-react';
+import { 
+  ChevronLeft, Activity, Clock, CheckCircle, XCircle, AlertCircle, 
+  Filter, Info, ChevronDown, ChevronUp, Copy, Check, Hash, 
+  Paperclip, UploadCloud, File, FileText, FileSpreadsheet, 
+  FileArchive, FileVideo, FileAudio, FileCode, X, Image
+} from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -35,7 +41,74 @@ const DISPLAY_STAGES = [
 
 const STATUS_FILTERS = ['All', 'Pending', 'In Progress', 'Completed', 'Failed'];
 
-const ClientProjectFeeds = () => {
+// ============================================
+// FILE UPLOAD CONFIGURATION
+// ============================================
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+const ALLOWED_EXTENSIONS = [
+  // Images
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
+  // Documents
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+  // Archives
+  '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+  // Presentations
+  '.ppt', '.pptx', '.odp',
+  // Video
+  '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
+  // Audio
+  '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
+  // Code/Config
+  '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
+  '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
+  '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
+  '.sh', '.bash', '.bat', '.ps1', '.cmd',
+  '.exe'
+];
+
+const getFileExtension = (filename) => {
+  if (!filename) return '';
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext ? '.' + ext : '';
+};
+
+const isImageFile = (filename) => {
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
+  return imageExtensions.includes(getFileExtension(filename));
+};
+
+const isAllowedFile = (file) => {
+  const ext = getFileExtension(file.name);
+  return ALLOWED_EXTENSIONS.includes(ext);
+};
+
+const getFileIcon = (file) => {
+  const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    return <Image size={16} className="text-blue-500" />;
+  }
+  if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
+  if (['doc', 'docx'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
+  if (['zip', 'rar', '7z'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
+  if (['mp4', 'avi', 'mkv'].includes(ext)) return <FileVideo size={16} className="text-indigo-500" />;
+  if (['mp3', 'wav', 'aac'].includes(ext)) return <FileAudio size={16} className="text-pink-500" />;
+  if (['js', 'py', 'java', 'json', 'xml'].includes(ext)) return <FileCode size={16} className="text-purple-500" />;
+  return <File size={16} className="text-slate-400" />;
+};
+
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+};
+
+const ProjectFeedStatus = () => {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -52,6 +125,157 @@ const ClientProjectFeeds = () => {
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const [copiedPath, setCopiedPath] = useState(null);
+
+  // ============================================
+  // FILE UPLOAD STATE
+  // ============================================
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
+
+  // Get user role for determining navigation
+  const userRole = localStorage.getItem('role');
+
+  // ============================================
+  // FILE HANDLERS
+  // ============================================
+
+  const validateFile = (file) => {
+    if (!isAllowedFile(file)) {
+      toast.error(`File type "${file.name}" is not supported.`);
+      return false;
+    }
+    
+    const isImage = isImageFile(file.name);
+    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+    
+    if (file.size > maxSize) {
+      const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+      const maxSizeInMB = isImage ? '5MB' : '50MB';
+      toast.error(`${file.name} (${sizeInMB}MB) exceeds the ${maxSizeInMB} size limit.`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const processFiles = (files) => {
+    const validFiles = [];
+    const validPreviews = [];
+
+    files.forEach(file => {
+      if (validateFile(file)) {
+        validFiles.push(file);
+        
+        let previewUrl = null;
+        if (isImageFile(file.name)) {
+          previewUrl = URL.createObjectURL(file);
+        }
+        
+        validPreviews.push({
+          file: file,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          preview: previewUrl,
+          id: Date.now() + Math.random().toString(36).substr(2, 9)
+        });
+      }
+    });
+
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      setFilePreviews(prev => [...prev, ...validPreviews]);
+      
+      const imageCount = validFiles.filter(f => isImageFile(f.name)).length;
+      const docCount = validFiles.filter(f => !isImageFile(f.name)).length;
+      
+      let message = `${validFiles.length} file(s) added`;
+      if (imageCount > 0 && docCount > 0) {
+        message = `${imageCount} image(s) and ${docCount} document(s) added`;
+      } else if (imageCount > 0) {
+        message = `${imageCount} image(s) added`;
+      } else {
+        message = `${docCount} document(s) added`;
+      }
+      toast.success(message);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    processFiles(files);
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    processFiles(files);
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setFilePreviews(prev => {
+      const removed = prev[index];
+      if (removed && removed.preview) {
+        URL.revokeObjectURL(removed.preview);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const uploadFiles = async () => {
+    if (selectedFiles.length === 0) return [];
+    
+    const uploadedUrls = [];
+    setUploadingFiles(true);
+
+    const token = localStorage.getItem('token');
+
+    for (const file of selectedFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data.success) {
+          uploadedUrls.push({
+            url: response.data.url,
+            filename: response.data.filename,
+            originalName: response.data.originalName,
+            size: response.data.size,
+            type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
+          });
+        }
+      } catch (error) {
+        console.error('File upload failed:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+      }
+    }
+
+    setUploadingFiles(false);
+    return uploadedUrls;
+  };
 
   // Helper to safely unpack nested MongoDB $date values or flat ISO string timestamps
   const unpackDate = (dateObj) => {
@@ -111,6 +335,10 @@ const ClientProjectFeeds = () => {
       toast.error('Failed to copy path');
     });
   };
+
+  // ============================================
+  // WEB SOCKET SETUP
+  // ============================================
 
   // Setup WebSocket connection
   useEffect(() => {
@@ -204,7 +432,6 @@ const ClientProjectFeeds = () => {
                   calculatedStatus = 'Pending';
                 }
 
-                // Look for alternative count naming conventions from server actions
                 const inboundCount = data.record_count !== undefined ? data.record_count : (data.count !== undefined ? data.count : null);
                 
                 console.log(`📊 Updating feed "${feed.feed_name}" record_count from ${feed.record_count} to ${inboundCount}`);
@@ -223,7 +450,6 @@ const ClientProjectFeeds = () => {
                   client: data.client || feed.client,
                   feed_type: data.feed_type || feed.feed_type,
                   output_path: data.path !== undefined ? data.path : (data.output_path !== undefined ? data.output_path : feed.output_path || null),
-                  // ✅ CRITICAL FIX: Explicitly set record_count from the update data
                   record_count: inboundCount !== null ? inboundCount : feed.record_count
                 };
               }
@@ -299,6 +525,10 @@ const ClientProjectFeeds = () => {
     };
   }, [actualProjectId]);
 
+  // ============================================
+  // FETCH FEEDS
+  // ============================================
+
   // Fetch feeds on mount and when project changes
   useEffect(() => {
     if (!actualProjectId) {
@@ -332,7 +562,14 @@ const ClientProjectFeeds = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/client/projects/${id}/feeds`, {
+      
+      // Determine which endpoint to use based on role
+      let endpoint = `/api/client/projects/${id}/feeds`;
+      
+      // The backend clientRoutes.js serves feed status data from FeedStatus collection
+      // which is role-agnostic — it just needs the project ID
+      
+      const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -356,8 +593,6 @@ const ClientProjectFeeds = () => {
         
         const parsedUpdatedAt = unpackDate(feed.updated_at || feed.updatedAt || feed.created_at || feed.createdAt);
 
-        // ✅ CRITICAL FIX: Explicitly preserve record_count
-        // The backend sends it as record_count, but we need to make sure it's passed through
         let recordCount = null;
         if (feed.record_count !== undefined && feed.record_count !== null) {
           recordCount = feed.record_count;
@@ -365,7 +600,6 @@ const ClientProjectFeeds = () => {
           recordCount = feed.count;
         }
 
-        // Log for debugging
         if (recordCount !== null) {
           console.log(`📊 Feed "${feed.feed_name || feed.name}" has record_count: ${recordCount}`);
         }
@@ -389,9 +623,7 @@ const ClientProjectFeeds = () => {
           projectCustomId: feed.projectCustomId || feed.project || 'Project',
           projectId: feed.projectId || feed.project || id,
           output_path: feed.output_path || feed.path || null,
-          // ✅ CRITICAL FIX: Explicitly set record_count
           record_count: recordCount,
-          // Keep other fields from the backend
           ...feed
         };
       });
@@ -408,6 +640,10 @@ const ClientProjectFeeds = () => {
       setLoading(false);
     }
   };
+
+  // ============================================
+  // HELPERS
+  // ============================================
 
   const formatISTTime = (dateString) => {
     const usableDateStr = unpackDate(dateString);
@@ -427,6 +663,17 @@ const ClientProjectFeeds = () => {
     if (feed.failed) return 'bg-red-500';
     if (feed.progress === 100) return 'bg-green-500';
     return 'bg-blue-500';
+  };
+
+  // Get navigation path based on role
+  const getBackPath = () => {
+    switch(userRole) {
+      case 'Client': return '/client';
+      case 'Project Manager': return '/pm/feed-status';
+      case 'Developer': return '/developer/feed-status';
+      case 'Team Lead': return '/teamlead/feed-status';
+      default: return '/client';
+    }
   };
 
   const filteredFeeds = statusFilter === 'All' ? feeds : feeds.filter(feed => feed.status === statusFilter);
@@ -450,6 +697,10 @@ const ClientProjectFeeds = () => {
     setExpandedFeed(expandedFeed === feedId ? null : feedId);
   };
 
+  // ============================================
+  // RENDER
+  // ============================================
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -467,7 +718,7 @@ const ClientProjectFeeds = () => {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => navigate('/client', { state: { returnTo: 'projects' } })}
+            onClick={() => navigate(getBackPath(), { state: { returnTo: 'projects' } })}
             className="flex items-center gap-1.5 text-gray-600 hover:text-gray-900 transition-colors text-sm"
           >
             <ChevronLeft size={18} />
@@ -740,7 +991,6 @@ const ClientProjectFeeds = () => {
                                       <span className="text-2xl font-black text-slate-800 font-mono tracking-tight">
                                         {Number(feed.record_count).toLocaleString('en-IN')}
                                       </span>
-                                     
                                     </div>
                                   ) : (
                                     <div className="text-xs text-slate-400 italic">No counting metrics calculated yet.</div>
@@ -816,4 +1066,4 @@ const ClientProjectFeeds = () => {
   );
 };
 
-export default ClientProjectFeeds;
+export default ProjectFeedStatus;

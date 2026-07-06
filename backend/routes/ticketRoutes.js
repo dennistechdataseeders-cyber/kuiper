@@ -31,7 +31,6 @@ const storage = multer.diskStorage({
 });
 
 // File filter - allow images AND documents
-// File filter - allow images AND documents
 const fileFilter = (req, file, cb) => {
   // Image extensions
   const allowedImageTypes = /jpeg|jpg|png|gif|webp|bmp|svg|ico/;
@@ -71,6 +70,77 @@ const upload = multer({
   },
   fileFilter: fileFilter
 });
+
+// ============================================
+// HELPER FUNCTIONS
+// ============================================
+
+// Get MIME type for file extension
+function getMimeType(filename) {
+  const ext = path.extname(filename).toLowerCase();
+  const mimeTypes = {
+    '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    '.xls': 'application/vnd.ms-excel',
+    '.pdf': 'application/pdf',
+    '.doc': 'application/msword',
+    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    '.ppt': 'application/vnd.ms-powerpoint',
+    '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    '.txt': 'text/plain',
+    '.csv': 'text/csv',
+    '.json': 'application/json',
+    '.xml': 'application/xml',
+    '.zip': 'application/zip',
+    '.rar': 'application/x-rar-compressed',
+    '.7z': 'application/x-7z-compressed',
+    '.tar': 'application/x-tar',
+    '.gz': 'application/gzip',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.png': 'image/png',
+    '.gif': 'image/gif',
+    '.webp': 'image/webp',
+    '.bmp': 'image/bmp',
+    '.svg': 'image/svg+xml',
+    '.ico': 'image/x-icon',
+    '.mp4': 'video/mp4',
+    '.avi': 'video/x-msvideo',
+    '.mkv': 'video/x-matroska',
+    '.mov': 'video/quicktime',
+    '.wmv': 'video/x-ms-wmv',
+    '.flv': 'video/x-flv',
+    '.webm': 'video/webm',
+    '.mp3': 'audio/mpeg',
+    '.wav': 'audio/wav',
+    '.aac': 'audio/aac',
+    '.ogg': 'audio/ogg',
+    '.flac': 'audio/flac',
+    '.py': 'text/x-python',
+    '.js': 'application/javascript',
+    '.jsx': 'application/javascript',
+    '.ts': 'application/typescript',
+    '.tsx': 'application/typescript',
+    '.html': 'text/html',
+    '.css': 'text/css',
+    '.scss': 'text/x-scss',
+    '.sass': 'text/x-sass',
+    '.java': 'text/x-java',
+    '.cpp': 'text/x-c++',
+    '.c': 'text/x-c',
+    '.h': 'text/x-c',
+    '.php': 'text/x-php',
+    '.rb': 'text/x-ruby',
+    '.go': 'text/x-go',
+    '.rs': 'text/x-rust',
+    '.sh': 'application/x-sh',
+    '.bash': 'application/x-sh',
+    '.bat': 'application/x-bat',
+    '.ps1': 'application/x-powershell',
+    '.cmd': 'application/x-msdos-program',
+    '.exe': 'application/octet-stream'
+  };
+  return mimeTypes[ext] || 'application/octet-stream';
+}
 
 // ============================================
 // FILE UPLOAD ENDPOINTS
@@ -247,6 +317,65 @@ router.delete('/delete-image', protect, async (req, res) => {
   } catch (error) {
     console.error('Image deletion error:', error);
     res.status(500).json({ error: 'Failed to delete image' });
+  }
+});
+
+// ============================================
+// SECURE FILE DOWNLOAD ENDPOINT
+// ============================================
+router.get('/download/:filename', protect, async (req, res) => {
+  try {
+    const { filename } = req.params;
+    
+    // Security: Prevent directory traversal attacks
+    if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+      return res.status(400).json({ error: 'Invalid filename' });
+    }
+    
+    // Sanitize: Only allow alphanumeric, dash, dot, underscore
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9\-_.]/g, '');
+    if (sanitizedFilename !== filename) {
+      return res.status(400).json({ error: 'Invalid filename format' });
+    }
+    
+    const filePath = path.join(__dirname, '../uploads/tickets', filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      console.error(`❌ File not found: ${filePath}`);
+      return res.status(404).json({ error: 'File not found' });
+    }
+    
+    // Get file stats
+    const stats = fs.statSync(filePath);
+    
+    // Set response headers
+    const mimeType = getMimeType(filename);
+    res.setHeader('Content-Length', stats.size);
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filename)}"`);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    
+    console.log(`📥 Downloading file: ${filename} (${(stats.size / 1024).toFixed(1)} KB)`);
+    
+    // Stream the file to the client
+    const stream = fs.createReadStream(filePath);
+    stream.pipe(res);
+    
+    stream.on('error', (error) => {
+      console.error('Stream error:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: 'Failed to download file' });
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Download error:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: 'Failed to download file' });
+    }
   }
 });
 

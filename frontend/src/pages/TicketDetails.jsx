@@ -100,7 +100,7 @@ const TicketDetails = () => {
   const currentStatusIndex = ticket ? statusFlow.indexOf(ticket.status) : -1;
 
   // ============================================
-  // FILE HELPER FUNCTIONS - FIXED
+  // FILE HELPER FUNCTIONS
   // ============================================
 
   const getFileExtension = (filename) => {
@@ -143,24 +143,19 @@ const TicketDetails = () => {
   };
 
   const isAllowedFile = (file) => {
-    // First check by extension
     const ext = getFileExtension(file.name);
     if (ALLOWED_EXTENSIONS.includes(ext)) {
       return true;
     }
     
-    // Fallback to MIME type check
     if (ALLOWED_MIME_TYPES.includes(file.type)) {
       return true;
     }
     
-    // Special case for text files with generic MIME types
     if (file.type.startsWith('text/')) {
       return true;
     }
     
-    // Special case for application/octet-stream (unknown files)
-    // Allow these if the extension is in our allowed list
     if (file.type === 'application/octet-stream' && ALLOWED_EXTENSIONS.includes(ext)) {
       return true;
     }
@@ -169,21 +164,18 @@ const TicketDetails = () => {
   };
 
   const validateFile = (file) => {
-    // Check file type
     if (!isAllowedFile(file)) {
       const ext = getFileExtension(file.name);
       const isAllowedExt = ALLOWED_EXTENSIONS.includes(ext);
       
       if (!isAllowedExt) {
-        toast.error(`File type "${file.name}" is not supported. Please upload images, documents, archives, or media files.`);
+        toast.error(`File type "${file.name}" is not supported.`);
         return false;
       }
       
-      // If extension is allowed but MIME type check failed, allow it
       console.log(`⚠️ File "${file.name}" has allowed extension but unrecognized MIME type: ${file.type} - allowing anyway`);
     }
 
-    // Check file size
     const isImage = isImageFile(file.name);
     const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     
@@ -203,42 +195,31 @@ const TicketDetails = () => {
     
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     
-    // Image types
     if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
       return <Image size={16} className="text-blue-500" />;
     }
-    // PDF
     if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
-    // Word documents
     if (['doc', 'docx', 'odt'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
-    // Excel/Spreadsheets
     if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
-    // Archives
     if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
-    // Text/Config files
     if (['txt', 'json', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf'].includes(ext)) {
       return <FileCode size={16} className="text-slate-600" />;
     }
-    // Code files
     if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'scss', 'sass'].includes(ext)) {
       return <FileCode size={16} className="text-purple-500" />;
     }
     if (['py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs'].includes(ext)) {
       return <FileCode size={16} className="text-orange-500" />;
     }
-    // Scripts
     if (['sh', 'bash', 'bat', 'ps1', 'cmd'].includes(ext)) {
       return <FileCode size={16} className="text-green-700" />;
     }
-    // Audio
     if (['mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a', 'wma'].includes(ext)) {
       return <FileAudio size={16} className="text-pink-500" />;
     }
-    // Video
     if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpg', 'mpeg'].includes(ext)) {
       return <FileVideo size={16} className="text-indigo-500" />;
     }
-    // Presentations
     if (['ppt', 'pptx', 'odp'].includes(ext)) {
       return <FileText size={16} className="text-orange-600" />;
     }
@@ -251,16 +232,12 @@ const TicketDetails = () => {
     
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     const typeMap = {
-      // Images
       'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 
       'webp': 'Image', 'bmp': 'Image', 'svg': 'Image', 'ico': 'Icon',
-      // Documents
       'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word', 'odt': 'Word',
       'xls': 'Excel', 'xlsx': 'Excel', 'csv': 'CSV', 'ods': 'Excel',
       'txt': 'Text', 'rtf': 'Rich Text',
-      // Archives
       'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z', 'tar': 'TAR', 'gz': 'GZ', 'bz2': 'BZ2',
-      // Code/Config
       'json': 'JSON', 'xml': 'XML', 'yaml': 'YAML', 'yml': 'YAML',
       'ini': 'Config', 'cfg': 'Config', 'conf': 'Config',
       'js': 'JavaScript', 'jsx': 'React', 'ts': 'TypeScript', 'tsx': 'React TS',
@@ -268,14 +245,11 @@ const TicketDetails = () => {
       'py': 'Python', 'java': 'Java', 'cpp': 'C++', 'c': 'C', 'h': 'C Header',
       'php': 'PHP', 'rb': 'Ruby', 'go': 'Go', 'rs': 'Rust',
       'sh': 'Shell', 'bash': 'Bash', 'bat': 'Batch', 'ps1': 'PowerShell', 'cmd': 'Command',
-      // Video
       'mp4': 'Video', 'avi': 'Video', 'mkv': 'Video', 'mov': 'Video',
       'wmv': 'Video', 'flv': 'Video', 'webm': 'Video', 'm4v': 'Video',
       'mpg': 'Video', 'mpeg': 'Video',
-      // Audio
       'mp3': 'Audio', 'wav': 'Audio', 'aac': 'Audio', 'ogg': 'Audio',
       'flac': 'Audio', 'm4a': 'Audio', 'wma': 'Audio',
-      // Presentations
       'ppt': 'PowerPoint', 'pptx': 'PowerPoint', 'odp': 'Presentation'
     };
     return typeMap[ext] || 'File';
@@ -286,6 +260,57 @@ const TicketDetails = () => {
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
+
+  // ============================================
+  // SECURE DOWNLOAD HANDLER
+  // ============================================
+
+  const handleFileDownload = (file) => {
+    const token = localStorage.getItem('token');
+    const filename = file.filename || file.url?.split('/').pop();
+    
+    if (!filename) {
+      toast.error('Invalid file');
+      return;
+    }
+
+    const downloadUrl = `${API_BASE_URL}/api/tickets/download/${encodeURIComponent(filename)}`;
+    
+    toast.loading('Downloading file...', { id: 'download' });
+    
+    fetch(downloadUrl, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+      return response.blob();
+    })
+    .then(blob => {
+      toast.dismiss('download');
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.originalName || file.filename || filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('File downloaded successfully!');
+    })
+    .catch(error => {
+      console.error('Download error:', error);
+      toast.dismiss('download');
+      toast.error('Failed to download file');
+      
+      // Fallback: open in new tab
+      window.open(downloadUrl, '_blank');
+    });
   };
 
   // ============================================
@@ -743,6 +768,9 @@ const TicketDetails = () => {
 
   if (!ticket) return null;
 
+  // Check if ticket has attachments from creation
+  const hasTicketAttachments = ticket.files && ticket.files.length > 0;
+
   return (
     <div className={`min-h-screen bg-gray-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
       {/* Header */}
@@ -773,6 +801,11 @@ const TicketDetails = () => {
               {ticket.category === 'Production' && ticket.subcategory === 'Feasibility' && (
                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-md bg-indigo-100 text-indigo-700">
                   🔬 Feasibility
+                </span>
+              )}
+              {hasTicketAttachments && (
+                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-md bg-blue-100 text-blue-700">
+                  📎 {ticket.files.length} attachment(s)
                 </span>
               )}
             </div>
@@ -811,6 +844,65 @@ const TicketDetails = () => {
           </div>
         </div>
       </div>
+
+      {/* Ticket Attachments Section - Display attachments from ticket creation */}
+      {hasTicketAttachments && (
+        <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+            <Paperclip size={16} className="text-blue-600" />
+            Ticket Attachments ({ticket.files.length})
+          </h3>
+          <div className="flex flex-wrap gap-3">
+            {ticket.files.map((file, index) => {
+              const isImage = isImageFile(file.originalName || file.filename);
+              const fileUrl = file.url || `${API_BASE_URL}/uploads/tickets/${file.filename}`;
+              
+              return (
+                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all group">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                    {isImage ? (
+                      <img 
+                        src={fileUrl} 
+                        alt={file.originalName || 'Attachment'}
+                        className="w-full h-full object-cover rounded-lg cursor-pointer"
+                        onClick={() => setShowImageViewer(fileUrl)}
+                      />
+                    ) : (
+                      getFileIcon(file)
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-semibold text-gray-700 truncate max-w-[200px]">
+                      {file.originalName || file.filename}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] text-gray-400">{formatFileSize(file.size)}</span>
+                      <span className="text-[8px] text-gray-400">•</span>
+                      <span className="text-[8px] text-gray-400">{getFileTypeLabel(file)}</span>
+                    </div>
+                  </div>
+                  {isImage && (
+                    <button
+                      onClick={() => setShowImageViewer(fileUrl)}
+                      className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                      title="View image"
+                    >
+                      <Eye size={14} />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleFileDownload(file)}
+                    className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                    title="Download file"
+                  >
+                    <Download size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Status Progress Map */}
       <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -1034,15 +1126,13 @@ const TicketDetails = () => {
                                           {isAudio && <span className="text-pink-500">• Audio</span>}
                                         </p>
                                       </div>
-                                      <a
-                                        href={file.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="p-1.5 rounded-lg hover:bg-white/20 text-gray-400 hover:text-blue-600 transition-all"
-                                        title="Download or view file"
+                                      <button
+                                        onClick={() => handleFileDownload(file)}
+                                        className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                                        title="Download file"
                                       >
                                         <Download size={14} />
-                                      </a>
+                                      </button>
                                     </div>
                                   );
                                 })}
@@ -1286,15 +1376,19 @@ const TicketDetails = () => {
             <img src={showImageViewer} alt="Full size view" className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
             
             <div className="absolute -top-12 right-0 flex items-center gap-3">
-              <a 
-                href={showImageViewer} 
-                download 
-                target="_blank"
-                rel="noreferrer"
+              <button
+                onClick={() => {
+                  // Download the image using the secure handler
+                  const file = { 
+                    filename: showImageViewer.split('/').pop(),
+                    originalName: showImageViewer.split('/').pop()
+                  };
+                  handleFileDownload(file);
+                }}
                 className="p-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors flex items-center gap-1.5 text-white text-xs font-medium backdrop-blur-sm"
               >
                 <Download size={15} /> Download Image
-              </a>
+              </button>
               <button 
                 type="button"
                 onClick={() => setShowImageViewer(null)} 

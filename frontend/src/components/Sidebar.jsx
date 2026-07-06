@@ -1,3 +1,5 @@
+// frontend/src/components/Sidebar.jsx
+
 import React, { useState, useRef, useEffect } from 'react';
 import {
   LayoutDashboard,
@@ -11,7 +13,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Inbox,
-Mail,
+  Mail,
   AlertTriangle,
   User,
   FileText,
@@ -144,6 +146,7 @@ const Sidebar = () => {
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
+      { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     ],
@@ -152,6 +155,7 @@ const Sidebar = () => {
       { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
+      { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
@@ -163,12 +167,12 @@ const Sidebar = () => {
       { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
+      { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
     ],
 
     Client: [
-      // { path: '/client', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' }, // This should point to the new dashboard
+      { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
     ],
   };

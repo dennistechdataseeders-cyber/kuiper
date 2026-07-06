@@ -1,12 +1,14 @@
 // frontend/src/pages/CreateTicket.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Send, Lock, Globe, Tag, Layers, ChevronDown, ChevronUp, 
   Users, Briefcase, AlertCircle, Clock, FileText, CheckCircle, Info,
-  Building2, Hash, Sparkles, Zap, UserCheck, GitFork
+  Building2, Hash, Sparkles, Zap, UserCheck, GitFork, Paperclip,
+  UploadCloud, File, FileSpreadsheet, FileArchive, FileVideo, 
+  FileAudio, FileCode, X, Image, Download, Eye
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
@@ -122,7 +124,6 @@ const TICKET_CATEGORIES = {
         'New Feed Request',
         'Editing Feed Enhancement'
       ],
-      // 🔥 NEW: Feasibility subcategory - NO sub-items, sets Project & Feed to "General"
       'Feasibility': [],
       'KUIPER': [
         'Report Bug',
@@ -196,6 +197,73 @@ const CLIENT_CATEGORIES = {
   'Production': TICKET_CATEGORIES['Production']
 };
 
+// ============================================
+// FILE UPLOAD CONFIGURATION
+// ============================================
+
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+
+const ALLOWED_EXTENSIONS = [
+  // Images
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
+  // Documents
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+  // Archives
+  '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+  // Presentations
+  '.ppt', '.pptx', '.odp',
+  // Video
+  '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
+  // Audio
+  '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
+  // Code/Config
+  '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
+  '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
+  '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
+  '.sh', '.bash', '.bat', '.ps1', '.cmd',
+  '.exe'
+];
+
+const getFileExtension = (filename) => {
+  if (!filename) return '';
+  const ext = filename.split('.').pop()?.toLowerCase();
+  return ext ? '.' + ext : '';
+};
+
+const isImageFile = (filename) => {
+  const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
+  return imageExtensions.includes(getFileExtension(filename));
+};
+
+const isAllowedFile = (file) => {
+  const ext = getFileExtension(file.name);
+  return ALLOWED_EXTENSIONS.includes(ext);
+};
+
+const getFileIcon = (file) => {
+  const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+  
+  if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    return <Image size={16} className="text-blue-500" />;
+  }
+  if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
+  if (['doc', 'docx'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
+  if (['zip', 'rar', '7z'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
+  if (['mp4', 'avi', 'mkv'].includes(ext)) return <FileVideo size={16} className="text-indigo-500" />;
+  if (['mp3', 'wav', 'aac'].includes(ext)) return <FileAudio size={16} className="text-pink-500" />;
+  if (['js', 'py', 'java', 'json', 'xml'].includes(ext)) return <FileCode size={16} className="text-purple-500" />;
+  return <File size={16} className="text-slate-400" />;
+};
+
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+};
+
 const CreateTicket = () => {
   const [formData, setFormData] = useState({
     title: '',
@@ -208,18 +276,27 @@ const CreateTicket = () => {
     category: '',
     subcategory: '',
     subItem: '',
-    assignedTo: '' // NEW: For developer assignment
+    assignedTo: ''
   });
   const [projects, setProjects] = useState([]);
   const [filteredProjects, setFilteredProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
-  const [developers, setDevelopers] = useState([]); // NEW: For developer list
+  const [developers, setDevelopers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubcategoryOpen, setIsSubcategoryOpen] = useState(false);
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
+
+  // ============================================
+  // FILE UPLOAD STATE
+  // ============================================
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef(null);
 
   // Check if user is Client
   const isClient = userRole === 'Client';
@@ -237,6 +314,149 @@ const CreateTicket = () => {
     }
     return TICKET_CATEGORIES;
   };
+
+  // ============================================
+  // FILE HANDLERS
+  // ============================================
+
+  const validateFile = (file) => {
+    if (!isAllowedFile(file)) {
+      toast.error(`File type "${file.name}" is not supported.`);
+      return false;
+    }
+    
+    const isImage = isImageFile(file.name);
+    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
+    
+    if (file.size > maxSize) {
+      const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+      const maxSizeInMB = isImage ? '5MB' : '50MB';
+      toast.error(`${file.name} (${sizeInMB}MB) exceeds the ${maxSizeInMB} size limit.`);
+      return false;
+    }
+    
+    return true;
+  };
+
+  const processFiles = (files) => {
+    const validFiles = [];
+    const validPreviews = [];
+
+    files.forEach(file => {
+      if (validateFile(file)) {
+        validFiles.push(file);
+        
+        let previewUrl = null;
+        if (isImageFile(file.name)) {
+          previewUrl = URL.createObjectURL(file);
+        }
+        
+        validPreviews.push({
+          file: file,
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          preview: previewUrl,
+          id: Date.now() + Math.random().toString(36).substr(2, 9)
+        });
+      }
+    });
+
+    if (validFiles.length > 0) {
+      setSelectedFiles(prev => [...prev, ...validFiles]);
+      setFilePreviews(prev => [...prev, ...validPreviews]);
+      
+      const imageCount = validFiles.filter(f => isImageFile(f.name)).length;
+      const docCount = validFiles.filter(f => !isImageFile(f.name)).length;
+      
+      let message = `${validFiles.length} file(s) added`;
+      if (imageCount > 0 && docCount > 0) {
+        message = `${imageCount} image(s) and ${docCount} document(s) added`;
+      } else if (imageCount > 0) {
+        message = `${imageCount} image(s) added`;
+      } else {
+        message = `${docCount} document(s) added`;
+      }
+      toast.success(message);
+    }
+  };
+
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    processFiles(files);
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const files = Array.from(e.dataTransfer.files);
+    processFiles(files);
+  };
+
+  const removeFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    setFilePreviews(prev => {
+      const removed = prev[index];
+      if (removed && removed.preview) {
+        URL.revokeObjectURL(removed.preview);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const uploadFiles = async () => {
+    if (selectedFiles.length === 0) return [];
+    
+    const uploadedUrls = [];
+    setUploadingFiles(true);
+
+    const token = localStorage.getItem('token');
+
+    for (const file of selectedFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data.success) {
+          uploadedUrls.push({
+            url: response.data.url,
+            filename: response.data.filename,
+            originalName: response.data.originalName,
+            size: response.data.size,
+            type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
+          });
+        }
+      } catch (error) {
+        console.error('File upload failed:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+      }
+    }
+
+    setUploadingFiles(false);
+    return uploadedUrls;
+  };
+
+  // ============================================
+  // EFFECTS
+  // ============================================
 
   // Auto-set internal for non-client roles
   useEffect(() => {
@@ -411,6 +631,10 @@ const CreateTicket = () => {
     }
   };
 
+  // ============================================
+  // SUBMIT HANDLER (UPDATED WITH FILES)
+  // ============================================
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -424,7 +648,6 @@ const CreateTicket = () => {
       return;
     }
     
-    // For Feasibility, developer assignment is required
     if (isFeasibility && !formData.assignedTo) {
       toast.error('Please assign a developer for feasibility assessment');
       return;
@@ -434,6 +657,12 @@ const CreateTicket = () => {
     
     try {
       const token = localStorage.getItem('token');
+      
+      // Upload files first if any
+      let uploadedFiles = [];
+      if (selectedFiles.length > 0) {
+        uploadedFiles = await uploadFiles();
+      }
       
       const payload = {
         title: formData.title,
@@ -446,7 +675,9 @@ const CreateTicket = () => {
         category: formData.category || undefined,
         subcategory: formData.subcategory || undefined,
         subItem: formData.subItem || undefined,
-        assignedTo: formData.assignedTo || null // NEW: Pass assigned developer
+        assignedTo: formData.assignedTo || null,
+        // Include files in the payload
+        files: uploadedFiles
       };
       
       await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
@@ -639,7 +870,7 @@ const CreateTicket = () => {
                           subcategory: '',
                           subItem: '',
                           ticketType: '',
-                          assignedTo: '' // Reset assigned developer when category changes
+                          assignedTo: ''
                         });
                         setIsSubcategoryOpen(true);
                       }}
@@ -668,7 +899,7 @@ const CreateTicket = () => {
                           subcategory: e.target.value,
                           subItem: '',
                           ticketType: '',
-                          assignedTo: '' // Reset assigned developer when subcategory changes
+                          assignedTo: ''
                         });
                       }}
                       disabled={!formData.category}
@@ -902,6 +1133,88 @@ const CreateTicket = () => {
                 </div>
               )}
 
+              {/* ============================================
+                  FILE ATTACHMENTS SECTION (NEW)
+                  ============================================ */}
+              <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+                <div className="flex items-center gap-2 mb-3">
+                  <Paperclip size={18} className="text-blue-600" />
+                  <label className="text-sm font-semibold text-slate-700">
+                    Attachments <span className="font-normal text-slate-400">(Optional)</span>
+                  </label>
+                  <span className="text-[8px] text-slate-400 ml-auto">
+                    Max: 5MB per image, 50MB per file
+                  </span>
+                </div>
+                
+                {/* File Preview */}
+                {filePreviews.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2 p-3 bg-white rounded-lg border border-slate-200">
+                    {filePreviews.map((preview, idx) => (
+                      <div key={preview.id || idx} className="relative group">
+                        <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
+                            {preview.file.type?.startsWith('image/') || isImageFile(preview.name) ? (
+                              <img 
+                                src={preview.preview || URL.createObjectURL(preview.file)} 
+                                alt={preview.name}
+                                className="w-full h-full object-cover rounded-lg"
+                              />
+                            ) : (
+                              getFileIcon(preview.file)
+                            )}
+                          </div>
+                          <div className="min-w-0 max-w-[120px]">
+                            <p className="text-[10px] font-semibold text-slate-700 truncate">{preview.name}</p>
+                            <p className="text-[8px] text-slate-400">{formatFileSize(preview.size)}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(idx)}
+                          className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md opacity-0 group-hover:opacity-100"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Drop Zone */}
+                <div
+                  className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+                    isDragging 
+                      ? 'border-blue-500 bg-blue-50/80' 
+                      : 'border-slate-300 bg-white hover:border-blue-400'
+                  }`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                  />
+                  
+                  <div className="flex flex-col items-center gap-2">
+                    <UploadCloud size={32} className={isDragging ? 'text-blue-600' : 'text-slate-400'} />
+                    <p className="text-sm font-medium text-slate-600">
+                      {isDragging ? 'Drop files here...' : 'Drag & drop files here, or click to select'}
+                    </p>
+                    <p className="text-[8px] text-slate-400">
+                      Supports images, documents, archives, code, and media files
+                    </p>
+                    <p className="text-[7px] text-slate-300">
+                      {filePreviews.length} file(s) selected
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Submit Button */}
               <div className="pt-4 border-t border-slate-200">
                 <button
@@ -912,12 +1225,13 @@ const CreateTicket = () => {
                   {loading ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      Creating Ticket...
+                      {uploadingFiles ? 'Uploading Files...' : 'Creating Ticket...'}
                     </>
                   ) : (
                     <>
                       {isClient ? <Send size={18} /> : <Lock size={18} />}
                       {isClient ? 'Submit Ticket' : 'Create Ticket'}
+                      {selectedFiles.length > 0 && ` (${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''})`}
                     </>
                   )}
                 </button>

@@ -36,10 +36,9 @@ import TeamLeadProjects from './pages/TeamLeadProjects';
 import TeamLeadDevelopers from './pages/TeamLeadDevelopers';
 import TeamLeadFeeds from './pages/TeamLeadFeeds';
 import TicketAssignmentRules from './pages/TicketAssignmentRules';
-import ClientFeedDelivery from './pages/ClientFeedDelivery';
-import ClientProjectFeeds from './pages/ClientProjectFeeds';
+import FeedDeliveryDashboard from './pages/FeedDeliveryDashboard';
+import ProjectFeedStatus from './pages/ProjectFeedStatus';
 import ClientFeedDetails from './pages/ClientFeedDetails';
-
 
 // Import the new Notification component
 import NotificationBell from './components/NotificationBell';
@@ -101,7 +100,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 function AppContent() {
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
-  const location = useLocation(); // Required for AnimatePresence to track key changes
+  const location = useLocation();
 
   const landingPath = useMemo(() => {
     if (!userRole) return '/login';
@@ -132,85 +131,131 @@ function AppContent() {
                   <Routes>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
 
-                    {/* Dashboards */}
+                    {/* Admin Dashboards */}
                     <Route path="/admin" element={<ProtectedRoute allowedRoles={['Admin']}><AdminDashboard /></ProtectedRoute>} />
-                    <Route 
-                        path="/admin/ticket-rules" 
-                        element={
-                          <ProtectedRoute allowedRoles={['Admin']}>
-                            <TicketAssignmentRules />
-                          </ProtectedRoute>
-                        } 
-                      />
-                    <Route path="/sales-manager" element={<ProtectedRoute allowedRoles={['Sales Manager']}><SalesManagerDashboard /></ProtectedRoute>} />
-                    <Route path="/sales" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
+                    <Route path="/admin/ticket-rules" element={
+                      <ProtectedRoute allowedRoles={['Admin']}>
+                        <TicketAssignmentRules />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/admin/project-clients" element={
+                      <ProtectedRoute allowedRoles={['Admin']}>
+                        <AdminProjectClients />
+                      </ProtectedRoute>
+                    } />
                     
-                    {/* Sales Routes */}
+                    {/* Sales Manager */}
+                    <Route path="/sales-manager" element={<ProtectedRoute allowedRoles={['Sales Manager']}><SalesManagerDashboard /></ProtectedRoute>} />
+                    
+                    {/* Sales */}
+                    <Route path="/sales" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
                     <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
                     <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
                     <Route path="/sales/prospects" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Prospects /></ProtectedRoute>} />
-                    <Route
-                      path="/sales/email-trigger"
-                      element={
-                        <ProtectedRoute
-                          allowedRoles={[
-                            'Sales',
-                            'Admin',
-                            'Sales Manager'
-                          ]}
-                        >
-                          <EmailTrigger />
-                        </ProtectedRoute>
-                      }
-                    />
-                    {/* Management */}
+                    <Route path="/sales/email-trigger" element={
+                      <ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}>
+                        <EmailTrigger />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Project Management */}
                     <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
                     <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
+                    
+                    {/* PM Routes */}
                     <Route path="/pm/feeds" element={
                       <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
                         <ProjectFeeds />
                       </ProtectedRoute>
                     } />
-                    <Route path="/pm/task-progress" element={<PMTaskProgress />}/>
-                    <Route path="/pm/resource-analytics"  element={    <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ResourceAnalytics /></ProtectedRoute>  }/>
+                    <Route path="/pm/task-progress" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><PMTaskProgress /></ProtectedRoute>} />
+                    <Route path="/pm/resource-analytics" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                        <ResourceAnalytics />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/pm/git-manager" element={
-                        <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
-                          <GitManager />
-                        </ProtectedRoute>
-                      } />
-                    {/* Developer */}
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                        <GitManager />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/pm/feed-status" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                        <FeedDeliveryDashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/pm/projects/:projectId/feeds" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                        <ProjectFeedStatus />
+                      </ProtectedRoute>
+                    } />
+
+                    {/* Developer Routes */}
                     <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
                     <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
                     <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
-                    <Route path="/developer/worklog" element={ <ProtectedRoute allowedRoles={['Developer', 'Admin']}> <Worklog /></ProtectedRoute>}/>    
+                    <Route path="/developer/worklog" element={<ProtectedRoute allowedRoles={['Developer', 'Admin']}><Worklog /></ProtectedRoute>} />    
                     <Route path="/developer/git-feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperGitFeeds /></ProtectedRoute>} />
                     <Route path="/developer/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperProjects /></ProtectedRoute>} />
                     <Route path="/developer/feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperFeeds /></ProtectedRoute>} />
-                    
-                    {/* Team Lead */}
+                    <Route path="/developer/feed-status" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Developer']}>
+                        <FeedDeliveryDashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/developer/projects/:projectId/feeds" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Developer']}>
+                        <ProjectFeedStatus />
+                      </ProtectedRoute>
+                    } />
+
+                    {/* Team Lead Routes */}
                     <Route path="/teamlead" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDashboard /></ProtectedRoute>} />
                     <Route path="/teamlead/projects" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadProjects /></ProtectedRoute>} />
                     <Route path="/teamlead/developers" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDevelopers /></ProtectedRoute>} />
                     <Route path="/teamlead/feeds" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadFeeds /></ProtectedRoute>} />
-                    {/*Client routes*/}
-                    <Route path="/client" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientFeedDelivery /></ProtectedRoute>} />
-                    <Route path="/client/projects/:projectId/feeds" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientProjectFeeds /></ProtectedRoute>} />
-                    <Route path="/client/feeds/:feedId" element={<ProtectedRoute allowedRoles={['Admin', 'Client']}><ClientFeedDetails /></ProtectedRoute>} />
+                    <Route path="/teamlead/feed-status" element={
+                      <ProtectedRoute allowedRoles={['Team Lead']}>
+                        <FeedDeliveryDashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/teamlead/projects/:projectId/feeds" element={
+                      <ProtectedRoute allowedRoles={['Team Lead']}>
+                        <ProjectFeedStatus />
+                      </ProtectedRoute>
+                    } />
+
+                    {/* Client Routes */}
+                    <Route path="/client" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Client']}>
+                        <FeedDeliveryDashboard />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/client/projects/:projectId/feeds" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Client']}>
+                        <ProjectFeedStatus />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/client/feeds/:feedId" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Client']}>
+                        <ClientFeedDetails />
+                      </ProtectedRoute>
+                    } />
                     
-                    {/* Shared */}
+                    {/* Tickets */}
                     <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDashboard /></ProtectedRoute>} />
                     <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead']}><CreateTicket /></ProtectedRoute>} />
                     <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDetails /></ProtectedRoute>} />
                     
+                    {/* Shared */}
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
-                    <Route path="*" element={<Navigate to={landingPath} replace />} />
                     <Route path="/notifications" element={
                       <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}>
                         <NotificationSettings />
                       </ProtectedRoute>
                     } />
-                    <Route path="/admin/project-clients" element={<ProtectedRoute allowedRoles={['Admin']}><AdminProjectClients /></ProtectedRoute>} />
+                    <Route path="*" element={<Navigate to={landingPath} replace />} />
                   </Routes>
                   
                 </main>
