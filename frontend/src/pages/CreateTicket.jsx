@@ -636,63 +636,62 @@ const CreateTicket = () => {
   // ============================================
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
+  
+  if (!formData.title || !formData.description) {
+    toast.error('Please fill in all required fields');
+    return;
+  }
+  
+  if (isClient && !formData.projectId && !isFeasibility) {
+    toast.error('Please select a project for this ticket');
+    return;
+  }
+  
+  if (isFeasibility && !formData.assignedTo) {
+    toast.error('Please assign a developer for feasibility assessment');
+    return;
+  }
+  
+  setLoading(true);
+  
+  try {
+    const token = localStorage.getItem('token');
     
-    if (!formData.title || !formData.description) {
-      toast.error('Please fill in all required fields');
-      return;
+    // Upload files first if any
+    let uploadedFiles = [];
+    if (selectedFiles.length > 0) {
+      uploadedFiles = await uploadFiles();
     }
     
-    if (isClient && !formData.projectId && !isFeasibility) {
-      toast.error('Please select a project for this ticket');
-      return;
-    }
+    const payload = {
+      title: formData.title,
+      description: formData.description,
+      priority: formData.priority,
+      projectId: formData.projectId || null,
+      feedId: formData.feedId || null,
+      isInternal: formData.isInternal,
+      ticketType: formData.ticketType || undefined,
+      category: formData.category || undefined,
+      subcategory: formData.subcategory || undefined,
+      subItem: formData.subItem || undefined,
+      assignedTo: formData.assignedTo || null,
+      files: uploadedFiles // <- ADD THIS LINE - send files with ticket creation
+    };
     
-    if (isFeasibility && !formData.assignedTo) {
-      toast.error('Please assign a developer for feasibility assessment');
-      return;
-    }
+    await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
     
-    setLoading(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      
-      // Upload files first if any
-      let uploadedFiles = [];
-      if (selectedFiles.length > 0) {
-        uploadedFiles = await uploadFiles();
-      }
-      
-      const payload = {
-        title: formData.title,
-        description: formData.description,
-        priority: formData.priority,
-        projectId: formData.projectId || null,
-        feedId: formData.feedId || null,
-        isInternal: formData.isInternal,
-        ticketType: formData.ticketType || undefined,
-        category: formData.category || undefined,
-        subcategory: formData.subcategory || undefined,
-        subItem: formData.subItem || undefined,
-        assignedTo: formData.assignedTo || null,
-        // Include files in the payload
-        files: uploadedFiles
-      };
-      
-      await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      toast.success('Ticket created successfully!');
-      navigate('/tickets');
-    } catch (error) {
-      console.error('Error creating ticket:', error);
-      toast.error(error.response?.data?.error || 'Failed to create ticket');
-    } finally {
-      setLoading(false);
-    }
-  };
+    toast.success('Ticket created successfully!');
+    navigate('/tickets');
+  } catch (error) {
+    console.error('Error creating ticket:', error);
+    toast.error(error.response?.data?.error || 'Failed to create ticket');
+  } finally {
+    setLoading(false);
+  }
+};
 
   const getProjectDisplayName = (project) => {
     return project.projectCustomId || project.name;

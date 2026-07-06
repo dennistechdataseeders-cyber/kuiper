@@ -17,9 +17,6 @@ const {
 // NOTIFICATION HELPER FUNCTIONS
 // ============================================
 
-/**
- * Create a notification for a user
- */
 async function createNotification(userId, notificationData) {
   try {
     const user = await User.findById(userId);
@@ -29,7 +26,6 @@ async function createNotification(userId, notificationData) {
       user.unreadNotifications = [];
     }
     
-    // Build message with additional context
     let message = notificationData.message;
     if (notificationData.type === 'ticket_commented' && notificationData.commentAuthor) {
       message = `${notificationData.commentAuthor} commented on ${notificationData.ticketNumber || 'ticket'}`;
@@ -54,7 +50,6 @@ async function createNotification(userId, notificationData) {
     user.notificationCount = (user.notificationCount || 0) + 1;
     await user.save();
     
-    // Emit socket notification for real-time update
     const io = global.io;
     if (io) {
       io.to(userId.toString()).emit('notification_count_update', {
@@ -77,11 +72,9 @@ async function createNotification(userId, notificationData) {
 // STAKEHOLDER HELPER FUNCTIONS
 // ============================================
 
-// Helper function to get all stakeholders for a ticket
 async function getTicketStakeholders(ticket, createdByUser) {
-  const stakeholders = new Map(); // Use Map to avoid duplicates by email
+  const stakeholders = new Map();
 
-  // 1. Add the created by user
   if (createdByUser) {
     stakeholders.set(createdByUser.email, {
       _id: createdByUser._id,
@@ -92,7 +85,6 @@ async function getTicketStakeholders(ticket, createdByUser) {
     });
   }
 
-  // 2. Add assigned developer if exists
   if (ticket.assignedTo) {
     const assignee = await User.findById(ticket.assignedTo).select('name email role');
     if (assignee) {
@@ -106,13 +98,11 @@ async function getTicketStakeholders(ticket, createdByUser) {
     }
   }
 
-  // 3. Get project details
   const project = await Project.findById(ticket.projectId)
     .populate('projectManager', 'name email role')
     .populate('teamLead', 'name email role')
     .populate('clients', 'name email role');
 
-  // 4. Add Project Manager (if exists and not already added)
   if (project && project.projectManager) {
     const pm = project.projectManager;
     if (!stakeholders.has(pm.email)) {
@@ -126,7 +116,6 @@ async function getTicketStakeholders(ticket, createdByUser) {
     }
   }
 
-  // 5. Add Team Lead (if exists and not already added)
   if (project && project.teamLead) {
     const tl = project.teamLead;
     if (!stakeholders.has(tl.email)) {
@@ -140,7 +129,6 @@ async function getTicketStakeholders(ticket, createdByUser) {
     }
   }
 
-  // 6. Add developers assigned to the feed (if feed exists)
   if (ticket.feedId) {
     const feed = await Feed.findById(ticket.feedId).populate('assignedDevelopers', 'name email role');
     if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
@@ -158,7 +146,6 @@ async function getTicketStakeholders(ticket, createdByUser) {
     }
   }
 
-  // 7. Add POC (Client) users from the project (for client-created tickets)
   if (project && project.clients && project.clients.length > 0) {
     for (const client of project.clients) {
       const clientUser = await User.findById(client._id || client).select('name email role organizationId');
@@ -177,12 +164,10 @@ async function getTicketStakeholders(ticket, createdByUser) {
     }
   }
 
-  // 8. Also get POCs from organizations associated with the project
   if (project && project.organizations && project.organizations.length > 0) {
     for (const orgId of project.organizations) {
       const org = await Organization.findById(orgId).select('pointsOfContact clientUserId');
       if (org) {
-        // Get client user associated with organization
         if (org.clientUserId) {
           const clientUser = await User.findById(org.clientUserId).select('name email role');
           if (clientUser && !stakeholders.has(clientUser.email)) {
@@ -199,7 +184,6 @@ async function getTicketStakeholders(ticket, createdByUser) {
           }
         }
         
-        // Also add all points of contact
         if (org.pointsOfContact && org.pointsOfContact.length > 0) {
           for (const poc of org.pointsOfContact) {
             if (poc.pocEmail && !stakeholders.has(poc.pocEmail)) {
@@ -222,7 +206,6 @@ async function getTicketStakeholders(ticket, createdByUser) {
   return Array.from(stakeholders.values());
 }
 
-// Helper function to get assignee email from rules
 async function getAssigneeEmailFromRules(category, subcategory = '', subItem = '') {
   try {
     const TicketAssignmentRule = require('../models/TicketAssignmentRule');
@@ -254,10 +237,6 @@ async function getAssigneeEmailFromRules(category, subcategory = '', subItem = '
   }
 }
 
-// ============================================
-// IMPROVED COMMENT NOTIFICATION FUNCTION
-// ============================================
-
 async function notifyCommentStakeholders(ticket, commentAuthor, commentText, hasImages = false, hasFiles = false) {
   const project = await Project.findById(ticket.projectId)
     .populate('projectManager', 'name email')
@@ -266,7 +245,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
   
   const stakeholders = new Map();
   
-  // Add creator
   const creator = await User.findById(ticket.createdBy).select('name email');
   if (creator && creator.email !== commentAuthor.email) {
     stakeholders.set(creator._id.toString(), { 
@@ -277,7 +255,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     });
   }
   
-  // Add assignee
   if (ticket.assignedTo) {
     const assignee = await User.findById(ticket.assignedTo).select('name email');
     if (assignee && assignee.email !== commentAuthor.email) {
@@ -290,7 +267,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     }
   }
   
-  // Add project manager
   if (project && project.projectManager && project.projectManager.email !== commentAuthor.email) {
     stakeholders.set(project.projectManager._id.toString(), {
       _id: project.projectManager._id,
@@ -300,7 +276,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     });
   }
   
-  // Add team lead
   if (project && project.teamLead && project.teamLead.email !== commentAuthor.email) {
     stakeholders.set(project.teamLead._id.toString(), {
       _id: project.teamLead._id,
@@ -310,7 +285,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     });
   }
   
-  // Add feed developers
   if (ticket.feedId) {
     const feed = await Feed.findById(ticket.feedId).populate('assignedDevelopers', 'name email');
     if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
@@ -331,7 +305,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
   const commentPreview = commentText ? commentText.substring(0, 200) : 'No text provided';
   const hasAttachments = hasImages || hasFiles;
   
-  // Build attachment text for notifications
   let attachmentText = '';
   if (hasAttachments) {
     const parts = [];
@@ -342,7 +315,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
   
   for (const [userId, stakeholder] of stakeholders) {
     try {
-      // Create notification in database
       const user = await User.findById(userId);
       if (!user) continue;
       
@@ -358,7 +330,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
         message: message,
         createdAt: new Date(),
         read: false,
-        // Store comment data for display
         commentData: {
           text: commentPreview,
           author: commentAuthor.name,
@@ -372,7 +343,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
       user.notificationCount = (user.notificationCount || 0) + 1;
       await user.save();
       
-      // Emit socket notification with comment details
       const io = global.io;
       if (io) {
         io.to(userId.toString()).emit('notification_count_update', {
@@ -389,7 +359,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
           }
         });
         
-        // Also emit to ticket room for real-time updates
         io.to(`ticket_${ticket._id}`).emit('ticket_commented', {
           ticketId: ticket._id,
           comment: {
@@ -400,7 +369,6 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
         });
       }
       
-      // Send email notification
       try {
         const commentUrl = `${frontendUrl}/tickets/${ticket._id}`;
         const emailHtml = `
@@ -459,7 +427,7 @@ function isInternalTicket(creatorRole) {
 
 exports.createTicket = async (req, res) => {
   try {
-    const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType, assignedTo } = req.body;
+    const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType, assignedTo, files } = req.body;
     
     const userRole = req.user.role;
     const shouldBeInternal = userRole !== 'Client' || isInternal === true;
@@ -522,7 +490,8 @@ exports.createTicket = async (req, res) => {
       category: category || '',
       subcategory: subcategory || '',
       subItem: subItem || '',
-      ticketType: ticketType || ''
+      ticketType: ticketType || '',
+      files: files || [] 
     });
     
     await ticket.save();
@@ -774,7 +743,7 @@ function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
 }
 
 // ============================================
-// GET TICKETS
+// GET TICKETS - UPDATED WITH HR FIX
 // ============================================
 
 exports.getTickets = async (req, res) => {
@@ -782,6 +751,8 @@ exports.getTickets = async (req, res) => {
     let filter = {};
     const userRole = req.user.role;
     const userId = req.user.id;
+
+    console.log(`🔍 Fetching tickets for role: ${userRole}, userId: ${userId}`);
 
     if (userRole === 'Client') {
       filter = {
@@ -826,6 +797,66 @@ exports.getTickets = async (req, res) => {
           { assignedTo: userId }
         ]
       };
+    } else if (userRole === 'HR') {
+      console.log(`🔍 HR user fetching tickets`);
+      
+      // Get the current HR user's ID
+      const hrUserId = req.user.id;
+      
+      // Get ALL HR user IDs
+      const hrUsers = await User.find({ role: 'HR' }).distinct('_id');
+      console.log(`👥 HR Users found: ${hrUsers.length}`, hrUsers);
+      
+      // Build comprehensive filter for HR
+      filter = {
+        $or: [
+          // Category matches HR-related categories - THIS IS THE KEY FIX
+          { category: { $in: ['HR', 'Admin', 'Payroll'] } },
+          // Subcategory matches HR-related subcategories
+          { subcategory: { $in: ['Employee Documents', 'Attendance & Leave', 'Employee Management'] } },
+          // Created by the current HR user
+          { createdBy: hrUserId },
+          // Assigned to the current HR user
+          { assignedTo: hrUserId },
+          // Created by ANY HR user
+          { createdBy: { $in: hrUsers } },
+          // Assigned to ANY HR user
+          { assignedTo: { $in: hrUsers } }
+        ]
+      };
+      
+      console.log(`🔍 HR filter:`, JSON.stringify(filter, null, 2));
+      
+    } else if (userRole === 'Finance') {
+      console.log(`🔍 Finance user fetching tickets`);
+      
+      // Get the current Finance user's ID
+      const financeUserId = req.user.id;
+      
+      const financeUsers = await User.find({ role: 'Finance' }).distinct('_id');
+      console.log(`👥 Finance Users found: ${financeUsers.length}`, financeUsers);
+      
+      filter = {
+        $or: [
+          // Category matches Finance-related categories
+          { category: { $in: ['Finance', 'Payroll', 'Admin'] } },
+          // Subcategory matches Finance-related subcategories
+          { subcategory: { $in: ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'] } },
+          // Created by the current Finance user
+          { createdBy: financeUserId },
+          // Assigned to the current Finance user
+          { assignedTo: financeUserId },
+          // Created by ANY Finance user
+          { createdBy: { $in: financeUsers } },
+          // Assigned to ANY Finance user
+          { assignedTo: { $in: financeUsers } }
+        ]
+      };
+      
+      console.log(`🔍 Finance filter:`, JSON.stringify(filter, null, 2));
+      
+    } else if (userRole === 'Admin') {
+      filter = {};
     }
 
     const tickets = await Ticket.find(filter)
@@ -834,6 +865,34 @@ exports.getTickets = async (req, res) => {
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name')
       .sort({ createdAt: -1 });
+
+    console.log(`🔍 Found ${tickets.length} tickets for ${userRole}`);
+    
+    if (tickets.length > 0) {
+      console.log(`🔍 Ticket details:`, tickets.map(t => ({ 
+        ticketNumber: t.ticketNumber,
+        category: t.category, 
+        subcategory: t.subcategory,
+        title: t.title
+      })));
+    } else {
+      console.log(`🔍 No tickets found for ${userRole}. Filter used:`, JSON.stringify(filter, null, 2));
+      
+      // DEBUG: Check total tickets and HR tickets
+      const totalTickets = await Ticket.countDocuments();
+      console.log(`📊 Total tickets in database: ${totalTickets}`);
+      
+      const hrTickets = await Ticket.find({ category: 'HR' });
+      console.log(`📊 HR tickets found: ${hrTickets.length}`);
+      if (hrTickets.length > 0) {
+        console.log(`📊 HR tickets:`, hrTickets.map(t => ({ 
+          ticketNumber: t.ticketNumber,
+          title: t.title, 
+          category: t.category, 
+          subcategory: t.subcategory 
+        })));
+      }
+    }
 
     res.json(tickets);
   } catch (error) {
@@ -992,7 +1051,7 @@ exports.assignTicket = async (req, res) => {
 };
 
 // ============================================
-// ADD COMMENT - UPDATED WITH FULL NOTIFICATIONS
+// ADD COMMENT
 // ============================================
 
 exports.addComment = async (req, res) => {
@@ -1011,7 +1070,6 @@ exports.addComment = async (req, res) => {
       createdAt: new Date()
     };
     
-    // Track attachments
     let hasImages = false;
     let hasFiles = false;
     
@@ -1045,7 +1103,6 @@ exports.addComment = async (req, res) => {
       .populate('feedId', 'name')
       .populate('comments.userId', 'name');
     
-    // Send notifications to all stakeholders with comment details
     await notifyCommentStakeholders(
       updatedTicket,
       { name: req.user.name, email: req.user.email },
@@ -1056,10 +1113,8 @@ exports.addComment = async (req, res) => {
     
     const io = req.app.get('io');
     
-    // Emit to the specific ticket room
     io.to(`ticket_${req.params.id}`).emit('ticket_commented', updatedTicket);
     
-    // Also emit to the creator and assignee individually
     if (ticket.createdBy && ticket.createdBy.toString() !== req.user.id.toString()) {
       io.to(ticket.createdBy.toString()).emit('ticket_commented', updatedTicket);
     }

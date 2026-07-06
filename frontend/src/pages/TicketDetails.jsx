@@ -451,6 +451,9 @@ const TicketDetails = () => {
   };
 
   const fetchDevelopers = async () => {
+    // Skip fetching developers for HR and Finance
+    if (userRole === 'HR' || userRole === 'Finance') return;
+    
     if (userRole !== 'Project Manager' && userRole !== 'Admin' && userRole !== 'Team Lead') return;
     
     try {
@@ -749,7 +752,15 @@ const TicketDetails = () => {
     }
   };
 
-  const canAssignDeveloper = userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead';
+  // ============================================
+  // CHECK IF USER CAN ASSIGN DEVELOPERS
+  // ============================================
+  
+  // HR and Finance users should NOT see the assignment section
+  const canAssignDeveloper = 
+    userRole !== 'HR' && 
+    userRole !== 'Finance' && 
+    (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead');
 
   // ============================================
   // RENDER
@@ -1272,27 +1283,32 @@ const TicketDetails = () => {
                 </div>
               </div>
               
-              <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned Developer</p>
-                <div className="mt-1.5">
-                  {ticket.assignedTo ? (
-                    <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
-                        {ticket.assignedTo.name?.charAt(0).toUpperCase() || 'D'}
+              {/* ============================================
+                  ASSIGNED TO SECTION - HIDDEN FOR HR AND FINANCE
+                  ============================================ */}
+              {(userRole !== 'HR' && userRole !== 'Finance') && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned To</p>
+                  <div className="mt-1.5">
+                    {ticket.assignedTo ? (
+                      <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-bold">
+                          {ticket.assignedTo.name?.charAt(0).toUpperCase() || 'D'}
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800">{ticket.assignedTo.name}</p>
+                          <p className="text-xs text-gray-500">{ticket.assignedTo.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{ticket.assignedTo.name}</p>
-                        <p className="text-xs text-gray-500">{ticket.assignedTo.email}</p>
+                    ) : (
+                      <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
+                        <AlertCircle size={16} className="text-amber-600" />
+                        <span className="text-sm text-amber-700 font-medium">Unassigned</span>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
-                      <AlertCircle size={16} className="text-amber-600" />
-                      <span className="text-sm text-amber-700 font-medium">Unassigned</span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
               
               <div>
                 <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Project Scope</p>
@@ -1321,8 +1337,10 @@ const TicketDetails = () => {
             </div>
           </div>
           
-          {/* Assignment Section */}
-          {(canAssignDeveloper || (userRole === 'Developer' && ticket.assignedTo?._id === currentUserId)) && (
+          {/* ============================================
+              ASSIGNMENT MANAGEMENT - HIDDEN FOR HR AND FINANCE
+              ============================================ */}
+          {canAssignDeveloper && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
                 <Users size={16} className="text-gray-500" /> Assignment Management

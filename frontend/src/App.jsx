@@ -39,6 +39,7 @@ import TicketAssignmentRules from './pages/TicketAssignmentRules';
 import FeedDeliveryDashboard from './pages/FeedDeliveryDashboard';
 import ProjectFeedStatus from './pages/ProjectFeedStatus';
 import ClientFeedDetails from './pages/ClientFeedDetails';
+import KnowledgeBase from './pages/KnowledgeBase';
 
 // Import the new Notification component
 import NotificationBell from './components/NotificationBell';
@@ -89,6 +90,8 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       'Project Manager': '/admin/projects',
       'Client': '/client', 
       'Team Lead': '/teamlead',
+      'HR': '/tickets',
+      'Finance': '/tickets',
     };
     
     const fallbackPath = rolePaths[userRole] || '/login';
@@ -103,16 +106,20 @@ function AppContent() {
   const location = useLocation();
 
   const landingPath = useMemo(() => {
-    if (!userRole) return '/login';
-    if (userRole === 'Admin') return '/admin';
-    if (userRole === 'Sales Manager') return '/sales-manager';
-    if (userRole === 'Sales') return '/sales';
-    if (userRole === 'Project Manager') return '/admin/projects';
-    if (userRole === 'Developer') return '/developer';
-    if (userRole === 'Client') return '/client';
-    if (userRole === 'Team Lead') return '/teamlead';
-    return '/login';
-  }, [userRole]);
+      if (!userRole) return '/login';
+      const pathMap = {
+        'Admin': '/admin',
+        'Sales Manager': '/sales-manager',
+        'Sales': '/sales',
+        'Project Manager': '/admin/projects',
+        'Developer': '/developer',
+        'Client': '/client',
+        'Team Lead': '/teamlead',
+        'HR': '/tickets',
+        'Finance': '/tickets',
+      };
+      return pathMap[userRole] || '/login';
+    }, [userRole]);
   
   return (
     <SessionManager>
@@ -242,20 +249,45 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
                     
-                    {/* Tickets */}
-                    <Route path="/tickets" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDashboard /></ProtectedRoute>} />
-                    <Route path="/tickets/create" element={<ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead']}><CreateTicket /></ProtectedRoute>} />
-                    <Route path="/tickets/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client']}><TicketDetails /></ProtectedRoute>} />
+                    {/* ============================================
+                        TICKETS ROUTES - UPDATED WITH HR & FINANCE
+                        ============================================ */}
                     
+                    {/* Ticket Dashboard - HR & Finance can view all their tickets */}
+                    <Route path="/tickets" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance']}>
+                        <TicketDashboard />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Create Ticket - HR & Finance can create tickets */}
+                    <Route path="/tickets/create" element={
+                      <ProtectedRoute allowedRoles={['Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance']}>
+                        <CreateTicket />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Ticket Details - HR & Finance can view ticket details */}
+                    <Route path="/tickets/:id" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance']}>
+                        <TicketDetails />
+                      </ProtectedRoute>
+                    } />
+              
                     {/* Shared */}
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/notifications" element={
-                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client']}>
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Client', 'HR', 'Finance']}>
                         <NotificationSettings />
                       </ProtectedRoute>
                     } />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
+                    <Route path="/knowledge" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead','HR', 'Finance']}>
+                          <KnowledgeBase />
+                        </ProtectedRoute>
+                      } />
                   </Routes>
                   
                 </main>

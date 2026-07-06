@@ -7,7 +7,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-    enum: ['Admin', 'Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'POC', 'Team Lead'], 
+    enum: ['Admin', 'Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'POC', 'Team Lead', 'HR', 'Finance'], 
     default: 'Client' 
   },
   pocName: String, 
@@ -18,7 +18,7 @@ const UserSchema = new mongoose.Schema({
   githubUsername: { 
     type: String, 
     default: null,
-    sparse: true // Allows multiple null values while maintaining uniqueness for non-null
+    sparse: true
   },
   githubLinked: { 
     type: Boolean, 
@@ -30,12 +30,12 @@ const UserSchema = new mongoose.Schema({
     default: 'organization'
   },
   
-  // New fields for POC (Point of Contact) management
+  // Organization reference
   organizationId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Organization',
     default: null,
-    index: true // Added index for faster queries
+    index: true
   },
   department: {
     type: String,
@@ -47,7 +47,7 @@ const UserSchema = new mongoose.Schema({
     default: false
   },
   
-  // Additional fields for better tracking
+  // Additional fields
   jobTitle: {
     type: String,
     default: ''
@@ -69,9 +69,7 @@ const UserSchema = new mongoose.Schema({
     default: true
   },
   
-  // ============================================
-  // NOTIFICATION FIELDS
-  // ============================================
+  // Notification fields
   notificationCount: {
     type: Number,
     default: 0
@@ -110,14 +108,12 @@ const UserSchema = new mongoose.Schema({
 // Middleware to update the updatedAt timestamp
 UserSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
-  
 });
 
-// Middleware to ensure only one primary POC per organization
+// Middleware for primary POC
 UserSchema.pre('save', async function(next) {
   if (this.isPrimaryPOC && this.organizationId && this.role === 'POC') {
     try {
-      // Set all other POCs of this organization to non-primary
       await this.constructor.updateMany(
         {
           organizationId: this.organizationId,
@@ -132,7 +128,7 @@ UserSchema.pre('save', async function(next) {
   }
 });
 
-// Virtual to get the organization name
+// Virtual for organization name
 UserSchema.virtual('organizationName').get(function() {
   if (this.organizationId && typeof this.organizationId === 'object') {
     return this.organizationId.companyName;
@@ -140,15 +136,11 @@ UserSchema.virtual('organizationName').get(function() {
   return null;
 });
 
-// Index for efficient queries on POCs by organization
+// Indexes
 UserSchema.index({ organizationId: 1, role: 1 });
 UserSchema.index({ isPrimaryPOC: 1, organizationId: 1 });
 
-// ============================================
-// NOTIFICATION METHODS
-// ============================================
-
-// Method to add a notification
+// Notification methods
 UserSchema.methods.addNotification = function(notificationData) {
   if (!this.unreadNotifications) {
     this.unreadNotifications = [];
@@ -166,7 +158,6 @@ UserSchema.methods.addNotification = function(notificationData) {
   return this.save();
 };
 
-// Method to mark a notification as read
 UserSchema.methods.markNotificationAsRead = function(notificationId) {
   const notification = this.unreadNotifications?.find(
     n => n._id.toString() === notificationId.toString()
@@ -180,7 +171,6 @@ UserSchema.methods.markNotificationAsRead = function(notificationId) {
   return Promise.resolve(this);
 };
 
-// Method to mark all notifications as read
 UserSchema.methods.markAllNotificationsAsRead = function() {
   if (this.unreadNotifications) {
     this.unreadNotifications.forEach(n => n.read = true);
@@ -190,23 +180,19 @@ UserSchema.methods.markAllNotificationsAsRead = function() {
   return Promise.resolve(this);
 };
 
-// Method to get unread notification count
 UserSchema.methods.getUnreadCount = function() {
   return this.unreadNotifications?.filter(n => !n.read).length || 0;
 };
 
-// Method to get all notifications with ticket details populated
 UserSchema.methods.getNotificationsWithDetails = async function() {
   await this.populate('unreadNotifications.ticketId', 'title ticketNumber status createdAt');
   return this.unreadNotifications || [];
 };
 
-// Method to check if user is a POC
 UserSchema.methods.isPOC = function() {
   return this.role === 'POC' || this.role === 'Client';
 };
 
-// Method to get full POC details with organization
 UserSchema.methods.getPOCDetails = async function() {
   if (this.organizationId) {
     await this.populate('organizationId', 'companyName website address');
@@ -228,5 +214,4 @@ UserSchema.methods.getPOCDetails = async function() {
   };
 };
 
-// Delete any other exports and use ONLY this:
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

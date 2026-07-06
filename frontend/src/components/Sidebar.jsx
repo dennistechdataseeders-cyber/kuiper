@@ -27,7 +27,8 @@ import {
   ChartBar,
   Ticket,
   Bell,
-  GitFork
+  GitFork,
+  FolderOpen
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -104,6 +105,10 @@ const Sidebar = () => {
         return 'from-blue-500/20 to-indigo-500/20 text-blue-300 border-blue-400/20';
       case 'Team Lead':
         return 'from-indigo-500/20 to-purple-500/20 text-indigo-300 border-indigo-400/20';
+      case 'HR':
+        return 'from-pink-500/20 to-rose-500/20 text-pink-300 border-pink-400/20';
+      case 'Finance':
+        return 'from-green-500/20 to-emerald-500/20 text-green-300 border-green-400/20';
       default:
         return 'from-blue-500/20 to-purple-500/20 text-blue-300 border-blue-400/20';
     }
@@ -122,6 +127,7 @@ const Sidebar = () => {
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
 
@@ -129,8 +135,8 @@ const Sidebar = () => {
       { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/users', icon: <UserPlus size={18} />, label: 'Team' },
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
-      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
     ],
 
     Sales: [
@@ -138,7 +144,7 @@ const Sidebar = () => {
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
     ],
 
     'Project Manager': [
@@ -147,8 +153,8 @@ const Sidebar = () => {
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
     ],
 
     'Team Lead': [
@@ -158,7 +164,7 @@ const Sidebar = () => {
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
-      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
     ],
 
     Developer: [
@@ -169,11 +175,25 @@ const Sidebar = () => {
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
     ],
 
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+    ],
+
+    HR: [
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/profile', icon: <User size={18} />, label: 'Profile' },
+    ],
+      
+    Finance: [
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/profile', icon: <User size={18} />, label: 'Profile' },
     ],
   };
 
@@ -186,6 +206,7 @@ const Sidebar = () => {
     if (path === '/developer') return location.pathname === '/developer';
     if (path === '/admin') return location.pathname === '/admin';
     if (path === '/teamlead') return location.pathname === '/teamlead';
+    if (path === '/knowledge') return location.pathname === '/knowledge';
     return location.pathname.startsWith(path);
   };
 

@@ -66,18 +66,28 @@ const ticketSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  comments: [{
-    text: { type: String, default: '' },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-    userName: { type: String },
-    images: [{ type: String }],
-    files: [{ 
+  // ============================================
+  // FILES FIELD - For attachments at creation
+  // ============================================
+  files: [{
     url: { type: String },
     filename: { type: String },
     originalName: { type: String },
     size: { type: Number },
     type: { type: String } // 'image' or 'document'
   }],
+  comments: [{
+    text: { type: String, default: '' },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    userName: { type: String },
+    images: [{ type: String }],
+    files: [{ 
+      url: { type: String },
+      filename: { type: String },
+      originalName: { type: String },
+      size: { type: Number },
+      type: { type: String } // 'image' or 'document'
+    }],
     createdAt: { type: Date, default: Date.now }
   }],
   resolvedAt: Date,

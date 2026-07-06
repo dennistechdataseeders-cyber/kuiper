@@ -12,36 +12,29 @@ const TicketDashboard = () => {
   const [tickets, setTickets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'internal', 'external'
+  const [filterType, setFilterType] = useState('all');
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
 
-  // Check if user can see internal tickets (non-clients)
   const canSeeInternal = ['Admin', 'Project Manager', 'Developer', 'Sales', 'Sales Manager', 'Team Lead'].includes(userRole);
-  
-  // Check if user is Client
   const isClient = userRole === 'Client';
+  const isHR = userRole === 'HR';
+  const isFinance = userRole === 'Finance';
 
   useEffect(() => {
     fetchTickets();
     
-    // Initialize notification manager on mount
     notificationManager.initAudio();
     
-    // Socket connection for real-time updates
     const socket = io(API_BASE_URL);
-    
-    // Join user's personal room
     socket.emit('join-user-room', currentUserId);
     
-    // Listen for new tickets
     socket.on('ticket_created', (newTicket) => {
       setTickets(prev => [newTicket, ...prev]);
       toast.success(`New ticket: ${newTicket.title}`);
       
-      // Desktop notification for PMs, Admins, Team Leads, and if assigned to current user
       if (userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') {
         notificationManager.notifyNewTicket(newTicket, () => {
           navigate(`/tickets/${newTicket._id}`);
@@ -53,7 +46,6 @@ const TicketDashboard = () => {
       }
     });
     
-    // Listen for ticket updates
     socket.on('ticket_updated', (updatedTicket) => {
       const oldTicket = tickets.find(t => t._id === updatedTicket._id);
       setTickets(prev => prev.map(t => 
@@ -62,7 +54,6 @@ const TicketDashboard = () => {
       
       toast.info(`Ticket ${updatedTicket.ticketNumber} status updated to ${updatedTicket.status}`);
       
-      // Desktop notification for status change (notify creator and assignee)
       if (oldTicket && oldTicket.status !== updatedTicket.status) {
         const shouldNotify = 
           updatedTicket.createdBy?._id === currentUserId ||
@@ -76,13 +67,11 @@ const TicketDashboard = () => {
       }
     });
     
-    // Listen for ticket assignments
     socket.on('ticket_assigned', (assignedTicket) => {
       setTickets(prev => prev.map(t => 
         t._id === assignedTicket._id ? assignedTicket : t
       ));
       
-      // Desktop notification if assigned to current user
       if (assignedTicket.assignedTo?._id === currentUserId) {
         toast.success(`Ticket assigned to you: ${assignedTicket.title}`);
         notificationManager.notifyTicketAssigned(assignedTicket, () => {
@@ -91,9 +80,7 @@ const TicketDashboard = () => {
       }
     });
     
-    // Listen for new comments
     socket.on('ticket_commented', (updatedTicket) => {
-      // Find the new comment
       const lastComment = updatedTicket.comments?.[updatedTicket.comments.length - 1];
       
       if (lastComment && lastComment.userId !== currentUserId) {
@@ -103,7 +90,6 @@ const TicketDashboard = () => {
         
         toast.success(`New comment from ${lastComment.userName} on ticket ${updatedTicket.ticketNumber}`);
         
-        // Desktop notification for creator and assignee
         const shouldNotify = 
           updatedTicket.createdBy?._id === currentUserId ||
           updatedTicket.assignedTo?._id === currentUserId;
@@ -119,7 +105,7 @@ const TicketDashboard = () => {
     return () => {
       socket.disconnect();
     };
-  }, []); // Empty dependency array - run once on mount
+  }, []);
 
   const fetchTickets = async () => {
     try {
@@ -127,6 +113,7 @@ const TicketDashboard = () => {
       const res = await axios.get(`${API_BASE_URL}/api/tickets`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      console.log('📊 Tickets fetched:', res.data);
       setTickets(res.data);
     } catch (error) {
       console.error('Error fetching tickets:', error);
@@ -156,7 +143,6 @@ const TicketDashboard = () => {
     }
   };
 
-  // Get ticket type color
   const getTicketTypeColor = (type) => {
     const typeColors = {
       'Data Extraction': 'bg-indigo-100 text-indigo-700 border-indigo-200',
@@ -176,7 +162,7 @@ const TicketDashboard = () => {
     return typeColors[type] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
-  // Filter tickets by status and type
+  // UPDATED: Simplified filtering - HR and Finance can see ALL their tickets
   const filteredTickets = tickets.filter(t => {
     // Status filter
     if (filter !== 'all' && t.status !== filter) return false;
@@ -184,6 +170,17 @@ const TicketDashboard = () => {
     // Type filter (internal/external)
     if (filterType === 'internal' && !t.isInternal) return false;
     if (filterType === 'external' && t.isInternal) return false;
+    
+    // For HR - show ALL HR-related tickets (backend already filters)
+    if (isHR) {
+      // Backend already filters for HR, so just return true
+      return true;
+    }
+    
+    // For Finance - show ALL Finance-related tickets (backend already filters)
+    if (isFinance) {
+      return true;
+    }
     
     return true;
   });
@@ -198,7 +195,6 @@ const TicketDashboard = () => {
     feasibility: tickets.filter(t => t.category === 'Production' && t.subcategory === 'Feasibility').length
   };
 
-  // Get category display name
   const getCategoryDisplay = (ticket) => {
     if (ticket.subItem) return ticket.subItem;
     if (ticket.subcategory) return ticket.subcategory;
@@ -206,7 +202,6 @@ const TicketDashboard = () => {
     return null;
   };
 
-  // Check if ticket is a Feasibility ticket
   const isFeasibilityTicket = (ticket) => {
     return ticket.category === 'Production' && ticket.subcategory === 'Feasibility';
   };
@@ -228,10 +223,13 @@ const TicketDashboard = () => {
       <div className="mb-8 flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Support Tickets</h1>
-          <p className="text-gray-600 mt-1">Track and manage all support requests</p>
+          <p className="text-gray-600 mt-1">
+            {isHR ? 'HR & Admin Tickets' : 
+             isFinance ? 'Finance & Payroll Tickets' : 
+             'Track and manage all support requests'}
+          </p>
         </div>
         <div className="flex gap-3 flex-wrap">
-          {/* Notification permission button */}
           {Notification.permission !== 'granted' && Notification.permission !== 'denied' && (
             <button
               onClick={() => notificationManager.requestPermission()}
@@ -241,8 +239,7 @@ const TicketDashboard = () => {
             </button>
           )}
           
-          {/* Create Ticket button - available to all roles except Client (they have their own) */}
-          {userRole !== 'Client' && (
+          {userRole !== 'Client' && userRole !== 'HR' && userRole !== 'Finance' && (
             <button
               onClick={() => navigate('/tickets/create')}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
@@ -251,7 +248,7 @@ const TicketDashboard = () => {
               New Internal Ticket
             </button>
           )}
-          {userRole === 'Client' && (
+          {(userRole === 'Client' || userRole === 'HR' || userRole === 'Finance') && (
             <button
               onClick={() => navigate('/tickets/create')}
               className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
@@ -305,8 +302,44 @@ const TicketDashboard = () => {
           </div>
         </div>
 
-        {/* Internal Tickets Stats - Only for non-clients */}
-        {canSeeInternal && (
+        {/* HR Specific Stats Card */}
+        {isHR && (
+          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">HR Related</p>
+                <p className="text-2xl font-bold text-pink-600">
+                  {tickets.filter(t => 
+                    ['HR', 'Admin', 'Payroll'].includes(t.category) ||
+                    ['Employee Documents', 'Attendance & Leave', 'Employee Management'].includes(t.subcategory)
+                  ).length}
+                </p>
+              </div>
+              <Users size={32} className="text-pink-500" />
+            </div>
+          </div>
+        )}
+
+        {/* Finance Specific Stats Card */}
+        {isFinance && (
+          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-600">Finance Related</p>
+                <p className="text-2xl font-bold text-green-600">
+                  {tickets.filter(t => 
+                    ['Finance', 'Payroll', 'Admin'].includes(t.category) ||
+                    ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'].includes(t.subcategory)
+                  ).length}
+                </p>
+              </div>
+              <Clock size={32} className="text-green-500" />
+            </div>
+          </div>
+        )}
+
+        {/* Internal Tickets Stats */}
+        {canSeeInternal && !isHR && !isFinance && (
           <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
@@ -319,12 +352,9 @@ const TicketDashboard = () => {
         )}
       </div>
 
-     
-
       {/* Filters */}
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
         <div className="flex flex-wrap items-center gap-2">
-          {/* Status Filters */}
           <div className="flex items-center gap-1">
             <span className="text-xs text-gray-500 mr-1 font-medium">Status:</span>
             {['all', 'Open', 'In Progress', 'Resolved', 'Closed'].map(status => (
@@ -342,8 +372,7 @@ const TicketDashboard = () => {
             ))}
           </div>
 
-          {/* Type Filters - Only for non-clients who can see internal tickets */}
-          {canSeeInternal && (
+          {canSeeInternal && !isHR && !isFinance && (
             <>
               <div className="w-px h-8 bg-gray-300 mx-2"></div>
               <div className="flex items-center gap-1">
@@ -385,7 +414,6 @@ const TicketDashboard = () => {
             </>
           )}
 
-          {/* Clear filters button */}
           {(filter !== 'all' || filterType !== 'all') && (
             <>
               <div className="w-px h-8 bg-gray-300 mx-2"></div>
@@ -427,7 +455,9 @@ const TicketDashboard = () => {
                       <Ticket size={48} className="text-gray-300" />
                       <p className="font-medium">No tickets found</p>
                       <p className="text-sm text-gray-400">
-                        {filterType === 'internal' ? 'No internal tickets available' : 
+                        {isHR ? 'No HR-related tickets available' : 
+                         isFinance ? 'No Finance-related tickets available' :
+                         filterType === 'internal' ? 'No internal tickets available' : 
                          filterType === 'external' ? 'No external tickets available' : 
                          'Create a new ticket to get started'}
                       </p>

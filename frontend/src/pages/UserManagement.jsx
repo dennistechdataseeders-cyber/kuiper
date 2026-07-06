@@ -378,9 +378,12 @@ const UserManagement = () => {
   const getRoleDisplayName = (role) => {
     if (role === 'Client') return 'POC';
     if (role === 'Team Lead') return 'Team Lead';
+    if (role === 'HR') return 'HR';
+    if (role === 'Finance') return 'Finance';
     return role;
   };
 
+  // Helper to get role color
   const getRoleColor = (role) => {
     switch(role) {
       case 'Admin': return 'bg-purple-100 text-purple-700';
@@ -390,6 +393,8 @@ const UserManagement = () => {
       case 'Project Manager': return 'bg-cyan-100 text-cyan-700';
       case 'Client': return 'bg-slate-100 text-slate-700';
       case 'Team Lead': return 'bg-indigo-100 text-indigo-700';
+      case 'HR': return 'bg-pink-100 text-pink-700';
+      case 'Finance': return 'bg-green-100 text-green-700';
       default: return 'bg-slate-100 text-slate-700';
     }
   };
@@ -421,7 +426,7 @@ const UserManagement = () => {
       return ['Client', 'Team Lead']; // PM can create Client and Team Lead
     }
     // Admin can create all roles
-    return ['Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead', 'Admin'];
+     return ['Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead', 'Admin', 'HR', 'Finance'];
   };
 
   return (
@@ -453,7 +458,7 @@ const UserManagement = () => {
       </div>
 
       {/* Stats Cards - ADD Team Lead count */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -466,47 +471,23 @@ const UserManagement = () => {
           </div>
         </div>
         
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-sm">
+        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total POCs</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Client').length}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <Building2 size={18} className="text-white" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Developers</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Developer').length}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <GitFork size={18} className="text-white" />
-            </div>
-          </div>
-        </div>
-        
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Sales Team</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Sales' || u.role === 'Sales Manager').length}</p>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">HR Team</p>
+              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'HR').length}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
               <Users size={18} className="text-white" />
             </div>
           </div>
         </div>
-
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 shadow-sm">
+        
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Team Leads</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Team Lead').length}</p>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Finance Team</p>
+              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Finance').length}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
               <Users size={18} className="text-white" />

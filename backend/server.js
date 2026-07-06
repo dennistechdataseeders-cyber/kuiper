@@ -62,6 +62,7 @@ const teamLeadRoutes = require('./routes/teamLeadRoutes');
 const ticketAssignmentRoutes = require('./routes/ticketAssignmentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const clientRoutes = require('./routes/clientRoutes');
+const knowledgeBaseRoutes = require('./routes/knowledgeBaseRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -223,6 +224,7 @@ app.use('/api/teamlead', protect, teamLeadRoutes);
 app.use('/api/admin', protect, ticketAssignmentRoutes);
 app.use('/api/notifications', protect, notificationRoutes);
 app.use('/api/client', protect, clientRoutes);
+app.use('/api/knowledge', protect, knowledgeBaseRoutes);
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
