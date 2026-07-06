@@ -124,7 +124,8 @@ const TICKET_CATEGORIES = {
         'New Feed Request',
         'Editing Feed Enhancement'
       ],
-      'Feasibility': [],
+      'Feasibility': [], // Empty array = no sub-items, shows developer assignment
+      'Others': [], // NEW: Empty array = no sub-items, shows developer assignment
       'KUIPER': [
         'Report Bug',
         'Latency',
@@ -205,19 +206,12 @@ const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 const ALLOWED_EXTENSIONS = [
-  // Images
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-  // Documents
   '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
-  // Archives
   '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
-  // Presentations
   '.ppt', '.pptx', '.odp',
-  // Video
   '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
-  // Audio
   '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
-  // Code/Config
   '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
   '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
   '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
@@ -304,8 +298,9 @@ const CreateTicket = () => {
   // Check if user can see project/feed selection
   const canSeeProjectFeed = userRole === 'Client' || userRole === 'Project Manager' || userRole === 'Team Lead';
   
-  // Check if Feasibility is selected (which hides project/feed selection)
-  const isFeasibility = formData.category === 'Production' && formData.subcategory === 'Feasibility';
+  // Check if special subcategory is selected (Feasibility or Others) - these show developer assignment
+  const isSpecialSubcategory = (formData.category === 'Production' && 
+    (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others'));
   
   // Get available categories based on role
   const getAvailableCategories = () => {
@@ -486,12 +481,23 @@ const CreateTicket = () => {
     return subcategory || [];
   };
 
-  // Check if subcategory has sub-items
+  // Check if subcategory has sub-items (not special like Feasibility or Others)
   const hasSubItems = () => {
     if (!formData.category || !formData.subcategory) return false;
+    // Feasibility and Others are special - they don't show sub-items
+    if (formData.category === 'Production' && 
+        (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others')) {
+      return false;
+    }
     const categories = getAvailableCategories();
     const subcategory = categories[formData.category]?.subcategories[formData.subcategory];
     return Array.isArray(subcategory) && subcategory.length > 0;
+  };
+
+  // Check if developer assignment should be shown
+  const shouldShowDeveloperAssignment = () => {
+    return formData.category === 'Production' && 
+      (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others');
   };
 
   // Auto-generate ticket type from category selection
@@ -509,6 +515,13 @@ const CreateTicket = () => {
           projectId: null,
           feedId: null
         }));
+      } else if (formData.category === 'Production' && formData.subcategory === 'Others') {
+        setFormData(prev => ({
+          ...prev,
+          ticketType: 'Others',
+          projectId: null,
+          feedId: null
+        }));
       } else {
         setFormData(prev => ({
           ...prev,
@@ -523,23 +536,23 @@ const CreateTicket = () => {
     }
   }, [formData.category, formData.subcategory, formData.subItem]);
 
-  // Reset project/feed when Feasibility is selected/unselected
+  // Reset project/feed when Feasibility or Others is selected/unselected
   useEffect(() => {
-    if (isFeasibility) {
+    if (isSpecialSubcategory) {
       setFormData(prev => ({
         ...prev,
         projectId: null,
         feedId: null
       }));
     }
-  }, [isFeasibility]);
+  }, [isSpecialSubcategory]);
 
-  // Fetch developers when component mounts or when Feasibility is selected
+  // Fetch developers when component mounts or when special subcategory is selected
   useEffect(() => {
-    if (isFeasibility) {
+    if (isSpecialSubcategory) {
       fetchDevelopers();
     }
-  }, [isFeasibility]);
+  }, [isSpecialSubcategory]);
 
   useEffect(() => {
     fetchProjects();
@@ -632,66 +645,65 @@ const CreateTicket = () => {
   };
 
   // ============================================
-  // SUBMIT HANDLER (UPDATED WITH FILES)
+  // SUBMIT HANDLER
   // ============================================
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!formData.title || !formData.description) {
-    toast.error('Please fill in all required fields');
-    return;
-  }
-  
-  if (isClient && !formData.projectId && !isFeasibility) {
-    toast.error('Please select a project for this ticket');
-    return;
-  }
-  
-  if (isFeasibility && !formData.assignedTo) {
-    toast.error('Please assign a developer for feasibility assessment');
-    return;
-  }
-  
-  setLoading(true);
-  
-  try {
-    const token = localStorage.getItem('token');
+    e.preventDefault();
     
-    // Upload files first if any
-    let uploadedFiles = [];
-    if (selectedFiles.length > 0) {
-      uploadedFiles = await uploadFiles();
+    if (!formData.title || !formData.description) {
+      toast.error('Please fill in all required fields');
+      return;
     }
     
-    const payload = {
-      title: formData.title,
-      description: formData.description,
-      priority: formData.priority,
-      projectId: formData.projectId || null,
-      feedId: formData.feedId || null,
-      isInternal: formData.isInternal,
-      ticketType: formData.ticketType || undefined,
-      category: formData.category || undefined,
-      subcategory: formData.subcategory || undefined,
-      subItem: formData.subItem || undefined,
-      assignedTo: formData.assignedTo || null,
-      files: uploadedFiles // <- ADD THIS LINE - send files with ticket creation
-    };
+    if (isClient && !formData.projectId && !isSpecialSubcategory) {
+      toast.error('Please select a project for this ticket');
+      return;
+    }
     
-    await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
+    if (isSpecialSubcategory && !formData.assignedTo) {
+      toast.error('Please assign a developer for this ticket');
+      return;
+    }
     
-    toast.success('Ticket created successfully!');
-    navigate('/tickets');
-  } catch (error) {
-    console.error('Error creating ticket:', error);
-    toast.error(error.response?.data?.error || 'Failed to create ticket');
-  } finally {
-    setLoading(false);
-  }
-};
+    setLoading(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      
+      let uploadedFiles = [];
+      if (selectedFiles.length > 0) {
+        uploadedFiles = await uploadFiles();
+      }
+      
+      const payload = {
+        title: formData.title,
+        description: formData.description,
+        priority: formData.priority,
+        projectId: formData.projectId || null,
+        feedId: formData.feedId || null,
+        isInternal: formData.isInternal,
+        ticketType: formData.ticketType || undefined,
+        category: formData.category || undefined,
+        subcategory: formData.subcategory || undefined,
+        subItem: formData.subItem || undefined,
+        assignedTo: formData.assignedTo || null,
+        files: uploadedFiles
+      };
+      
+      await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      toast.success('Ticket created successfully!');
+      navigate('/tickets');
+    } catch (error) {
+      console.error('Error creating ticket:', error);
+      toast.error(error.response?.data?.error || 'Failed to create ticket');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getProjectDisplayName = (project) => {
     return project.projectCustomId || project.name;
@@ -767,17 +779,20 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Feasibility Mode Banner */}
-              {isFeasibility && (
+              {/* Special Subcategory Mode Banner */}
+              {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
                   <div className="p-2 bg-purple-200 rounded-lg">
                     <Info size={16} className="text-purple-700" />
                   </div>
                   <div>
-                    <p className="text-sm font-semibold text-purple-800">Feasibility Request</p>
+                    <p className="text-sm font-semibold text-purple-800">
+                      {formData.subcategory === 'Feasibility' ? 'Feasibility Request' : 'Others Request'}
+                    </p>
                     <p className="text-xs text-purple-700 mt-0.5">
-                      This ticket is for feasibility assessment. Project and Feed will be set to <span className="font-medium">General</span>.
-                      Please assign a developer for assessment.
+                      This ticket is for {formData.subcategory === 'Feasibility' ? 'feasibility assessment' : 'general other requests'}. 
+                      Project and Feed will be set to <span className="font-medium">General</span>.
+                      Please assign a developer.
                     </p>
                   </div>
                 </div>
@@ -911,14 +926,14 @@ const CreateTicket = () => {
                     </select>
                   </div>
 
-                  {/* Sub-Item Dropdown - HIDDEN for Feasibility */}
-                  {!isFeasibility && hasSubItems() && (
+                  {/* Sub-Item Dropdown - HIDDEN for Feasibility and Others */}
+                  {!isSpecialSubcategory && hasSubItems() && (
                     <div>
                       <label className="block text-xs font-medium text-slate-500 mb-1.5">
                         Specific Issue
                       </label>
                       <select
-                        required={!isFeasibility}
+                        required={!isSpecialSubcategory}
                         value={formData.subItem}
                         onChange={(e) => {
                           setFormData({ 
@@ -938,10 +953,14 @@ const CreateTicket = () => {
                     </div>
                   )}
                   
-                  {/* Feasibility info - no sub-items */}
-                  {isFeasibility && (
+                  {/* Special subcategory info - no sub-items */}
+                  {isSpecialSubcategory && (
                     <div className="flex items-center justify-center bg-purple-50 border-2 border-purple-200 rounded-xl p-3">
-                      <span className="text-xs font-medium text-purple-700">No specific issue selection needed</span>
+                      <span className="text-xs font-medium text-purple-700">
+                        {formData.subcategory === 'Feasibility' 
+                          ? 'No specific issue selection needed' 
+                          : 'General other request - assign developer'}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -958,7 +977,7 @@ const CreateTicket = () => {
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-700 font-medium">
                         {formData.subcategory}
                       </span>
-                      {formData.subItem && !isFeasibility && (
+                      {formData.subItem && !isSpecialSubcategory && (
                         <>
                           <span className="text-slate-400">→</span>
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 rounded-lg border border-blue-200 text-blue-700 font-medium">
@@ -966,9 +985,9 @@ const CreateTicket = () => {
                           </span>
                         </>
                       )}
-                      {isFeasibility && (
+                      {isSpecialSubcategory && (
                         <span className="text-[8px] font-black text-purple-600 bg-purple-100 px-2 py-1 rounded-lg">
-                          General Assessment
+                          {formData.subcategory === 'Feasibility' ? 'Feasibility Assessment' : 'Other Request'}
                         </span>
                       )}
                     </div>
@@ -976,8 +995,8 @@ const CreateTicket = () => {
                 )}
               </div>
 
-              {/* Developer Assignment - Only for Feasibility */}
-              {isFeasibility && (
+              {/* Developer Assignment - Only for Feasibility and Others */}
+              {isSpecialSubcategory && (
                 <div className="bg-purple-50/80 rounded-xl p-5 border-2 border-purple-200/50">
                   <div className="flex items-center gap-2 mb-3">
                     <UserCheck size={18} className="text-purple-600" />
@@ -992,7 +1011,7 @@ const CreateTicket = () => {
                     onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
                     className="w-full px-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
                   >
-                    <option value="">Select a developer for feasibility assessment</option>
+                    <option value="">Select a developer for {formData.subcategory.toLowerCase()} request</option>
                     {developers.length === 0 ? (
                       <option value="" disabled>No developers available</option>
                     ) : (
@@ -1018,19 +1037,19 @@ const CreateTicket = () => {
                         </div>
                       )}
                       <span className="text-xs text-slate-400 ml-auto">
-                        Developer will be assigned to this feasibility ticket
+                        Developer will be assigned to this ticket
                       </span>
                     </div>
                   )}
                   
                   <p className="text-[8px] text-purple-500 mt-2">
-                    Select a developer who will assess this feasibility request
+                    Select a developer who will handle this {formData.subcategory.toLowerCase()} request
                   </p>
                 </div>
               )}
 
-              {/* Project and Feed - Hidden for Feasibility */}
-              {!isFeasibility && canSeeProjectFeed && (
+              {/* Project and Feed - Hidden for Feasibility and Others */}
+              {!isSpecialSubcategory && canSeeProjectFeed && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {/* Project Selection */}
                   <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
@@ -1102,8 +1121,8 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Feasibility notice - Project/Feed set to General */}
-              {isFeasibility && (
+              {/* Special subcategory notice - Project/Feed set to General */}
+              {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
                   <div className="p-2 bg-purple-200 rounded-lg">
                     <Building2 size={16} className="text-purple-700" />
@@ -1111,7 +1130,7 @@ const CreateTicket = () => {
                   <div>
                     <p className="text-sm font-semibold text-purple-800">Project & Feed: General</p>
                     <p className="text-xs text-purple-600">
-                      This feasibility ticket will be assigned to the general pool and assessed by the selected developer.
+                      This {formData.subcategory.toLowerCase()} ticket will be assigned to the general pool and handled by the selected developer.
                     </p>
                   </div>
                 </div>
@@ -1133,7 +1152,7 @@ const CreateTicket = () => {
               )}
 
               {/* ============================================
-                  FILE ATTACHMENTS SECTION (NEW)
+                  FILE ATTACHMENTS SECTION
                   ============================================ */}
               <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
                 <div className="flex items-center gap-2 mb-3">
@@ -1218,7 +1237,7 @@ const CreateTicket = () => {
               <div className="pt-4 border-t border-slate-200">
                 <button
                   type="submit"
-                  disabled={loading || (isFeasibility && !formData.assignedTo)}
+                  disabled={loading || (isSpecialSubcategory && !formData.assignedTo)}
                   className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-200/50 hover:shadow-xl hover:shadow-blue-300/50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? (
@@ -1234,9 +1253,9 @@ const CreateTicket = () => {
                     </>
                   )}
                 </button>
-                {isFeasibility && !formData.assignedTo && (
+                {isSpecialSubcategory && !formData.assignedTo && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    Please assign a developer to create this feasibility ticket
+                    Please assign a developer to create this {formData.subcategory.toLowerCase()} ticket
                   </p>
                 )}
               </div>

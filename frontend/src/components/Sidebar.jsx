@@ -127,7 +127,7 @@ const Sidebar = () => {
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
 
@@ -136,7 +136,7 @@ const Sidebar = () => {
       { path: '/admin/users', icon: <UserPlus size={18} />, label: 'Team' },
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     Sales: [
@@ -144,7 +144,7 @@ const Sidebar = () => {
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     'Project Manager': [
@@ -154,7 +154,7 @@ const Sidebar = () => {
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     'Team Lead': [
@@ -164,7 +164,7 @@ const Sidebar = () => {
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     Developer: [
@@ -175,24 +175,24 @@ const Sidebar = () => {
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     HR: [
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
     ],
       
     Finance: [
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
     ],
   };
