@@ -1,5 +1,3 @@
-// frontend/src/pages/CreateTicket.jsx
-
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -14,11 +12,11 @@ import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
-// Ticket Category Configuration
 const TICKET_CATEGORIES = {
   'Finance': {
     icon: '💰',
     color: 'emerald',
+    role: 'Finance',
     subcategories: {
       'Reimbursement': [
         'Employee Expense Claim',
@@ -42,6 +40,7 @@ const TICKET_CATEGORIES = {
   'HR': {
     icon: '👥',
     color: 'pink',
+    role: 'HR',
     subcategories: {
       'Employee Documents': [
         'Employment Letter',
@@ -63,6 +62,7 @@ const TICKET_CATEGORIES = {
   'Payroll': {
     icon: '💳',
     color: 'blue',
+    role: 'Finance',
     subcategories: {
       'Salary': [
         'Salary Query',
@@ -83,6 +83,7 @@ const TICKET_CATEGORIES = {
   'Sales': {
     icon: '📊',
     color: 'orange',
+    role: 'Sales',
     subcategories: {
       'Lead Management': [
         'Lead Assignment',
@@ -103,6 +104,7 @@ const TICKET_CATEGORIES = {
   'Production': {
     icon: '⚙️',
     color: 'red',
+    role: 'Developer',
     subcategories: {
       'Data Extraction': [
         'Feed Not Working',
@@ -124,8 +126,8 @@ const TICKET_CATEGORIES = {
         'New Feed Request',
         'Editing Feed Enhancement'
       ],
-      'Feasibility': [], // Empty array = no sub-items, shows developer assignment
-      'Others': [], // NEW: Empty array = no sub-items, shows developer assignment
+      'Feasibility': [],
+      'Others': [],
       'KUIPER': [
         'Report Bug',
         'Latency',
@@ -139,6 +141,7 @@ const TICKET_CATEGORIES = {
   'Admin': {
     icon: '🛠️',
     color: 'gray',
+    role: 'Admin',
     subcategories: {
       'Agency': [
         'Lease Request',
@@ -167,6 +170,7 @@ const TICKET_CATEGORIES = {
   'IT': {
     icon: '💻',
     color: 'cyan',
+    role: 'IT',
     subcategories: {
       'Access Management': [
         'Email Access',
@@ -184,6 +188,7 @@ const TICKET_CATEGORIES = {
   'Development': {
     icon: '🚀',
     color: 'violet',
+    role: 'Developer',
     subcategories: {
       'New Feature Request': [
         'Requirements Request',
@@ -193,17 +198,12 @@ const TICKET_CATEGORIES = {
   }
 };
 
-// Client-only categories (only Production for clients)
 const CLIENT_CATEGORIES = {
   'Production': TICKET_CATEGORIES['Production']
 };
 
-// ============================================
-// FILE UPLOAD CONFIGURATION
-// ============================================
-
-const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
@@ -283,36 +283,27 @@ const CreateTicket = () => {
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
 
-  // ============================================
-  // FILE UPLOAD STATE
-  // ============================================
+  const [departmentUsers, setDepartmentUsers] = useState([]);
+  const [selectedPerson, setSelectedPerson] = useState('');
+  const [loadingDepartmentUsers, setLoadingDepartmentUsers] = useState(false);
+
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
-  // Check if user is Client
   const isClient = userRole === 'Client';
-  
-  // Check if user can see project/feed selection
   const canSeeProjectFeed = userRole === 'Client' || userRole === 'Project Manager' || userRole === 'Team Lead';
-  
-  // Check if special subcategory is selected (Feasibility or Others) - these show developer assignment
   const isSpecialSubcategory = (formData.category === 'Production' && 
     (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others'));
   
-  // Get available categories based on role
   const getAvailableCategories = () => {
     if (isClient) {
       return CLIENT_CATEGORIES;
     }
     return TICKET_CATEGORIES;
   };
-
-  // ============================================
-  // FILE HANDLERS
-  // ============================================
 
   const validateFile = (file) => {
     if (!isAllowedFile(file)) {
@@ -449,11 +440,70 @@ const CreateTicket = () => {
     return uploadedUrls;
   };
 
-  // ============================================
-  // EFFECTS
-  // ============================================
+  const fetchDepartmentUsers = async (category, subcategory = '') => {
+    setLoadingDepartmentUsers(true);
+    setDepartmentUsers([]);
+    setSelectedPerson('');
 
-  // Auto-set internal for non-client roles
+    try {
+      const token = localStorage.getItem('token');
+      const categories = getAvailableCategories();
+      const categoryConfig = categories[category];
+      
+      if (!categoryConfig) {
+        console.log('No category config found for:', category);
+        setDepartmentUsers([]);
+        setLoadingDepartmentUsers(false);
+        return;
+      }
+
+      let roleToFetch = categoryConfig.role;
+
+      if (category === 'Production') {
+        if (subcategory === 'Feasibility' || subcategory === 'Others') {
+          console.log('Special subcategory - using developer dropdown instead');
+          setDepartmentUsers([]);
+          setLoadingDepartmentUsers(false);
+          return;
+        }
+        roleToFetch = 'Developer';
+      }
+
+      if (category === 'Payroll') {
+        roleToFetch = 'Finance';
+      }
+
+      console.log(`🔍 Fetching users with role: ${roleToFetch} for category: ${category}`);
+
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      console.log('📊 All users from API:', res.data.length);
+
+      const users = res.data.filter(u => 
+        u.role && u.role.toLowerCase() === roleToFetch.toLowerCase()
+      );
+
+      console.log(`✅ Found ${users.length} users with role ${roleToFetch}:`, users.map(u => u.name));
+
+      setDepartmentUsers(users);
+
+      if (users.length === 1) {
+        setSelectedPerson(users[0]._id);
+        setFormData(prev => ({ ...prev, assignedTo: users[0]._id }));
+        console.log('✅ Auto-selected:', users[0].name);
+      }
+
+    } catch (error) {
+      console.error('❌ Error fetching department users:', error);
+      toast.error('Failed to load department users');
+      setDepartmentUsers([]);
+    } finally {
+      setLoadingDepartmentUsers(false);
+    }
+  };
+
   useEffect(() => {
     if (!isClient) {
       setFormData(prev => ({
@@ -463,14 +513,21 @@ const CreateTicket = () => {
     }
   }, [isClient]);
 
-  // Get available subcategories based on selected category
+  useEffect(() => {
+    if (formData.category) {
+      fetchDepartmentUsers(formData.category, formData.subcategory);
+    } else {
+      setDepartmentUsers([]);
+      setSelectedPerson('');
+    }
+  }, [formData.category, formData.subcategory]);
+
   const getSubcategories = () => {
     if (!formData.category) return [];
     const categories = getAvailableCategories();
     return Object.keys(categories[formData.category]?.subcategories || {});
   };
 
-  // Get available sub-items based on selected category and subcategory
   const getSubItems = () => {
     if (!formData.category || !formData.subcategory) return [];
     const categories = getAvailableCategories();
@@ -481,10 +538,8 @@ const CreateTicket = () => {
     return subcategory || [];
   };
 
-  // Check if subcategory has sub-items (not special like Feasibility or Others)
   const hasSubItems = () => {
     if (!formData.category || !formData.subcategory) return false;
-    // Feasibility and Others are special - they don't show sub-items
     if (formData.category === 'Production' && 
         (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others')) {
       return false;
@@ -494,13 +549,25 @@ const CreateTicket = () => {
     return Array.isArray(subcategory) && subcategory.length > 0;
   };
 
-  // Check if developer assignment should be shown
   const shouldShowDeveloperAssignment = () => {
     return formData.category === 'Production' && 
       (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others');
   };
 
-  // Auto-generate ticket type from category selection
+  const shouldShowPersonDropdown = () => {
+    if (!formData.category) return false;
+    if (isClient) return false;
+    if (formData.category === 'Production') {
+      if (formData.subcategory && 
+          formData.subcategory !== 'Feasibility' && 
+          formData.subcategory !== 'Others') {
+        return true;
+      }
+      return false;
+    }
+    return true;
+  };
+
   useEffect(() => {
     if (formData.category && formData.subcategory && formData.subItem) {
       setFormData(prev => ({
@@ -536,7 +603,6 @@ const CreateTicket = () => {
     }
   }, [formData.category, formData.subcategory, formData.subItem]);
 
-  // Reset project/feed when Feasibility or Others is selected/unselected
   useEffect(() => {
     if (isSpecialSubcategory) {
       setFormData(prev => ({
@@ -547,7 +613,6 @@ const CreateTicket = () => {
     }
   }, [isSpecialSubcategory]);
 
-  // Fetch developers when component mounts or when special subcategory is selected
   useEffect(() => {
     if (isSpecialSubcategory) {
       fetchDevelopers();
@@ -644,10 +709,6 @@ const CreateTicket = () => {
     }
   };
 
-  // ============================================
-  // SUBMIT HANDLER
-  // ============================================
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -658,6 +719,12 @@ const CreateTicket = () => {
     
     if (isClient && !formData.projectId && !isSpecialSubcategory) {
       toast.error('Please select a project for this ticket');
+      return;
+    }
+    
+    if (shouldShowPersonDropdown() && !selectedPerson && !isSpecialSubcategory) {
+      const categoryName = formData.category || 'department';
+      toast.error(`Please select a ${categoryName} team member for this ticket`);
       return;
     }
     
@@ -676,6 +743,12 @@ const CreateTicket = () => {
         uploadedFiles = await uploadFiles();
       }
       
+      let finalAssignedTo = formData.assignedTo || null;
+      
+      if (shouldShowPersonDropdown() && selectedPerson && !isSpecialSubcategory) {
+        finalAssignedTo = selectedPerson;
+      }
+      
       const payload = {
         title: formData.title,
         description: formData.description,
@@ -687,7 +760,7 @@ const CreateTicket = () => {
         category: formData.category || undefined,
         subcategory: formData.subcategory || undefined,
         subItem: formData.subItem || undefined,
-        assignedTo: formData.assignedTo || null,
+        assignedTo: finalAssignedTo,
         files: uploadedFiles
       };
       
@@ -709,7 +782,6 @@ const CreateTicket = () => {
     return project.projectCustomId || project.name;
   };
 
-  // Priority options with colors
   const priorityOptions = [
     { value: 'Low', label: 'Low', color: 'bg-green-100 text-green-700 border-green-200' },
     { value: 'Medium', label: 'Medium', color: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
@@ -719,10 +791,21 @@ const CreateTicket = () => {
 
   const availableCategories = getAvailableCategories();
 
+  const getSelectedPersonName = () => {
+    if (!selectedPerson) return null;
+    const user = departmentUsers.find(u => u._id === selectedPerson);
+    return user ? user.name : null;
+  };
+
+  const getSelectedPersonRole = () => {
+    if (!selectedPerson) return null;
+    const user = departmentUsers.find(u => u._id === selectedPerson);
+    return user ? user.role : null;
+  };
+
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
       <div className="w-full">
-        {/* Header */}
         <div className="mb-8">
           <button
             onClick={() => navigate('/tickets')}
@@ -746,10 +829,8 @@ const CreateTicket = () => {
           </div>
         </div>
 
-        {/* Form Card */}
         <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
           <form onSubmit={handleSubmit}>
-            {/* Form Header */}
             <div className="px-8 py-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
                 <div className="p-2.5 bg-blue-50 rounded-xl">
@@ -763,7 +844,6 @@ const CreateTicket = () => {
             </div>
 
             <div className="p-8 space-y-8">
-              {/* Client Mode Badge - Show for clients */}
               {isClient && (
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
                   <div className="p-2 bg-blue-200 rounded-lg">
@@ -779,7 +859,6 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Special Subcategory Mode Banner */}
               {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
                   <div className="p-2 bg-purple-200 rounded-lg">
@@ -798,9 +877,7 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Two Column Layout for Title and Description */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Title */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                     Title <span className="text-red-500">*</span>
@@ -817,7 +894,6 @@ const CreateTicket = () => {
                   </div>
                 </div>
                 
-                {/* Priority */}
                 <div>
                   <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                     Priority <span className="text-red-500">*</span>
@@ -841,7 +917,6 @@ const CreateTicket = () => {
                 </div>
               </div>
 
-              {/* Description - Full Width */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   Description <span className="text-red-500">*</span>
@@ -856,7 +931,6 @@ const CreateTicket = () => {
                 />
               </div>
 
-              {/* Category Selection - Full Width */}
               <div className="bg-slate-50/80 rounded-xl p-6 border-2 border-slate-200/50">
                 <div className="flex items-center gap-2 mb-4">
                   <Layers size={18} className="text-blue-600" />
@@ -869,7 +943,6 @@ const CreateTicket = () => {
                 </div>
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {/* Category Dropdown */}
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1.5">
                       Category
@@ -884,7 +957,9 @@ const CreateTicket = () => {
                           subcategory: '',
                           subItem: '',
                           ticketType: '',
-                          assignedTo: ''
+                          assignedTo: '',
+                          projectId: null,
+                          feedId: null
                         });
                         setIsSubcategoryOpen(true);
                       }}
@@ -899,7 +974,6 @@ const CreateTicket = () => {
                     </select>
                   </div>
 
-                  {/* Subcategory Dropdown */}
                   <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1.5">
                       Subcategory
@@ -926,7 +1000,6 @@ const CreateTicket = () => {
                     </select>
                   </div>
 
-                  {/* Sub-Item Dropdown - HIDDEN for Feasibility and Others */}
                   {!isSpecialSubcategory && hasSubItems() && (
                     <div>
                       <label className="block text-xs font-medium text-slate-500 mb-1.5">
@@ -953,7 +1026,6 @@ const CreateTicket = () => {
                     </div>
                   )}
                   
-                  {/* Special subcategory info - no sub-items */}
                   {isSpecialSubcategory && (
                     <div className="flex items-center justify-center bg-purple-50 border-2 border-purple-200 rounded-xl p-3">
                       <span className="text-xs font-medium text-purple-700">
@@ -965,7 +1037,6 @@ const CreateTicket = () => {
                   )}
                 </div>
 
-                {/* Selected Category Display */}
                 {formData.category && formData.subcategory && (
                   <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
                     <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -995,7 +1066,74 @@ const CreateTicket = () => {
                 )}
               </div>
 
-              {/* Developer Assignment - Only for Feasibility and Others */}
+              {shouldShowPersonDropdown() && !isSpecialSubcategory && (
+                <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Users size={18} className="text-blue-600" />
+                    <label className="text-sm font-semibold text-slate-700">
+                      Assign to {formData.category} Team Member <span className="text-red-500">*</span>
+                    </label>
+                    {loadingDepartmentUsers && (
+                      <div className="ml-2">
+                        <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                  </div>
+                  
+                  <select
+                    required
+                    value={selectedPerson}
+                    onChange={(e) => {
+                      setSelectedPerson(e.target.value);
+                      setFormData(prev => ({ ...prev, assignedTo: e.target.value }));
+                    }}
+                    disabled={departmentUsers.length === 0 || loadingDepartmentUsers}
+                    className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {loadingDepartmentUsers 
+                        ? 'Loading team members...' 
+                        : departmentUsers.length === 0 
+                          ? `No ${formData.category} team members available` 
+                          : `Select a ${formData.category} team member...`}
+                    </option>
+                    {departmentUsers.map(user => (
+                      <option key={user._id} value={user._id}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </select>
+                  
+                  {selectedPerson && departmentUsers.length > 0 && (
+                    <div className="mt-3 p-3 bg-white rounded-lg border border-blue-200 flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                        {getSelectedPersonName()?.charAt(0) || '?'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-bold text-slate-700">
+                          {getSelectedPersonName() || 'Selected'}
+                        </p>
+                        <p className="text-[10px] text-slate-500">
+                          {getSelectedPersonRole() || ''} • Will be assigned to this ticket
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {departmentUsers.length === 0 && !loadingDepartmentUsers && (
+                    <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
+                      <p className="text-xs text-amber-700">
+                        ⚠️ No {formData.category} users found in the system. Please contact an administrator to add {formData.category} users.
+                      </p>
+                    </div>
+                  )}
+                  
+                  <p className="text-[8px] text-slate-400 mt-2">
+                    This ticket will be assigned to the selected {formData.category} team member
+                  </p>
+                </div>
+              )}
+
               {isSpecialSubcategory && (
                 <div className="bg-purple-50/80 rounded-xl p-5 border-2 border-purple-200/50">
                   <div className="flex items-center gap-2 mb-3">
@@ -1048,10 +1186,8 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Project and Feed - Hidden for Feasibility and Others */}
               {!isSpecialSubcategory && canSeeProjectFeed && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Project Selection */}
                   <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
                     <div className="flex items-center gap-2 mb-3">
                       <Briefcase size={18} className="text-blue-600" />
@@ -1092,7 +1228,6 @@ const CreateTicket = () => {
                     )}
                   </div>
 
-                  {/* Feed Selection */}
                   <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
                     <div className="flex items-center gap-2 mb-3">
                       <Hash size={18} className="text-blue-600" />
@@ -1121,7 +1256,6 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Special subcategory notice - Project/Feed set to General */}
               {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
                   <div className="p-2 bg-purple-200 rounded-lg">
@@ -1136,7 +1270,6 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* Ticket Type Display */}
               {formData.ticketType && (
                 <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
                   <div className="flex items-center gap-3">
@@ -1151,9 +1284,6 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              {/* ============================================
-                  FILE ATTACHMENTS SECTION
-                  ============================================ */}
               <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
                 <div className="flex items-center gap-2 mb-3">
                   <Paperclip size={18} className="text-blue-600" />
@@ -1165,7 +1295,6 @@ const CreateTicket = () => {
                   </span>
                 </div>
                 
-                {/* File Preview */}
                 {filePreviews.length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-2 p-3 bg-white rounded-lg border border-slate-200">
                     {filePreviews.map((preview, idx) => (
@@ -1199,7 +1328,6 @@ const CreateTicket = () => {
                   </div>
                 )}
                 
-                {/* Drop Zone */}
                 <div
                   className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all ${
                     isDragging 
@@ -1233,7 +1361,6 @@ const CreateTicket = () => {
                 </div>
               </div>
 
-              {/* Submit Button */}
               <div className="pt-4 border-t border-slate-200">
                 <button
                   type="submit"
@@ -1256,6 +1383,16 @@ const CreateTicket = () => {
                 {isSpecialSubcategory && !formData.assignedTo && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
                     Please assign a developer to create this {formData.subcategory.toLowerCase()} ticket
+                  </p>
+                )}
+                {shouldShowPersonDropdown() && !selectedPerson && departmentUsers.length > 0 && (
+                  <p className="text-xs text-amber-600 mt-2 text-center">
+                    Please select a {formData.category} team member to assign this ticket
+                  </p>
+                )}
+                {shouldShowPersonDropdown() && departmentUsers.length === 0 && formData.category && (
+                  <p className="text-xs text-amber-600 mt-2 text-center">
+                    No {formData.category} users available. Please contact an administrator.
                   </p>
                 )}
               </div>

@@ -1,3 +1,5 @@
+// frontend/src/components/NotificationBell.jsx
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock } from 'lucide-react';
@@ -12,6 +14,7 @@ const NotificationBell = () => {
   const [isSupported, setIsSupported] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [openTicketCount, setOpenTicketCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
@@ -94,7 +97,8 @@ const NotificationBell = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setNotificationCount(res.data.total || 0);
+      setNotificationCount(res.data.unreadCount || 0);
+      setOpenTicketCount(res.data.openTicketCount || 0);
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
@@ -163,7 +167,11 @@ const NotificationBell = () => {
     }
   };
 
-  const handleNotificationClick = (notification) => {
+  const handleNotificationClick = async (notification) => {
+    // Close dropdown first
+    setShowDropdown(false);
+    
+    // If it's a ticket notification, navigate to the ticket
     if (notification.ticketId) {
       const ticketId = typeof notification.ticketId === 'object' 
         ? notification.ticketId._id 
@@ -171,10 +179,10 @@ const NotificationBell = () => {
       
       // Mark as read if it's a notification
       if (notification._id && !notification._id.toString().startsWith('open_')) {
-        markAsRead(notification._id);
+        await markAsRead(notification._id);
       }
       
-      setShowDropdown(false);
+      // Navigate to ticket details
       navigate(`/tickets/${ticketId}`);
     }
   };
@@ -267,7 +275,14 @@ const NotificationBell = () => {
                 </span>
               )}
             </div>
-            
+            {notificationCount > 0 && (
+              <button
+                onClick={markAllAsRead}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Mark all read
+              </button>
+            )}
           </div>
           
           <div className="flex-1 overflow-y-auto">
@@ -321,7 +336,6 @@ const NotificationBell = () => {
                           </span>
                         </div>
                         
-                        {/* Show comment preview if available */}
                         {notification.type === 'ticket_commented' && lastComment && (
                           <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
                             <div className="flex items-center gap-1.5">
@@ -383,6 +397,9 @@ const NotificationBell = () => {
     );
   };
 
+  // Calculate total count (unread notifications + open tickets)
+  const totalCount = notificationCount + openTicketCount;
+
   return (
     <div className="relative inline-block">
       <button
@@ -399,9 +416,9 @@ const NotificationBell = () => {
           <Bell size={18} className="text-yellow-500 animate-pulse" />
         )}
         
-        {notificationCount > 0 && (
+        {totalCount > 0 && (
           <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-md">
-            {notificationCount > 99 ? '99+' : notificationCount}
+            {totalCount > 99 ? '99+' : totalCount}
           </span>
         )}
       </button>

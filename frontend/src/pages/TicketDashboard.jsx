@@ -113,7 +113,6 @@ const TicketDashboard = () => {
       const res = await axios.get(`${API_BASE_URL}/api/tickets`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('📊 Tickets fetched:', res.data);
       setTickets(res.data);
     } catch (error) {
       console.error('Error fetching tickets:', error);
@@ -162,7 +161,9 @@ const TicketDashboard = () => {
     return typeColors[type] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
-  // UPDATED: Simplified filtering - HR and Finance can see ALL their tickets
+  // ============================================
+  // FIXED: Filter tickets for HR and Finance - only show assigned to them
+  // ============================================
   const filteredTickets = tickets.filter(t => {
     // Status filter
     if (filter !== 'all' && t.status !== filter) return false;
@@ -171,17 +172,17 @@ const TicketDashboard = () => {
     if (filterType === 'internal' && !t.isInternal) return false;
     if (filterType === 'external' && t.isInternal) return false;
     
-    // For HR - show ALL HR-related tickets (backend already filters)
+    // For HR - ONLY show tickets assigned to this HR user
     if (isHR) {
-      // Backend already filters for HR, so just return true
-      return true;
+      return t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId;
     }
     
-    // For Finance - show ALL Finance-related tickets (backend already filters)
+    // For Finance - ONLY show tickets assigned to this Finance user
     if (isFinance) {
-      return true;
+      return t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId;
     }
     
+    // For all other roles, show all tickets (existing behavior)
     return true;
   });
 
@@ -194,6 +195,21 @@ const TicketDashboard = () => {
     external: tickets.filter(t => !t.isInternal).length,
     feasibility: tickets.filter(t => t.category === 'Production' && t.subcategory === 'Feasibility').length
   };
+
+  // Stats for HR and Finance - only count assigned tickets
+  const getAssignedStats = () => {
+    const assignedTickets = tickets.filter(t => 
+      t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId
+    );
+    return {
+      total: assignedTickets.length,
+      open: assignedTickets.filter(t => t.status === 'Open').length,
+      inProgress: assignedTickets.filter(t => t.status === 'In Progress').length,
+      resolved: assignedTickets.filter(t => t.status === 'Resolved').length,
+    };
+  };
+
+  const assignedStats = (isHR || isFinance) ? getAssignedStats() : stats;
 
   const getCategoryDisplay = (ticket) => {
     if (ticket.subItem) return ticket.subItem;
@@ -266,7 +282,9 @@ const TicketDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Total Tickets</p>
-              <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <p className="text-2xl font-bold text-gray-900">
+                {isHR || isFinance ? assignedStats.total : stats.total}
+              </p>
             </div>
             <Ticket size={32} className="text-blue-500" />
           </div>
@@ -276,7 +294,9 @@ const TicketDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Open</p>
-              <p className="text-2xl font-bold text-blue-600">{stats.open}</p>
+              <p className="text-2xl font-bold text-blue-600">
+                {isHR || isFinance ? assignedStats.open : stats.open}
+              </p>
             </div>
             <AlertCircle size={32} className="text-blue-500" />
           </div>
@@ -286,7 +306,9 @@ const TicketDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">In Progress</p>
-              <p className="text-2xl font-bold text-yellow-600">{stats.inProgress}</p>
+              <p className="text-2xl font-bold text-yellow-600">
+                {isHR || isFinance ? assignedStats.inProgress : stats.inProgress}
+              </p>
             </div>
             <Clock size={32} className="text-yellow-500" />
           </div>
@@ -296,7 +318,9 @@ const TicketDashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Resolved</p>
-              <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
+              <p className="text-2xl font-bold text-green-600">
+                {isHR || isFinance ? assignedStats.resolved : stats.resolved}
+              </p>
             </div>
             <CheckCircle size={32} className="text-green-500" />
           </div>
@@ -310,8 +334,9 @@ const TicketDashboard = () => {
                 <p className="text-sm text-gray-600">HR Related</p>
                 <p className="text-2xl font-bold text-pink-600">
                   {tickets.filter(t => 
-                    ['HR', 'Admin', 'Payroll'].includes(t.category) ||
-                    ['Employee Documents', 'Attendance & Leave', 'Employee Management'].includes(t.subcategory)
+                    (t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId) &&
+                    (['HR', 'Admin', 'Payroll'].includes(t.category) ||
+                    ['Employee Documents', 'Attendance & Leave', 'Employee Management'].includes(t.subcategory))
                   ).length}
                 </p>
               </div>
@@ -328,8 +353,9 @@ const TicketDashboard = () => {
                 <p className="text-sm text-gray-600">Finance Related</p>
                 <p className="text-2xl font-bold text-green-600">
                   {tickets.filter(t => 
-                    ['Finance', 'Payroll', 'Admin'].includes(t.category) ||
-                    ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'].includes(t.subcategory)
+                    (t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId) &&
+                    (['Finance', 'Payroll', 'Admin'].includes(t.category) ||
+                    ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'].includes(t.subcategory))
                   ).length}
                 </p>
               </div>
@@ -455,8 +481,8 @@ const TicketDashboard = () => {
                       <Ticket size={48} className="text-gray-300" />
                       <p className="font-medium">No tickets found</p>
                       <p className="text-sm text-gray-400">
-                        {isHR ? 'No HR-related tickets available' : 
-                         isFinance ? 'No Finance-related tickets available' :
+                        {isHR ? 'No HR tickets assigned to you' : 
+                         isFinance ? 'No Finance tickets assigned to you' :
                          filterType === 'internal' ? 'No internal tickets available' : 
                          filterType === 'external' ? 'No external tickets available' : 
                          'Create a new ticket to get started'}

@@ -1,6 +1,7 @@
 // frontend/src/components/Sidebar.jsx
 
 import React, { useState, useRef, useEffect } from 'react';
+import axios from 'axios';
 import {
   LayoutDashboard,
   Users,
@@ -35,6 +36,7 @@ import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
+import API_BASE_URL from '../config';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -46,6 +48,7 @@ const Sidebar = () => {
   // LOCAL STATES
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [openTicketCount, setOpenTicketCount] = useState(0);
 
   const menuRef = useRef(null);
 
@@ -65,6 +68,30 @@ const Sidebar = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
+  }, []);
+
+  // FETCH OPEN TICKET COUNT
+  useEffect(() => {
+    const fetchOpenTicketCount = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        const res = await axios.get(`${API_BASE_URL}/api/notifications/count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        setOpenTicketCount(res.data.openTicketCount || 0);
+      } catch (error) {
+        console.error('Error fetching open ticket count:', error);
+      }
+    };
+    
+    fetchOpenTicketCount();
+    
+    // Refresh count every 30 seconds
+    const interval = setInterval(fetchOpenTicketCount, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   // LOGOUT
@@ -210,6 +237,11 @@ const Sidebar = () => {
     return location.pathname.startsWith(path);
   };
 
+  // Helper to check if a menu item should show a badge
+  const shouldShowBadge = (item) => {
+    return item.label === 'Tickets' && openTicketCount > 0;
+  };
+
   return (
     <>
       {/* SIDEBAR */}
@@ -272,12 +304,13 @@ const Sidebar = () => {
         >
           {links.map((item) => {
             const active = isRouteActive(item.path);
+            const showBadge = shouldShowBadge(item);
 
             return (
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={`flex items-center gap-2.5 p-2 rounded-xl transition-all duration-200 group ${
+                className={`relative flex items-center gap-2.5 p-2 rounded-xl transition-all duration-200 group ${
                   active
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
                     : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
@@ -286,8 +319,20 @@ const Sidebar = () => {
               >
                 <span className="flex-shrink-0">{item.icon}</span>
                 {!isCollapsed && (
-                  <span className="text-[12px] font-semibold tracking-tight whitespace-nowrap">
-                    {item.label}
+                  <>
+                    <span className="text-[12px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                      {item.label}
+                    </span>
+                    {showBadge && (
+                      <span className="ml-auto bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                        {openTicketCount > 99 ? '99+' : openTicketCount}
+                      </span>
+                    )}
+                  </>
+                )}
+                {isCollapsed && showBadge && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
+                    {openTicketCount > 99 ? '99+' : openTicketCount}
                   </span>
                 )}
               </NavLink>

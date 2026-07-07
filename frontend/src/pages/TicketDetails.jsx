@@ -6,7 +6,7 @@ import {
   CheckCircle, XCircle, Clock, Image, X, AlertCircle, 
   Loader2, Eye, Download, UploadCloud, GitFork, Paperclip,
   File, FileText, FileArchive, FileSpreadsheet, FileVideo, FileAudio,
-  FileCode, FileJson
+  FileCode, FileJson, Tag, Layers, Building2, Briefcase
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -37,75 +37,32 @@ const TicketDetails = () => {
   const currentUserName = localStorage.getItem('userName');
 
   // ============================================
-  // FILE CONFIGURATION - EXTENDED SUPPORT
+  // FILE CONFIGURATION
   // ============================================
 
-  // Max file sizes
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-  const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+  const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-  // Allowed file extensions (primary validation)
   const ALLOWED_EXTENSIONS = [
-    // Images
     '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-    // Documents
     '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
-    // Archives
     '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
-    // Presentations
     '.ppt', '.pptx', '.odp',
-    // Video
     '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
-    // Audio
     '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
-    // Code/Config
     '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
     '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
     '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
     '.sh', '.bash', '.bat', '.ps1', '.cmd',
-    // Executables
-    '.exe',
-    // Python specific
-    '.pyc', '.pyo', '.pyd', '.whl'
-  ];
-
-  // Allowed MIME types (fallback validation)
-  const ALLOWED_MIME_TYPES = [
-    // Images
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp', 'image/svg+xml',
-    // Documents
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain', 'text/csv', 'text/x-csv', 'application/csv',
-    'application/zip', 'application/x-zip-compressed',
-    'application/x-rar-compressed', 'application/x-7z-compressed',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    // Video
-    'video/mp4', 'video/avi', 'video/x-msvideo', 'video/mkv', 'video/quicktime',
-    'video/x-ms-wmv', 'video/flv', 'video/webm',
-    // Audio
-    'audio/mpeg', 'audio/wav', 'audio/aac', 'audio/ogg', 'audio/flac',
-    // Code/Config
-    'application/json', 'application/xml', 'text/xml', 'text/yaml',
-    'text/javascript', 'application/javascript', 'text/css',
-    'text/x-python', 'text/x-java', 'text/x-c', 'text/x-c++',
-    'text/x-ruby', 'text/x-php', 'text/x-go', 'text/x-rust'
+    '.exe'
   ];
 
   const statusFlow = ['Open', 'In Progress', 'Resolved', 'Closed'];
   const currentStatusIndex = ticket ? statusFlow.indexOf(ticket.status) : -1;
 
-  // ============================================
-  // FILE HELPER FUNCTIONS
-  // ============================================
-
   const getFileExtension = (filename) => {
     if (!filename) return '';
-    const name = typeof filename === 'string' ? filename : String(filename);
+    const name = typeof filename === 'string' ? filename : (filename?.originalName || filename?.filename || filename?.name || '');
     const ext = name.split('.').pop()?.toLowerCase();
     return ext ? '.' + ext : '';
   };
@@ -117,76 +74,9 @@ const TicketDetails = () => {
     return imageExtensions.includes(getFileExtension(name));
   };
 
-  const isVideoFile = (filename) => {
-    const name = typeof filename === 'string' ? filename : (filename?.originalName || filename?.filename || filename?.name || '');
-    if (!name) return false;
-    const videoExtensions = ['.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg'];
-    return videoExtensions.includes(getFileExtension(name));
-  };
-
-  const isAudioFile = (filename) => {
-    const name = typeof filename === 'string' ? filename : (filename?.originalName || filename?.filename || filename?.name || '');
-    if (!name) return false;
-    const audioExtensions = ['.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma'];
-    return audioExtensions.includes(getFileExtension(name));
-  };
-
-  const isCodeFile = (file) => {
-    const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
-    if (!filename) return false;
-    
-    const codeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass', 
-                           '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
-                           '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
-                           '.sh', '.bash', '.bat', '.ps1', '.cmd'];
-    return codeExtensions.includes(getFileExtension(filename));
-  };
-
   const isAllowedFile = (file) => {
     const ext = getFileExtension(file.name);
-    if (ALLOWED_EXTENSIONS.includes(ext)) {
-      return true;
-    }
-    
-    if (ALLOWED_MIME_TYPES.includes(file.type)) {
-      return true;
-    }
-    
-    if (file.type.startsWith('text/')) {
-      return true;
-    }
-    
-    if (file.type === 'application/octet-stream' && ALLOWED_EXTENSIONS.includes(ext)) {
-      return true;
-    }
-    
-    return false;
-  };
-
-  const validateFile = (file) => {
-    if (!isAllowedFile(file)) {
-      const ext = getFileExtension(file.name);
-      const isAllowedExt = ALLOWED_EXTENSIONS.includes(ext);
-      
-      if (!isAllowedExt) {
-        toast.error(`File type "${file.name}" is not supported.`);
-        return false;
-      }
-      
-      console.log(`⚠️ File "${file.name}" has allowed extension but unrecognized MIME type: ${file.type} - allowing anyway`);
-    }
-
-    const isImage = isImageFile(file.name);
-    const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
-    
-    if (file.size > maxSize) {
-      const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
-      const maxSizeInMB = isImage ? '5MB' : '50MB';
-      toast.error(`${file.name} (${sizeInMB}MB) exceeds the ${maxSizeInMB} size limit.`);
-      return false;
-    }
-
-    return true;
+    return ALLOWED_EXTENSIONS.includes(ext);
   };
 
   const getFileIcon = (file) => {
@@ -262,10 +152,6 @@ const TicketDetails = () => {
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-  // ============================================
-  // SECURE DOWNLOAD HANDLER
-  // ============================================
-
   const handleFileDownload = (file) => {
     const token = localStorage.getItem('token');
     const filename = file.filename || file.url?.split('/').pop();
@@ -307,15 +193,9 @@ const TicketDetails = () => {
       console.error('Download error:', error);
       toast.dismiss('download');
       toast.error('Failed to download file');
-      
-      // Fallback: open in new tab
       window.open(downloadUrl, '_blank');
     });
   };
-
-  // ============================================
-  // NOTIFICATION & SOCKET FUNCTIONS
-  // ============================================
 
   const showCommentNotification = (ticketData, commentAuthor, fileCount = 0, imageCount = 0) => {
     if (commentAuthor === currentUserName || commentAuthor === currentUserId) return;
@@ -346,10 +226,6 @@ const TicketDetails = () => {
       });
     }
   };
-
-  // ============================================
-  // API CALLS
-  // ============================================
 
   useEffect(() => {
     fetchTicketDetails();
@@ -451,9 +327,7 @@ const TicketDetails = () => {
   };
 
   const fetchDevelopers = async () => {
-    // Skip fetching developers for HR and Finance
     if (userRole === 'HR' || userRole === 'Finance') return;
-    
     if (userRole !== 'Project Manager' && userRole !== 'Admin' && userRole !== 'Team Lead') return;
     
     try {
@@ -466,10 +340,6 @@ const TicketDetails = () => {
       console.error('Error fetching developers:', error);
     }
   };
-
-  // ============================================
-  // TICKET ACTION FUNCTIONS
-  // ============================================
 
   const updateStatus = async (newStatus) => {
     setUpdating(true);
@@ -531,16 +401,12 @@ const TicketDetails = () => {
     }
   };
 
-  // ============================================
-  // FILE PROCESSING FUNCTIONS
-  // ============================================
-
   const processFiles = (files) => {
     const validFiles = [];
     const validPreviews = [];
 
     files.forEach(file => {
-      if (validateFile(file)) {
+      if (isAllowedFile(file)) {
         validFiles.push(file);
         
         let previewUrl = null;
@@ -556,25 +422,15 @@ const TicketDetails = () => {
           preview: previewUrl,
           id: Date.now() + Math.random().toString(36).substr(2, 9)
         });
+      } else {
+        toast.error(`File type "${file.name}" is not supported.`);
       }
     });
 
     if (validFiles.length > 0) {
       setSelectedFiles(prev => [...prev, ...validFiles]);
       setFilePreviews(prev => [...prev, ...validPreviews]);
-      
-      const imageCount = validFiles.filter(f => isImageFile(f.name)).length;
-      const docCount = validFiles.filter(f => !isImageFile(f.name)).length;
-      
-      let message = `${validFiles.length} file(s) added`;
-      if (imageCount > 0 && docCount > 0) {
-        message = `${imageCount} image(s) and ${docCount} document(s) added`;
-      } else if (imageCount > 0) {
-        message = `${imageCount} image(s) added`;
-      } else {
-        message = `${docCount} document(s) added`;
-      }
-      toast.success(message);
+      toast.success(`${validFiles.length} file(s) added`);
     }
   };
 
@@ -651,10 +507,6 @@ const TicketDetails = () => {
     return uploadedUrls;
   };
 
-  // ============================================
-  // COMMENT FUNCTION
-  // ============================================
-
   const addComment = async (e) => {
     if (e) e.preventDefault();
     if (!newComment.trim() && selectedFiles.length === 0) {
@@ -699,10 +551,6 @@ const TicketDetails = () => {
     }
   };
 
-  // ============================================
-  // UI HELPER FUNCTIONS
-  // ============================================
-
   const getStatusColor = (status) => {
     switch(status) {
       case 'Open': return 'bg-blue-100 text-blue-700';
@@ -721,6 +569,20 @@ const TicketDetails = () => {
       case 'Low': return 'bg-green-100 text-green-700';
       default: return 'bg-gray-100 text-gray-700';
     }
+  };
+
+  const getCategoryColor = (category) => {
+    const colors = {
+      'Finance': 'bg-green-100 text-green-700 border-green-200',
+      'HR': 'bg-pink-100 text-pink-700 border-pink-200',
+      'Payroll': 'bg-blue-100 text-blue-700 border-blue-200',
+      'Sales': 'bg-orange-100 text-orange-700 border-orange-200',
+      'Production': 'bg-red-100 text-red-700 border-red-200',
+      'Admin': 'bg-gray-100 text-gray-700 border-gray-200',
+      'IT': 'bg-cyan-100 text-cyan-700 border-cyan-200',
+      'Development': 'bg-violet-100 text-violet-700 border-violet-200'
+    };
+    return colors[category] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
   const isTicketCreator = ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId);
@@ -752,19 +614,10 @@ const TicketDetails = () => {
     }
   };
 
-  // ============================================
-  // CHECK IF USER CAN ASSIGN DEVELOPERS
-  // ============================================
-  
-  // HR and Finance users should NOT see the assignment section
   const canAssignDeveloper = 
     userRole !== 'HR' && 
     userRole !== 'Finance' && 
     (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead');
-
-  // ============================================
-  // RENDER
-  // ============================================
 
   if (loading) {
     return (
@@ -779,7 +632,6 @@ const TicketDetails = () => {
 
   if (!ticket) return null;
 
-  // Check if ticket has attachments from creation
   const hasTicketAttachments = ticket.files && ticket.files.length > 0;
 
   return (
@@ -856,7 +708,68 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Ticket Attachments Section - Display attachments from ticket creation */}
+      {/* Ticket Category & Subcategory Info Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Layers size={16} className="text-blue-600" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</span>
+          </div>
+          {ticket.category ? (
+            <div className="flex items-center gap-2">
+              <span className={`inline-flex px-3 py-1.5 rounded-lg text-sm font-semibold border ${getCategoryColor(ticket.category)}`}>
+                {ticket.category}
+              </span>
+              {ticket.subcategory && (
+                <>
+                  <span className="text-gray-400">→</span>
+                  <span className="inline-flex px-3 py-1.5 rounded-lg text-sm font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                    {ticket.subcategory}
+                  </span>
+                </>
+              )}
+              {ticket.subItem && (
+                <>
+                  <span className="text-gray-400">→</span>
+                  <span className="inline-flex px-3 py-1.5 rounded-lg text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    {ticket.subItem}
+                  </span>
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="text-sm text-gray-400 italic">No category specified</span>
+          )}
+        </div>
+
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Briefcase size={16} className="text-blue-600" />
+            <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Project & Feed</span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {ticket.projectId ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <Building2 size={14} />
+                {ticket.projectId.name || ticket.projectId.projectCustomId}
+              </span>
+            ) : (
+              <span className="text-sm text-gray-400 italic">No project</span>
+            )}
+            {ticket.feedId && (
+              <>
+                <span className="text-gray-400">/</span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Tag size={14} />
+                  {ticket.feedId.name}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Ticket Attachments Section */}
       {hasTicketAttachments && (
         <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <h3 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
@@ -1030,7 +943,6 @@ const TicketDetails = () => {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            {/* Drag and Drop Hover Overlay Backdrop */}
             {isDragging && (
               <div className="absolute inset-0 bg-blue-600/10 backdrop-blur-[2px] border-2 border-dashed border-blue-500 z-50 flex flex-col items-center justify-center transition-all pointer-events-none">
                 <div className="bg-white p-4 rounded-full shadow-lg flex items-center justify-center animate-bounce mb-2">
@@ -1081,7 +993,6 @@ const TicketDetails = () => {
                               </p>
                             )}
                             
-                            {/* Images */}
                             {hasImages && (
                               <div className="mt-2 flex flex-wrap gap-2">
                                 {comment.images.map((img, imgIdx) => (
@@ -1103,50 +1014,40 @@ const TicketDetails = () => {
                               </div>
                             )}
                             
-                            {/* Files - Now includes code files too */}
                             {hasFiles && (
                               <div className="mt-2 space-y-2">
-                                {comment.files.map((file, fileIdx) => {
-                                  const isCode = isCodeFile(file);
-                                  const isVideo = isVideoFile(file);
-                                  const isAudio = isAudioFile(file);
-                                  
-                                  return (
-                                    <div key={fileIdx} className="flex items-center gap-3 p-2 bg-white/10 rounded-lg border border-gray-200/20 hover:bg-white/20 transition-all group">
-                                      <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
-                                        {file.type === 'image' ? (
-                                          <img 
-                                            src={file.url} 
-                                            alt={file.originalName || 'Attachment'}
-                                            className="w-full h-full object-cover rounded-lg"
-                                          />
-                                        ) : (
-                                          getFileIcon(file)
-                                        )}
-                                      </div>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-semibold text-gray-700 truncate">
-                                          {file.originalName || file.filename}
-                                        </p>
-                                        <p className="text-[8px] text-gray-400 flex items-center gap-2">
-                                          <span>{formatFileSize(file.size)}</span>
-                                          <span>•</span>
-                                          <span>{getFileTypeLabel(file)}</span>
-                                          {isCode && <span className="text-purple-500">• Code</span>}
-                                          {isVideo && <span className="text-indigo-500">• Video</span>}
-                                          {isAudio && <span className="text-pink-500">• Audio</span>}
-                                        </p>
-                                      </div>
-                                      <button
-                                        onClick={() => handleFileDownload(file)}
-                                        className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
-                                        title="Download file"
-                                      >
-                                        <Download size={14} />
-                                      </button>
+                                {comment.files.map((file, fileIdx) => (
+                                  <div key={fileIdx} className="flex items-center gap-3 p-2 bg-white/10 rounded-lg border border-gray-200/20 hover:bg-white/20 transition-all group">
+                                    <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                                      {file.type === 'image' ? (
+                                        <img 
+                                          src={file.url} 
+                                          alt={file.originalName || 'Attachment'}
+                                          className="w-full h-full object-cover rounded-lg"
+                                        />
+                                      ) : (
+                                        getFileIcon(file)
+                                      )}
                                     </div>
-                                  );
-                                })}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="text-xs font-semibold text-gray-700 truncate">
+                                        {file.originalName || file.filename}
+                                      </p>
+                                      <p className="text-[8px] text-gray-400 flex items-center gap-2">
+                                        <span>{formatFileSize(file.size)}</span>
+                                        <span>•</span>
+                                        <span>{getFileTypeLabel(file)}</span>
+                                      </p>
+                                    </div>
+                                    <button
+                                      onClick={() => handleFileDownload(file)}
+                                      className="p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                                      title="Download file"
+                                    >
+                                      <Download size={14} />
+                                    </button>
+                                  </div>
+                                ))}
                               </div>
                             )}
                           </div>
@@ -1171,7 +1072,6 @@ const TicketDetails = () => {
             
             {/* Form Box */}
             <div className="border-t border-gray-200 bg-white p-4">
-              {/* File Previews */}
               {filePreviews.length > 0 && (
                 <div className="mb-3 flex flex-wrap gap-2 p-2 bg-gray-50 rounded-lg border border-gray-200">
                   {filePreviews.map((preview, idx) => (
@@ -1283,9 +1183,28 @@ const TicketDetails = () => {
                 </div>
               </div>
               
-              {/* ============================================
-                  ASSIGNED TO SECTION - HIDDEN FOR HR AND FINANCE
-                  ============================================ */}
+              {/* Category & Subcategory in Sidebar */}
+              <div>
+                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Category</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {ticket.category ? (
+                    <>
+                      <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${getCategoryColor(ticket.category)}`}>
+                        {ticket.category}
+                      </span>
+                      {ticket.subcategory && (
+                        <span className="inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                          {ticket.subcategory}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400 italic">Not specified</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Assigned To Section */}
               {(userRole !== 'HR' && userRole !== 'Finance') && (
                 <div>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned To</p>
@@ -1337,9 +1256,7 @@ const TicketDetails = () => {
             </div>
           </div>
           
-          {/* ============================================
-              ASSIGNMENT MANAGEMENT - HIDDEN FOR HR AND FINANCE
-              ============================================ */}
+          {/* Assignment Management */}
           {canAssignDeveloper && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
@@ -1396,7 +1313,6 @@ const TicketDetails = () => {
             <div className="absolute -top-12 right-0 flex items-center gap-3">
               <button
                 onClick={() => {
-                  // Download the image using the secure handler
                   const file = { 
                     filename: showImageViewer.split('/').pop(),
                     originalName: showImageViewer.split('/').pop()

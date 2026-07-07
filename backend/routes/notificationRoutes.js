@@ -5,6 +5,7 @@ const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 
 // GET notification count
+
 router.get('/count', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -23,6 +24,12 @@ router.get('/count', protect, async (req, res) => {
       // Client sees their own open tickets
       openTicketCount = await Ticket.countDocuments({
         createdBy: req.user._id,
+        status: { $in: ['Open', 'In Progress'] }
+      });
+    } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
+      // HR and Finance see tickets assigned to them
+      openTicketCount = await Ticket.countDocuments({
+        assignedTo: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
       });
     } else {

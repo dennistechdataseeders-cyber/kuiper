@@ -378,7 +378,19 @@ router.get('/download/:filename', protect, async (req, res) => {
     }
   }
 });
-
+// Add to ticketRoutes.js - GET /department-users/:role
+router.get('/department-users/:role', protect, async (req, res) => {
+  try {
+    const { role } = req.params;
+    const users = await User.find({ role: role })
+      .select('name email _id role')
+      .sort({ name: 1 });
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching department users:', error);
+    res.status(500).json({ error: 'Failed to fetch department users' });
+  }
+});
 // ============================================
 // TICKET CRUD ROUTES
 // ============================================

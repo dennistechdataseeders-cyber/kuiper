@@ -46,10 +46,14 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // ============================================
 
 // GET /users - Fetch all users
-router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager', 'Sales','Team Lead'), async (req, res) => {
+router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager', 'Sales', 'Team Lead', 'HR', 'Finance','Developer'), async (req, res) => {
   try {
     let filter = {};
-    if (req.user.role === 'Sales Manager') {
+    
+    // If role query param is provided, filter by it
+    if (req.query.role) {
+      filter = { role: req.query.role };
+    } else if (req.user.role === 'Sales Manager') {
       filter = { role: 'Sales' };
     }
     
@@ -70,6 +74,36 @@ router.get('/users', authorize('Admin', 'Project Manager', 'Sales Manager', 'Sal
   } catch (err) {
     console.error("Error in /users route:", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// GET USERS BY ROLE - FOR TICKET ASSIGNMENT
+// ============================================
+// ============================================
+// GET USERS BY ROLE - FOR TICKET ASSIGNMENT
+// ============================================
+router.get('/users/by-role/:role', authorize('Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance'), async (req, res) => {
+  try {
+    const { role } = req.params;
+    
+    // Validate role
+    const validRoles = ['Admin', 'HR', 'Finance', 'Sales', 'Project Manager', 'Developer', 'Team Lead', 'IT', 'Client'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role specified' });
+    }
+    
+    // Find users with the specified role
+    const users = await User.find({ role: role })
+      .select('name email _id role githubUsername githubLinked')
+      .sort({ name: 1 });
+    
+    console.log(`👥 Found ${users.length} users with role: ${role}`);
+    
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users by role:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
 
@@ -1289,7 +1323,7 @@ router.get('/client/projects', authorize('Client'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-// Add this after the existing routes
+
 // ============================================
 // TEAM LEAD ASSIGNMENT ROUTES
 // ============================================
@@ -1363,6 +1397,7 @@ router.get('/projects/teamlead/:teamLeadId', authorize('Admin', 'Project Manager
     res.status(500).json({ error: err.message });
   }
 });
+
 // GET /users/teamleads - Get all Team Leads
 router.get('/users/teamleads', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
@@ -1373,6 +1408,7 @@ router.get('/users/teamleads', authorize('Admin', 'Project Manager'), async (req
     res.status(500).json({ error: err.message });
   }
 });
+
 // GET /projects/teamlead - Get projects for Team Lead (alternative endpoint)
 router.get('/projects/teamlead', authorize('Team Lead'), async (req, res) => {
   try {
@@ -1397,7 +1433,10 @@ router.get('/projects/teamlead', authorize('Team Lead'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+// ============================================
 // COUNTRY MAP
+// ============================================
 const COUNTRY_MAP = {
   "Afghanistan": "AF", "Albania": "AL", "Algeria": "DZ", 
   "Australia": "AU", "Brazil": "BR", "Canada": "CA", 

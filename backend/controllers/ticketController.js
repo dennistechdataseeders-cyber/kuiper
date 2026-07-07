@@ -425,6 +425,8 @@ function isInternalTicket(creatorRole) {
 // CREATE TICKET
 // ============================================
 
+// backend/controllers/ticketController.js
+
 exports.createTicket = async (req, res) => {
   try {
     const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType, assignedTo, files } = req.body;
@@ -453,18 +455,23 @@ exports.createTicket = async (req, res) => {
     const finalProjectId = projectId || null;
     const finalFeedId = feedId || null;
     
+    // ============================================
+    // FIX: Prioritize manually selected assignee
+    // ============================================
     let finalAssignedTo = null;
     
+    // If assignedTo is explicitly provided, use it
     if (assignedTo) {
-      const developer = await User.findOne({ _id: assignedTo, role: 'Developer' });
-      if (developer) {
-        finalAssignedTo = developer._id;
-        console.log(`   ✅ Assigned developer set: ${developer.name} (${developer._id})`);
+      const user = await User.findById(assignedTo);
+      if (user) {
+        finalAssignedTo = user._id;
+        console.log(`   ✅ Using manually selected assignee: ${user.name} (${user._id})`);
       } else {
-        console.log(`   ⚠️ Assigned developer not found or not a Developer role: ${assignedTo}`);
+        console.log(`   ⚠️ Manually selected assignee not found: ${assignedTo}`);
       }
     }
     
+    // If no manual assignment, try feed assignment
     if (!finalAssignedTo && feedId) {
       const feed = await Feed.findById(feedId).populate('assignedDevelopers', '_id');
       if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
@@ -473,9 +480,25 @@ exports.createTicket = async (req, res) => {
       }
     }
     
+    // Auto-assign to self if developer
     if (!finalAssignedTo && userRole === 'Developer') {
       finalAssignedTo = req.user.id;
       console.log(`   Auto-assigned ticket to creator (Developer): ${req.user.id}`);
+    }
+    
+    // ============================================
+    // ONLY use rule-based assignment if no manual assignment
+    // ============================================
+    let assigneeInfo = null;
+    if (!finalAssignedTo) {
+      assigneeInfo = await getAssigneeEmailFromRules(
+        category || '',
+        subcategory || '',
+        subItem || ''
+      );
+      console.log(`   Using rule-based assignment: ${assigneeInfo?.email || 'none'}`);
+    } else {
+      console.log(`   Using manual assignment, skipping rules`);
     }
     
     const ticket = new Ticket({
@@ -493,6 +516,11 @@ exports.createTicket = async (req, res) => {
       ticketType: ticketType || '',
       files: files || [] 
     });
+    
+    // Only set assigneeEmail if using rule-based assignment
+    if (assigneeInfo) {
+      ticket.assigneeEmail = assigneeInfo.email;
+    }
     
     await ticket.save();
     
@@ -518,17 +546,8 @@ exports.createTicket = async (req, res) => {
     const frontendUrl = process.env.FRONTEND_URL || 'http://192.168.1.105:5173';
     const stakeholders = await getTicketStakeholders(ticket, creatorUser);
     
-    const assigneeInfo = await getAssigneeEmailFromRules(
-      ticket.category || '',
-      ticket.subcategory || '',
-      ticket.subItem || ''
-    );
-    
-    ticket.assigneeEmail = assigneeInfo.email;
-    await ticket.save();
-    
-    const ruleAssigneeExists = stakeholders.some(s => s.email === assigneeInfo.email);
-    if (!ruleAssigneeExists) {
+    // If using rule-based assignment, add the rule assignee to stakeholders
+    if (assigneeInfo && !stakeholders.some(s => s.email === assigneeInfo.email)) {
       stakeholders.push({
         name: assigneeInfo.name,
         email: assigneeInfo.email,
@@ -537,7 +556,7 @@ exports.createTicket = async (req, res) => {
       });
     }
     
-    console.log(`📧 Ticket ${ticket.ticketNumber} assigned to: ${assigneeInfo.email} (Rule: ${assigneeInfo.ruleId || 'Default'})`);
+    console.log(`📧 Ticket ${ticket.ticketNumber} assigned to: ${finalAssignedTo ? 'Manual assignee' : assigneeInfo?.email || 'Unassigned'}`);
     
     const notificationMessage = `New ticket created: ${ticket.title} (${ticket.ticketNumber})`;
     
