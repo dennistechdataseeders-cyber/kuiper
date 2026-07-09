@@ -23,6 +23,7 @@ const TicketDetails = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const [developers, setDevelopers] = useState([]);
   const [assigning, setAssigning] = useState(false);
   const [updating, setUpdating] = useState(false);
@@ -32,6 +33,7 @@ const TicketDetails = () => {
   const socketRef = useRef();
   const commentsEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const textareaRef = useRef(null);
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
   const currentUserName = localStorage.getItem('userName');
@@ -45,7 +47,7 @@ const TicketDetails = () => {
 
   const ALLOWED_EXTENSIONS = [
     '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.tsv', '.rtf', '.odt', '.ods',
     '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
     '.ppt', '.pptx', '.odp',
     '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
@@ -90,7 +92,7 @@ const TicketDetails = () => {
     }
     if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
     if (['doc', 'docx', 'odt'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
-    if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
+    if (['xls', 'xlsx', 'csv', 'tsv', 'ods'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
     if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
     if (['txt', 'json', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf'].includes(ext)) {
       return <FileCode size={16} className="text-slate-600" />;
@@ -125,7 +127,7 @@ const TicketDetails = () => {
       'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 
       'webp': 'Image', 'bmp': 'Image', 'svg': 'Image', 'ico': 'Icon',
       'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word', 'odt': 'Word',
-      'xls': 'Excel', 'xlsx': 'Excel', 'csv': 'CSV', 'ods': 'Excel',
+      'xls': 'Excel', 'xlsx': 'Excel', 'csv': 'CSV', 'tsv': 'TSV', 'ods': 'Excel',
       'txt': 'Text', 'rtf': 'Rich Text',
       'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z', 'tar': 'TAR', 'gz': 'GZ', 'bz2': 'BZ2',
       'json': 'JSON', 'xml': 'XML', 'yaml': 'YAML', 'yml': 'YAML',
@@ -468,60 +470,86 @@ const TicketDetails = () => {
     });
   };
 
-  const uploadFiles = async () => {
-    if (selectedFiles.length === 0) return [];
+  // OPTIMIZED: Upload files with concurrency (max 3 at a time)
+  const uploadFilesWithConcurrency = async (files) => {
+    if (files.length === 0) return [];
     
     const uploadedUrls = [];
-    setUploadingFiles(true);
-
     const token = localStorage.getItem('token');
-
-    for (const file of selectedFiles) {
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
+    const concurrencyLimit = 3;
+    let completed = 0;
+    
+    setUploadingFiles(true);
+    
+    return new Promise((resolve) => {
+      const uploadNext = (index) => {
+        if (index >= files.length) {
+          if (completed === files.length) {
+            setUploadingFiles(false);
+            resolve(uploadedUrls);
+          }
+          return;
+        }
+        
+        const file = files[index];
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
           headers: { 
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }
+        })
+        .then(response => {
+          if (response.data.success) {
+            uploadedUrls.push({
+              url: response.data.url,
+              filename: response.data.filename,
+              originalName: response.data.originalName,
+              size: response.data.size,
+              type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
+            });
+          }
+        })
+        .catch(error => {
+          console.error(`File upload failed for ${file.name}:`, error);
+          toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+        })
+        .finally(() => {
+          completed++;
+          // Start the next upload in the queue
+          uploadNext(concurrencyLimit + index - 1);
         });
-        
-        if (response.data.success) {
-          uploadedUrls.push({
-            url: response.data.url,
-            filename: response.data.filename,
-            originalName: response.data.originalName,
-            size: response.data.size,
-            type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
-          });
-        }
-      } catch (error) {
-        console.error('File upload failed:', error);
-        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+      };
+      
+      // Start the first batch of uploads
+      for (let i = 0; i < Math.min(concurrencyLimit, files.length); i++) {
+        uploadNext(i);
       }
-    }
-
-    setUploadingFiles(false);
-    return uploadedUrls;
+    });
   };
 
+  // OPTIMIZED: Debounced comment submission
   const addComment = async (e) => {
     if (e) e.preventDefault();
+    
+    // Prevent multiple submissions
+    if (isSending) return;
+    
     if (!newComment.trim() && selectedFiles.length === 0) {
       toast.error('Please enter a comment or attach a file');
       return;
     }
+    
+    setIsSending(true);
     
     try {
       const token = localStorage.getItem('token');
       let uploadedFiles = [];
       
       if (selectedFiles.length > 0) {
-        setUploadingFiles(true);
-        uploadedFiles = await uploadFiles();
-        setUploadingFiles(false);
+        uploadedFiles = await uploadFilesWithConcurrency(selectedFiles);
       }
       
       const payload = {
@@ -539,6 +567,11 @@ const TicketDetails = () => {
       setSelectedFiles([]);
       setFilePreviews([]);
       
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      
       if (uploadedFiles.length > 0) {
         toast.success(`Comment added with ${uploadedFiles.length} attachment(s)`);
       } else {
@@ -547,7 +580,8 @@ const TicketDetails = () => {
     } catch (error) {
       console.error('Error adding comment:', error);
       toast.error(error.response?.data?.error || 'Failed to add comment');
-      setUploadingFiles(false);
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -619,6 +653,24 @@ const TicketDetails = () => {
     userRole !== 'Finance' && 
     (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead');
 
+  const handleTextareaKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      if ((newComment.trim() || selectedFiles.length > 0) && !isSending) {
+        addComment();
+      }
+    }
+  };
+
+  // Auto-resize textarea
+  const handleTextareaChange = (e) => {
+    setNewComment(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px';
+    }
+  };
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-gray-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -668,7 +720,7 @@ const TicketDetails = () => {
               )}
               {hasTicketAttachments && (
                 <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-md bg-blue-100 text-blue-700">
-                  📎 {ticket.files.length} attachment(s)
+                   {ticket.files.length} attachment(s)
                 </span>
               )}
             </div>
@@ -1107,17 +1159,14 @@ const TicketDetails = () => {
               
               <div className="flex items-center gap-2 w-full bg-gray-50 border border-gray-300 rounded-lg p-1 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
                 <textarea
+                  ref={textareaRef}
                   value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
+                  onChange={handleTextareaChange}
+                  onKeyDown={handleTextareaKeyDown}
                   placeholder="Write your message..."
                   className="flex-1 bg-transparent px-3 py-2 text-sm text-gray-700 outline-none resize-none self-center min-h-[38px] max-h-[120px]"
                   rows={1}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      if (newComment.trim() || selectedFiles.length > 0) addComment();
-                    }
-                  }}
+                  disabled={isSending}
                 />
                 
                 <div className="flex items-center self-center h-full px-1 gap-1">
@@ -1131,7 +1180,7 @@ const TicketDetails = () => {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current.click()}
-                    disabled={uploadingFiles}
+                    disabled={uploadingFiles || isSending}
                     className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 rounded-md transition-colors flex items-center justify-center disabled:opacity-50"
                     title="Attach files (images up to 5MB, files up to 50MB)"
                   >
@@ -1142,11 +1191,11 @@ const TicketDetails = () => {
                 <button
                   type="button"
                   onClick={() => addComment()}
-                  disabled={(!newComment.trim() && selectedFiles.length === 0) || uploadingFiles}
+                  disabled={(!newComment.trim() && selectedFiles.length === 0) || uploadingFiles || isSending}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 text-white rounded-md transition-all flex items-center gap-1.5 font-medium text-sm shadow-sm h-[36px] self-center disabled:shadow-none"
                 >
-                  {uploadingFiles ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
-                  <span>Send</span>
+                  {isSending ? <Loader2 size={16} className="animate-spin" /> : <Send size={15} />}
+                  <span>{isSending ? 'Sending...' : 'Send'}</span>
                 </button>
               </div>
               
@@ -1204,8 +1253,8 @@ const TicketDetails = () => {
                 </div>
               </div>
 
-              {/* Assigned To Section */}
-              {(userRole !== 'HR' && userRole !== 'Finance') && (
+              {/* Assigned To Section - Hidden for Clients */}
+              {userRole !== 'Client' && (
                 <div>
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned To</p>
                   <div className="mt-1.5">
@@ -1256,8 +1305,8 @@ const TicketDetails = () => {
             </div>
           </div>
           
-          {/* Assignment Management */}
-          {canAssignDeveloper && (
+          {/* Assignment Management - Hidden for Clients */}
+          {userRole !== 'Client' && canAssignDeveloper && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2 text-sm uppercase tracking-wider">
                 <Users size={16} className="text-gray-500" /> Assignment Management

@@ -208,7 +208,7 @@ const Sidebar = () => {
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      // { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
     HR: [

@@ -207,7 +207,7 @@ const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
 const ALLOWED_EXTENSIONS = [
   '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.tsv', '.rtf', '.odt', '.ods',
   '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
   '.ppt', '.pptx', '.odp',
   '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
@@ -243,7 +243,7 @@ const getFileIcon = (file) => {
   }
   if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
   if (['doc', 'docx'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
-  if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
+  if (['xls', 'xlsx', 'csv', 'tsv'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
   if (['zip', 'rar', '7z'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
   if (['mp4', 'avi', 'mkv'].includes(ext)) return <FileVideo size={16} className="text-indigo-500" />;
   if (['mp3', 'wav', 'aac'].includes(ext)) return <FileAudio size={16} className="text-pink-500" />;
@@ -496,8 +496,6 @@ const CreateTicket = () => {
       }
 
     } catch (error) {
-      console.error('❌ Error fetching department users:', error);
-      toast.error('Failed to load department users');
       setDepartmentUsers([]);
     } finally {
       setLoadingDepartmentUsers(false);
@@ -525,7 +523,14 @@ const CreateTicket = () => {
   const getSubcategories = () => {
     if (!formData.category) return [];
     const categories = getAvailableCategories();
-    return Object.keys(categories[formData.category]?.subcategories || {});
+    const subcategories = Object.keys(categories[formData.category]?.subcategories || {});
+    
+    // If client, filter out Feasibility and Others
+    if (isClient && formData.category === 'Production') {
+      return subcategories.filter(sub => sub !== 'Feasibility' && sub !== 'Others');
+    }
+    
+    return subcategories;
   };
 
   const getSubItems = () => {
@@ -844,20 +849,7 @@ const CreateTicket = () => {
             </div>
 
             <div className="p-8 space-y-8">
-              {isClient && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-                  <div className="p-2 bg-blue-200 rounded-lg">
-                    <Globe size={16} className="text-blue-700" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-blue-800">Client Ticket Mode</p>
-                    <p className="text-xs text-blue-700 mt-0.5">
-                      As a Client, you can only create <span className="font-medium">Production</span> related tickets.
-                      Your tickets will be sent to the internal team for resolution.
-                    </p>
-                  </div>
-                </div>
-              )}
+              
 
               {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
@@ -936,9 +928,7 @@ const CreateTicket = () => {
                   <Layers size={18} className="text-blue-600" />
                   <label className="text-sm font-semibold text-slate-700">
                     Category & Subcategory <span className="text-red-500">*</span>
-                    {isClient && (
-                      <span className="text-xs text-blue-600 font-normal ml-2">(Production Only)</span>
-                    )}
+                   
                   </label>
                 </div>
                 

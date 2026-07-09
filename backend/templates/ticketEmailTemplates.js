@@ -8,8 +8,6 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
     year: 'numeric'
   });
 
-  // Filter out POC from team display for internal emails
-  const internalTeam = recipientsList.filter(r => r.type !== 'poc');
   const hasFeed = feedName && feedName !== 'null' && feedName !== 'undefined';
   // ✅ Use the passed projectName
   const displayProjectName = projectName || 'Unknown Project';
@@ -108,23 +106,6 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
               </div>
             </td>
           </tr>
-
-          ${internalTeam.length > 0 ? `
-          <tr>
-            <td style="padding:0 40px 36px 40px;">
-              <div style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.08em; margin-bottom:12px;">Assigned Team</div>
-              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; border-collapse: separate;">
-                ${internalTeam.map((r, idx) => `
-                  <tr>
-                    <td style="padding:14px 20px; ${idx < internalTeam.length - 1 ? 'border-bottom:1px solid #e2e8f0;' : ''} font-size:14px; font-weight:700; color:#0f172a;">
-                      ${r.name}
-                    </td>
-                  </tr>
-                `).join('')}
-              </table>
-            </td>
-          </tr>
-          ` : ''}
 
           <tr>
             <td style="padding:0 40px 32px 40px; text-align:center;">

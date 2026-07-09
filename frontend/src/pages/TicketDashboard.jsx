@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck } from 'lucide-react';
+import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
@@ -13,6 +13,7 @@ const TicketDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
@@ -52,7 +53,7 @@ const TicketDashboard = () => {
         t._id === updatedTicket._id ? updatedTicket : t
       ));
       
-      toast.info(`Ticket ${updatedTicket.ticketNumber} status updated to ${updatedTicket.status}`);
+      toast.info(`Ticket ${formatTicketNumber(updatedTicket.ticketNumber)} status updated to ${updatedTicket.status}`);
       
       if (oldTicket && oldTicket.status !== updatedTicket.status) {
         const shouldNotify = 
@@ -88,7 +89,7 @@ const TicketDashboard = () => {
           t._id === updatedTicket._id ? updatedTicket : t
         ));
         
-        toast.success(`New comment from ${lastComment.userName} on ticket ${updatedTicket.ticketNumber}`);
+        toast.success(`New comment from ${lastComment.userName} on ticket ${formatTicketNumber(updatedTicket.ticketNumber)}`);
         
         const shouldNotify = 
           updatedTicket.createdBy?._id === currentUserId ||
@@ -106,6 +107,14 @@ const TicketDashboard = () => {
       socket.disconnect();
     };
   }, []);
+
+  // Format ticket number to 4 digits (e.g., 1 -> 0001, 16 -> 0016)
+  const formatTicketNumber = (number) => {
+    if (!number) return '0000';
+    const num = parseInt(number);
+    if (isNaN(num)) return String(number);
+    return String(num).padStart(4, '0');
+  };
 
   const fetchTickets = async () => {
     try {
@@ -162,7 +171,7 @@ const TicketDashboard = () => {
   };
 
   // ============================================
-  // FIXED: Filter tickets for HR and Finance - only show assigned to them
+  // FILTER TICKETS WITH SEARCH
   // ============================================
   const filteredTickets = tickets.filter(t => {
     // Status filter
@@ -174,15 +183,43 @@ const TicketDashboard = () => {
     
     // For HR - ONLY show tickets assigned to this HR user
     if (isHR) {
-      return t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId;
+      if (t.assignedTo?._id !== currentUserId && t.assignedTo !== currentUserId) return false;
     }
     
     // For Finance - ONLY show tickets assigned to this Finance user
     if (isFinance) {
-      return t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId;
+      if (t.assignedTo?._id !== currentUserId && t.assignedTo !== currentUserId) return false;
     }
     
-    // For all other roles, show all tickets (existing behavior)
+    // Search filter - search by ticket number, title, or assigned to name
+    if (searchQuery.trim() !== '') {
+      const query = searchQuery.trim().toLowerCase();
+      
+      // Search by ticket number (formatted as 4 digits)
+      const formattedNumber = formatTicketNumber(t.ticketNumber);
+      const ticketNumberMatch = formattedNumber.toLowerCase().includes(query) || 
+                               String(t.ticketNumber).toLowerCase().includes(query) || false;
+      
+      // Search by ticket title
+      const titleMatch = t.title?.toLowerCase().includes(query) || false;
+      
+      // Search by assigned to name
+      const assignedToName = t.assignedTo?.name?.toLowerCase() || '';
+      const assignedToMatch = assignedToName.includes(query) || false;
+      
+      // Search by created by name
+      const createdByName = t.createdBy?.name?.toLowerCase() || '';
+      const createdByMatch = createdByName.includes(query) || false;
+      
+      // Search by project custom ID or name
+      const projectIdMatch = t.projectId?.projectCustomId?.toLowerCase().includes(query) || false;
+      const projectNameMatch = t.projectId?.name?.toLowerCase().includes(query) || false;
+      
+      if (!ticketNumberMatch && !titleMatch && !assignedToMatch && !createdByMatch && !projectIdMatch && !projectNameMatch) {
+        return false;
+      }
+    }
+    
     return true;
   });
 
@@ -220,6 +257,11 @@ const TicketDashboard = () => {
 
   const isFeasibilityTicket = (ticket) => {
     return ticket.category === 'Production' && ticket.subcategory === 'Feasibility';
+  };
+
+  // Clear search handler
+  const clearSearch = () => {
+    setSearchQuery('');
   };
 
   if (loading) {
@@ -378,8 +420,45 @@ const TicketDashboard = () => {
         )}
       </div>
 
-      {/* Filters */}
+      {/* Search Bar & Filters */}
       <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
+        {/* Search Bar */}
+        <div className="mb-4">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search size={18} className="text-gray-400" />
+            </div>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by Ticket Number (e.g., 0016), Title, Name, or Project..."
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm bg-gray-50 hover:bg-white"
+            />
+            {searchQuery && (
+              <button
+                onClick={clearSearch}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+              >
+                <span className="text-sm font-medium">Clear</span>
+              </button>
+            )}
+          </div>
+          {searchQuery && (
+            <div className="mt-1.5 text-xs text-gray-500 flex items-center gap-2 flex-wrap">
+              <span className="font-medium">Searching for:</span>
+              <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-medium">
+                "{searchQuery}"
+              </span>
+              <span className="text-gray-400">
+                ({filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''} found)
+              </span>
+             
+            </div>
+          )}
+        </div>
+
+        {/* Filter Buttons */}
         <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-1">
             <span className="text-xs text-gray-500 mr-1 font-medium">Status:</span>
@@ -440,17 +519,18 @@ const TicketDashboard = () => {
             </>
           )}
 
-          {(filter !== 'all' || filterType !== 'all') && (
+          {(filter !== 'all' || filterType !== 'all' || searchQuery) && (
             <>
               <div className="w-px h-8 bg-gray-300 mx-2"></div>
               <button
                 onClick={() => {
                   setFilter('all');
                   setFilterType('all');
+                  setSearchQuery('');
                 }}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
               >
-                Clear Filters
+                Clear All Filters
               </button>
             </>
           )}
@@ -481,12 +561,28 @@ const TicketDashboard = () => {
                       <Ticket size={48} className="text-gray-300" />
                       <p className="font-medium">No tickets found</p>
                       <p className="text-sm text-gray-400">
-                        {isHR ? 'No HR tickets assigned to you' : 
-                         isFinance ? 'No Finance tickets assigned to you' :
-                         filterType === 'internal' ? 'No internal tickets available' : 
-                         filterType === 'external' ? 'No external tickets available' : 
-                         'Create a new ticket to get started'}
+                        {searchQuery ? (
+                          <>No tickets match your search: "<span className="font-medium">{searchQuery}</span>"</>
+                        ) : isHR ? (
+                          'No HR tickets assigned to you'
+                        ) : isFinance ? (
+                          'No Finance tickets assigned to you'
+                        ) : filterType === 'internal' ? (
+                          'No internal tickets available'
+                        ) : filterType === 'external' ? (
+                          'No external tickets available'
+                        ) : (
+                          'Create a new ticket to get started'
+                        )}
                       </p>
+                      {searchQuery && (
+                        <button
+                          onClick={clearSearch}
+                          className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
+                        >
+                          Clear search
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -494,13 +590,34 @@ const TicketDashboard = () => {
                 filteredTickets.map(ticket => {
                   const categoryDisplay = getCategoryDisplay(ticket);
                   const isFeasibility = isFeasibilityTicket(ticket);
+                  const formattedNumber = formatTicketNumber(ticket.ticketNumber);
                   
+                  // Highlight matching search terms
+                  const highlightMatch = (text) => {
+                    if (!searchQuery || !text) return text;
+                    const lowerText = text.toLowerCase();
+                    const lowerQuery = searchQuery.toLowerCase();
+                    if (lowerText.includes(lowerQuery)) {
+                      const parts = text.split(new RegExp(`(${searchQuery})`, 'gi'));
+                      return parts.map((part, i) => 
+                        part.toLowerCase() === lowerQuery ? 
+                          <span key={i} className="bg-yellow-200 px-0.5 rounded">{part}</span> : 
+                          part
+                      );
+                    }
+                    return text;
+                  };
+
+                  // Check if assigned to name matches search
+                  const assignedName = ticket.assignedTo?.name || '';
+                  const isAssignedMatch = searchQuery && assignedName.toLowerCase().includes(searchQuery.toLowerCase());
+
                   return (
                     <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-sm font-medium text-gray-900">
-                            {ticket.ticketNumber}
+                            {highlightMatch(formattedNumber)}
                           </span>
                           {ticket.isInternal && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[9px] font-bold">
@@ -518,7 +635,7 @@ const TicketDashboard = () => {
                       </td>
                       <td className="px-6 py-4">
                         <div>
-                          <p className="font-medium text-gray-900">{ticket.title}</p>
+                          <p className="font-medium text-gray-900">{highlightMatch(ticket.title)}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <p className="text-sm text-gray-500">
                               {ticket.projectId?.name || (ticket.isInternal ? 'Internal Task' : 'No Project')}
@@ -552,7 +669,9 @@ const TicketDashboard = () => {
                         {ticket.assignedTo ? (
                           <div className="flex items-center gap-2">
                             <Users size={14} className="text-gray-400" />
-                            <span className="text-sm text-gray-700">{ticket.assignedTo.name}</span>
+                            <span className={`text-sm ${isAssignedMatch ? 'bg-yellow-200 px-0.5 rounded' : 'text-gray-700'}`}>
+                              {highlightMatch(ticket.assignedTo.name)}
+                            </span>
                           </div>
                         ) : (
                           <span className="text-sm text-gray-400">Unassigned</span>
@@ -560,7 +679,9 @@ const TicketDashboard = () => {
                       </td>
                       <td className="px-6 py-4">
                         <span className="text-sm text-gray-600">
-                          {ticket.projectId?.projectCustomId || 'General'}
+                          {ticket.projectId?.projectCustomId ? 
+                            highlightMatch(ticket.projectId.projectCustomId) : 
+                            'General'}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-500">
