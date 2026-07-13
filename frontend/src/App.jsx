@@ -39,12 +39,20 @@ import TicketAssignmentRules from './pages/TicketAssignmentRules';
 import FeedDeliveryDashboard from './pages/FeedDeliveryDashboard';
 import ProjectFeedStatus from './pages/ProjectFeedStatus';
 import ClientFeedDetails from './pages/ClientFeedDetails';
+import AttendanceSync from './pages/AttendanceSync';
 import KnowledgeBase from './pages/KnowledgeBase';
+
+// ============================================
+// HRMS IMPORTS - Phase 0
+// ============================================
+import HrDashboard from './pages/HrDashboard';
+import EmployeeDashboard from './pages/EmployeeDashboard';
 
 // Import the new Notification component
 import NotificationBell from './components/NotificationBell';
 
 import { AnimatePresence } from 'framer-motion';
+import { useSidebar } from './context/SidebarContext';
 
 const SessionManager = ({ children }) => {
   const navigate = useNavigate();
@@ -64,7 +72,16 @@ const SessionManager = ({ children }) => {
     const currentTime = Date.now();
     const expirationTime = 12 * 60 * 60 * 1000; // 12 Hours
 
-    if (lastActive && currentTime - parseInt(lastActive) > expirationTime) {
+    // Safely parse lastActive
+    let lastActiveTime = 0;
+    if (lastActive) {
+      const parsed = parseInt(lastActive);
+      if (!isNaN(parsed)) {
+        lastActiveTime = parsed;
+      }
+    }
+
+    if (lastActiveTime && currentTime - lastActiveTime > expirationTime) {
       localStorage.clear();
       navigate('/login', { replace: true });
     } else {
@@ -90,7 +107,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       'Project Manager': '/admin/projects',
       'Client': '/client', 
       'Team Lead': '/teamlead',
-      'HR': '/tickets',
+      'HR': '/hr',
       'Finance': '/tickets',
     };
     
@@ -104,6 +121,7 @@ function AppContent() {
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const location = useLocation();
+  const { isCollapsed } = useSidebar();
 
   const landingPath = useMemo(() => {
       if (!userRole) return '/login';
@@ -115,7 +133,7 @@ function AppContent() {
         'Developer': '/developer',
         'Client': '/client',
         'Team Lead': '/teamlead',
-        'HR': '/tickets',
+        'HR': '/hr',
         'Finance': '/tickets',
       };
       return pathMap[userRole] || '/login';
@@ -134,11 +152,15 @@ function AppContent() {
             <ProtectedRoute>
               <div className="flex bg-[#f8fafc] min-h-screen">
                 <Sidebar />
-                <main className="flex-1 w-full overflow-x-hidden pl-20 lg:pl-0">
+              <main className={`flex-1 w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
+        isCollapsed ? 'pl-[84px]' : 'pl-[28px]'
+                }`}>
                   <Routes>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
 
-                    {/* Admin Dashboards */}
+                    {/* ============================================
+                        ADMIN DASHBOARDS
+                        ============================================ */}
                     <Route path="/admin" element={<ProtectedRoute allowedRoles={['Admin']}><AdminDashboard /></ProtectedRoute>} />
                     <Route path="/admin/ticket-rules" element={
                       <ProtectedRoute allowedRoles={['Admin']}>
@@ -151,10 +173,14 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
                     
-                    {/* Sales Manager */}
+                    {/* ============================================
+                        SALES MANAGER
+                        ============================================ */}
                     <Route path="/sales-manager" element={<ProtectedRoute allowedRoles={['Sales Manager']}><SalesManagerDashboard /></ProtectedRoute>} />
                     
-                    {/* Sales */}
+                    {/* ============================================
+                        SALES
+                        ============================================ */}
                     <Route path="/sales" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
                     <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
                     <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
@@ -165,7 +191,9 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
                     
-                    {/* Project Management */}
+                    {/* ============================================
+                        PROJECT MANAGEMENT
+                        ============================================ */}
                     <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
                     <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
                     
@@ -197,7 +225,9 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
 
-                    {/* Developer Routes */}
+                    {/* ============================================
+                        DEVELOPER ROUTES
+                        ============================================ */}
                     <Route path="/developer" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
                     <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
                     <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
@@ -216,7 +246,9 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
 
-                    {/* Team Lead Routes */}
+                    {/* ============================================
+                        TEAM LEAD ROUTES
+                        ============================================ */}
                     <Route path="/teamlead" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDashboard /></ProtectedRoute>} />
                     <Route path="/teamlead/projects" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadProjects /></ProtectedRoute>} />
                     <Route path="/teamlead/developers" element={<ProtectedRoute allowedRoles={['Team Lead']}><TeamLeadDevelopers /></ProtectedRoute>} />
@@ -232,7 +264,9 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
 
-                    {/* Client Routes */}
+                    {/* ============================================
+                        CLIENT ROUTES
+                        ============================================ */}
                     <Route path="/client" element={
                       <ProtectedRoute allowedRoles={['Admin', 'Client']}>
                         <FeedDeliveryDashboard />
@@ -273,8 +307,28 @@ function AppContent() {
                         <TicketDetails />
                       </ProtectedRoute>
                     } />
+
+                    {/* ============================================
+                        HRMS ROUTES - Phase 0
+                        ============================================ */}
+                    
+                    {/* HR Dashboard - HR and Admin only */}
+                    <Route path="/hr" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'HR']}>
+                        <HrDashboard />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* Employee Dashboard - All non-HR employees */}
+                    <Route path="/employee" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Developer', 'Team Lead', 'Sales', 'Project Manager', 'Client', 'Finance']}>
+                        <EmployeeDashboard />
+                      </ProtectedRoute>
+                    } />
               
-                    {/* Shared */}
+                    {/* ============================================
+                        SHARED ROUTES
+                        ============================================ */}
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Admin', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/notifications" element={
@@ -282,12 +336,17 @@ function AppContent() {
                         <NotificationSettings />
                       </ProtectedRoute>
                     } />
-                    <Route path="*" element={<Navigate to={landingPath} replace />} />
                     <Route path="/knowledge" element={
                         <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Developer', 'Team Lead','HR', 'Finance']}>
                           <KnowledgeBase />
                         </ProtectedRoute>
                       } />
+                    <Route path="/hr/attendance-sync" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'HR']}>
+                          <AttendanceSync />
+                        </ProtectedRoute>
+                      } />
+                    <Route path="*" element={<Navigate to={landingPath} replace />} />
                   </Routes>
                   
                 </main>

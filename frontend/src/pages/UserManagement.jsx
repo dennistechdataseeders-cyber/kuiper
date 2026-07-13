@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Users } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Users, Hash, RefreshCw } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
@@ -12,7 +12,7 @@ const UserManagement = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [linkingGithub, setLinkingGithub] = useState(false);
+  const [linkingGithub, setLinkingGithub] = useState({}); // Track per user
   const [searchOrgTerm, setSearchOrgTerm] = useState('');
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const [showNewOrgForm, setShowNewOrgForm] = useState(false);
@@ -56,7 +56,8 @@ const UserManagement = () => {
     role: getDefaultRole(),
     organizationId: '',
     department: 'Other',
-    isPrimaryPOC: false
+    isPrimaryPOC: false,
+    employeeCode: '' // NEW: Employee Code field
   });
   
   const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
@@ -86,6 +87,7 @@ const UserManagement = () => {
       result = result.filter(user =>
         user.name?.toLowerCase().includes(search) ||
         user.email?.toLowerCase().includes(search) ||
+        user.employeeCode?.toLowerCase().includes(search) ||
         (user.role === 'Client' && user.organizationId?.companyName?.toLowerCase().includes(search))
       );
     }
@@ -151,7 +153,8 @@ const UserManagement = () => {
       role: user.role || 'Client',
       organizationId: user.organizationId?._id || user.organizationId || '',
       department: user.department || 'Other',
-      isPrimaryPOC: user.isPrimaryPOC || false
+      isPrimaryPOC: user.isPrimaryPOC || false,
+      employeeCode: user.employeeCode || '' // NEW: Load existing employee code
     });
     setEmailReadOnly(true);
     setPasswordReadOnly(true);
@@ -175,28 +178,46 @@ const UserManagement = () => {
   };
 
   // Link GitHub account for existing user
-  const handleLinkGitHub = async (user) => {
-    setLinkingGithub(true);
-    try {
-      const res = await axios.post(
-        `${API_BASE}/users/${user._id}/link-github`, 
-        {},
-        authHeader
-      );
+  // Link GitHub account for existing user
+const handleLinkGitHub = async (userId) => {
+  setLinkingGithub(prev => ({ ...prev, [userId]: true }));
+  try {
+    const res = await axios.post(
+      `${API_BASE}/users/${userId}/link-github`, 
+      {},
+      authHeader
+    );
+    
+    if (res.data.success) {
+      toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
+      fetchUsers();
+    } else {
+      // Show the error message from the backend
+      toast.error(res.data.error || 'Failed to link GitHub account');
       
-      if (res.data.success) {
-        toast.success(`GitHub account ${res.data.githubUsername} linked successfully!`);
-        fetchUsers();
-      } else {
-        toast.error(res.data.error || 'Failed to link GitHub account');
+      // If there's debug info, log it
+      if (res.data.debug) {
+        console.log('🔍 Debug info:', res.data.debug);
+        if (res.data.debug.tip) {
+          toast.info(`💡 ${res.data.debug.tip}`, { duration: 8000 });
+        }
       }
-    } catch (err) {
-      console.error('GitHub linking error:', err);
-      toast.error(err.response?.data?.error || 'Failed to link GitHub account');
-    } finally {
-      setLinkingGithub(false);
     }
-  };
+  } catch (err) {
+    console.error('GitHub linking error:', err);
+    
+    // Better error handling
+    const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
+    toast.error(errorMessage);
+    
+    // Show additional info if available
+    if (err.response?.data?.debug) {
+      console.log('🔍 Debug info:', err.response.data.debug);
+    }
+  } finally {
+    setLinkingGithub(prev => ({ ...prev, [userId]: false }));
+  }
+};
 
   const createNewOrganization = async () => {
     if (!newOrgData.companyName.trim()) {
@@ -250,7 +271,8 @@ const UserManagement = () => {
           role: formData.role,
           organizationId: finalOrgId,
           department: formData.department,
-          isPrimaryPOC: formData.isPrimaryPOC
+          isPrimaryPOC: formData.isPrimaryPOC,
+          employeeCode: formData.employeeCode || null // NEW: Include employee code
         };
         
         if (formData.password && formData.password.trim()) {
@@ -283,7 +305,8 @@ const UserManagement = () => {
           role: formData.role,
           organizationId: finalOrgId || null,
           department: formData.department,
-          isPrimaryPOC: formData.isPrimaryPOC
+          isPrimaryPOC: formData.isPrimaryPOC,
+          employeeCode: formData.employeeCode || null // NEW: Include employee code
         };
         
         console.log("Creating user with payload:", createPayload);
@@ -338,7 +361,8 @@ const UserManagement = () => {
       role: getDefaultRole(),
       organizationId: '',
       department: 'Other',
-      isPrimaryPOC: false
+      isPrimaryPOC: false,
+      employeeCode: '' // NEW: Reset employee code
     });
   };
 
@@ -351,7 +375,8 @@ const UserManagement = () => {
       role: getDefaultRole(),
       organizationId: '',
       department: 'Other',
-      isPrimaryPOC: false
+      isPrimaryPOC: false,
+      employeeCode: '' // NEW: Reset employee code
     });
     setEmailReadOnly(true);
     setPasswordReadOnly(true);
@@ -504,7 +529,7 @@ const UserManagement = () => {
             <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by name, email, or organization..."
+              placeholder="Search by name, email, employee code, or organization..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400 transition-colors"
@@ -566,6 +591,8 @@ const UserManagement = () => {
               <tr>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Identity</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Email</th>
+                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Employee Code</th>
+                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">GitHub</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Role / Organization</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
               </tr>
@@ -574,6 +601,9 @@ const UserManagement = () => {
               {currentUsers.length > 0 ? currentUsers.map((user) => {
                 const isPOC = user.role === 'Client';
                 const isTeamLead = user.role === 'Team Lead';
+                const isDeveloper = user.role === 'Developer';
+                const isLinking = linkingGithub[user._id] || false;
+                
                 return (
                   <tr key={user._id} className="hover:bg-blue-50/30 transition-colors group">
                     <td className="p-5">
@@ -598,25 +628,48 @@ const UserManagement = () => {
                               Team Lead
                             </span>
                           )}
-                          {user.role === 'Developer' && (
-                            <>
-                              {user.githubLinked && user.githubUsername ? (
-                                <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                  <CheckCircle size={8} />
-                                  GitHub: {user.githubUsername}
-                                </span>
-                              ) : (
-                                <span className="text-[8px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full inline-flex items-center gap-1">
-                                  <AlertCircle size={8} />
-                                  GitHub: Not Linked
-                                </span>
-                              )}
-                            </>
-                          )}
                         </div>
                       </div>
                     </td>
                     <td className="p-5 text-slate-500 font-medium text-sm">{user.email}</td>
+                    <td className="p-5">
+                      {user.employeeCode ? (
+                        <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono">
+                          <Hash size={12} />
+                          {user.employeeCode}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400 italic">Not set</span>
+                      )}
+                    </td>
+                    <td className="p-5">
+                      {isDeveloper ? (
+                        <div className="flex items-center gap-1.5">
+                          {user.githubLinked && user.githubUsername ? (
+                            <span className="inline-flex items-center gap-1 text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                              <CheckCircle size={8} />
+                              {user.githubUsername}
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleLinkGitHub(user._id)}
+                              disabled={isLinking}
+                              className="inline-flex items-center gap-1 text-[8px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full hover:bg-orange-100 transition-all disabled:opacity-50"
+                              title="Verify and link GitHub account"
+                            >
+                              {isLinking ? (
+                                <RefreshCw size={8} className="animate-spin" />
+                              ) : (
+                                <GitFork size={8} />
+                              )}
+                              {isLinking ? 'Verifying...' : 'Verify GitHub'}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[8px] text-slate-400 italic">—</span>
+                      )}
+                    </td>
                     <td className="p-5">
                       <div>
                         <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${getRoleColor(user.role)}`}>
@@ -631,17 +684,7 @@ const UserManagement = () => {
                     </td>
                     <td className="p-5 text-right">
                       <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                        {user.role === 'Developer' && !user.githubLinked && (
-                          <button 
-                            onClick={() => handleLinkGitHub(user)} 
-                            disabled={linkingGithub}
-                            className="p-2 text-green-600 hover:text-green-700 hover:bg-green-50 rounded-lg transition-all shadow-sm disabled:opacity-50"
-                            title="Link GitHub Account"
-                          >
-                            <GitFork size={16}/>
-                          </button>
-                        )}
-                        {user.role === 'Developer' && user.githubLinked && user.githubUsername && (
+                        {isDeveloper && user.githubLinked && user.githubUsername && (
                           <div className="p-2 text-green-600 rounded-lg" title={`GitHub: ${user.githubUsername}`}>
                             <CheckCircle size={16}/>
                           </div>
@@ -658,7 +701,7 @@ const UserManagement = () => {
                 );
               }) : (
                 <tr>
-                  <td colSpan="4" className="p-10 text-center">
+                  <td colSpan="6" className="p-10 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                         <Users size={28} className="text-slate-300" />
@@ -796,6 +839,34 @@ const UserManagement = () => {
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                   placeholder="john.doe@example.com"
                 />
+              </div>
+              
+              {/* Employee Code Field - NEW */}
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
+                  Employee Code {!isEditing && '(Optional - auto-generated if blank)'}
+                </label>
+                <div className="relative">
+                  <Hash size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input 
+                    type="text" 
+                    autoComplete="off"
+                    className="w-full p-4 pl-11 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all font-mono"
+                    value={formData.employeeCode} 
+                    onChange={(e) => setFormData({...formData, employeeCode: e.target.value.toUpperCase()})}
+                    placeholder={isEditing ? "e.g., EMP000001" : "Leave blank for auto-generation"}
+                  />
+                </div>
+                {!isEditing && (
+                  <p className="text-[8px] text-slate-400 mt-1">
+                    If left blank, an employee code will be auto-generated (e.g., EMP000001).
+                  </p>
+                )}
+                {isEditing && (
+                  <p className="text-[8px] text-amber-500 mt-1">
+                    ⚠️ Changing this code may affect attendance sync and integrations.
+                  </p>
+                )}
               </div>
               
               {/* Password Field */}
@@ -1075,7 +1146,7 @@ const UserManagement = () => {
                       <>
                         <CheckCircle size={14} className="text-green-600" />
                         <p className="text-[9px] font-black text-green-700">
-                          ✅ GitHub account linked: {newlyCreatedUser.githubUsername}
+                          GitHub account linked: {newlyCreatedUser.githubUsername}
                         </p>
                       </>
                     ) : (

@@ -1,5 +1,3 @@
-// frontend/src/pages/ProjectFeeds.jsx
-
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
@@ -59,6 +57,18 @@ const ProjectFeeds = () => {
   const [feeds, setFeeds] = useState([]);
   const { isCollapsed } = useSidebar();
   const location = useLocation();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [isTablet, setIsTablet] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
+
+  // Handle resize for responsive detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsTablet(window.innerWidth >= 768 && window.innerWidth < 1024);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // FILTERS
   const [feedTypeFilter, setFeedTypeFilter] = useState('ALL');
@@ -103,7 +113,7 @@ const ProjectFeeds = () => {
   const [showCommentModal, setShowCommentModal] = useState(false);
   const [selectedCommentFeed, setSelectedCommentFeed] = useState(null);
 
-  // State for Feed Comments Modal (NEW)
+  // State for Feed Comments Modal
   const [showFeedCommentModal, setShowFeedCommentModal] = useState(false);
   const [selectedFeedForComments, setSelectedFeedForComments] = useState(null);
   const [commentRefreshTrigger, setCommentRefreshTrigger] = useState(0);
@@ -364,14 +374,14 @@ const ProjectFeeds = () => {
     }
   };
 
-  // Open Feed Comment Modal (NEW)
+  // Open Feed Comment Modal
   const openFeedCommentModal = (feed) => {
     setSelectedFeedForComments(feed);
     setShowFeedCommentModal(true);
     setCommentRefreshTrigger(prev => prev + 1);
   };
 
-  // Close Feed Comment Modal (NEW)
+  // Close Feed Comment Modal
   const closeFeedCommentModal = () => {
     setShowFeedCommentModal(false);
     setSelectedFeedForComments(null);
@@ -447,7 +457,6 @@ const ProjectFeeds = () => {
         setSelectedProject(location.state.selectedProjectId);
         window.history.replaceState({}, document.title);
       } else {
-        console.warn('Project not found:', location.state.selectedProjectId);
         setSelectedProject('ALL');
       }
     }
@@ -619,269 +628,257 @@ const ProjectFeeds = () => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${
-        isCollapsed ? 'ml-20' : 'ml-64'
+      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 transition-all duration-300 ${
+        isCollapsed ? 'ml-10 md:ml-16 lg:ml-20' : 'ml-0 sm:ml-16 md:ml-48 lg:ml-64'
       }`}
     >
-      {/* HEADER SECTION */}
-      <div className="mb-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-              Feed Center
-            </h1>
-            <p className="text-xs font-medium text-slate-500 mt-1">
-              Monitor and manage all active project feeds
-            </p>
-          </div>
-
-          {/* FILTERS SECTION */}
-          <div className="flex flex-wrap items-center gap-2 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
-            <div className="relative">
-              <Briefcase size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="pl-8 pr-6 py-1.5 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 min-w-[160px] hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
-              >
-                <option value="ALL">All Projects</option>
-                {projects.map(project => (
-                  <option key={project._id} value={project._id}>
-                    {project.projectCustomId}
-                  </option>
-                ))}
-              </select>
+      <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
+        {/* HEADER SECTION */}
+        <div className="mb-4 sm:mb-6">
+          <div className="flex flex-col space-y-3">
+            <div>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                Feed Center
+              </h1>
+              <p className="text-[10px] sm:text-xs font-medium text-slate-500 mt-0.5 sm:mt-1">
+                Monitor and manage all active project feeds
+              </p>
             </div>
 
-            <div className="relative">
-              <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <select
-                value={feedTypeFilter}
-                onChange={(e) => setFeedTypeFilter(e.target.value)}
-                className="pl-8 pr-6 py-1.5 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 min-w-[130px] hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
-              >
-                <option value="ALL">All Types</option>
-                <option value="Daily">Daily</option>
-                <option value="Weekly">Weekly</option>
-                <option value="Monthly">Monthly</option>
-                <option value="Once off">Once off</option>
-              </select>
-            </div>
+            {/* FILTERS SECTION - Responsive grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2 sm:p-3 rounded-xl shadow-sm border border-slate-200">
+              {/* Project Select */}
+              <div className="relative">
+                <Briefcase size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="w-full pl-8 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
+                >
+                  <option value="ALL">All Projects</option>
+                  {projects.slice(0, 20).map(project => (
+                    <option key={project._id} value={project._id}>
+                      {project.projectCustomId}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="text"
-                placeholder="Search feeds..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 outline-none font-medium text-xs w-[180px] placeholder:text-slate-400 focus:border-blue-400 transition-colors"
-              />
+              {/* Type Filter */}
+              <div className="relative">
+                <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <select
+                  value={feedTypeFilter}
+                  onChange={(e) => setFeedTypeFilter(e.target.value)}
+                  className="w-full pl-8 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
+                >
+                  <option value="ALL">All Types</option>
+                  <option value="Daily">Daily</option>
+                  <option value="Weekly">Weekly</option>
+                  <option value="Monthly">Monthly</option>
+                  <option value="Once off">Once off</option>
+                </select>
+              </div>
+
+              {/* Search */}
+              <div className="relative">
+                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search feeds..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-medium text-xs placeholder:text-slate-400 focus:border-blue-400 transition-colors"
+                />
+              </div>
             </div>
           </div>
         </div>
-      </div>
-      
-      {/* COMBINED STATS CARD - Today's Progress + Project Stats with Clickable Pending */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
-        <div className="p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-200">
-                <Calendar size={16} />
+        
+        {/* STATS CARD */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-4 sm:mb-6 overflow-hidden">
+          <div className="p-3 sm:p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-200">
+                  <Calendar size={isMobile ? 14 : 16} />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-black text-slate-800">Today's Progress</h3>
+                  <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                    {getTodayDayName()}, {new Date().toLocaleDateString()}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xs font-black text-slate-800">Today's Progress</h3>
-                <p className="text-[8px] font-bold text-slate-400 uppercase tracking-wider">
-                  {getTodayDayName()}, {new Date().toLocaleDateString()}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-1">
+                  <div className="w-5 sm:w-6 h-5 sm:h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <Briefcase size={isMobile ? 10 : 12} />
+                  </div>
+                  <div>
+                    <p className="text-[6px] sm:text-[7px] font-black text-slate-400 uppercase">Projects</p>
+                    <p className="text-xs sm:text-sm font-black text-slate-800">{projects.length}</p>
+                  </div>
+                </div>
+                <div className="w-px h-5 sm:h-6 bg-slate-200"></div>
+                <div className="flex items-center gap-1">
+                  <div className="w-5 sm:w-6 h-5 sm:h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
+                    <Activity size={isMobile ? 10 : 12} />
+                  </div>
+                  <div>
+                    <p className="text-[6px] sm:text-[7px] font-black text-slate-400 uppercase">Feeds</p>
+                    <p className="text-xs sm:text-sm font-black text-slate-800">{filteredFeeds.length}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mb-3">
+              <div className="flex justify-between text-[8px] sm:text-[9px] font-bold text-slate-500 mb-1">
+                <span>Completion Rate</span>
+                <span>{todayFeedStats.percentage.toFixed(0)}%</span>
+              </div>
+              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full bg-gradient-to-r ${getProgressColor(todayFeedStats.percentage)} rounded-full transition-all duration-500 ease-out`}
+                  style={{ width: `${todayFeedStats.percentage}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-purple-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1 mb-0.5">
+                  <Calendar size={isMobile ? 10 : 12} className="text-purple-600" />
+                  <p className="text-[7px] sm:text-[8px] font-black text-purple-600 uppercase">Today</p>
+                </div>
+                <p className="text-lg sm:text-xl font-black text-purple-700">{todayFeedStats.total}</p>
+              </div>
+              
+              <div className="bg-emerald-50 rounded-lg p-2 text-center">
+                <div className="flex items-center justify-center gap-1 mb-0.5">
+                  <CheckCircle size={isMobile ? 10 : 12} className="text-emerald-600" />
+                  <p className="text-[7px] sm:text-[8px] font-black text-emerald-600 uppercase">Done</p>
+                </div>
+                <p className="text-lg sm:text-xl font-black text-emerald-700">{todayFeedStats.completed}</p>
+              </div>
+              
+              <div 
+                onClick={togglePendingFilter}
+                className={`rounded-lg p-2 text-center cursor-pointer transition-all duration-200 ${
+                  showPendingOnly 
+                    ? 'bg-amber-600 ring-2 ring-amber-400 ring-offset-1' 
+                    : 'bg-amber-50 hover:bg-amber-100'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-1 mb-0.5">
+                  <AlertCircle size={isMobile ? 10 : 12} className={showPendingOnly ? 'text-white' : 'text-amber-600'} />
+                  <p className={`text-[7px] sm:text-[8px] font-black uppercase ${showPendingOnly ? 'text-white' : 'text-amber-600'}`}>
+                    Pending
+                  </p>
+                  {showPendingOnly && (
+                    <X 
+                      size={isMobile ? 10 : 12} 
+                      className="text-white ml-0.5 hover:text-amber-200" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowPendingOnly(false);
+                      }}
+                    />
+                  )}
+                </div>
+                <p className={`text-lg sm:text-xl font-black ${showPendingOnly ? 'text-white' : 'text-amber-700'}`}>
+                  {todayFeedStats.pending}
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-1">
-                <div className="w-6 h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center">
-                  <Briefcase size={10} />
-                </div>
-                <div>
-                  <p className="text-[7px] font-black text-slate-400 uppercase">Projects</p>
-                  <p className="text-xs font-black text-slate-800">{projects.length}</p>
-                </div>
-              </div>
-              <div className="w-px h-6 bg-slate-200"></div>
-              <div className="flex items-center gap-1">
-                <div className="w-6 h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Activity size={10} />
-                </div>
-                <div>
-                  <p className="text-[7px] font-black text-slate-400 uppercase">Feeds</p>
-                  <p className="text-xs font-black text-slate-800">{filteredFeeds.length}</p>
-                </div>
-              </div>
-            </div>
-          </div>
 
-          {/* Progress Bar */}
-          <div className="mb-3">
-            <div className="flex justify-between text-[8px] font-bold text-slate-500 mb-1">
-              <span className="flex items-center gap-1">Completion Rate</span>
-              <span>{todayFeedStats.percentage.toFixed(0)}%</span>
-            </div>
-            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={`h-full bg-gradient-to-r ${getProgressColor(todayFeedStats.percentage)} rounded-full transition-all duration-500 ease-out`}
-                style={{ width: `${todayFeedStats.percentage}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Stats Grid - Compact with Clickable Pending */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-purple-50 rounded-lg p-2 text-center">
-              <div className="flex items-center justify-center gap-0.5 mb-0.5">
-                <Calendar size={10} className="text-purple-600" />
-                <p className="text-[7px] font-black text-purple-600 uppercase">Today</p>
-              </div>
-              <p className="text-lg font-black text-purple-700">{todayFeedStats.total}</p>
-            </div>
-            
-            <div className="bg-emerald-50 rounded-lg p-2 text-center">
-              <div className="flex items-center justify-center gap-0.5 mb-0.5">
-                <CheckCircle size={10} className="text-emerald-600" />
-                <p className="text-[7px] font-black text-emerald-600 uppercase">Done</p>
-              </div>
-              <p className="text-lg font-black text-emerald-700">{todayFeedStats.completed}</p>
-            </div>
-            
-            {/* CLICKABLE PENDING DIV */}
-            <div 
-              onClick={togglePendingFilter}
-              className={`rounded-lg p-2 text-center cursor-pointer transition-all duration-200 ${
-                showPendingOnly 
-                  ? 'bg-amber-600 ring-2 ring-amber-400 ring-offset-2' 
-                  : 'bg-amber-50 hover:bg-amber-100 hover:scale-105'
-              }`}
-            >
-              <div className="flex items-center justify-center gap-0.5 mb-0.5">
-                <AlertCircle size={10} className={showPendingOnly ? 'text-white' : 'text-amber-600'} />
-                <p className={`text-[7px] font-black uppercase ${showPendingOnly ? 'text-white' : 'text-amber-600'}`}>
-                  Pending
+            {/* Status Messages */}
+            {todayFeedStats.pending > 0 && !showPendingOnly && (
+              <div 
+                onClick={togglePendingFilter}
+                className="mt-2 p-1.5 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:bg-amber-100 transition-all"
+              >
+                <p className="text-[8px] sm:text-[9px] font-bold text-amber-700 text-center">
+                  {todayFeedStats.pending} feed(s) remaining — Click to view
                 </p>
-                {showPendingOnly && (
-                  <X 
-                    size={10} 
-                    className="text-white ml-1 hover:text-amber-200" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowPendingOnly(false);
-                    }}
-                  />
-                )}
               </div>
-              <p className={`text-lg font-black ${showPendingOnly ? 'text-white' : 'text-amber-700'}`}>
-                {todayFeedStats.pending}
-              </p>
-            </div>
+            )}
+
+            {showPendingOnly && todayFeedStats.pending > 0 && (
+              <div className="mt-2 p-1.5 bg-amber-600 rounded-lg border border-amber-500">
+                <p className="text-[8px] sm:text-[9px] font-bold text-white text-center">
+                  Showing {todayFeedStats.pending} pending feed(s)
+                </p>
+              </div>
+            )}
+
+            {todayFeedStats.total === 0 && (
+              <div className="mt-2 p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 text-center">
+                  No feeds scheduled for today
+                </p>
+              </div>
+            )}
+
+            {todayFeedStats.total > 0 && todayFeedStats.percentage === 100 && (
+              <div className="mt-2 p-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
+                <p className="text-[8px] sm:text-[9px] font-bold text-emerald-700 text-center">
+                  All done! 🎉
+                </p>
+              </div>
+            )}
           </div>
+        </div>
 
-          {/* Status Messages - Compact */}
-          {todayFeedStats.pending > 0 && !showPendingOnly && (
-            <div 
-              onClick={togglePendingFilter}
-              className="mt-2 p-1.5 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:bg-amber-100 transition-all"
+        {/* Items Per Page Selector */}
+        <div className="flex justify-end mb-3 sm:mb-4">
+          <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-1.5 shadow-sm">
+            <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase">Show:</span>
+            <select
+              value={itemsPerPage}
+              onChange={(e) => {
+                setItemsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
+              className="text-xs sm:text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
             >
-              <p className="text-[8px] font-bold text-amber-700 text-center">
-                {todayFeedStats.pending} feed(s) remaining for today — Click to view
-              </p>
-            </div>
-          )}
-
-          {showPendingOnly && todayFeedStats.pending > 0 && (
-            <div className="mt-2 p-1.5 bg-amber-600 rounded-lg border border-amber-500">
-              <p className="text-[8px] font-bold text-white text-center">
-                Showing {todayFeedStats.pending} pending feed(s) — Click the Pending badge again to show all
-              </p>
-            </div>
-          )}
-
-          {todayFeedStats.total === 0 && (
-            <div className="mt-2 p-1.5 bg-slate-50 rounded-lg border border-slate-100">
-              <p className="text-[8px] font-bold text-slate-500 text-center">
-                No feeds scheduled for today
-              </p>
-            </div>
-          )}
-
-          {todayFeedStats.total > 0 && todayFeedStats.percentage === 100 && (
-            <div className="mt-2 p-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
-              <p className="text-[8px] font-bold text-emerald-700 text-center">
-                All today's feeds completed! 🎉
-              </p>
-            </div>
-          )}
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+            <span className="text-[8px] sm:text-[10px] font-black text-slate-500">per page</span>
+          </div>
         </div>
-      </div>
 
-      {/* Items Per Page Selector */}
-      <div className="flex justify-end mb-4">
-        <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-1.5 shadow-sm">
-          <span className="text-[9px] font-black text-slate-500 uppercase">Show:</span>
-          <select
-            value={itemsPerPage}
-            onChange={(e) => {
-              setItemsPerPage(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-[9px] font-black text-slate-500">per page</span>
-        </div>
-      </div>
-
-      {/* TABLE SECTION - Full view with all columns */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1200px]">
-            <thead>
-              <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed Details</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Type</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Developers</th>
-                <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Git Repository</th>
-                <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
+        {/* TABLE SECTION - Only the table is horizontally scrollable */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          {isMobile ? (
+            // Mobile Card View - No horizontal scroll needed
+            <div className="divide-y divide-slate-100">
               {currentFeeds.length > 0 ? (
-                currentFeeds.map((feed, idx) => {
+                currentFeeds.map((feed) => {
                   const isTodayFeed = isFeedForToday(feed);
                   const completion = getTodayCompletionDetails(feed);
                   const isCompleted = completion.isCompleted;
                   const isExpanded = expandedFeedId === feed._id;
                   const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
-                  const displayDevelopers = developerNames.slice(0, 2);
-                  const hasMoreDevelopers = developerNames.length > 2;
                   const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                   const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
                   
                   return (
-                    <React.Fragment key={feed._id}>
-                      {/* Main Row */}
-                      <tr
-                        className={`border-b border-slate-100 hover:bg-slate-50/80 transition-all duration-200 cursor-pointer ${
-                          idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                        } ${isTodayFeed && !isCompleted ? 'bg-amber-50/20' : ''} ${isExpanded ? 'bg-blue-50/40' : ''}`}
+                    <div key={feed._id} className="p-3 hover:bg-slate-50/60 transition-all">
+                      {/* Feed Header */}
+                      <div 
+                        className="flex items-start justify-between cursor-pointer"
                         onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
                       >
-                        <td className="px-4 py-3">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0 ${
                               isTodayFeed && !isCompleted 
                                 ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
                                 : isCompleted
@@ -890,651 +887,851 @@ const ProjectFeeds = () => {
                             }`}>
                               {isCompleted ? <CheckCircle size={12} /> : <Hash size={12} />}
                             </div>
-                            <div>
-                              <div className="flex items-center gap-1.5">
-                                <p className="text-xs font-bold text-slate-800">{feed.name}</p>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1 flex-wrap">
+                                <p className="text-sm font-bold text-slate-800 truncate">{feed.name}</p>
                                 {isTodayFeed && !isCompleted && (
-                                  <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">Today</span>
+                                  <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Today</span>
                                 )}
                                 {isCompleted && (
-                                  <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full">Done</span>
+                                  <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Done</span>
                                 )}
                               </div>
                             </div>
                           </div>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase">
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
+                          <span className="inline-flex items-center gap-0.5 bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-lg text-[8px] font-black uppercase">
                             <Briefcase size={8} />
-                            {feed.projectCustomId}
+                            <span className="max-w-[50px] truncate">{feed.projectCustomId}</span>
                           </span>
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase border ${getFeedTypeColor(feed.feedType)}`}>
+                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase border ${getFeedTypeColor(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
                             {feed.feedType}
                           </span>
-                        </td>
+                          {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                        </div>
+                      </div>
 
-                        {/* Status Column */}
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="relative min-w-[120px]">
-                            <select
-                              value={feed.feedStatus || 'New'}
-                              onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
-                              disabled={updatingStatus[feed._id]}
-                              className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
-                              style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '8px' }}
-                            >
-                              {feedStatuses.map(status => (
-                                <option key={status} value={status}>{status}</option>
-                              ))}
-                            </select>
-                            {updatingStatus[feed._id] && (
-                              <div className="absolute right-1 top-1/2 -translate-y-1/2">
-                                <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Developers Column */}
-                        <td className="px-4 py-3">
-                          <div className="space-y-1">
-                            <div className="flex flex-wrap items-center gap-1">
-                              {displayDevelopers.map((devName, devIdx) => (
-                                <span
-                                  key={devIdx}
-                                  className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold"
-                                >
-                                  <Users size={6} />
-                                  {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
-                                </span>
-                              ))}
+                      {/* Status */}
+                      <div className="mt-2">
+                        <div className="relative w-full">
+                          <select
+                            value={feed.feedStatus || 'New'}
+                            onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
+                            disabled={updatingStatus[feed._id]}
+                            className={`w-full px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all ${getFeedStatusColor(feed.feedStatus)}`}
+                          >
+                            {feedStatuses.map(status => (
+                              <option key={status} value={status}>{status}</option>
+                            ))}
+                          </select>
+                          {updatingStatus[feed._id] && (
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                             </div>
-                            {hasMoreDevelopers && (
-                              <span className="text-[7px] font-bold text-blue-500">
-                                +{developerNames.length - 2} more
-                              </span>
-                            )}
-                            {developerNames.length === 0 && (
-                              <span className="text-[7px] font-bold text-slate-400 italic">Unassigned</span>
-                            )}
-                          </div>
-                        </td>
-
-                        {/* Git Repository Column */}
-                        <td className="px-4 py-3">
-                          {gitUrl ? (
-                            <a 
-                              href={gitUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[8px] text-blue-600 hover:underline"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <GitFork size={10} />
-                              {gitName || 'View Repo'}
-                            </a>
-                          ) : (
-                            <span className="text-[8px] text-slate-400 italic">No Git repo</span>
                           )}
-                        </td>
+                        </div>
+                      </div>
 
-                        {/* Actions Column */}
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                            <button
-                              onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
-                              className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
-                              title={isExpanded ? "Collapse Details" : "Expand Details"}
-                            >
-                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                            </button>
-                            <button
-                              onClick={() => openFeedCommentModal(feed)}
-                              className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-purple-50 hover:text-purple-600 transition-all"
-                              title="View Comments"
-                            >
-                              <MessageSquare size={12} />
-                            </button>
-                            {isCompleted && (
-                              <button
-                                onClick={() => openCommentModal(feed)}
-                                className="group w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
-                                title="View Completion Comment"
-                              >
-                                <CheckCircle size={12} />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => handleEditClick(feed)}
-                              className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
-                              title="Edit Feed"
-                            >
-                              <Edit3 size={12} />
-                            </button>
-                            <button
-                              onClick={() => openTicketModal(feed)}
-                              className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
-                              title="Generate Ticket"
-                            >
-                              <Ticket size={12} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                      {/* Developers */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                        {developerNames.slice(0, 3).map((devName, idx) => (
+                          <span key={idx} className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold">
+                            <Users size={8} />
+                            {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
+                          </span>
+                        ))}
+                        {developerNames.length > 3 && (
+                          <span className="text-[7px] font-bold text-blue-500">+{developerNames.length - 3}</span>
+                        )}
+                        {developerNames.length === 0 && (
+                          <span className="text-[7px] font-bold text-slate-400 italic">Unassigned</span>
+                        )}
+                      </div>
 
-                      {/* Expanded Row with Platform URL, Schedule, and Comments */}
+                      {/* Actions */}
+                      <div className="mt-2 flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
+                        <button
+                          onClick={() => openFeedCommentModal(feed)}
+                          className="p-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all"
+                          title="Comments"
+                        >
+                          <MessageSquare size={14} />
+                        </button>
+                        {isCompleted && (
+                          <button
+                            onClick={() => openCommentModal(feed)}
+                            className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
+                            title="Completion Comment"
+                          >
+                            <CheckCircle size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleEditClick(feed)}
+                          className="p-1.5 rounded-lg bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                          title="Edit"
+                        >
+                          <Edit3 size={14} />
+                        </button>
+                        <button
+                          onClick={() => openTicketModal(feed)}
+                          className="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
+                          title="Generate Ticket"
+                        >
+                          <Ticket size={14} />
+                        </button>
+                        {gitUrl && (
+                          <a 
+                            href={gitUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-lg bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                            title="Git Repository"
+                          >
+                            <GitFork size={14} />
+                          </a>
+                        )}
+                      </div>
+
+                      {/* Expanded Details */}
                       {isExpanded && (
-                        <tr className="bg-blue-50/30">
-                          <td colSpan={7} className="px-6 py-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Platform URL Details */}
-                              <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
-                                    <Globe size={12} />
-                                  </div>
-                                  <h4 className="text-[9px] font-black uppercase text-slate-500">Platform & URL</h4>
-                                </div>
-                                {feed.feedPlatform ? (
-                                  <div>
-                                    <p className="text-xs font-bold text-slate-700 mb-1">{feed.feedPlatform}</p>
-                                    {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
-                                      <a 
-                                        href={feed.webDomain} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer"
-                                        className="text-[9px] text-blue-600 hover:underline break-all flex items-center gap-1"
-                                      >
-                                        <ExternalLink size={10} />
-                                        {feed.webDomain}
-                                      </a>
-                                    )}
-                                    {feed.feedPlatform === 'App' && (
-                                      <p className="text-[9px] text-slate-500 italic">Mobile application platform</p>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <p className="text-xs text-slate-400 italic">No platform specified</p>
-                                )}
-                              </div>
-
-                              {/* Schedule Details */}
-                              <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center">
-                                    <Calendar size={12} />
-                                  </div>
-                                  <h4 className="text-[9px] font-black uppercase text-slate-500">Schedule</h4>
-                                </div>
-                                <p className="text-xs font-bold text-slate-700">{getScheduleDisplay(feed)}</p>
-                                {feed.feedType === 'Weekly' && feed.weekDay && (
-                                  <p className="text-[8px] text-slate-500 mt-1">Every {feed.weekDay}</p>
-                                )}
-                                {feed.feedType === 'Monthly' && feed.monthDay && (
-                                  <p className="text-[8px] text-slate-500 mt-1">Day {feed.monthDay} of each month</p>
-                                )}
-                                {feed.feedType === 'Once off' && (
-                                  <p className="text-[8px] text-slate-500 mt-1">One-time execution</p>
-                                )}
-                              </div>
+                        <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
+                          {/* Platform */}
+                          {feed.feedPlatform && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-[8px] font-bold text-slate-500">Platform:</span>
+                              <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[7px] font-black ${getPlatformColor(feed.feedPlatform)}`}>
+                                {getPlatformIcon(feed.feedPlatform)}
+                                {feed.feedPlatform}
+                              </span>
+                              {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
+                                <a href={feed.webDomain} target="_blank" rel="noopener noreferrer" className="text-[7px] text-blue-600 hover:underline truncate max-w-[120px]">
+                                  {feed.webDomain}
+                                </a>
+                              )}
                             </div>
+                          )}
 
-                            {/* Feed Comments Section */}
-                            <div className="mt-4 bg-white rounded-lg p-3 shadow-sm border border-slate-200">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center">
-                                  <MessageSquare size={12} />
-                                </div>
-                                <h4 className="text-[9px] font-black uppercase text-slate-500">Feed Comments</h4>
-                              </div>
-                              <CommentSection
-                                type="feed"
-                                entityId={feed._id}
-                                userRole={userRole}
-                                userId={currentUserId}
-                                currentUserName={userName}
-                                canComment={true}
-                                refreshTrigger={commentRefreshTrigger}
-                              />
-                            </div>
-                          </td>
-                        </tr>
+                          {/* Schedule */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[8px] font-bold text-slate-500">Schedule:</span>
+                            <span className="text-[8px] font-medium text-slate-700">{getScheduleDisplay(feed)}</span>
+                          </div>
+
+                          {/* Comments */}
+                          <div className="mt-1">
+                            <CommentSection
+                              type="feed"
+                              entityId={feed._id}
+                              userRole={userRole}
+                              userId={currentUserId}
+                              currentUserName={userName}
+                              canComment={true}
+                              refreshTrigger={commentRefreshTrigger}
+                            />
+                          </div>
+                        </div>
                       )}
-                    </React.Fragment>
+                    </div>
                   );
                 })
               ) : (
-                <tr>
-                  <td colSpan={7} className="py-12 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
-                        <Activity size={20} className="text-slate-300" />
-                      </div>
-                      <p className="text-xs font-bold uppercase text-slate-400">
-                        {showPendingOnly ? 'No pending feeds for today!' : 'No feeds found'}
-                      </p>
-                      <p className="text-[9px] text-slate-300 mt-0.5">
-                        {showPendingOnly ? 'All feeds completed or none scheduled' : 'Try adjusting your filters'}
-                      </p>
-                    </div>
-                  </td>
-                </tr>
+                <div className="p-8 text-center">
+                  <Activity size={32} className="text-slate-300 mx-auto mb-2" />
+                  <p className="text-sm font-bold uppercase text-slate-400">
+                    {showPendingOnly ? 'No pending feeds!' : 'No feeds found'}
+                  </p>
+                  <p className="text-[10px] text-slate-300 mt-0.5">
+                    {showPendingOnly ? 'All completed or none scheduled' : 'Try adjusting filters'}
+                  </p>
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* PAGINATION */}
-      {totalPages > 1 && (
-        <div className="mt-6 flex justify-between items-center">
-          <div className="text-[9px] font-bold text-slate-400">
-            Showing {indexOfFirstFeed + 1} to {Math.min(indexOfLastFeed, filteredFeeds.length)} of {filteredFeeds.length} feeds
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <button
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage(prev => prev - 1)}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronLeft size={14} />
-            </button>
-
-            <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
-              {[...Array(Math.min(totalPages, 5))].map((_, i) => {
-                let pageNum;
-                if (totalPages <= 5) {
-                  pageNum = i + 1;
-                } else if (currentPage <= 3) {
-                  pageNum = i + 1;
-                  if (i === 4) pageNum = totalPages;
-                } else if (currentPage >= totalPages - 2) {
-                  pageNum = totalPages - 4 + i;
-                } else {
-                  pageNum = currentPage - 2 + i;
-                  if (i === 0) pageNum = 1;
-                  if (i === 4) pageNum = totalPages;
-                }
-                
-                if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                  return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
-                }
-                
-                if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                  return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
-                }
-                
-                return (
-                  <button
-                    key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
-                      currentPage === pageNum
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
             </div>
+          ) : (
+            // Desktop Table View - Only this is horizontally scrollable
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1100px]">
+                <thead>
+                  <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Feed Details</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Project</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Type</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Developers</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Git Repository</th>
+                    <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {currentFeeds.length > 0 ? (
+                    currentFeeds.map((feed, idx) => {
+                      const isTodayFeed = isFeedForToday(feed);
+                      const completion = getTodayCompletionDetails(feed);
+                      const isCompleted = completion.isCompleted;
+                      const isExpanded = expandedFeedId === feed._id;
+                      const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
+                      const displayDevelopers = developerNames.slice(0, 2);
+                      const hasMoreDevelopers = developerNames.length > 2;
+                      const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
+                      const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
+                      
+                      return (
+                        <React.Fragment key={feed._id}>
+                          <tr
+                            className={`border-b border-slate-100 hover:bg-slate-50/80 transition-all duration-200 cursor-pointer ${
+                              idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
+                            } ${isTodayFeed && !isCompleted ? 'bg-amber-50/20' : ''} ${isExpanded ? 'bg-blue-50/40' : ''}`}
+                            onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
+                          >
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0 ${
+                                  isTodayFeed && !isCompleted 
+                                    ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
+                                    : isCompleted
+                                    ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
+                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 text-white'
+                                }`}>
+                                  {isCompleted ? <CheckCircle size={12} /> : <Hash size={12} />}
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-bold text-slate-800 whitespace-nowrap">{feed.name}</p>
+                                    {isTodayFeed && !isCompleted && (
+                                      <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full whitespace-nowrap">Today</span>
+                                    )}
+                                    {isCompleted && (
+                                      <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full whitespace-nowrap">Done</span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
 
-            <button
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage(prev => prev + 1)}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-            >
-              <ChevronRight size={14} />
-            </button>
-          </div>
-        </div>
-      )}
+                            <td className="px-4 py-3">
+                              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase whitespace-nowrap">
+                                <Briefcase size={8} />
+                                {feed.projectCustomId}
+                              </span>
+                            </td>
 
-      {/* EDIT MODAL */}
-      {showEditModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[120] p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-xl font-black text-slate-800">Edit Feed</h2>
-                <p className="text-[10px] text-slate-400 mt-1">Update feed configuration</p>
-              </div>
-              <button onClick={closeModal} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
-                <X size={16} />
-              </button>
-            </div>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase border whitespace-nowrap ${getFeedTypeColor(feed.feedType)}`}>
+                                {getFeedTypeIcon(feed.feedType)}
+                                {feed.feedType}
+                              </span>
+                            </td>
 
-            <form onSubmit={handleUpdateFeed} className="space-y-4">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="Enter feed name"
-                  value={feedForm.name}
-                  onChange={(e) => setFeedForm({ ...feedForm, name: e.target.value })}
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                />
-              </div>
+                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                              <div className="relative min-w-[120px]">
+                                <select
+                                  value={feed.feedStatus || 'New'}
+                                  onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
+                                  disabled={updatingStatus[feed._id]}
+                                  className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
+                                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '8px' }}
+                                >
+                                  {feedStatuses.map(status => (
+                                    <option key={status} value={status}>{status}</option>
+                                  ))}
+                                </select>
+                                {updatingStatus[feed._id] && (
+                                  <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                                    <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
 
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Type</label>
-                <select
-                  value={feedForm.feedType}
-                  onChange={(e) =>
-                    setFeedForm({
-                      ...feedForm,
-                      feedType: e.target.value,
-                      weekDay: e.target.value !== 'Weekly' ? '' : feedForm.weekDay,
-                      monthDay: e.target.value !== 'Monthly' ? '' : feedForm.monthDay
+                            <td className="px-4 py-3">
+                              <div className="space-y-1">
+                                <div className="flex flex-wrap items-center gap-1">
+                                  {displayDevelopers.map((devName, devIdx) => (
+                                    <span
+                                      key={devIdx}
+                                      className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold whitespace-nowrap"
+                                    >
+                                      <Users size={6} />
+                                      {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
+                                    </span>
+                                  ))}
+                                </div>
+                                {hasMoreDevelopers && (
+                                  <span className="text-[7px] font-bold text-blue-500 whitespace-nowrap">
+                                    +{developerNames.length - 2} more
+                                  </span>
+                                )}
+                                {developerNames.length === 0 && (
+                                  <span className="text-[7px] font-bold text-slate-400 italic whitespace-nowrap">Unassigned</span>
+                                )}
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {gitUrl ? (
+                                <a 
+                                  href={gitUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 text-[8px] text-blue-600 hover:underline whitespace-nowrap"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <GitFork size={10} />
+                                  {gitName || 'View Repo'}
+                                </a>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 italic whitespace-nowrap">No Git repo</span>
+                              )}
+                            </td>
+
+                            <td className="px-4 py-3">
+                              <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <button
+                                  onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
+                                  className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all flex-shrink-0"
+                                  title={isExpanded ? "Collapse Details" : "Expand Details"}
+                                >
+                                  {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                                </button>
+                                <button
+                                  onClick={() => openFeedCommentModal(feed)}
+                                  className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-purple-50 hover:text-purple-600 transition-all flex-shrink-0"
+                                  title="View Comments"
+                                >
+                                  <MessageSquare size={12} />
+                                </button>
+                                {isCompleted && (
+                                  <button
+                                    onClick={() => openCommentModal(feed)}
+                                    className="group w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all flex-shrink-0"
+                                    title="View Completion Comment"
+                                  >
+                                    <CheckCircle size={12} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => handleEditClick(feed)}
+                                  className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all flex-shrink-0"
+                                  title="Edit Feed"
+                                >
+                                  <Edit3 size={12} />
+                                </button>
+                                <button
+                                  onClick={() => openTicketModal(feed)}
+                                  className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex-shrink-0"
+                                  title="Generate Ticket"
+                                >
+                                  <Ticket size={12} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {isExpanded && (
+                            <tr className="bg-blue-50/30">
+                              <td colSpan={7} className="px-6 py-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
+                                        <Globe size={12} />
+                                      </div>
+                                      <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Platform & URL</h4>
+                                    </div>
+                                    {feed.feedPlatform ? (
+                                      <div>
+                                        <p className="text-xs font-bold text-slate-700 mb-1 whitespace-nowrap">{feed.feedPlatform}</p>
+                                        {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
+                                          <a 
+                                            href={feed.webDomain} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="text-[9px] text-blue-600 hover:underline break-all flex items-center gap-1"
+                                          >
+                                            <ExternalLink size={10} />
+                                            {feed.webDomain}
+                                          </a>
+                                        )}
+                                        {feed.feedPlatform === 'App' && (
+                                          <p className="text-[9px] text-slate-500 italic whitespace-nowrap">Mobile application platform</p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-slate-400 italic whitespace-nowrap">No platform specified</p>
+                                    )}
+                                  </div>
+
+                                  <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                                        <Calendar size={12} />
+                                      </div>
+                                      <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Schedule</h4>
+                                    </div>
+                                    <p className="text-xs font-bold text-slate-700 whitespace-nowrap">{getScheduleDisplay(feed)}</p>
+                                    {feed.feedType === 'Weekly' && feed.weekDay && (
+                                      <p className="text-[8px] text-slate-500 mt-1 whitespace-nowrap">Every {feed.weekDay}</p>
+                                    )}
+                                    {feed.feedType === 'Monthly' && feed.monthDay && (
+                                      <p className="text-[8px] text-slate-500 mt-1 whitespace-nowrap">Day {feed.monthDay} of each month</p>
+                                    )}
+                                    {feed.feedType === 'Once off' && (
+                                      <p className="text-[8px] text-slate-500 mt-1 whitespace-nowrap">One-time execution</p>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
+                                      <MessageSquare size={12} />
+                                    </div>
+                                    <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Feed Comments</h4>
+                                  </div>
+                                  <CommentSection
+                                    type="feed"
+                                    entityId={feed._id}
+                                    userRole={userRole}
+                                    userId={currentUserId}
+                                    currentUserName={userName}
+                                    canComment={true}
+                                    refreshTrigger={commentRefreshTrigger}
+                                  />
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
                     })
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                            <Activity size={20} className="text-slate-300" />
+                          </div>
+                          <p className="text-xs font-bold uppercase text-slate-400">
+                            {showPendingOnly ? 'No pending feeds for today!' : 'No feeds found'}
+                          </p>
+                          <p className="text-[9px] text-slate-300 mt-0.5">
+                            {showPendingOnly ? 'All feeds completed or none scheduled' : 'Try adjusting your filters'}
+                          </p>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* PAGINATION */}
+        {totalPages > 1 && (
+          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
+            <div className="text-[8px] sm:text-[10px] font-bold text-slate-400">
+              Showing {indexOfFirstFeed + 1} to {Math.min(indexOfLastFeed, filteredFeeds.length)} of {filteredFeeds.length} feeds
+            </div>
+            
+            <div className="flex items-center gap-1 sm:gap-2">
+              <button
+                disabled={currentPage === 1}
+                onClick={() => setCurrentPage(prev => prev - 1)}
+                className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                <ChevronLeft size={isMobile ? 14 : 16} />
+              </button>
+
+              <div className="flex gap-0.5 sm:gap-1 bg-white p-0.5 sm:p-1 rounded-lg border border-slate-200 shadow-sm">
+                {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                    if (i === 4) pageNum = totalPages;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                    if (i === 0) pageNum = 1;
+                    if (i === 4) pageNum = totalPages;
                   }
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
-                >
-                  <option value="Daily">Daily</option>
-                  <option value="Weekly">Weekly</option>
-                  <option value="Monthly">Monthly</option>
-                  <option value="Once off">Once off</option>
-                </select>
-              </div>
-
-              {feedForm.feedType === 'Weekly' && (
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Select Day</label>
-                  <select
-                    required
-                    value={feedForm.weekDay}
-                    onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })}
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
-                  >
-                    <option value="">Choose a day</option>
-                    {weekDays.map(day => (
-                      <option key={day} value={day}>{day}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {feedForm.feedType === 'Monthly' && (
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Day of Month (1-31)</label>
-                  <select
-                    required
-                    value={feedForm.monthDay}
-                    onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })}
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
-                  >
-                    <option value="">Select day</option>
-                    {[...Array(31)].map((_, i) => (
-                      <option key={i + 1} value={i + 1}>{i + 1}{getOrdinalSuffix(i + 1)}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Feed Status */}
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Status</label>
-                <select
-                  value={feedForm.feedStatus}
-                  onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
-                >
-                  {feedStatuses.map(status => (
-                    <option key={status} value={status}>{status}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Platform Selection */}
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Platform Type</label>
-                <div className="flex gap-2">
-                  {['Web', 'App', 'Both'].map((platform) => (
+                  
+                  if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
+                    return <span key="ellipsis1" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-[10px] sm:text-xs">...</span>;
+                  }
+                  
+                  if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
+                    return <span key="ellipsis2" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-[10px] sm:text-xs">...</span>;
+                  }
+                  
+                  return (
                     <button
-                      key={platform}
-                      type="button"
-                      onClick={() => {
-                        setFeedForm({ 
-                          ...feedForm, 
-                          feedPlatform: platform,
-                          webDomain: platform === 'App' ? '' : feedForm.webDomain
-                        });
-                      }}
-                      className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
-                        feedForm.feedPlatform === platform
-                          ? 'bg-blue-600 text-white shadow-md'
-                          : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-6 sm:w-7 h-6 sm:h-7 rounded-md text-[9px] sm:text-[11px] font-black transition-all ${
+                        currentPage === pageNum
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
+                          : 'text-slate-500 hover:bg-slate-100'
                       }`}
                     >
-                      {platform}
+                      {pageNum}
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Domain URL */}
-              {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Domain URL</label>
-                  <input
-                    type="url"
-                    placeholder="https://example.com"
-                    value={feedForm.webDomain}
-                    onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                  />
-                </div>
-              )}
-
-              {/* Assign Developers */}
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-2 block flex items-center gap-1">
-                  <UserCheck size={10} />
-                  Assign Developers
-                </label>
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {developers.map(dev => (
-                    <label
-                      key={dev._id}
-                      className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
-                        feedForm.assignedDevelopers.includes(dev._id)
-                          ? 'border-blue-500 bg-blue-50 shadow-sm'
-                          : 'border-slate-200 hover:bg-slate-50'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={feedForm.assignedDevelopers.includes(dev._id)}
-                        onChange={(e) => {
-                          const updated = e.target.checked
-                            ? [...feedForm.assignedDevelopers, dev._id]
-                            : feedForm.assignedDevelopers.filter(id => id !== dev._id);
-                          setFeedForm({ ...feedForm, assignedDevelopers: updated });
-                        }}
-                        className="w-3 h-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                      />
-                      <span className="text-[10px] font-bold text-slate-700 truncate">{dev.name}</span>
-                    </label>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
 
               <button
-                type="submit"
-                className="w-full py-3 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all uppercase text-[10px] tracking-wider shadow-md"
+                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage(prev => prev + 1)}
+                className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
-                Save Changes
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* FEED COMMENT MODAL (NEW) */}
-      {showFeedCommentModal && selectedFeedForComments && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[140] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
-              <div>
-                <h2 className="text-2xl font-black text-[#1B2559]">Feed Comments</h2>
-                <p className="text-sm text-slate-500 mt-1">
-                  {selectedFeedForComments.name}
-                  <span className="text-[9px] text-slate-400 ml-2">
-                    {selectedFeedForComments.projectCustomId}
-                  </span>
-                </p>
-              </div>
-              <button 
-                onClick={closeFeedCommentModal}
-                className="text-slate-300 hover:text-slate-600 transition-colors"
-              >
-                <X size={28} />
+                <ChevronRight size={isMobile ? 14 : 16} />
               </button>
             </div>
-            
-            <CommentSection
-              type="feed"
-              entityId={selectedFeedForComments._id}
-              userRole={userRole}
-              userId={currentUserId}
-              currentUserName={userName}
-              canComment={true}
-              refreshTrigger={commentRefreshTrigger}
-            />
           </div>
-        </div>
-      )}
+        )}
 
-      {/* GENERATE TICKET MODAL */}
-      {showTicketModal && selectedTicketFeed && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="p-5 border-b border-slate-100">
-              <div className="flex justify-between items-center">
+        {/* MODALS - Same as before */}
+        {/* EDIT MODAL */}
+        {showEditModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[120] p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-6">
                 <div>
-                  <h2 className="text-lg font-black text-slate-800">Generate Support Ticket</h2>
-                  <p className="text-[10px] text-slate-500 mt-1">
-                    Feed: <span className="font-bold text-blue-600">{selectedTicketFeed.name}</span>
-                  </p>
+                  <h2 className="text-xl font-black text-slate-800">Edit Feed</h2>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Update feed configuration</p>
                 </div>
-                <button onClick={closeTicketModal} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                <button onClick={closeModal} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
                   <X size={16} />
                 </button>
               </div>
-            </div>
 
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Ticket Title *</label>
-                <input
-                  type="text"
-                  placeholder="Brief summary of the issue"
-                  value={ticketForm.title}
-                  onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                />
-              </div>
-
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Priority</label>
-                <select
-                  value={ticketForm.priority}
-                  onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
-                >
-                  <option value="Low">Low</option>
-                  <option value="Medium">Medium</option>
-                  <option value="High">High</option>
-                  <option value="Urgent">Urgent</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Description *</label>
-                <textarea
-                  placeholder="Detailed description of the issue..."
-                  rows={4}
-                  value={ticketForm.description}
-                  onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-slate-100 flex gap-2">
-              <button onClick={closeTicketModal} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-black uppercase text-[10px] tracking-wider hover:bg-slate-200 transition-colors">
-                Cancel
-              </button>
-              <button
-                onClick={handleGenerateTicket}
-                disabled={generatingTicket}
-                className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-amber-600 hover:to-amber-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-              >
-                {generatingTicket ? (
-                  <>
-                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Generating...
-                  </>
-                ) : (
-                  <>
-                    <Ticket size={12} />
-                    Generate
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* COMMENT VIEW MODAL (Completion Comment) */}
-      {showCommentModal && selectedCommentFeed && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[130] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-              <div className="flex items-center gap-1.5">
-                <CheckCircle size={16} className="text-emerald-600" />
-                <h3 className="text-base font-black text-slate-800">Completion Comment</h3>
-              </div>
-              <button onClick={() => setShowCommentModal(false)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
-                <X size={14} />
-              </button>
-            </div>
-            <div className="p-4">
-              <div className="mb-3">
-                <p className="text-[8px] font-black text-slate-400 uppercase">Feed</p>
-                <p className="text-sm font-bold text-slate-800">{selectedCommentFeed.name}</p>
-                <p className="text-[10px] text-slate-500">{selectedCommentFeed.projectCustomId}</p>
-              </div>
-              <div className="mb-3">
-                <p className="text-[8px] font-black text-slate-400 uppercase">Comment</p>
-                <div className="mt-1 p-2 bg-slate-50 rounded-lg border border-slate-100">
-                  <p className="text-xs text-slate-700 leading-relaxed">"{selectedCommentFeed.description}"</p>
-                </div>
-              </div>
-              {selectedCommentFeed.completedAt && (
+              <form onSubmit={handleUpdateFeed} className="space-y-4">
                 <div>
-                  <p className="text-[8px] font-black text-slate-400 uppercase">Completed At</p>
-                  <p className="text-[10px] text-slate-500 mt-0.5">{new Date(selectedCommentFeed.completedAt).toLocaleString()}</p>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Enter feed name"
+                    value={feedForm.name}
+                    onChange={(e) => setFeedForm({ ...feedForm, name: e.target.value })}
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                  />
                 </div>
-              )}
-            </div>
-            <div className="p-4 border-t border-slate-100">
-              <button onClick={() => setShowCommentModal(false)} className="w-full py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-emerald-600 hover:to-emerald-700 transition-all">
-                Close
-              </button>
+
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Type</label>
+                  <select
+                    value={feedForm.feedType}
+                    onChange={(e) =>
+                      setFeedForm({
+                        ...feedForm,
+                        feedType: e.target.value,
+                        weekDay: e.target.value !== 'Weekly' ? '' : feedForm.weekDay,
+                        monthDay: e.target.value !== 'Monthly' ? '' : feedForm.monthDay
+                      })
+                    }
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                  >
+                    <option value="Daily">Daily</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Once off">Once off</option>
+                  </select>
+                </div>
+
+                {feedForm.feedType === 'Weekly' && (
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Select Day</label>
+                    <select
+                      required
+                      value={feedForm.weekDay}
+                      onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })}
+                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                    >
+                      <option value="">Choose a day</option>
+                      {weekDays.map(day => (
+                        <option key={day} value={day}>{day}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {feedForm.feedType === 'Monthly' && (
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Day of Month (1-31)</label>
+                    <select
+                      required
+                      value={feedForm.monthDay}
+                      onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })}
+                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                    >
+                      <option value="">Select day</option>
+                      {[...Array(31)].map((_, i) => (
+                        <option key={i + 1} value={i + 1}>{i + 1}{getOrdinalSuffix(i + 1)}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Status</label>
+                  <select
+                    value={feedForm.feedStatus}
+                    onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                  >
+                    {feedStatuses.map(status => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Platform Type</label>
+                  <div className="flex gap-2">
+                    {['Web', 'App', 'Both'].map((platform) => (
+                      <button
+                        key={platform}
+                        type="button"
+                        onClick={() => {
+                          setFeedForm({ 
+                            ...feedForm, 
+                            feedPlatform: platform,
+                            webDomain: platform === 'App' ? '' : feedForm.webDomain
+                          });
+                        }}
+                        className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
+                          feedForm.feedPlatform === platform
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                        }`}
+                      >
+                        {platform}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
+                  <div>
+                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Domain URL</label>
+                    <input
+                      type="url"
+                      placeholder="https://example.com"
+                      value={feedForm.webDomain}
+                      onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
+                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                    />
+                  </div>
+                )}
+
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-2 block flex items-center gap-1">
+                    <UserCheck size={10} />
+                    Assign Developers
+                  </label>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {developers.map(dev => (
+                      <label
+                        key={dev._id}
+                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
+                          feedForm.assignedDevelopers.includes(dev._id)
+                            ? 'border-blue-500 bg-blue-50 shadow-sm'
+                            : 'border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={feedForm.assignedDevelopers.includes(dev._id)}
+                          onChange={(e) => {
+                            const updated = e.target.checked
+                              ? [...feedForm.assignedDevelopers, dev._id]
+                              : feedForm.assignedDevelopers.filter(id => id !== dev._id);
+                            setFeedForm({ ...feedForm, assignedDevelopers: updated });
+                          }}
+                          className="w-3 h-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-[10px] font-bold text-slate-700 truncate">{dev.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-3 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all uppercase text-[10px] tracking-wider shadow-md"
+                >
+                  Save Changes
+                </button>
+              </form>
             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* FEED COMMENT MODAL */}
+        {showFeedCommentModal && selectedFeedForComments && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[140] p-4">
+            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h2 className="text-2xl font-black text-[#1B2559]">Feed Comments</h2>
+                  <p className="text-sm text-slate-500 mt-0.5">
+                    {selectedFeedForComments.name}
+                    <span className="text-[9px] text-slate-400 ml-2">
+                      {selectedFeedForComments.projectCustomId}
+                    </span>
+                  </p>
+                </div>
+                <button 
+                  onClick={closeFeedCommentModal}
+                  className="text-slate-300 hover:text-slate-600 transition-colors"
+                >
+                  <X size={28} />
+                </button>
+              </div>
+              
+              <CommentSection
+                type="feed"
+                entityId={selectedFeedForComments._id}
+                userRole={userRole}
+                userId={currentUserId}
+                currentUserName={userName}
+                canComment={true}
+                refreshTrigger={commentRefreshTrigger}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* GENERATE TICKET MODAL */}
+        {showTicketModal && selectedTicketFeed && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
+              <div className="p-5 border-b border-slate-100">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h2 className="text-lg font-black text-slate-800">Generate Support Ticket</h2>
+                    <p className="text-[10px] text-slate-500 mt-0.5">
+                      Feed: <span className="font-bold text-blue-600">{selectedTicketFeed.name}</span>
+                    </p>
+                  </div>
+                  <button onClick={closeTicketModal} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                    <X size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 space-y-4">
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Ticket Title *</label>
+                  <input
+                    type="text"
+                    placeholder="Brief summary of the issue"
+                    value={ticketForm.title}
+                    onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Priority</label>
+                  <select
+                    value={ticketForm.priority}
+                    onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                  >
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                    <option value="Urgent">Urgent</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Description *</label>
+                  <textarea
+                    placeholder="Detailed description of the issue..."
+                    rows={3}
+                    value={ticketForm.description}
+                    onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors resize-none"
+                  />
+                </div>
+              </div>
+
+              <div className="p-5 border-t border-slate-100 flex gap-2">
+                <button onClick={closeTicketModal} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-black uppercase text-[10px] tracking-wider hover:bg-slate-200 transition-colors">
+                  Cancel
+                </button>
+                <button
+                  onClick={handleGenerateTicket}
+                  disabled={generatingTicket}
+                  className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-amber-600 hover:to-amber-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                >
+                  {generatingTicket ? (
+                    <>
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Ticket size={12} />
+                      Generate
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* COMMENT VIEW MODAL */}
+        {showCommentModal && selectedCommentFeed && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[130] flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
+              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+                <div className="flex items-center gap-1.5">
+                  <CheckCircle size={16} className="text-emerald-600" />
+                  <h3 className="text-base font-black text-slate-800">Completion Comment</h3>
+                </div>
+                <button onClick={() => setShowCommentModal(false)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="p-4">
+                <div className="mb-3">
+                  <p className="text-[8px] font-black text-slate-400 uppercase">Feed</p>
+                  <p className="text-sm font-bold text-slate-800">{selectedCommentFeed.name}</p>
+                  <p className="text-[10px] text-slate-500">{selectedCommentFeed.projectCustomId}</p>
+                </div>
+                <div className="mb-3">
+                  <p className="text-[8px] font-black text-slate-400 uppercase">Comment</p>
+                  <div className="mt-1 p-2 bg-slate-50 rounded-lg border border-slate-100">
+                    <p className="text-xs text-slate-700 leading-relaxed">"{selectedCommentFeed.description}"</p>
+                  </div>
+                </div>
+                {selectedCommentFeed.completedAt && (
+                  <div>
+                    <p className="text-[8px] font-black text-slate-400 uppercase">Completed At</p>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{new Date(selectedCommentFeed.completedAt).toLocaleString()}</p>
+                  </div>
+                )}
+              </div>
+              <div className="p-4 border-t border-slate-100">
+                <button onClick={() => setShowCommentModal(false)} className="w-full py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-emerald-600 hover:to-emerald-700 transition-all">
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };

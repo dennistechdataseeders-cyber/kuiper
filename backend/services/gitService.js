@@ -1,3 +1,4 @@
+// backend/services/gitService.js
 const { Octokit } = require('@octokit/rest');
 const User = require('../models/User');
 
@@ -7,14 +8,28 @@ class GitService {
     this.owner = process.env.GITHUB_OWNER;
     this.octokit = null;
     
+    console.log('🔧 Initializing GitHub Service...');
+    console.log(`   GITHUB_TOKEN exists: ${!!this.token}`);
+    console.log(`   GITHUB_TOKEN prefix: ${this.token ? this.token.substring(0, 4) : 'none'}`);
+    console.log(`   GITHUB_OWNER: ${this.owner}`);
+    
     if (this.token && this.owner && this.token.startsWith('ghp_')) {
-      this.octokit = new Octokit({ 
-        auth: this.token,
-        userAgent: 'KUIPER-CRM-v1.0'  
-      });
-      console.log('✅ GitHub service initialized for:', this.owner);
+      try {
+        this.octokit = new Octokit({ 
+          auth: this.token,
+          userAgent: 'KUIPER-CRM-v1.0'  
+        });
+        console.log('✅ GitHub service initialized successfully for:', this.owner);
+      } catch (error) {
+        console.error('❌ Failed to initialize Octokit:', error.message);
+        this.octokit = null;
+      }
     } else {
-      console.warn('⚠️ GitHub token missing or invalid. Git features disabled.');
+      const reasons = [];
+      if (!this.token) reasons.push('GITHUB_TOKEN not set');
+      if (!this.owner) reasons.push('GITHUB_OWNER not set');
+      if (this.token && !this.token.startsWith('ghp_')) reasons.push('GITHUB_TOKEN does not start with "ghp_"');
+      console.warn(`⚠️ GitHub service disabled. Reasons: ${reasons.join(', ')}`);
     }
   }
 
@@ -31,14 +46,21 @@ class GitService {
   // FIX: Improved GitHub username resolution
   // =====================================================
   async getUsernameFromEmail(email) {
-    if (!this.octokit || !email) return null;
+    if (!this.octokit || !email) {
+      console.warn('⚠️ Cannot search GitHub: octokit not initialized or email missing');
+      return null;
+    }
     
     try {
+      console.log(`🔍 Searching GitHub for email: ${email}`);
+      
       // Method 1: Search by email (only works if public)
       const response = await this.octokit.search.users({
         q: `${email} in:email`,
         per_page: 5
       });
+      
+      console.log(`   Search result: ${response.data.total_count} users found`);
       
       if (response.data.total_count > 0 && response.data.items[0]) {
         const username = response.data.items[0].login;
@@ -61,6 +83,7 @@ class GitService {
           }
         } catch (userErr) {
           // User not found by username
+          console.log(`   Username ${emailUsername} not found on GitHub`);
         }
       }
 
@@ -68,22 +91,33 @@ class GitService {
       return null;
     } catch (error) {
       console.error(`Error searching GitHub for ${email}:`, error.message);
+      if (error.status === 403) {
+        console.error('   GitHub API rate limit exceeded. Try again later.');
+      }
       return null;
     }
   }
 
   async getDetailedGitHubUser(email) {
-    if (!this.octokit || !email) return null;
+    if (!this.octokit || !email) {
+      console.warn('⚠️ Cannot fetch GitHub user: octokit not initialized or email missing');
+      return null;
+    }
     
     try {
+      console.log(`🔍 Fetching detailed GitHub user for: ${email}`);
+      
       // Try 1: Search by email
       const response = await this.octokit.search.users({
         q: `${email} in:email`,
         per_page: 5
       });
       
+      console.log(`   Search result: ${response.data.total_count} users found`);
+      
       if (response.data.total_count > 0 && response.data.items[0]) {
         const username = response.data.items[0].login;
+        console.log(`   Found username: ${username}`);
         const userDetails = await this.octokit.users.getByUsername({ username });
         return {
           username,
@@ -115,7 +149,7 @@ class GitService {
             };
           }
         } catch (fallbackErr) {
-          // User not found
+          console.log(`   Username ${emailUsername} not found on GitHub`);
         }
       }
 
@@ -123,6 +157,9 @@ class GitService {
       return null;
     } catch (error) {
       console.error(`Error fetching GitHub user details for ${email}:`, error.message);
+      if (error.status === 403) {
+        console.error('   GitHub API rate limit exceeded. Try again later.');
+      }
       return null;
     }
   }
@@ -131,19 +168,32 @@ class GitService {
   // FIX: Improved GitHub linking with better error handling
   // =====================================================
   async linkGitHubAccountToUser(userId, email) {
+    console.log(`🔗 linkGitHubAccountToUser called for userId: ${userId}, email: ${email}`);
+    
     try {
       const user = await User.findById(userId);
       if (!user) {
+        console.error('❌ User not found:', userId);
         return { success: false, error: 'User not found' };
       }
 
       // Already linked
       if (user.githubUsername && user.githubLinked) {
-        console.log(`User ${user.email} already has GitHub linked: ${user.githubUsername}`);
+        console.log(`ℹ️ User ${user.email} already has GitHub linked: ${user.githubUsername}`);
         return {
           success: true,
           alreadyLinked: true,
           githubUsername: user.githubUsername
+        };
+      }
+
+      // Check if octokit is initialized
+      if (!this.octokit) {
+        console.error('❌ Octokit not initialized. Cannot link GitHub account.');
+        return {
+          success: false,
+          error: 'GitHub service is not initialized. Please check GITHUB_TOKEN configuration.',
+          githubLinked: false
         };
       }
 
@@ -159,26 +209,25 @@ class GitService {
           success: true,
           githubUsername: githubUser.username,
           githubLinked: true,
-          profile_url: githubUser.profile_url
+          profile_url: githubUser.profile_url,
+          avatar_url: githubUser.avatar_url
         };
       } else {
-        user.githubUsername = null;
-        user.githubLinked = false;
-        await user.save();
-        
+        // Don't save if no GitHub account found (keep existing values)
         console.log(`⚠️ No GitHub account found for ${user.email}`);
         return {
           success: false,
           githubUsername: null,
           githubLinked: false,
-          message: 'No public GitHub account found with this email'
+          message: 'No public GitHub account found with this email. Make sure your email is public on GitHub.'
         };
       }
     } catch (error) {
-      console.error('Error linking GitHub account:', error);
+      console.error('❌ Error linking GitHub account:', error.message);
       return {
         success: false,
-        error: error.message
+        error: error.message,
+        githubLinked: false
       };
     }
   }

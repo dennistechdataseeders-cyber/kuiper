@@ -590,22 +590,38 @@ const [followUpData, setFollowUpData] = useState({
   };
 
   const handleCloseLead = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const payload = {
-        status: closingData.reason === 'won' ? 'Production Ready' : 'Closed',
-        lastInteractionDesc: closingData.description || 'No description provided',
-        projectManagerId: null 
-      };
-      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, payload, { headers: { Authorization: `Bearer ${token}` } });
-      toast.success(`Lead marked as ${payload.status}`);
-      fetchData(); 
-      closeModal();
-    } catch (err) { 
-      console.error("Close Lead Error:", err.response?.data);
-      alert(err.response?.data?.error || "Failed to close lead"); 
-    }
-  };
+  // Validate that reason is selected
+  if (!closingData.reason) {
+    toast.error("Please select an outcome (Won or Lost)");
+    return;
+  }
+
+  // Validate that description is provided for lost leads
+  if (closingData.reason === 'lost' && !closingData.description.trim()) {
+    toast.error("Please provide a reason for losing the lead");
+    return;
+  }
+
+  try {
+    const token = localStorage.getItem('token');
+    const payload = {
+      status: closingData.reason === 'won' ? 'Production Ready' : 'Closed',
+      lastInteractionDesc: closingData.description || 'No description provided',
+      projectManagerId: null 
+    };
+    
+    await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, payload, { 
+      headers: { Authorization: `Bearer ${token}` } 
+    });
+    
+    toast.success(`Lead marked as ${payload.status}`);
+    fetchData(); 
+    closeModal();
+  } catch (err) { 
+    console.error("Close Lead Error:", err.response?.data);
+    toast.error(err.response?.data?.error || "Failed to close lead"); 
+  }
+};
 
   const closeModal = () => {
     if (isUploading) return;
@@ -866,47 +882,67 @@ const handleProjectSubmit = async (e) => {
                       Scheduled
                     </button>
                   </div>
-                  <div className="space-y-4">
-                    {followUps.length === 0 ? (
-                      <p className="text-slate-400 text-sm italic text-center py-6">No pending follow-ups.</p>
-                    ) : currentFollowUps.map((lead) => {
-                      const isOverdueTask = isOverdue(lead.followUpDate);
-                      return (
-                        <div key={lead._id} className={`p-5 rounded-3xl border flex items-center justify-between group transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-100 hover:border-orange-200'}`}>
-                          <div className="flex items-center gap-4 flex-1">
-                            <div className="p-3 bg-white/80 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
-                              {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-                                <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
-                                  {lead.organizationId?.companyName || 'No Org'}
-                                </span>
-                                {isOverdueTask && (
-                                  <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                    <AlertTriangle size={8} />
-                                    Pending SLA
+                 <div className="space-y-4">
+                      {followUps.length === 0 ? (
+                        <p className="text-slate-400 text-sm italic text-center py-6">No pending follow-ups.</p>
+                      ) : currentFollowUps.map((lead) => {
+                        const isOverdueTask = isOverdue(lead.followUpDate);
+                        return (
+                          <div key={lead._id} className={`p-5 rounded-3xl border flex items-center justify-between group transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-100 hover:border-orange-200'}`}>
+                            <div className="flex items-center gap-4 flex-1">
+                              <div className="p-3 bg-white/80 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
+                                {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
+                                  <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
+                                    {lead.organizationId?.companyName || 'No Org'}
                                   </span>
+                                  {isOverdueTask && (
+                                    <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
+                                      <AlertTriangle size={8} />
+                                      Pending SLA
+                                    </span>
+                                  )}
+                                </div>
+                                
+                                {/* POC Contact Details - Added above date */}
+                                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                  {lead.pocEmail && (
+                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
+                                      <Mail size={10} className="text-slate-400" />
+                                      {lead.pocEmail}
+                                    </span>
+                                  )}
+                                  {lead.pocPhone && (
+                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
+                                      <Phone size={10} className="text-slate-400" />
+                                      {lead.pocPhone}
+                                    </span>
+                                    
+                                  )}
+                                   <span className="text-[8px] font-medium text-slate-00 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
+                                        Scheduled: {new Date(lead.followUpDate).toLocaleDateString()}
+                                    </span>
+                                </div>
+                                
+                                {lead.lastInteractionDesc && (
+                                  <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
+                                    📝 {lead.lastInteractionDesc}
+                                  </p>
                                 )}
                               </div>
-                              <p className="text-[9px] text-slate-500 mt-1">Scheduled: {new Date(lead.followUpDate).toLocaleDateString()}</p>
-                              {lead.lastInteractionDesc && (
-                                <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
-                                  📝 {lead.lastInteractionDesc}
-                                </p>
-                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors">
+                                <ExternalLink size={16}/>
+                              </button>
                             </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors">
-                              <ExternalLink size={16}/>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
                 </div>
 
                 {totalFollowUpPages > 1 && (
@@ -958,6 +994,23 @@ const handleProjectSubmit = async (e) => {
                                     </span>
                                   )}
                                 </div>
+                                
+                                {/* POC Contact Details - Added above date */}
+                                <div className="flex items-center gap-3 mt-1 flex-wrap">
+                                  {lead.pocEmail && (
+                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
+                                      <Mail size={10} className="text-slate-400" />
+                                      {lead.pocEmail}
+                                    </span>
+                                  )}
+                                  {lead.pocPhone && (
+                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
+                                      <Phone size={10} className="text-slate-400" />
+                                      {lead.pocPhone}
+                                    </span>
+                                  )}
+                                </div>
+                                
                                 <p className="text-[9px] text-slate-500 mt-1">Due: {new Date(lead.followUpDate).toLocaleDateString()}</p>
                                 {lead.lastInteractionDesc && (
                                   <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
@@ -1121,16 +1174,111 @@ const handleProjectSubmit = async (e) => {
                 </div>
               </div>
             )}
-            {actionStep === 3 && (
-              <div className="animate-in slide-in-from-right-4 duration-300">
-                <h2 className="text-2xl font-black text-slate-900 mb-2">Conclusion</h2>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3"><button onClick={() => setClosingData({...closingData, reason: 'lost'})} className={`col-span-2 mx-auto py-3 px-6 rounded-2xl font-black text-[10px] uppercase border-2 transition-all ${closingData.reason === 'lost' ? 'bg-rose-50 border-rose-500 text-rose-600' : 'bg-slate-50 border-transparent text-slate-400'}`}>Lost</button></div>
-                  <textarea placeholder="Final summary/reasons..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl h-32 resize-none font-medium outline-none" value={closingData.description} onChange={(e) => setClosingData({...closingData, description: e.target.value})} />
-                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={handleCloseLead} className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase shadow-lg transition-all ${closingData.reason === 'won' ? 'bg-emerald-500 shadow-emerald-200' : 'bg-rose-500 shadow-rose-200'}`}>Confirm Status</button></div>
+          {actionStep === 3 && (
+            <div className="animate-in slide-in-from-right-4 duration-300">
+              <h2 className="text-2xl font-black text-slate-900 mb-2">Conclusion</h2>
+              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select outcome and provide details</p>
+              
+              <div className="space-y-6">
+                {/* Outcome Selection */}
+                <div className="space-y-3">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    Select Outcome *
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button 
+                      type="button"
+                      onClick={() => setClosingData({...closingData, reason: 'won'})} 
+                      className={`py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                        closingData.reason === 'won' 
+                          ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-md shadow-emerald-100' 
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      <CheckCircle size={16} className={closingData.reason === 'won' ? 'text-emerald-600' : 'text-slate-400'} />
+                      Won 
+                    </button>
+                    
+                    <button 
+                      type="button"
+                      onClick={() => setClosingData({...closingData, reason: 'lost'})} 
+                      className={`py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                        closingData.reason === 'lost' 
+                          ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-md shadow-rose-100' 
+                          : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:border-slate-300'
+                      }`}
+                    >
+                      <X size={16} className={closingData.reason === 'lost' ? 'text-rose-600' : 'text-slate-400'} />
+                      Lost
+                    </button>
+                  </div>
                 </div>
+
+                {/* Description */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    {closingData.reason === 'won' ? 'Success Notes' : 'Reason for Loss'} *
+                  </label>
+                  <textarea 
+                    placeholder={
+                      closingData.reason === 'won' 
+                        ? "Describe what made this lead successful..." 
+                        : "Please explain why this lead was lost..."
+                    }
+                    required
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-28 resize-none font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
+                    value={closingData.description} 
+                    onChange={(e) => setClosingData({...closingData, description: e.target.value})} 
+                  />
+                  {closingData.reason === 'lost' && (
+                    <p className="text-[9px] text-rose-500 ml-1 flex items-center gap-1">
+                      <AlertCircle size={12} />
+                      Please provide a reason for losing this lead
+                    </p>
+                  )}
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex gap-3 pt-4 border-t border-slate-100">
+                  <button 
+                    onClick={() => setActionStep(1)} 
+                    className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={handleCloseLead} 
+                    disabled={!closingData.reason || (closingData.reason === 'lost' && !closingData.description.trim())}
+                    className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
+                      closingData.reason === 'won' 
+                        ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' 
+                        : closingData.reason === 'lost'
+                        ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-200'
+                        : 'bg-slate-300 cursor-not-allowed'
+                    } ${(!closingData.reason || (closingData.reason === 'lost' && !closingData.description.trim())) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {closingData.reason === 'won' ? <CheckCircle size={16} /> : <X size={16} />}
+                    {closingData.reason === 'won' ? 'Confirm Win' : 'Confirm Loss'}
+                  </button>
+                </div>
+
+                {/* Validation Message */}
+                {!closingData.reason && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
+                    <AlertCircle size={14} className="text-amber-600" />
+                    <p className="text-[10px] font-bold text-amber-700">Please select an outcome (Won or Lost) to continue</p>
+                  </div>
+                )}
+                
+                {closingData.reason === 'lost' && !closingData.description.trim() && (
+                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2">
+                    <AlertCircle size={14} className="text-rose-600" />
+                    <p className="text-[10px] font-bold text-rose-700">Please provide a reason for losing the lead</p>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+          )}
             {actionStep === 4 && (
               <div className="animate-in slide-in-from-right-4 duration-300">
                 <h2 className="text-2xl font-black text-slate-900 mb-2">Assign Project</h2>

@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
@@ -18,7 +18,9 @@ import {
   UserPlus,
   Search,
   AlertCircle,
-  Users
+  Users,
+  Building2,
+  CheckCircle
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -338,6 +340,11 @@ const LeadGeneration = () => {
   const [availablePOCs, setAvailablePOCs] = useState([]);
   const [selectedPOCIndex, setSelectedPOCIndex] = useState(null);
 
+  // Search state for organization dropdown
+  const [orgSearchTerm, setOrgSearchTerm] = useState('');
+  const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
+  const orgDropdownRef = useRef(null);
+
   const [filterStatus, setFilterStatus] = useState('All');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -368,7 +375,33 @@ const LeadGeneration = () => {
   });
   
   const { isCollapsed } = useSidebar();
-  
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (orgDropdownRef.current && !orgDropdownRef.current.contains(event.target)) {
+        setIsOrgDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Sort organizations alphabetically
+  const sortedOrgs = [...orgs].sort((a, b) => {
+    const nameA = (a.companyName || a.name || '').toLowerCase();
+    const nameB = (b.companyName || b.name || '').toLowerCase();
+    return nameA.localeCompare(nameB);
+  });
+
+  // Filter organizations based on search term
+  const filteredOrgs = sortedOrgs.filter(org => {
+    const search = orgSearchTerm.toLowerCase().trim();
+    if (!search) return true;
+    const companyName = (org.companyName || org.name || '').toLowerCase();
+    return companyName.includes(search);
+  });
+
   const fetchData = useCallback(async () => {
     setLoading(true);
 
@@ -493,7 +526,6 @@ const LeadGeneration = () => {
         });
       }
       
-      console.log("Extracted POCs:", pocs);
       setAvailablePOCs(pocs);
       
       // Auto-select first POC if available
@@ -522,13 +554,17 @@ const LeadGeneration = () => {
     }));
   };
 
-  // Handle organization change
-  const handleOrgChange = async (orgId) => {
+  // Handle organization selection
+  const handleOrgSelect = async (orgId) => {
     const selectedOrg = orgs.find(
       (o) => o._id === orgId
     );
 
     if (selectedOrg) {
+      // Update the search term with the selected organization name
+      const orgName = selectedOrg.companyName || selectedOrg.name || '';
+      setOrgSearchTerm(orgName);
+      
       setFormData((prev) => ({
         ...prev,
         organizationId: orgId,
@@ -541,23 +577,29 @@ const LeadGeneration = () => {
       
       setSelectedPOCIndex(null);
       setAvailablePOCs([]);
+      setIsOrgDropdownOpen(false);
       
       // Fetch organization details including POCs
       await fetchOrganizationDetails(orgId);
-    } else {
-      setFormData((prev) => ({
-        ...prev,
-        organizationId: '',
-        pocId: '',
-        pocName: '',
-        pocPhone: '',
-        pocEmail: '',
-        pocLinkedin: ''
-      }));
-      setSelectedPOCIndex(null);
-      setAvailablePOCs([]);
-      setSelectedOrgDetails(null);
     }
+  };
+
+  // Handle clearing organization selection
+  const handleClearOrg = () => {
+    setOrgSearchTerm('');
+    setFormData((prev) => ({
+      ...prev,
+      organizationId: '',
+      pocId: '',
+      pocName: '',
+      pocPhone: '',
+      pocEmail: '',
+      pocLinkedin: ''
+    }));
+    setSelectedPOCIndex(null);
+    setAvailablePOCs([]);
+    setSelectedOrgDetails(null);
+    setIsOrgDropdownOpen(false);
   };
 
   // QUICK ACTION
@@ -742,6 +784,8 @@ const LeadGeneration = () => {
       setSelectedPOCIndex(null);
       setAvailablePOCs([]);
       setSelectedOrgDetails(null);
+      setOrgSearchTerm('');
+      setIsOrgDropdownOpen(false);
 
       fetchData();
 
@@ -1085,56 +1129,118 @@ const LeadGeneration = () => {
                   </div>
                 )}
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
-                    Select Organization
+                {/* SEARCHABLE ORGANIZATION SELECTION */}
+                <div className="space-y-2" ref={orgDropdownRef}>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2 flex items-center gap-2">
+                    <Building2 size={14} />
+                    Select Organization *
                   </label>
 
-                  <select
-                    required
-                    disabled={
-                      isAlreadyConverted
-                    }
-                    className={`w-full p-4 rounded-2xl border-2 transition-all outline-none font-bold ${
-                      isAlreadyConverted
-                        ? 'bg-slate-100 border-transparent text-slate-400'
-                        : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white text-slate-700'
-                    }`}
-                    value={
-                      formData.organizationId
-                    }
-                    onChange={(e) =>
-                      handleOrgChange(
-                        e.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      Select Organization...
-                    </option>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    
+                    <input
+                      type="text"
+                      required
+                      disabled={isAlreadyConverted}
+                      placeholder="Search for an organization..."
+                      className={`w-full p-4 pl-12 pr-24 rounded-2xl border-2 transition-all outline-none font-bold ${
+                        isAlreadyConverted
+                          ? 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed'
+                          : formData.organizationId
+                          ? 'bg-emerald-50 border-emerald-300 text-slate-700'
+                          : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white text-slate-700'
+                      }`}
+                      value={orgSearchTerm}
+                      onChange={(e) => {
+                        setOrgSearchTerm(e.target.value);
+                        setIsOrgDropdownOpen(true);
+                        // If search term changes and there's a selected org, clear it
+                        if (formData.organizationId) {
+                          setFormData(prev => ({ ...prev, organizationId: '', pocId: '', pocName: '', pocPhone: '', pocEmail: '', pocLinkedin: '' }));
+                          setSelectedPOCIndex(null);
+                          setAvailablePOCs([]);
+                          setSelectedOrgDetails(null);
+                        }
+                      }}
+                      onFocus={() => setIsOrgDropdownOpen(true)}
+                    />
 
-                    {orgs &&
-                    orgs.length > 0 ? (
-                      orgs.map((org) => (
-                        <option
-                          key={org._id}
-                          value={org._id}
+                    {/* Action buttons */}
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                      {formData.organizationId && (
+                        <button
+                          type="button"
+                          onClick={handleClearOrg}
+                          className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+                          title="Clear selection"
                         >
-                          {org.companyName ||
-                            org.name ||
-                            "Unknown Organization"}
-                        </option>
-                      ))
-                    ) : (
-                      <option
-                        disabled
-                        value=""
+                          <X size={14} className="text-slate-400 hover:text-slate-600" />
+                        </button>
+                      )}
+                      
+                      <button
+                        type="button"
+                        onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
                       >
-                        No organizations
-                        available
-                      </option>
-                    )}
-                  </select>
+                        <ChevronDown 
+                          size={16} 
+                          className={`text-slate-400 transition-transform duration-200 ${
+                            isOrgDropdownOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {formData.organizationId && (
+                        <CheckCircle size={16} className="text-emerald-500 ml-1" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Dropdown */}
+                  {isOrgDropdownOpen && !isAlreadyConverted && (
+                    <div className="absolute z-50 w-full max-w-[calc(100%-2rem)] bg-white rounded-2xl border border-slate-200 shadow-xl max-h-60 overflow-y-auto mt-1 animate-in slide-in-from-top-2 duration-200">
+                      {filteredOrgs.length === 0 ? (
+                        <div className="p-6 text-center">
+                          <Building2 size={24} className="mx-auto text-slate-300 mb-2" />
+                          <p className="text-sm font-bold text-slate-500">No organizations found</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Try a different search term</p>
+                        </div>
+                      ) : (
+                        filteredOrgs.map((org) => (
+                          <div
+                            key={org._id}
+                            onClick={() => handleOrgSelect(org._id)}
+                            className={`flex items-center justify-between p-4 cursor-pointer transition-all hover:bg-blue-50 border-b border-slate-50 last:border-0 ${
+                              formData.organizationId === org._id ? 'bg-blue-50' : ''
+                            }`}
+                          >
+                            <div>
+                              <p className="font-bold text-slate-800 text-sm">
+                                {org.companyName || org.name || 'Unnamed Organization'}
+                              </p>
+                              {org.website && (
+                                <p className="text-[10px] text-slate-400 flex items-center gap-1">
+                                  <Globe size={10} />
+                                  {org.website}
+                                </p>
+                              )}
+                              {org.pocName && (
+                                <p className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <Users size={8} />
+                                  Contact: {org.pocName}
+                                </p>
+                              )}
+                            </div>
+                            {formData.organizationId === org._id && (
+                              <CheckCircle size={18} className="text-emerald-500 shrink-0" />
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1165,7 +1271,7 @@ const LeadGeneration = () => {
                         <option value="">Select a Point of Contact...</option>
                         {availablePOCs.map((poc) => (
                           <option key={poc.id} value={poc.id}>
-                            {poc.name} {poc.isPrimary && "(Primary)"} - {poc.department}
+                            {poc.name} {poc.isPrimary ? "(Primary)" : ""} - {poc.department}
                           </option>
                         ))}
                       </select>
@@ -1218,11 +1324,13 @@ const LeadGeneration = () => {
                   </>
                 ) : formData.organizationId ? (
                   <div className="text-center py-6 text-slate-400">
+                    <Users size={24} className="mx-auto mb-2 text-slate-300" />
                     <p className="text-xs font-medium">No POCs found for this organization.</p>
                     <p className="text-[10px] mt-1">Please add POCs to the organization first.</p>
                   </div>
                 ) : (
                   <div className="text-center py-6 text-slate-400">
+                    <Building2 size={24} className="mx-auto mb-2 text-slate-300" />
                     <p className="text-xs font-medium">Select an organization to view POCs.</p>
                   </div>
                 )}
@@ -1230,16 +1338,18 @@ const LeadGeneration = () => {
 
               <button
                 disabled={
-                  isAlreadyConverted || !formData.pocName
+                  isAlreadyConverted || !formData.pocName || !formData.organizationId
                 }
                 className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
-                  isAlreadyConverted || !formData.pocName
+                  isAlreadyConverted || !formData.pocName || !formData.organizationId
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
                 }`}
               >
                 {isAlreadyConverted
                   ? "Lead Already Generated"
+                  : !formData.organizationId
+                  ? "Select an Organization First"
                   : !formData.pocName
                   ? "Select a POC to Continue"
                   : "Generate Lead Now"}

@@ -69,6 +69,16 @@ const UserSchema = new mongoose.Schema({
     default: true
   },
   
+  // ============================================
+  // EMPLOYEE CODE - ADDED
+  // ============================================
+  employeeCode: {
+    type: String,
+    unique: true,
+    sparse: true,
+    default: null
+  },
+  
   // Notification fields
   notificationCount: {
     type: Number,

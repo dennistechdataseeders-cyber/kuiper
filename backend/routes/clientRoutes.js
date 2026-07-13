@@ -132,28 +132,18 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
     // Get today's date
     const today = new Date().toISOString().split('T')[0];
     
-    console.log(`📊 Project name: "${project.name}"`);
-    console.log(`📊 Project Custom ID: "${project.projectCustomId}"`);
-    console.log(`📊 Today's date: ${today}`);
-    console.log(`📊 Role: ${userRole}`);
-    
     // ✅ Query FeedStatus table in client_feed_dashboard DB
     const feedStatuses = await FeedStatus.find({ 
       project: project.projectCustomId, 
       date: today 
     });
 
-    console.log(`📊 Found ${feedStatuses.length} feed statuses for project "${project.name}" on ${today}`);
-
     // If no feed statuses found, try without date filter
     let allFeeds = feedStatuses;
     if (allFeeds.length === 0) {
-      console.log(`⚠️ No feed statuses for today, checking all dates...`);
       const allStatuses = await FeedStatus.find({ 
         project: project.name
       }).sort({ date: -1 });
-      
-      console.log(`📊 Found ${allStatuses.length} total feed statuses for this project`);
       
       // Get the most recent status for each feed
       const feedMap = new Map();
@@ -165,12 +155,10 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
       });
       
       allFeeds = Array.from(feedMap.values());
-      console.log(`📊 Found ${allFeeds.length} unique feeds for this project`);
     }
 
     // If still no feeds, return empty array
     if (!allFeeds || allFeeds.length === 0) {
-      console.log('⚠️ No feeds found for this project in FeedStatus table');
       return res.status(200).json([]);
     }
 
@@ -221,8 +209,6 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
       };
     });
 
-    console.log(`✅ Returning ${enrichedFeeds.length} enriched feeds from FeedStatus table`);
-    console.log(`📊 First feed record_count: ${enrichedFeeds[0]?.record_count || 'null'}`);
     res.status(200).json(enrichedFeeds);
     
   } catch (error) {
@@ -238,14 +224,10 @@ router.get('/feeds/status/:feedName', async (req, res) => {
   try {
     const { feedName } = req.params;
     const date = new Date().toISOString().split('T')[0];
-    
-    console.log(`📊 Checking status for feed: "${feedName}" on ${date}`);
-    console.log(`📊 FeedStatus DB URI: ${process.env.FEED_STATUS_MONGO_URI || 'Not set'}`);
 
     const feed = await FeedStatus.findOne({ feed_name: feedName, date });
 
     if (!feed) {
-      console.log(`⚠️ No status found for "${feedName}", returning default`);
       return res.json({
         feed_name: feedName,
         date,
@@ -264,8 +246,6 @@ router.get('/feeds/status/:feedName', async (req, res) => {
     const completedStages = Object.values(stages).filter(
       (s) => s && s.completed === true
     ).length;
-
-    console.log(`✅ Status for "${feedName}": ${feed.status} (${feed.progress}%, ${completedStages}/${totalStages} stages)`);
 
     res.json({
       feed_name: feedName,
@@ -312,8 +292,6 @@ router.post('/feeds/update', async (req, res) => {
     }
 
     const date = new Date().toISOString().split('T')[0];
-    
-    console.log(`📥 Updating feed status: ${feed_name} | ${stage} = ${completed}`);
 
     // First, find or create the document
     let feed = await FeedStatus.findOne({ feed_name, date });
@@ -352,16 +330,13 @@ router.post('/feeds/update', async (req, res) => {
 
     if (stage === 'file_integrity' && count !== undefined) {
       feed.record_count = Number(count);
-      console.log(`📊 Integrity metric verified for ${feed_name}: ${count} records calculated.`);
     }
 
     if (stage === 'process_complete') {
       if (Array.isArray(paths) && paths.length > 0) {
         feed.output_path = paths;
-        console.log(`📂 Stored multiple output_paths:`, paths);
       } else if (path) {
         feed.output_path = path;
-        console.log(`📂 Stored single output_path: ${path}`);
       }
     }
 
@@ -377,8 +352,6 @@ router.post('/feeds/update', async (req, res) => {
     feed.updated_at = new Date();
 
     await feed.save();
-
-    console.log(`✅ Feed "${feed_name}" updated: ${stage} → ${progress}% (${feed.status})`);
 
     // Emit WebSocket event
     const io = req.app.get('io');
@@ -432,8 +405,6 @@ router.get('/feeds/:feedId', protect, async (req, res) => {
     const { feedId } = req.params;
     const today = new Date().toISOString().split('T')[0];
     
-    console.log(`📊 Fetching feed details for: ${feedId}`);
-    
     let feedStatus = await FeedStatus.findOne({ 
       feed_name: feedId,
       date: today
@@ -449,7 +420,6 @@ router.get('/feeds/:feedId', protect, async (req, res) => {
     }
     
     if (!feedStatus) {
-      console.log(`⚠️ Feed not found: ${feedId}`);
       return res.status(404).json({ error: 'Feed not found' });
     }
     
@@ -495,8 +465,6 @@ router.get('/feeds/:feedId', protect, async (req, res) => {
       record_count: feedStatus.record_count !== undefined && feedStatus.record_count !== null ? feedStatus.record_count : null
     };
 
-    console.log(`✅ Returning feed: ${enrichedFeed.feed_name} (${status}, ${progress}%)`);
-    console.log(`📊 Feed record_count: ${enrichedFeed.record_count}`);
     res.status(200).json(enrichedFeed);
     
   } catch (error) {
@@ -514,8 +482,6 @@ router.post('/feeds/:feedId/status', protect, async (req, res) => {
     const { status, progress, stages, failed, error_message, date, project, client, feed_type, output_path, record_count } = req.body;
     
     const targetDate = date || new Date().toISOString().split('T')[0];
-    
-    console.log(`📥 Received feed status update for: ${feedId} (${targetDate})`);
     
     const updateData = {
       feed_name: feedId,
@@ -536,7 +502,6 @@ router.post('/feeds/:feedId/status', protect, async (req, res) => {
     
     if (record_count !== undefined && record_count !== null) {
       updateData.record_count = record_count;
-      console.log(`📊 Setting record_count to: ${record_count}`);
     }
     
     const updatedFeed = await feedStatusService.upsertFeedStatus(updateData);
@@ -587,8 +552,6 @@ router.post('/feeds/status/notify', async (req, res) => {
 
     const targetDate = date || new Date().toISOString().split('T')[0];
     
-    console.log(`📥 Received feed status notification for: ${feed_name} (${targetDate})`);
-    
     const updateData = {
       feed_name,
       date: targetDate,
@@ -605,7 +568,6 @@ router.post('/feeds/status/notify', async (req, res) => {
     
     if (record_count !== undefined && record_count !== null) {
       updateData.record_count = record_count;
-      console.log(`📊 Setting record_count to: ${record_count}`);
     }
     
     const updatedFeed = await feedStatusService.upsertFeedStatus(updateData);
@@ -633,9 +595,6 @@ router.post('/feeds/status/notify', async (req, res) => {
       if (project_id) {
         io.to(`project_${project_id}`).emit('feed_status_updated', eventData);
       }
-      
-      console.log(`📡 Emitted real-time update for feed: ${feed_name}`);
-      console.log(`📊 Record count in WebSocket event: ${eventData.record_count}`);
     }
     
     res.json({ 

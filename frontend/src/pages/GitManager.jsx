@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import { 
@@ -6,7 +6,8 @@ import {
   ExternalLink, RefreshCw, ChevronRight, Home,
   GitFork, Copy, CheckCircle, Users, Mail, X,
   Send, Link as LinkIcon, AlertCircle, Info,
-  UserPlus, Rocket
+  UserPlus, Rocket, Search, ChevronLeft,
+  Clock, Hash
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -33,9 +34,29 @@ const GitManager = () => {
   const [directInvitePermission, setDirectInvitePermission] = useState('push');
   const [sendingDirectInvite, setSendingDirectInvite] = useState(false);
   
+  // Search and Pagination
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  
   const { isCollapsed } = useSidebar();
   const userRole = localStorage.getItem('role');
   const isManagerOrAdmin = userRole === 'Project Manager' || userRole === 'Admin';
+
+  // Helper function to format date as dd/mm/yyyy
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'N/A';
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (e) {
+      return 'N/A';
+    }
+  };
 
   useEffect(() => {
     fetchProjects();
@@ -102,10 +123,10 @@ const GitManager = () => {
 
   const handleProjectSelect = async (project) => {
     setSelectedProject(project);
+    setCurrentPage(1);
     if (project.gitRepoUrl) {
       fetchRepoContents(project._id, '');
       
-      // Only fetch invite link and collaborators for PM/Admin
       if (isManagerOrAdmin) {
         try {
           const token = localStorage.getItem('token');
@@ -189,10 +210,8 @@ const GitManager = () => {
         toast.success(`Invitation sent to ${directInviteEmail}`);
         setShowDirectInviteModal(false);
         setDirectInviteEmail('');
-        // Refresh collaborators list
         await fetchCollaborators(selectedProject._id);
       } else if (res.data.inviteLink) {
-        // If automatic addition failed, provide the invite link
         toast.info(`Could not auto-invite ${directInviteEmail}. Please share this invite link with them.`);
         await navigator.clipboard.writeText(res.data.inviteLink);
         toast.success('Invite link copied to clipboard!');
@@ -215,7 +234,6 @@ const GitManager = () => {
     
     const emails = developerEmails.split(',').map(e => e.trim()).filter(e => e);
     
-    // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const invalidEmails = emails.filter(e => !emailRegex.test(e));
     if (invalidEmails.length > 0) {
@@ -238,7 +256,6 @@ const GitManager = () => {
       
       if (successCount > 0) {
         toast.success(`GitHub invitations sent to ${successCount} developer(s)`);
-        // Refresh collaborators list
         await fetchCollaborators(selectedProject._id);
       }
       
@@ -276,10 +293,48 @@ const GitManager = () => {
     return <FileCode size={18} className="text-gray-500" />;
   };
 
+  // Get last updated time for a folder (returns dd/mm/yyyy)
+  const getLastUpdated = (item) => {
+    if (item.type === 'folder') {
+      const date = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000);
+      return 'Updated: ' + formatDate(date);
+    }
+    return null;
+  };
+
+  // Get projects with Git repositories
   const projectsWithGit = projects.filter(p => p.gitRepoUrl);
 
+  // Filter projects based on search term
+  const filteredProjects = useMemo(() => {
+    if (!searchTerm.trim()) return projectsWithGit;
+    
+    const search = searchTerm.toLowerCase().trim();
+    return projectsWithGit.filter(project => {
+      const projectId = project.projectCustomId?.toLowerCase() || '';
+      const projectName = project.name?.toLowerCase() || '';
+      const repoName = project.gitRepoName?.toLowerCase() || '';
+      
+      return projectId.includes(search) || 
+             projectName.includes(search) || 
+             repoName.includes(search);
+    });
+  }, [projectsWithGit, searchTerm]);
+
+  // Pagination for projects
+  const totalPages = Math.ceil(filteredProjects.length / itemsPerPage);
+  const paginatedProjects = filteredProjects.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   return (
-    <div className={`min-h-screen bg-gray-70 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className={`min-h-screen bg-gray-70 p-6 transition-all duration-300 ${isCollapsed ? 'ml-5' : 'ml-64'}`}>
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
@@ -292,6 +347,31 @@ const GitManager = () => {
               <p className="text-gray-500 mt-1">Manage your project repositories and invite developers</p>
             </div>
           </div>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Search by project ID (e.g., 0016) or name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+            />
+            {searchTerm && (
+              <button
+                onClick={() => setSearchTerm('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''} found
+          </p>
         </div>
 
         {/* Info Banner for Developers */}
@@ -319,6 +399,11 @@ const GitManager = () => {
             <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <GitBranch size={16} />
               Select Project
+              {searchTerm && (
+                <span className="text-xs text-gray-400 font-normal ml-2">
+                  (Filtered: {filteredProjects.length} projects)
+                </span>
+              )}
             </h2>
             <div className="flex items-center gap-2">
               {isManagerOrAdmin && selectedProject && (
@@ -348,48 +433,126 @@ const GitManager = () => {
               <p>No projects with Git repositories yet</p>
               <p className="text-sm mt-1">Create a project to automatically create a GitHub repository</p>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {projectsWithGit.map(project => (
-                <div
-                  key={project._id}
-                  onClick={() => handleProjectSelect(project)}
-                  className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                    selectedProject?._id === project._id
-                      ? 'border-blue-500 bg-blue-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-70'
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <FolderGit2 size={20} className="text-gray-700" />
-                    {project.gitRepoUrl && (
-                      <a
-                        href={project.gitRepoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-blue-600 hover:text-blue-700"
-                      >
-                        <ExternalLink size={16} />
-                      </a>
-                    )}
-                  </div>
-                  <p className="font-semibold text-gray-900 text-sm truncate">
-                    {project.projectCustomId || project.name}
-                  </p>
-                  <p className="text-xs text-gray-500 mt-1 truncate">
-                    {project.gitRepoName}
-                  </p>
-                </div>
-              ))}
+          ) : filteredProjects.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <Search size={48} className="mx-auto mb-3 text-gray-300" />
+              <p>No projects match your search</p>
+              <p className="text-sm mt-1">Try adjusting your search terms</p>
             </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {paginatedProjects.map(project => (
+                  <div
+                    key={project._id}
+                    onClick={() => handleProjectSelect(project)}
+                    className={`p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                      selectedProject?._id === project._id
+                        ? 'border-blue-500 bg-blue-50'
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-70'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <FolderGit2 size={20} className="text-gray-700" />
+                      {project.gitRepoUrl && (
+                        <a
+                          href={project.gitRepoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <ExternalLink size={16} />
+                        </a>
+                      )}
+                    </div>
+                    <p className="font-semibold text-gray-900 text-sm truncate">
+                      {project.projectCustomId || project.name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1 truncate">
+                      {project.gitRepoName}
+                    </p>
+                    <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+                      <Clock size={12} />
+                      <span>Updated: {formatDate(project.updatedAt || project.createdAt)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <>
+                  <div className="mt-6 flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                      disabled={currentPage === 1}
+                      className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    
+                    <div className="flex gap-1">
+                      {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+                        let pageNum;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                          if (i === 4) pageNum = totalPages;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                          if (i === 0) pageNum = 1;
+                          if (i === 4) pageNum = totalPages;
+                        }
+                        
+                        if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
+                          return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-gray-400 text-xs">...</span>;
+                        }
+                        
+                        if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
+                          return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-gray-400 text-xs">...</span>;
+                        }
+                        
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`w-6 h-6 rounded-md text-xs font-bold transition-all ${
+                              currentPage === pageNum
+                                ? 'bg-blue-600 text-white shadow-sm'
+                                : 'text-gray-500 hover:bg-gray-100'
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <button
+                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                      disabled={currentPage === totalPages}
+                      className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                  
+                  <div className="mt-3 text-center text-xs text-gray-400">
+                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredProjects.length)} of {filteredProjects.length} projects
+                  </div>
+                </>
+              )}
+            </>
           )}
         </div>
 
         {/* Repository Browser */}
         {selectedProject && selectedProject.gitRepoUrl && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            {/* Browser Header */}
             <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
@@ -406,13 +569,11 @@ const GitManager = () => {
                 </div>
                 
                 <div className="flex items-center gap-2">
-                  {/* Invite buttons - only for PM/Admin */}
                   {isManagerOrAdmin && inviteLink && (
                     <>
                       <button
                         onClick={copyInviteLink}
                         className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-70 transition-colors flex items-center gap-1"
-                        title="Copy invite link"
                       >
                         {copiedInviteLink ? <CheckCircle size={14} className="text-green-600" /> : <LinkIcon size={14} />}
                         {copiedInviteLink ? 'Copied!' : 'Copy Invite Link'}
@@ -457,7 +618,6 @@ const GitManager = () => {
               </div>
             </div>
 
-            {/* Contents List */}
             <div className="p-4">
               {loadingContents ? (
                 <div className="flex justify-center py-12">
@@ -485,16 +645,23 @@ const GitManager = () => {
                         {getIcon(item.type, item.name)}
                         <span className="text-sm text-gray-700 font-medium">{item.name}</span>
                       </div>
-                      {item.type === 'folder' && (
-                        <ChevronRight size={16} className="text-gray-400" />
-                      )}
+                      <div className="flex items-center gap-3">
+                        {item.type === 'folder' && (
+                          <span className="text-xs text-gray-400 flex items-center gap-1">
+                            <Clock size={12} />
+                            {formatDate(item.updated_at || item.created_at)}
+                          </span>
+                        )}
+                        {item.type === 'folder' && (
+                          <ChevronRight size={16} className="text-gray-400" />
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
 
-            {/* Info Banner */}
             <div className="px-6 py-3 bg-blue-50 border-t border-blue-100 text-xs text-blue-700">
               <div className="flex items-center gap-2">
                 <Rocket size={14} />
@@ -605,7 +772,6 @@ const GitManager = () => {
             </div>
 
             <div className="space-y-4">
-              {/* Important Info Box */}
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <AlertCircle size={16} className="text-yellow-600 mt-0.5 flex-shrink-0" />
@@ -619,7 +785,6 @@ const GitManager = () => {
                 </div>
               </div>
 
-              {/* Direct Invite Link Section */}
               <div className="bg-gray-50 p-3 rounded-lg">
                 <p className="text-xs font-semibold text-gray-600 mb-2">Or share this link:</p>
                 <div className="flex items-center gap-2">
@@ -642,7 +807,6 @@ const GitManager = () => {
 
               <div className="border-t border-gray-200 my-2"></div>
 
-              {/* Bulk Invite Section */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Developer Emails (comma separated)
@@ -672,7 +836,6 @@ const GitManager = () => {
                 />
               </div>
 
-              {/* Results Display */}
               {inviteResults.length > 0 && (
                 <div className="bg-gray-50 p-3 rounded-lg max-h-48 overflow-y-auto">
                   <p className="text-xs font-semibold text-gray-600 mb-2">Send Results:</p>
@@ -689,7 +852,6 @@ const GitManager = () => {
                 </div>
               )}
 
-              {/* Info Note */}
               {inviteResults.length === 0 && (
                 <div className="bg-blue-50 p-3 rounded-lg">
                   <div className="flex items-start gap-2">

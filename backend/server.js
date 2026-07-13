@@ -63,6 +63,8 @@ const ticketAssignmentRoutes = require('./routes/ticketAssignmentRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const clientRoutes = require('./routes/clientRoutes');
 const knowledgeBaseRoutes = require('./routes/knowledgeBaseRoutes');
+const hrRoutes = require('./routes/hrRoutes');
+const employeeRoutes = require('./routes/employeeRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -76,7 +78,7 @@ const io = new Server(server, {
     origin: [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
-      'http://192.168.1.6:5173', 
+      'http://192.168.1.3:5173', 
       'http://192.168.1.105:5173',
       'https://kuiperapp.co.in',
       'https://www.kuiperapp.co.in',
@@ -225,7 +227,8 @@ app.use('/api/admin', protect, ticketAssignmentRoutes);
 app.use('/api/notifications', protect, notificationRoutes);
 app.use('/api/client', protect, clientRoutes);
 app.use('/api/knowledge', protect, knowledgeBaseRoutes);
-
+app.use('/api/hr', hrRoutes);
+app.use('/api/employee', employeeRoutes);
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
 ========================================================= */

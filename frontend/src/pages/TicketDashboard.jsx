@@ -18,6 +18,16 @@ const TicketDashboard = () => {
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  // Handle resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const canSeeInternal = ['Admin', 'Project Manager', 'Developer', 'Sales', 'Sales Manager', 'Team Lead'].includes(userRole);
   const isClient = userRole === 'Client';
@@ -266,7 +276,7 @@ const TicketDashboard = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-gray-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className={`min-h-screen bg-gray-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading tickets...</p>
@@ -276,105 +286,97 @@ const TicketDashboard = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gray-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className={`min-h-screen bg-gray-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10' : 'ml-64'}`}>
       {/* Header */}
-      <div className="mb-8 flex justify-between items-center flex-wrap gap-4">
+      <div className="mb-4 sm:mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Support Tickets</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Support Tickets</h1>
+          <p className="text-sm text-gray-600 mt-1 hidden sm:block">
             {isHR ? 'HR & Admin Tickets' : 
              isFinance ? 'Finance & Payroll Tickets' : 
              'Track and manage all support requests'}
           </p>
         </div>
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 sm:gap-3 flex-wrap w-full sm:w-auto">
           {Notification.permission !== 'granted' && Notification.permission !== 'denied' && (
             <button
               onClick={() => notificationManager.requestPermission()}
-              className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all"
+              className="bg-gray-600 hover:bg-gray-700 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all"
             >
               Enable Notifications
             </button>
           )}
           
-          {userRole !== 'Client' && userRole !== 'HR' && userRole !== 'Finance' && (
-            <button
-              onClick={() => navigate('/tickets/create')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
-            >
-              <Plus size={20} />
-              New Internal Ticket
-            </button>
-          )}
-          {(userRole === 'Client' || userRole === 'HR' || userRole === 'Finance') && (
-            <button
-              onClick={() => navigate('/tickets/create')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg flex items-center gap-2 transition-all shadow-lg shadow-blue-200"
-            >
-              <Plus size={20} />
-              New Ticket
-            </button>
-          )}
+          <button
+            onClick={() => navigate('/tickets/create')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg text-sm font-medium transition-all shadow-lg shadow-blue-200 flex items-center gap-2 flex-1 sm:flex-none justify-center"
+          >
+            <Plus size={18} />
+            <span className="hidden sm:inline">
+              {userRole !== 'Client' && userRole !== 'HR' && userRole !== 'Finance' ? 'New Internal Ticket' : 'New Ticket'}
+            </span>
+            <span className="sm:hidden">New Ticket</span>
+          </button>
         </div>
       </div>
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+      {/* Stats Cards - Responsive grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-8">
+        <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Tickets</p>
-              <p className="text-2xl font-bold text-gray-900">
+              <p className="text-[10px] sm:text-sm text-gray-600">Total</p>
+              <p className="text-lg sm:text-2xl font-bold text-gray-900">
                 {isHR || isFinance ? assignedStats.total : stats.total}
               </p>
             </div>
-            <Ticket size={32} className="text-blue-500" />
+            <Ticket size={isMobile ? 20 : 32} className="text-blue-500" />
           </div>
         </div>
         
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+        <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Open</p>
-              <p className="text-2xl font-bold text-blue-600">
+              <p className="text-[10px] sm:text-sm text-gray-600">Open</p>
+              <p className="text-lg sm:text-2xl font-bold text-blue-600">
                 {isHR || isFinance ? assignedStats.open : stats.open}
               </p>
             </div>
-            <AlertCircle size={32} className="text-blue-500" />
+            <AlertCircle size={isMobile ? 20 : 32} className="text-blue-500" />
           </div>
         </div>
         
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+        <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">In Progress</p>
-              <p className="text-2xl font-bold text-yellow-600">
+              <p className="text-[10px] sm:text-sm text-gray-600">In Prog</p>
+              <p className="text-lg sm:text-2xl font-bold text-yellow-600">
                 {isHR || isFinance ? assignedStats.inProgress : stats.inProgress}
               </p>
             </div>
-            <Clock size={32} className="text-yellow-500" />
+            <Clock size={isMobile ? 20 : 32} className="text-yellow-500" />
           </div>
         </div>
         
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+        <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Resolved</p>
-              <p className="text-2xl font-bold text-green-600">
+              <p className="text-[10px] sm:text-sm text-gray-600">Resolved</p>
+              <p className="text-lg sm:text-2xl font-bold text-green-600">
                 {isHR || isFinance ? assignedStats.resolved : stats.resolved}
               </p>
             </div>
-            <CheckCircle size={32} className="text-green-500" />
+            <CheckCircle size={isMobile ? 20 : 32} className="text-green-500" />
           </div>
         </div>
 
         {/* HR Specific Stats Card */}
         {isHR && (
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+          <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">HR Related</p>
-                <p className="text-2xl font-bold text-pink-600">
+                <p className="text-[10px] sm:text-sm text-gray-600">HR</p>
+                <p className="text-lg sm:text-2xl font-bold text-pink-600">
                   {tickets.filter(t => 
                     (t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId) &&
                     (['HR', 'Admin', 'Payroll'].includes(t.category) ||
@@ -382,18 +384,18 @@ const TicketDashboard = () => {
                   ).length}
                 </p>
               </div>
-              <Users size={32} className="text-pink-500" />
+              <Users size={isMobile ? 20 : 32} className="text-pink-500" />
             </div>
           </div>
         )}
 
         {/* Finance Specific Stats Card */}
         {isFinance && (
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+          <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Finance Related</p>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-[10px] sm:text-sm text-gray-600">Finance</p>
+                <p className="text-lg sm:text-2xl font-bold text-green-600">
                   {tickets.filter(t => 
                     (t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId) &&
                     (['Finance', 'Payroll', 'Admin'].includes(t.category) ||
@@ -401,72 +403,71 @@ const TicketDashboard = () => {
                   ).length}
                 </p>
               </div>
-              <Clock size={32} className="text-green-500" />
+              <Clock size={isMobile ? 20 : 32} className="text-green-500" />
             </div>
           </div>
         )}
 
         {/* Internal Tickets Stats */}
         {canSeeInternal && !isHR && !isFinance && (
-          <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+          <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Internal</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.internal}</p>
+                <p className="text-[10px] sm:text-sm text-gray-600">Internal</p>
+                <p className="text-lg sm:text-2xl font-bold text-purple-600">{stats.internal}</p>
               </div>
-              <Lock size={32} className="text-purple-500" />
+              <Lock size={isMobile ? 20 : 32} className="text-purple-500" />
             </div>
           </div>
         )}
       </div>
 
       {/* Search Bar & Filters */}
-      <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 mb-6">
+      <div className="bg-white rounded-lg p-3 sm:p-4 shadow-sm border border-gray-200 mb-4 sm:mb-6">
         {/* Search Bar */}
-        <div className="mb-4">
+        <div className="mb-3 sm:mb-4">
           <div className="relative">
             <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <Search size={18} className="text-gray-400" />
+              <Search size={isMobile ? 16 : 18} className="text-gray-400" />
             </div>
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by Ticket Number (e.g., 0016), Title, Name, or Project..."
-              className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm bg-gray-50 hover:bg-white"
+              placeholder={isMobile ? "Search tickets..." : "Search by Ticket Number (e.g., 0016), Title, Name, or Project..."}
+              className="w-full pl-9 sm:pl-10 pr-10 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm bg-gray-50 hover:bg-white"
             />
             {searchQuery && (
               <button
                 onClick={clearSearch}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
               >
-                <span className="text-sm font-medium">Clear</span>
+                <span className="text-xs sm:text-sm font-medium">Clear</span>
               </button>
             )}
           </div>
           {searchQuery && (
-            <div className="mt-1.5 text-xs text-gray-500 flex items-center gap-2 flex-wrap">
-              <span className="font-medium">Searching for:</span>
-              <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-medium">
+            <div className="mt-1 text-xs text-gray-500 flex items-center gap-1 sm:gap-2 flex-wrap">
+              <span className="font-medium">Searching:</span>
+              <span className="bg-blue-50 text-blue-700 px-1.5 sm:px-2 py-0.5 rounded-md font-medium text-[10px] sm:text-xs">
                 "{searchQuery}"
               </span>
-              <span className="text-gray-400">
-                ({filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''} found)
+              <span className="text-gray-400 text-[10px] sm:text-xs">
+                ({filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''})
               </span>
-             
             </div>
           )}
         </div>
 
         {/* Filter Buttons */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-500 mr-1 font-medium">Status:</span>
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
+            <span className="text-[10px] sm:text-xs text-gray-500 mr-0.5 sm:mr-1 font-medium hidden sm:inline">Status:</span>
             {['all', 'Open', 'In Progress', 'Resolved', 'Closed'].map(status => (
               <button
                 key={status}
                 onClick={() => setFilter(status === 'all' ? 'all' : status)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium transition-all whitespace-nowrap ${
                   filter === (status === 'all' ? 'all' : status)
                     ? 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -479,41 +480,41 @@ const TicketDashboard = () => {
 
           {canSeeInternal && !isHR && !isFinance && (
             <>
-              <div className="w-px h-8 bg-gray-300 mx-2"></div>
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-gray-500 mr-1 font-medium">Type:</span>
+              <div className="w-px h-6 sm:h-8 bg-gray-300 mx-1 sm:mx-2 hidden sm:block"></div>
+              <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
+                <span className="text-[10px] sm:text-xs text-gray-500 mr-0.5 sm:mr-1 font-medium hidden sm:inline">Type:</span>
                 <button
                   onClick={() => setFilterType('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                  className={`px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium transition-all flex items-center gap-0.5 sm:gap-1 ${
                     filterType === 'all'
                       ? 'bg-gray-800 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <Filter size={12} />
-                  All
+                  <Filter size={isMobile ? 10 : 12} />
+                  <span className="hidden sm:inline">All</span>
                 </button>
                 <button
                   onClick={() => setFilterType('external')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                  className={`px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium transition-all flex items-center gap-0.5 sm:gap-1 ${
                     filterType === 'external'
                       ? 'bg-green-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <Globe size={12} />
-                  External
+                  <Globe size={isMobile ? 10 : 12} />
+                  <span className="hidden sm:inline">External</span>
                 </button>
                 <button
                   onClick={() => setFilterType('internal')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all flex items-center gap-1 ${
+                  className={`px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium transition-all flex items-center gap-0.5 sm:gap-1 ${
                     filterType === 'internal'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                   }`}
                 >
-                  <Lock size={12} />
-                  Internal
+                  <Lock size={isMobile ? 10 : 12} />
+                  <span className="hidden sm:inline">Internal</span>
                 </button>
               </div>
             </>
@@ -521,186 +522,234 @@ const TicketDashboard = () => {
 
           {(filter !== 'all' || filterType !== 'all' || searchQuery) && (
             <>
-              <div className="w-px h-8 bg-gray-300 mx-2"></div>
+              <div className="w-px h-6 sm:h-8 bg-gray-300 mx-1 sm:mx-2 hidden sm:block"></div>
               <button
                 onClick={() => {
                   setFilter('all');
                   setFilterType('all');
                   setSearchQuery('');
                 }}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all"
+                className="px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-all whitespace-nowrap"
               >
-                Clear All Filters
+                Clear All
               </button>
             </>
           )}
         </div>
       </div>
 
-      {/* Tickets Table */}
+      {/* Tickets Table - Responsive */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50 border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title / Type</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
+          {isMobile ? (
+            // Mobile Card View
+            <div className="divide-y divide-gray-200">
               {filteredTickets.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-                    <div className="flex flex-col items-center gap-2">
-                      <Ticket size={48} className="text-gray-300" />
-                      <p className="font-medium">No tickets found</p>
-                      <p className="text-sm text-gray-400">
-                        {searchQuery ? (
-                          <>No tickets match your search: "<span className="font-medium">{searchQuery}</span>"</>
-                        ) : isHR ? (
-                          'No HR tickets assigned to you'
-                        ) : isFinance ? (
-                          'No Finance tickets assigned to you'
-                        ) : filterType === 'internal' ? (
-                          'No internal tickets available'
-                        ) : filterType === 'external' ? (
-                          'No external tickets available'
-                        ) : (
-                          'Create a new ticket to get started'
-                        )}
-                      </p>
-                      {searchQuery && (
-                        <button
-                          onClick={clearSearch}
-                          className="mt-2 text-sm text-blue-600 hover:text-blue-800 font-medium"
-                        >
-                          Clear search
-                        </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
+                <div className="p-8 text-center">
+                  <Ticket size={40} className="text-gray-300 mx-auto mb-3" />
+                  <p className="text-sm text-gray-500 font-medium">No tickets found</p>
+                  <p className="text-xs text-gray-400 mt-1">Create a new ticket to get started</p>
+                </div>
               ) : (
                 filteredTickets.map(ticket => {
-                  const categoryDisplay = getCategoryDisplay(ticket);
-                  const isFeasibility = isFeasibilityTicket(ticket);
                   const formattedNumber = formatTicketNumber(ticket.ticketNumber);
+                  const isFeasibility = isFeasibilityTicket(ticket);
                   
-                  // Highlight matching search terms
-                  const highlightMatch = (text) => {
-                    if (!searchQuery || !text) return text;
-                    const lowerText = text.toLowerCase();
-                    const lowerQuery = searchQuery.toLowerCase();
-                    if (lowerText.includes(lowerQuery)) {
-                      const parts = text.split(new RegExp(`(${searchQuery})`, 'gi'));
-                      return parts.map((part, i) => 
-                        part.toLowerCase() === lowerQuery ? 
-                          <span key={i} className="bg-yellow-200 px-0.5 rounded">{part}</span> : 
-                          part
-                      );
-                    }
-                    return text;
-                  };
-
-                  // Check if assigned to name matches search
-                  const assignedName = ticket.assignedTo?.name || '';
-                  const isAssignedMatch = searchQuery && assignedName.toLowerCase().includes(searchQuery.toLowerCase());
-
                   return (
-                    <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm font-medium text-gray-900">
-                            {highlightMatch(formattedNumber)}
-                          </span>
-                          {ticket.isInternal && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[9px] font-bold">
-                              <Lock size={10} />
-                              Internal
+                    <div 
+                      key={ticket._id} 
+                      className="p-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/tickets/${ticket._id}`)}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-mono text-xs font-medium text-gray-900">
+                              {formattedNumber}
                             </span>
-                          )}
-                          {isFeasibility && (
-                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-md text-[9px] font-bold">
-                              <UserCheck size={10} />
-                              Feasibility
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="font-medium text-gray-900">{highlightMatch(ticket.title)}</p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
-                            <p className="text-sm text-gray-500">
-                              {ticket.projectId?.name || (ticket.isInternal ? 'Internal Task' : 'No Project')}
-                            </p>
-                            {categoryDisplay && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${getTicketTypeColor(ticket.category)}`}>
-                                <Tag size={10} />
-                                {categoryDisplay}
+                            {ticket.isInternal && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[8px] font-bold">
+                                <Lock size={8} />
+                                Internal
                               </span>
                             )}
-                            {ticket.ticketType && !categoryDisplay && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${getTicketTypeColor(ticket.ticketType)}`}>
-                                <Tag size={10} />
-                                {ticket.ticketType}
+                            {isFeasibility && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[8px] font-bold">
+                                <UserCheck size={8} />
+                                Feasibility
                               </span>
                             )}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${getPriorityColor(ticket.priority)}`}>
-                          {ticket.priority}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md border ${getStatusColor(ticket.status)}`}>
-                          {ticket.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        {ticket.assignedTo ? (
-                          <div className="flex items-center gap-2">
-                            <Users size={14} className="text-gray-400" />
-                            <span className={`text-sm ${isAssignedMatch ? 'bg-yellow-200 px-0.5 rounded' : 'text-gray-700'}`}>
-                              {highlightMatch(ticket.assignedTo.name)}
+                          <p className="text-sm font-medium text-gray-900 mt-1">{ticket.title}</p>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className={`inline-flex px-1.5 py-0.5 text-[8px] font-semibold rounded ${getStatusColor(ticket.status)}`}>
+                              {ticket.status}
+                            </span>
+                            <span className={`inline-flex px-1.5 py-0.5 text-[8px] font-semibold rounded ${getPriorityColor(ticket.priority)}`}>
+                              {ticket.priority}
+                            </span>
+                            <span className="text-[9px] text-gray-500 truncate max-w-[100px]">
+                              {ticket.projectId?.projectCustomId || 'General'}
                             </span>
                           </div>
-                        ) : (
-                          <span className="text-sm text-gray-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-gray-600">
-                          {ticket.projectId?.projectCustomId ? 
-                            highlightMatch(ticket.projectId.projectCustomId) : 
-                            'General'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
-                        {new Date(ticket.createdAt).toLocaleDateString()}
-                      </td>
-                      <td className="px-6 py-4 text-right">
+                          <div className="flex items-center gap-2 mt-1.5 text-[9px] text-gray-400">
+                            <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
+                            {ticket.assignedTo && (
+                              <>
+                                <span>•</span>
+                                <span className="flex items-center gap-0.5">
+                                  <Users size={10} />
+                                  {ticket.assignedTo.name}
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        </div>
                         <button
-                          onClick={() => navigate(`/tickets/${ticket._id}`)}
-                          className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/tickets/${ticket._id}`);
+                          }}
+                          className="text-blue-600 hover:text-blue-800 text-xs font-medium whitespace-nowrap ml-2"
                         >
-                          View Details →
+                          View →
                         </button>
-                      </td>
-                    </tr>
+                      </div>
+                    </div>
                   );
                 })
               )}
-            </tbody>
-          </table>
+            </div>
+          ) : (
+            // Desktop Table View
+            <table className="w-full min-w-[900px]">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ticket</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title / Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {filteredTickets.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
+                      <div className="flex flex-col items-center gap-2">
+                        <Ticket size={48} className="text-gray-300" />
+                        <p className="font-medium">No tickets found</p>
+                        <p className="text-sm text-gray-400">
+                          {searchQuery ? (
+                            <>No tickets match your search: "<span className="font-medium">{searchQuery}</span>"</>
+                          ) : isHR ? (
+                            'No HR tickets assigned to you'
+                          ) : isFinance ? (
+                            'No Finance tickets assigned to you'
+                          ) : (
+                            'Create a new ticket to get started'
+                          )}
+                        </p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredTickets.map(ticket => {
+                    const categoryDisplay = getCategoryDisplay(ticket);
+                    const isFeasibility = isFeasibilityTicket(ticket);
+                    const formattedNumber = formatTicketNumber(ticket.ticketNumber);
+                    
+                    return (
+                      <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-sm font-medium text-gray-900">
+                              {formattedNumber}
+                            </span>
+                            {ticket.isInternal && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[9px] font-bold">
+                                <Lock size={10} />
+                                Internal
+                              </span>
+                            )}
+                            {isFeasibility && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-md text-[9px] font-bold">
+                                <UserCheck size={10} />
+                                Feasibility
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div>
+                            <p className="font-medium text-gray-900">{ticket.title}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <p className="text-sm text-gray-500">
+                                {ticket.projectId?.name || (ticket.isInternal ? 'Internal Task' : 'No Project')}
+                              </p>
+                              {categoryDisplay && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${getTicketTypeColor(ticket.category)}`}>
+                                  <Tag size={10} />
+                                  {categoryDisplay}
+                                </span>
+                              )}
+                              {ticket.ticketType && !categoryDisplay && (
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[9px] font-bold border ${getTicketTypeColor(ticket.ticketType)}`}>
+                                  <Tag size={10} />
+                                  {ticket.ticketType}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md ${getPriorityColor(ticket.priority)}`}>
+                            {ticket.priority}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-md border ${getStatusColor(ticket.status)}`}>
+                            {ticket.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          {ticket.assignedTo ? (
+                            <div className="flex items-center gap-2">
+                              <Users size={14} className="text-gray-400" />
+                              <span className="text-sm text-gray-700">
+                                {ticket.assignedTo.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="text-sm text-gray-600">
+                            {ticket.projectId?.projectCustomId || 'General'}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-500">
+                          {new Date(ticket.createdAt).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button
+                            onClick={() => navigate(`/tickets/${ticket._id}`)}
+                            className="text-blue-600 hover:text-blue-800 font-medium text-sm transition-colors"
+                          >
+                            View Details →
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          )}
         </div>
       </div>
     </div>

@@ -65,6 +65,16 @@ const ProjectManagement = () => {
   const [teamLeads, setTeamLeads] = useState([]);
   const [organizations, setOrganizations] = useState([]);
   const { isCollapsed } = useSidebar();
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Handle resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   
   // --- Pagination State ---
   const [currentPage, setCurrentPage] = useState(1);
@@ -778,14 +788,14 @@ const ProjectManagement = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className={`min-h-screen bg-slate-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10 sm:ml-20' : 'ml-64'}`}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 sm:mb-6 gap-3 sm:gap-6">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-[#1B2559]">
+          <h1 className="text-2xl sm:text-4xl font-black tracking-tight text-[#1B2559]">
             Workspace Project
           </h1>
-          <p className="text-[#A3AED0] font-bold text-sm mt-1">
+          <p className="text-[#A3AED0] font-bold text-xs sm:text-sm mt-0.5 sm:mt-1 hidden sm:block">
             Manage system flows and feeds.
           </p>
         </div>
@@ -795,98 +805,98 @@ const ProjectManagement = () => {
             setIsEditing(false);
             setShowProjectModal(true);
           }}
-          className="bg-[#111C44] text-white px-6 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-widest"
+          className="bg-[#111C44] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all active:scale-95 text-[8px] sm:text-[10px] uppercase tracking-widest w-full sm:w-auto justify-center"
         >
-          <FolderPlus size={16} />
+          <FolderPlus size={isMobile ? 14 : 16} />
           New Project
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
-            <LayoutGrid size={20} />
+      {/* Stats - Responsive */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6">
+        <div className="bg-white p-3 sm:p-4 rounded-3xl flex items-center gap-3 sm:gap-4 border border-slate-100 shadow-sm">
+          <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+            <LayoutGrid size={isMobile ? 16 : 20} />
           </div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Projects</p>
-            <p className="text-xl font-black text-[#1B2559]">{filteredProjects.length}</p>
+            <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Projects</p>
+            <p className="text-lg sm:text-xl font-black text-[#1B2559]">{filteredProjects.length}</p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <Activity size={20} />
+        <div className="bg-white p-3 sm:p-4 rounded-3xl flex items-center gap-3 sm:gap-4 border border-slate-100 shadow-sm">
+          <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <Activity size={isMobile ? 16 : 20} />
           </div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Feeds</p>
-            <p className="text-xl font-black text-[#1B2559]">
+            <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">Active Feeds</p>
+            <p className="text-lg sm:text-xl font-black text-[#1B2559]">
               {projects.reduce((acc, curr) => acc + (curr.feeds?.length || 0), 0)}
             </p>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-3xl flex items-center gap-4 border border-slate-100 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
-            <CheckCircle2 size={20} />
+        <div className="bg-white p-3 sm:p-4 rounded-3xl flex items-center gap-3 sm:gap-4 border border-slate-100 shadow-sm">
+          <div className="w-10 sm:w-12 h-10 sm:h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center">
+            <CheckCircle2 size={isMobile ? 16 : 20} />
           </div>
           <div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">On Hold Projects</p>
-            <p className="text-xl font-black text-[#1B2559]">
+            <p className="text-[8px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">On Hold Projects</p>
+            <p className="text-lg sm:text-xl font-black text-[#1B2559]">
               {projects.filter(p => isOnHoldStatus(p.projectStatus)).length}
             </p>
           </div>
         </div>
       </div>
 
-      {/* Filters Bar */}
-      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+      {/* Filters Bar - Responsive */}
+      <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-3 sm:p-4 mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 sm:gap-4">
           {/* Search Input */}
-          <div className="relative md:col-span-4">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="relative sm:col-span-4">
+            <Search size={isMobile ? 14 : 16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by project ID, name, or organization..."
+              placeholder={isMobile ? "Search..." : "Search by project ID, name, or organization..."}
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-medium text-sm focus:border-blue-400 transition-all"
+              className="w-full pl-9 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-medium text-xs sm:text-sm focus:border-blue-400 transition-all"
             />
           </div>
 
           {/* Status Filter Dropdown */}
-          <div className="relative md:col-span-3">
-            <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <div className="relative sm:col-span-3">
+            <Filter size={isMobile ? 14 : 16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <select
               value={statusFilter}
               onChange={(e) => {
                 setStatusFilter(e.target.value);
                 setCurrentPage(1);
               }}
-              className="w-full pl-10 pr-8 py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-semibold text-sm text-slate-700 appearance-none cursor-pointer hover:border-blue-400 transition-all"
+              className="w-full pl-9 sm:pl-10 pr-7 sm:pr-8 py-2 sm:py-2.5 rounded-xl border border-slate-200 bg-slate-50 outline-none font-semibold text-xs sm:text-sm text-slate-700 appearance-none cursor-pointer hover:border-blue-400 transition-all"
             >
               <option value="All">All Projects</option>
               <option value="Active">Active </option>
               <option value="Inactive">Inactive (Closed)</option>
               <option value="On Hold">On Hold</option>
             </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <ChevronDown size={isMobile ? 12 : 14} className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
 
           {/* Items Per Page Selector */}
-          <div className="relative md:col-span-3">
-            <div className="flex items-center gap-2 bg-slate-50 rounded-xl border border-slate-200 px-3 py-1.5 h-[42px]">
-              <span className="text-[9px] font-black text-slate-500 uppercase">Show:</span>
+          <div className="relative sm:col-span-3">
+            <div className="flex items-center gap-1 sm:gap-2 bg-slate-50 rounded-xl border border-slate-200 px-2 sm:px-3 py-1 sm:py-1.5 h-[36px] sm:h-[42px]">
+              <span className="text-[7px] sm:text-[9px] font-black text-slate-500 uppercase hidden xs:inline">Show:</span>
               <select
                 value={itemsPerPage}
                 onChange={(e) => {
                   setItemsPerPage(Number(e.target.value));
                   setCurrentPage(1);
                 }}
-                className="flex-1 text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+                className="flex-1 text-[9px] sm:text-xs font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
               >
                 <option value={5}>5</option>
                 <option value={10}>10</option>
@@ -894,18 +904,18 @@ const ProjectManagement = () => {
                 <option value={50}>50</option>
                 <option value={100}>100</option>
               </select>
-              <span className="text-[9px] font-black text-slate-500">per page</span>
+              <span className="text-[7px] sm:text-[9px] font-black text-slate-500 hidden sm:inline">per page</span>
             </div>
           </div>
 
           {/* Reset Button */}
           {(searchTerm || statusFilter !== 'All') && (
-            <div className="md:col-span-2">
+            <div className="sm:col-span-2">
               <button
                 onClick={resetFilters}
-                className="w-full py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs uppercase tracking-wider hover:bg-slate-100 transition-all flex items-center justify-center gap-2"
+                className="w-full py-1.5 sm:py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-[9px] sm:text-xs uppercase tracking-wider hover:bg-slate-100 transition-all flex items-center justify-center gap-1.5 sm:gap-2"
               >
-                <X size={14} />
+                <X size={isMobile ? 12 : 14} />
                 Reset Filters
               </button>
             </div>
@@ -913,20 +923,20 @@ const ProjectManagement = () => {
         </div>
       </div>
 
-      {/* TABLE VIEW */}
+      {/* TABLE VIEW - Responsive */}
       <div className="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1300px]">
+          <table className="w-full min-w-[900px] sm:min-w-[1300px]">
             <thead className="bg-[#F8FAFC] border-b-2 border-slate-100">
               <tr>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[240px]">Project</th>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[160px]">Client Organization</th>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[120px]">Industry</th>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[110px]">Country</th>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[90px]">Feeds</th>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[180px]">TL</th>
-                <th className="text-left px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[180px]">Status</th>
-                <th className="text-right px-8 py-6 text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[130px]">Actions</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[120px] sm:min-w-[240px]">Project</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[100px] sm:min-w-[160px] hidden sm:table-cell">Client Org</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[80px] sm:min-w-[120px] hidden md:table-cell">Industry</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[70px] sm:min-w-[110px] hidden lg:table-cell">Country</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[60px] sm:min-w-[90px]">Feeds</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[100px] sm:min-w-[180px] hidden md:table-cell">TL</th>
+                <th className="text-left px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[100px] sm:min-w-[180px]">Status</th>
+                <th className="text-right px-3 sm:px-8 py-3 sm:py-6 text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 min-w-[90px] sm:min-w-[130px]">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -936,73 +946,75 @@ const ProjectManagement = () => {
                   const orgList = project.organizations || [];
                   return (
                     <tr key={project._id} className="border-b border-slate-100 hover:bg-slate-50/70 transition-all">
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0 ${
+                      <td className="px-3 sm:px-8 py-3 sm:py-6">
+                        <div className="flex items-center gap-2 sm:gap-4">
+                          <div className={`w-10 sm:w-14 h-10 sm:h-14 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0 ${
                             isFromSales ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
                           }`}>
-                            {isFromSales ? <ShoppingBag size={22} /> : <Activity size={22} />}
+                            {isFromSales ? <ShoppingBag size={isMobile ? 16 : 22} /> : <Activity size={isMobile ? 16 : 22} />}
                           </div>
                           <div>
-                            <p className="text-sm font-black text-[#1B2559] leading-tight">{project.projectCustomId || 'NO_ID'}</p>
+                            <p className="text-xs sm:text-sm font-black text-[#1B2559] leading-tight truncate max-w-[80px] sm:max-w-none">
+                              {project.projectCustomId?.substring(0, 15) || 'NO_ID'}
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-8 py-6">
-                        <div className="flex flex-wrap gap-1.5">
+                      <td className="px-3 sm:px-8 py-3 sm:py-6 hidden sm:table-cell">
+                        <div className="flex flex-wrap gap-0.5 sm:gap-1.5">
                           {orgList.length > 0 ? (
                             orgList.slice(0, 2).map((org, idx) => {
                               const orgName = typeof org === 'object' ? org?.companyName : organizations.find(o => o._id === org)?.companyName;
                               return (
-                                <span key={idx} className="inline-flex items-center gap-1.5 bg-purple-50 text-purple-700 px-2.5 py-1.5 rounded-lg text-[9px] font-bold">
-                                  <Building2 size={9} />
-                                  {orgName || 'Organization'}
+                                <span key={idx} className="inline-flex items-center gap-1 sm:gap-1.5 bg-purple-50 text-purple-700 px-1.5 sm:px-2.5 py-1 sm:py-1.5 rounded-lg text-[7px] sm:text-[9px] font-bold truncate max-w-[60px] sm:max-w-none">
+                                  <Building2 size={isMobile ? 7 : 9} />
+                                  {orgName?.substring(0, 10) || 'Org'}
                                 </span>
                               );
                             })
                           ) : (
-                            <span className="text-slate-400 text-[10px] font-medium">No clients</span>
+                            <span className="text-slate-400 text-[8px] sm:text-[10px] font-medium">No clients</span>
                           )}
                           {orgList.length > 2 && (
-                            <span className="text-[9px] font-bold text-slate-400">+{orgList.length - 2} more</span>
+                            <span className="text-[7px] sm:text-[9px] font-bold text-slate-400">+{orgList.length - 2}</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-8 py-6">
-                        <span className="inline-flex items-center gap-2 bg-blue-50 text-blue-600 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-blue-100 whitespace-nowrap">
-                          <Briefcase size={12} />
-                          {project.industry}
+                      <td className="px-3 sm:px-8 py-3 sm:py-6 hidden md:table-cell">
+                        <span className="inline-flex items-center gap-1 sm:gap-2 bg-blue-50 text-blue-600 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-widest border border-blue-100 whitespace-nowrap">
+                          <Briefcase size={isMobile ? 10 : 12} />
+                          {project.industry?.substring(0, 6) || project.industry}
                         </span>
                       </td>
-                      <td className="px-8 py-6">
-                        <span className="inline-flex items-center gap-2 bg-slate-50 text-slate-600 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest border border-slate-100 whitespace-nowrap">
-                          <Globe size={12} />
+                      <td className="px-3 sm:px-8 py-3 sm:py-6 hidden lg:table-cell">
+                        <span className="inline-flex items-center gap-1 sm:gap-2 bg-slate-50 text-slate-600 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-widest border border-slate-100 whitespace-nowrap">
+                          <Globe size={isMobile ? 10 : 12} />
                           {POPULAR_COUNTRIES.find(c => c.label === project.country)?.value ||
                            (project.country?.substring(0, 2).toUpperCase()) || 'XX'}
                         </span>
                       </td>
-                      <td className="px-8 py-6">
+                      <td className="px-3 sm:px-8 py-3 sm:py-6">
                         <div 
-                          className="flex items-center gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
+                          className="flex items-center gap-1 sm:gap-2 cursor-pointer hover:text-blue-600 transition-colors group"
                           onClick={() => navigateToFeedExplorer(project)}
                         >
-                          <Hash size={14} className="text-slate-400 group-hover:text-blue-600" />
-                          <span className="text-base font-black text-[#1B2559] group-hover:text-blue-600">
+                          <Hash size={isMobile ? 12 : 14} className="text-slate-400 group-hover:text-blue-600" />
+                          <span className="text-sm sm:text-base font-black text-[#1B2559] group-hover:text-blue-600">
                             {project.feeds?.length || 0}
                           </span>
-                          <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                          <span className="text-[8px] sm:text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap hidden sm:inline">
                             View →
                           </span>
                         </div>
                       </td>
                       
                       {/* TL COLUMN */}
-                      <td className="px-8 py-6">
+                      <td className="px-3 sm:px-8 py-3 sm:py-6 hidden md:table-cell">
                         <select
                           value={project.teamLead?._id || project.teamLead || ''}
                           onChange={(e) => updateTeamLead(project._id, e.target.value)}
-                          className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-8 bg-indigo-50 text-indigo-700 border-indigo-200 min-w-[140px]"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '10px' }}
+                          className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-5 sm:pr-8 bg-indigo-50 text-indigo-700 border-indigo-200 min-w-[90px] sm:min-w-[140px]"
+                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px sm:right 10px center', backgroundSize: '8px sm:10px' }}
                         >
                           <option value="">— None —</option>
                           {teamLeads.map(tl => (
@@ -1012,42 +1024,42 @@ const ProjectManagement = () => {
                       </td>
 
                       {/* STATUS COLUMN */}
-                      <td className="px-8 py-6">
+                      <td className="px-3 sm:px-8 py-3 sm:py-6">
                         <div className="relative">
                           <select
                             value={project.projectStatus || 'New'}
                             onChange={(e) => updateProjectStatus(project._id, e.target.value)}
                             disabled={updatingStatus[project._id]}
-                            className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-8 min-w-[140px] ${getProjectStatusColor(project.projectStatus)}`}
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center', backgroundSize: '10px' }}
+                            className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-5 sm:pr-8 min-w-[90px] sm:min-w-[140px] ${getProjectStatusColor(project.projectStatus)}`}
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px sm:right 10px center', backgroundSize: '8px sm:10px' }}
                           >
                             {projectStatuses.map(status => (
                               <option key={status} value={status}>{status}</option>
                             ))}
                           </select>
                           {updatingStatus[project._id] && (
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 mr-2">
-                              <div className="w-3 h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 mr-1 sm:mr-2">
+                              <div className="w-2 sm:w-3 h-2 sm:h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
                             </div>
                           )}
                         </div>
                       </td>
                       
-                      <td className="px-8 py-6">
-                        <div className="flex items-center justify-end gap-2.5">
+                      <td className="px-3 sm:px-8 py-3 sm:py-6">
+                        <div className="flex items-center justify-end gap-1.5 sm:gap-2.5">
                           <button 
                             onClick={() => handleEditClick(project)} 
-                            className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"
+                            className="w-8 sm:w-11 h-8 sm:h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition-all shadow-sm"
                             title="Edit Project"
                           >
-                            <Settings2 size={16} />
+                            <Settings2 size={isMobile ? 14 : 16} />
                           </button>
                           <button 
                             onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }} 
-                            className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm"
+                            className="w-8 sm:w-11 h-8 sm:h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 transition-all shadow-sm"
                             title="Add Feed"
                           >
-                            <Plus size={16} />
+                            <Plus size={isMobile ? 14 : 16} />
                           </button>
                           <button 
                             onClick={() => {
@@ -1055,10 +1067,10 @@ const ProjectManagement = () => {
                               setShowProjectCommentModal(true);
                               setCommentRefreshTrigger(prev => prev + 1);
                             }}
-                            className="w-11 h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-purple-50 hover:text-purple-600 transition-all shadow-sm"
+                            className="w-8 sm:w-11 h-8 sm:h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-purple-50 hover:text-purple-600 transition-all shadow-sm"
                             title="View Comments"
                           >
-                            <MessageSquare size={16} />
+                            <MessageSquare size={isMobile ? 14 : 16} />
                           </button>
                         </div>
                       </td>
@@ -1067,13 +1079,13 @@ const ProjectManagement = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-3 sm:px-6 py-12 sm:py-16 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
-                        <Activity size={28} className="text-slate-300" />
+                      <div className="w-12 sm:w-16 h-12 sm:h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-3 sm:mb-4">
+                        <Activity size={isMobile ? 20 : 28} className="text-slate-300" />
                       </div>
-                      <p className="text-sm font-bold text-slate-500">No projects found</p>
-                      <p className="text-xs text-slate-400 mt-1">Try adjusting your filters</p>
+                      <p className="text-xs sm:text-sm font-bold text-slate-500">No projects found</p>
+                      <p className="text-[10px] sm:text-xs text-slate-400 mt-0.5 sm:mt-1">Try adjusting your filters</p>
                     </div>
                   </td>
                 </tr>
@@ -1083,23 +1095,23 @@ const ProjectManagement = () => {
         </div>
       </div>
 
-      {/* Pagination */}
+      {/* Pagination - Responsive */}
       {totalPages > 1 && (
-        <div className="mt-6 flex justify-between items-center">
-          <div className="text-[9px] font-bold text-slate-400">
+        <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
+          <div className="text-[7px] sm:text-[9px] font-bold text-slate-400 text-center sm:text-left">
             Showing {indexOfFirstProject + 1} to {Math.min(indexOfLastProject, filteredProjects.length)} of {filteredProjects.length} projects
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <button
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => prev - 1)}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="w-6 sm:w-8 h-6 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
-              <ChevronLeft size={14} />
+              <ChevronLeft size={isMobile ? 12 : 14} />
             </button>
 
-            <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
+            <div className="flex gap-0.5 sm:gap-1 bg-white p-0.5 sm:p-1 rounded-lg border border-slate-200 shadow-sm">
               {[...Array(Math.min(totalPages, 5))].map((_, i) => {
                 let pageNum;
                 if (totalPages <= 5) {
@@ -1116,18 +1128,18 @@ const ProjectManagement = () => {
                 }
                 
                 if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                  return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                  return <span key="ellipsis1" className="w-4 sm:w-6 h-4 sm:h-6 flex items-center justify-center text-slate-400 text-[7px] sm:text-xs">…</span>;
                 }
                 
                 if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                  return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                  return <span key="ellipsis2" className="w-4 sm:w-6 h-4 sm:h-6 flex items-center justify-center text-slate-400 text-[7px] sm:text-xs">…</span>;
                 }
                 
                 return (
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                    className={`w-5 sm:w-6 h-5 sm:h-6 rounded-md text-[8px] sm:text-[10px] font-black transition-all ${
                       currentPage === pageNum
                         ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
                         : 'text-slate-500 hover:bg-slate-100'
@@ -1142,54 +1154,54 @@ const ProjectManagement = () => {
             <button
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => prev + 1)}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="w-6 sm:w-8 h-6 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
             >
-              <ChevronRight size={14} />
+              <ChevronRight size={isMobile ? 12 : 14} />
             </button>
           </div>
         </div>
       )}
 
-      {/* PROJECT MODAL */}
+      {/* PROJECT MODAL - Responsive */}
       {showProjectModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-xl p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-3 sm:p-6">
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-xl p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 sm:mb-10">
+              <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
                 {isEditing ? 'Modify Workspace' : 'Launch New Project'}
               </h2>
               <button onClick={closeProjectModal} className="text-slate-300 hover:text-slate-600 transition-colors">
-                <X size={28} />
+                <X size={isMobile ? 20 : 28} />
               </button>
             </div>
-            <form onSubmit={handleProjectSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
-                <input type="text" placeholder="Title" required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
+            <form onSubmit={handleProjectSubmit} className="space-y-4 sm:space-y-6">
+              <div className="space-y-1 sm:space-y-2">
+                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
+                <input type="text" placeholder="Title" required className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
               </div>
               
               {/* ORGANIZATION SELECTION SECTION */}
-              <div className="space-y-2" ref={orgDropdownRef}>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
-                  <Building2 size={12} />
-                  Assign Client Organizations (Select at least one) *
+              <div className="space-y-1 sm:space-y-2" ref={orgDropdownRef}>
+                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1 sm:gap-2">
+                  <Building2 size={isMobile ? 10 : 12} />
+                  Assign Client Organizations *
                 </label>
                 
                 {/* Selected Organizations Display */}
                 {projectForm.organizations.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3 p-3 bg-purple-50 rounded-xl border border-purple-100">
+                  <div className="flex flex-wrap gap-1 sm:gap-2 mb-2 sm:mb-3 p-2 sm:p-3 bg-purple-50 rounded-xl border border-purple-100">
                     {projectForm.organizations.map(orgId => {
                       const org = organizations.find(o => o._id === orgId);
                       return org ? (
-                        <span key={orgId} className="inline-flex items-center gap-1.5 bg-purple-600 text-white px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider">
-                          <Building2 size={10} />
-                          {org.companyName}
+                        <span key={orgId} className="inline-flex items-center gap-1 sm:gap-1.5 bg-purple-600 text-white px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[7px] sm:text-[9px] font-black uppercase tracking-wider">
+                          <Building2 size={isMobile ? 8 : 10} />
+                          {org.companyName?.substring(0, 12) || org.companyName}
                           <button
                             type="button"
                             onClick={() => removeOrg(orgId)}
                             className="hover:text-red-200 transition-colors"
                           >
-                            <X size={10} />
+                            <X size={isMobile ? 8 : 10} />
                           </button>
                         </span>
                       ) : null;
@@ -1201,32 +1213,32 @@ const ProjectManagement = () => {
                   <>
                     {/* Search Input for Organizations */}
                     <div className="relative">
-                      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Search size={isMobile ? 12 : 14} className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
-                        placeholder="Search organizations by name or website..."
+                        placeholder={isMobile ? "Search orgs..." : "Search organizations by name or website..."}
                         value={orgSearchTerm}
                         onChange={(e) => {
                           setOrgSearchTerm(e.target.value);
                           setIsOrgDropdownOpen(true);
                         }}
                         onFocus={() => setIsOrgDropdownOpen(true)}
-                        className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-purple-500 bg-slate-50"
+                        className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-purple-500 bg-slate-50"
                       />
                       <button
                         type="button"
                         onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400"
                       >
-                        {isOrgDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                        {isOrgDropdownOpen ? <ChevronUp size={isMobile ? 12 : 14} /> : <ChevronDown size={isMobile ? 12 : 14} />}
                       </button>
                     </div>
 
                     {/* Dropdown List for Organizations */}
                     {isOrgDropdownOpen && (
-                      <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 overflow-y-auto z-50">
+                      <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-40 sm:max-h-48 overflow-y-auto z-50">
                         {filteredOrganizations.length === 0 ? (
-                          <div className="p-4 text-center text-slate-400 text-xs">No organizations found</div>
+                          <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">No organizations found</div>
                         ) : (
                           filteredOrganizations.map(org => {
                             const isSelected = projectForm.organizations.includes(org._id);
@@ -1234,13 +1246,13 @@ const ProjectManagement = () => {
                               <div
                                 key={org._id}
                                 onClick={() => toggleOrgSelection(org._id)}
-                                className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-purple-50' : ''}`}
+                                className={`flex items-center justify-between p-2 sm:p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-purple-50' : ''}`}
                               >
                                 <div>
-                                  <p className="text-sm font-bold text-slate-800">{org.companyName}</p>
-                                  <p className="text-[9px] text-slate-400">{org.website || 'No website'}</p>
+                                  <p className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{org.companyName}</p>
+                                  <p className="text-[8px] sm:text-[9px] text-slate-400 truncate max-w-[100px] sm:max-w-none">{org.website || 'No website'}</p>
                                 </div>
-                                {isSelected && <CheckCircle size={14} className="text-purple-600" />}
+                                {isSelected && <CheckCircle size={isMobile ? 12 : 14} className="text-purple-600 flex-shrink-0" />}
                               </div>
                             );
                           })
@@ -1254,16 +1266,16 @@ const ProjectManagement = () => {
                         setShowNewOrgForm(true);
                         setIsOrgDropdownOpen(false);
                       }}
-                      className="w-full mt-2 py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                      className="w-full mt-1 sm:mt-2 py-1.5 sm:py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[8px] sm:text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-1 sm:gap-2"
                     >
-                      <Plus size={14} />
+                      <Plus size={isMobile ? 12 : 14} />
                       Create New Organization
                     </button>
                   </>
                 ) : (
-                  <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
+                  <div className="space-y-2 sm:space-y-3 p-3 sm:p-4 bg-blue-50 rounded-xl border border-blue-200">
                     <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-black uppercase text-blue-600 ml-1">New Organization Details</label>
+                      <label className="text-[8px] sm:text-[10px] font-black uppercase text-blue-600 ml-1">New Organization</label>
                       <button
                         type="button"
                         onClick={() => {
@@ -1272,48 +1284,48 @@ const ProjectManagement = () => {
                         }}
                         className="text-slate-400 hover:text-slate-600"
                       >
-                        <X size={14} />
+                        <X size={isMobile ? 12 : 14} />
                       </button>
                     </div>
                     <input
                       type="text"
                       placeholder="Organization Name *"
                       required
-                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-sm"
+                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-xs sm:text-sm"
                       value={newOrgData.companyName}
                       onChange={(e) => setNewOrgData({...newOrgData, companyName: e.target.value})}
                     />
                     <input
                       type="text"
                       placeholder="Website (optional)"
-                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm"
                       value={newOrgData.website}
                       onChange={(e) => setNewOrgData({...newOrgData, website: e.target.value})}
                     />
                     <input
                       type="text"
                       placeholder="Address (optional)"
-                      className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm"
                       value={newOrgData.address}
                       onChange={(e) => setNewOrgData({...newOrgData, address: e.target.value})}
                     />
                   </div>
                 )}
                 
-                <p className="text-[8px] text-slate-400 mt-1">
+                <p className="text-[7px] sm:text-[8px] text-slate-400 mt-0.5 sm:mt-1">
                   {projectForm.organizations.length} client organization(s) selected
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-6">
+              <div className="grid grid-cols-2 gap-3 sm:gap-6">
                 <CreatableSelect isClearable options={POPULAR_COUNTRIES} placeholder="Select Country" value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || { label: projectForm.country, value: projectForm.country }} onChange={(v) => setProjectForm({ ...projectForm, country: v?.label || '' })} styles={customDropdownStyles} />
                 <CreatableSelect isClearable options={industries} value={industries.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} styles={customDropdownStyles} />
               </div>
-              <select className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({ ...projectForm, projectManager: e.target.value })}>
+              <select className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({ ...projectForm, projectManager: e.target.value })}>
                 <option value="">Select Manager</option>
                 {projectManagers.map(pm => <option key={pm._id} value={pm._id}>{pm.name}</option>)}
               </select>
-              <button type="submit" className="w-full py-5 bg-[#111C44] text-white font-black rounded-2xl hover:bg-blue-600 transition-all uppercase text-xs tracking-widest shadow-xl">
+              <button type="submit" className="w-full py-3 sm:py-5 bg-[#111C44] text-white font-black rounded-2xl hover:bg-blue-600 transition-all uppercase text-[10px] sm:text-xs tracking-widest shadow-xl">
                 {isEditing ? 'Save Changes' : 'Create Project'}
               </button>
             </form>
@@ -1321,31 +1333,31 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* FEED MODAL */}
+      {/* FEED MODAL - Responsive */}
       {showFeedModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[110] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-lg p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-10">
-              <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[110] p-3 sm:p-6">
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-lg p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 sm:mb-10">
+              <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
                 {isEditingFeed ? 'Update Stream' : 'New Feed'}
               </h2>
               <button onClick={closeFeedModal} className="text-slate-300 hover:text-slate-600 transition-colors">
-                <X size={28} />
+                <X size={isMobile ? 20 : 28} />
               </button>
             </div>
 
-            <form onSubmit={handleFeedSubmit} className="space-y-6">
+            <form onSubmit={handleFeedSubmit} className="space-y-4 sm:space-y-6">
               <input
                 type="text"
                 placeholder="Stream Name"
                 required
-                className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold"
+                className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base"
                 value={feedForm.name}
                 onChange={(e) => setFeedForm({ ...feedForm, name: e.target.value })}
               />
 
               <select
-                className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700"
+                className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700"
                 value={feedForm.feedType}
                 onChange={(e) => setFeedForm({ 
                   ...feedForm, 
@@ -1362,8 +1374,8 @@ const ProjectManagement = () => {
 
               {feedForm.feedType === 'Weekly' && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Select Weekly Day</label>
-                  <select required value={feedForm.weekDay} onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700">
+                  <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Select Weekly Day</label>
+                  <select required value={feedForm.weekDay} onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })} className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700">
                     <option value="">Choose Day</option>
                     {weekDays.map(day => <option key={day} value={day}>{day}</option>)}
                   </select>
@@ -1372,8 +1384,8 @@ const ProjectManagement = () => {
 
               {feedForm.feedType === 'Monthly' && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Day of Month (1-31)</label>
-                  <select required value={feedForm.monthDay} onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })} className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700">
+                  <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Day of Month (1-31)</label>
+                  <select required value={feedForm.monthDay} onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })} className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700">
                     <option value="">Select Day</option>
                     {[...Array(31)].map((_, i) => (
                       <option key={i + 1} value={i + 1}>{i + 1}</option>
@@ -1383,13 +1395,13 @@ const ProjectManagement = () => {
               )}
 
               {/* FEED STATUS SELECTION */}
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
-                  <Activity size={12} />
+              <div className="space-y-1 sm:space-y-2">
+                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1 sm:gap-2">
+                  <Activity size={isMobile ? 10 : 12} />
                   Feed Status
                 </label>
                 <select
-                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-slate-700 cursor-pointer"
+                  className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 cursor-pointer"
                   value={feedForm.feedStatus}
                   onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
                 >
@@ -1400,9 +1412,9 @@ const ProjectManagement = () => {
               </div>
 
               {/* WEB / APP SELECTION */}
-              <div className="space-y-3">
-                <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Platform Type</label>
-                <div className="flex gap-3">
+              <div className="space-y-2 sm:space-y-3">
+                <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Platform Type</label>
+                <div className="flex gap-2 sm:gap-3">
                   {['Web', 'App', 'Both'].map((platform) => (
                     <button
                       key={platform}
@@ -1414,7 +1426,7 @@ const ProjectManagement = () => {
                           webDomain: platform === 'App' ? '' : feedForm.webDomain
                         });
                       }}
-                      className={`flex-1 py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all ${
+                      className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[8px] sm:text-xs uppercase tracking-wider transition-all ${
                         feedForm.feedPlatform === platform
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100'
@@ -1429,47 +1441,47 @@ const ProjectManagement = () => {
               {/* DOMAIN FIELD */}
               {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 ml-1">Domain URL</label>
+                  <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Domain URL</label>
                   <input
                     type="url"
                     placeholder="https://example.com"
                     value={feedForm.webDomain}
                     onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
-                    className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 focus:border-blue-400 transition-all"
+                    className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-all"
                   />
-                  <p className="text-[8px] text-slate-400 mt-1 ml-1">Enter the full URL including https://</p>
+                  <p className="text-[7px] sm:text-[8px] text-slate-400 mt-0.5 sm:mt-1 ml-1">Enter full URL including https://</p>
                 </div>
               )}
 
-              {/* SEARCHABLE DEVELOPER DROPDOWN WITH GITHUB STATUS */}
-              <div className="space-y-2" ref={developerDropdownRef}>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
-                  <UserCheck size={12} />
+              {/* SEARCHABLE DEVELOPER DROPDOWN WITH GITHUB STATUS - Responsive */}
+              <div className="space-y-1 sm:space-y-2" ref={developerDropdownRef}>
+                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1 sm:gap-2">
+                  <UserCheck size={isMobile ? 10 : 12} />
                   Assign Developers
                 </label>
                 
                 {/* Selected Developers Display */}
                 {feedForm.assignedDevelopers.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3 p-3 bg-blue-50 rounded-xl border border-blue-100">
+                  <div className="flex flex-wrap gap-1 sm:gap-2 mb-2 sm:mb-3 p-2 sm:p-3 bg-blue-50 rounded-xl border border-blue-100">
                     {feedForm.assignedDevelopers.map(devId => {
                       const dev = developers.find(d => d._id === devId);
                       return dev ? (
-                        <span key={devId} className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider ${
+                        <span key={devId} className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[7px] sm:text-[9px] font-black uppercase tracking-wider ${
                           dev.githubLinked && dev.githubUsername 
                             ? 'bg-green-600 text-white' 
                             : 'bg-orange-500 text-white'
                         }`}>
-                          <GitFork size={10} />
-                          {dev.name}
+                          <GitFork size={isMobile ? 8 : 10} />
+                          {dev.name?.substring(0, 10) || dev.name}
                           {(!dev.githubLinked || !dev.githubUsername) && (
-                            <span className="text-[7px] bg-orange-700 px-1 rounded ml-1">No GitHub</span>
+                            <span className="text-[6px] sm:text-[7px] bg-orange-700 px-0.5 sm:px-1 rounded ml-0.5 sm:ml-1">No GitHub</span>
                           )}
                           <button
                             type="button"
                             onClick={() => toggleDeveloperSelection(devId)}
                             className="hover:text-red-200 transition-colors"
                           >
-                            <X size={10} />
+                            <X size={isMobile ? 8 : 10} />
                           </button>
                         </span>
                       ) : null;
@@ -1479,56 +1491,55 @@ const ProjectManagement = () => {
 
                 {/* GitHub Info Note */}
                 {feedForm.assignedDevelopers.length > 0 && (
-                  <div className="bg-blue-50 rounded-lg p-2 mb-2">
-                    <div className="flex items-center gap-1.5">
-                      <GitFork size={10} className="text-blue-600" />
-                      <p className="text-[7px] font-bold text-blue-700">
-                        Developers with linked GitHub accounts will receive automatic repository invitations.
+                  <div className="bg-blue-50 rounded-lg p-1.5 sm:p-2 mb-1 sm:mb-2">
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      <GitFork size={isMobile ? 8 : 10} className="text-blue-600" />
+                      <p className="text-[6px] sm:text-[7px] font-bold text-blue-700">
+                        Linked GitHub accounts receive repo invitations.
                       </p>
                     </div>
                   </div>
                 )}
 
                 {/* Search Input with Refresh Button */}
-                <div className="relative flex gap-2">
+                <div className="relative flex gap-1.5 sm:gap-2">
                   <div className="relative flex-1">
-                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search size={isMobile ? 12 : 14} className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search developers by name or email..."
+                      placeholder={isMobile ? "Search devs..." : "Search developers by name or email..."}
                       value={developerSearchTerm}
                       onChange={(e) => {
                         setDeveloperSearchTerm(e.target.value);
                         setIsDeveloperDropdownOpen(true);
                       }}
                       onFocus={() => setIsDeveloperDropdownOpen(true)}
-                      className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
+                      className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-blue-500 bg-slate-50"
                     />
                     <button
                       type="button"
                       onClick={() => setIsDeveloperDropdownOpen(!isDeveloperDropdownOpen)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400"
                     >
-                      {isDeveloperDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                      {isDeveloperDropdownOpen ? <ChevronUp size={isMobile ? 12 : 14} /> : <ChevronDown size={isMobile ? 12 : 14} />}
                     </button>
                   </div>
                   
-                  {/* Refresh button */}
                   <button
                     type="button"
                     onClick={() => fetchInitialData()}
-                    className="px-3 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                    className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
                     title="Refresh developers list"
                   >
-                    <RefreshCw size={16} />
+                    <RefreshCw size={isMobile ? 14 : 16} />
                   </button>
                 </div>
 
                 {/* Dropdown List with GitHub Status */}
                 {isDeveloperDropdownOpen && (
-                  <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-64 overflow-y-auto z-50">
+                  <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 sm:max-h-64 overflow-y-auto z-50">
                     {filteredDevelopers.length === 0 ? (
-                      <div className="p-4 text-center text-slate-400 text-xs">No developers found</div>
+                      <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">No developers found</div>
                     ) : (
                       filteredDevelopers.map(dev => {
                         const isSelected = feedForm.assignedDevelopers.includes(dev._id);
@@ -1536,62 +1547,62 @@ const ProjectManagement = () => {
                         return (
                           <div
                             key={dev._id}
-                            className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                            className={`flex items-center justify-between p-2 sm:p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-blue-50' : ''}`}
                           >
                             <div 
                               className="flex-1 cursor-pointer"
                               onClick={() => toggleDeveloperSelection(dev._id)}
                             >
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-bold text-slate-800">{dev.name}</p>
+                              <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                                <p className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[80px] sm:max-w-none">{dev.name}</p>
                                 {hasGitHub ? (
-                                  <span className="inline-flex items-center gap-1 text-[7px] font-black text-green-600 bg-green-50 px-1.5 py-0.5 rounded-full">
-                                    <CheckCircle size={8} />
-                                    GitHub: {dev.githubUsername}
+                                  <span className="inline-flex items-center gap-0.5 sm:gap-1 text-[6px] sm:text-[7px] font-black text-green-600 bg-green-50 px-1 sm:px-1.5 py-0.5 rounded-full">
+                                    <CheckCircle size={isMobile ? 6 : 8} />
+                                    {dev.githubUsername?.substring(0, 8) || dev.githubUsername}
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 text-[7px] font-black text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full">
-                                    <AlertCircle size={8} />
-                                    GitHub: Not Linked
+                                  <span className="inline-flex items-center gap-0.5 sm:gap-1 text-[6px] sm:text-[7px] font-black text-orange-600 bg-orange-50 px-1 sm:px-1.5 py-0.5 rounded-full">
+                                    <AlertCircle size={isMobile ? 6 : 8} />
+                                    No GitHub
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[9px] text-slate-400">{dev.email}</p>
+                              <p className="text-[7px] sm:text-[9px] text-slate-400 truncate max-w-[80px] sm:max-w-none">{dev.email}</p>
                               {!hasGitHub && dev.role === 'Developer' && (
-                                <p className="text-[7px] text-orange-500 mt-0.5">
-                                  ⚠️ Won't receive GitHub invitations
+                                <p className="text-[6px] sm:text-[7px] text-orange-500 mt-0.5">
+                                  ⚠️ No GitHub invites
                                 </p>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 sm:gap-2">
                               {!hasGitHub && dev.role === 'Developer' && (
                                 <button
                                   onClick={(e) => handleQuickLinkGitHub(dev, e)}
-                                  className="p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
+                                  className="p-1 sm:p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
                                   title="Link GitHub Account"
                                 >
-                                  <GitFork size={14} />
+                                  <GitFork size={isMobile ? 12 : 14} />
                                 </button>
                               )}
-                              {isSelected && <CheckCircle size={14} className="text-blue-600 flex-shrink-0" />}
+                              {isSelected && <CheckCircle size={isMobile ? 12 : 14} className="text-blue-600 flex-shrink-0" />}
                             </div>
                           </div>
                         );
                       })
                     )}
                     {filteredDevelopers.length === 0 && developers.length > 0 && (
-                      <div className="p-4 text-center text-slate-400 text-xs">
-                        No matching developers found. Try a different search term.
+                      <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">
+                        No matching developers. Try different search.
                       </div>
                     )}
                   </div>
                 )}
                 
-                <div className="flex justify-between items-center mt-1">
-                  <p className="text-[8px] text-slate-400">
+                <div className="flex justify-between items-center mt-0.5 sm:mt-1">
+                  <p className="text-[7px] sm:text-[8px] text-slate-400">
                     {feedForm.assignedDevelopers.length} developer(s) selected
                   </p>
-                  <p className="text-[8px] text-slate-400">
+                  <p className="text-[7px] sm:text-[8px] text-slate-400">
                     {feedForm.assignedDevelopers.filter(id => {
                       const dev = developers.find(d => d._id === id);
                       return dev && dev.githubLinked && dev.githubUsername;
@@ -1600,7 +1611,7 @@ const ProjectManagement = () => {
                 </div>
               </div>
 
-              <button type="submit" className="w-full py-5 bg-blue-600 text-white font-black rounded-2xl hover:bg-[#111C44] transition-all uppercase text-xs tracking-widest shadow-xl">
+              <button type="submit" className="w-full py-3 sm:py-5 bg-blue-600 text-white font-black rounded-2xl hover:bg-[#111C44] transition-all uppercase text-[10px] sm:text-xs tracking-widest shadow-xl">
                 {isEditingFeed ? 'Save Configuration' : 'Connect Stream'}
               </button>
             </form>
@@ -1608,23 +1619,23 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* TASK MODAL */}
+      {/* TASK MODAL - Responsive */}
       {showTaskModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[120] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-10 border border-white/20">
-            <div className="flex justify-between items-center mb-8">
-              <h2 className="text-3xl font-black text-[#1B2559] tracking-tight">Deploy Task</h2>
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[120] p-3 sm:p-6">
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-md p-6 sm:p-10 border border-white/20">
+            <div className="flex justify-between items-center mb-6 sm:mb-8">
+              <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">Deploy Task</h2>
               <button onClick={() => setShowTaskModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors">
-                <X size={28} />
+                <X size={isMobile ? 20 : 28} />
               </button>
             </div>
-            <form onSubmit={handleCreateTask} className="space-y-6">
-              <p className="text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-2">
-                <Hash size={12} />
+            <form onSubmit={handleCreateTask} className="space-y-4 sm:space-y-6">
+              <p className="text-[8px] sm:text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1 sm:gap-2">
+                <Hash size={isMobile ? 10 : 12} />
                 Stream: {activeFeed?.name}
               </p>
-              <textarea required placeholder="Enter specific instructions for developers..." className="w-full p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-slate-700 min-h-[150px] focus:border-blue-300" value={taskText} onChange={(e) => setTaskText(e.target.value)} />
-              <button type="submit" className="w-full py-5 bg-[#111C44] text-white font-black rounded-2xl uppercase text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl">
+              <textarea required placeholder="Enter specific instructions for developers..." className="w-full p-4 sm:p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700 min-h-[120px] sm:min-h-[150px] focus:border-blue-300" value={taskText} onChange={(e) => setTaskText(e.target.value)} />
+              <button type="submit" className="w-full py-3 sm:py-5 bg-[#111C44] text-white font-black rounded-2xl uppercase text-[10px] sm:text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl">
                 Push to Bucket
               </button>
             </form>
@@ -1632,14 +1643,14 @@ const ProjectManagement = () => {
         </div>
       )}
 
-      {/* PROJECT COMMENT MODAL */}
+      {/* PROJECT COMMENT MODAL - Responsive */}
       {showProjectCommentModal && selectedProjectForComments && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[150] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[150] p-4 sm:p-6">
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4 sm:mb-6">
               <div>
-                <h2 className="text-2xl font-black text-[#1B2559]">Project Comments</h2>
-                <p className="text-sm text-slate-500 mt-1">
+                <h2 className="text-xl sm:text-2xl font-black text-[#1B2559]">Project Comments</h2>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1 truncate max-w-[150px] sm:max-w-none">
                   {selectedProjectForComments.projectCustomId || selectedProjectForComments.name}
                 </p>
               </div>
@@ -1650,7 +1661,7 @@ const ProjectManagement = () => {
                 }}
                 className="text-slate-300 hover:text-slate-600 transition-colors"
               >
-                <X size={28} />
+                <X size={isMobile ? 20 : 28} />
               </button>
             </div>
             
@@ -1667,17 +1678,17 @@ const ProjectManagement = () => {
         </div>
       )}
       
-      {/* SUCCESS POPUP */}
+      {/* SUCCESS POPUP - Responsive */}
       {showSuccessPopup && (
-        <div className="fixed top-6 right-6 z-[200] animate-in slide-in-from-top-5 duration-300">
-          <div className="bg-emerald-500 text-white px-6 py-4 rounded-2xl shadow-2xl border border-emerald-400 min-w-[280px]">
-            <div className="flex items-center justify-between gap-4">
+        <div className="fixed top-3 sm:top-6 right-3 sm:right-6 z-[200] animate-in slide-in-from-top-5 duration-300 max-w-[90vw] sm:max-w-[280px]">
+          <div className="bg-emerald-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-2xl border border-emerald-400">
+            <div className="flex items-center justify-between gap-2 sm:gap-4">
               <div>
-                <p className="text-xs font-black uppercase tracking-widest opacity-80">Success</p>
-                <p className="text-sm font-bold mt-1">{successMessage}</p>
+                <p className="text-[8px] sm:text-xs font-black uppercase tracking-widest opacity-80">Success</p>
+                <p className="text-xs sm:text-sm font-bold mt-0.5 sm:mt-1 truncate">{successMessage}</p>
               </div>
-              <button onClick={() => setShowSuccessPopup(false)} className="text-white/80 hover:text-white">
-                <X size={18} />
+              <button onClick={() => setShowSuccessPopup(false)} className="text-white/80 hover:text-white flex-shrink-0">
+                <X size={isMobile ? 14 : 18} />
               </button>
             </div>
           </div>

@@ -5,7 +5,7 @@ import axios from 'axios';
 import './index.css';
 import { SidebarProvider } from './context/SidebarContext';
 import { Toaster } from 'react-hot-toast';
-
+import ErrorBoundary from './components/ErrorBoundary';
 // Global Axios Interceptor
 axios.interceptors.response.use(
   (response) => response,
@@ -21,6 +21,7 @@ axios.interceptors.response.use(
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
+     <ErrorBoundary> 
    <SidebarProvider>
       <App />
       <Toaster 
@@ -36,5 +37,6 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         }}
       />
     </SidebarProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );

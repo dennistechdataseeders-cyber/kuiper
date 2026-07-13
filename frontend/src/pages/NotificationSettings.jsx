@@ -16,13 +16,20 @@ const NotificationSettings = () => {
   });
 
   useEffect(() => {
-    setPermission(Notification.permission);
-    // Load saved settings from localStorage
+  setPermission(Notification.permission);
+  try {
     const saved = localStorage.getItem('notificationSettings');
     if (saved) {
-      setSettings(JSON.parse(saved));
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        setSettings(parsed);
+      }
     }
-  }, []);
+  } catch (e) {
+    // If corrupted, use defaults
+    localStorage.removeItem('notificationSettings');
+  }
+}, []);
 
   const saveSettings = (newSettings) => {
     setSettings(newSettings);

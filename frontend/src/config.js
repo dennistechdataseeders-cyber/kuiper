@@ -1,4 +1,5 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://192.168.1.3:5000';
 
 export { API_BASE_URL }; // Supports named imports like: import { API_BASE_URL }
 export default API_BASE_URL; // Supports default imports like: import API_BASE_URL

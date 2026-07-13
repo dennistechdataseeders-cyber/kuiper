@@ -1,3 +1,5 @@
+/* frontend/src/index.css - FULL UPDATED FILE */
+
 @import "tailwindcss";
 
 /* --- Existing Custom Animations --- */
@@ -191,4 +193,295 @@ button.fixed {
 /* Prevent horizontal scroll on body when dropdown is open */
 body.dropdown-open {
   overflow: hidden !important;
+}
+
+/* ============================================
+   FIX: SIDEBAR GAP
+   ============================================ */
+
+/* Ensure main content starts exactly after sidebar */
+main {
+  margin-left: 0 !important;
+  max-width: 100%;
+}
+
+/* Fix any residual gap on the left */
+.flex > main {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Ensure sidebar doesn't create extra space */
+aside + main {
+  margin-left: 0 !important;
+}
+
+/* Fix for the toggle button being positioned on top of sidebar */
+button.fixed.top-10 {
+  z-index: 60 !important;
+}
+
+/* Ensure the toggle button doesn't create a gap when hidden */
+button.fixed.top-10.hidden {
+  display: none !important;
+}
+
+/* ============================================
+   MOBILE RESPONSIVENESS FIXES
+   ============================================ */
+
+/* Ensure content doesn't overflow on mobile */
+@media (max-width: 768px) {
+  main {
+    padding-left: 0 !important;
+  }
+  
+  /* Fix for tables on mobile */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Ensure buttons are touch-friendly on mobile */
+  button, 
+  [role="button"],
+  .cursor-pointer {
+    min-height: 40px;
+    min-width: 40px;
+  }
+}
+
+/* Ensure all interactive elements have proper touch targets */
+@media (max-width: 480px) {
+  button, 
+  .btn, 
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Prevent horizontal scroll on small screens */
+  body {
+    overflow-x: hidden;
+  }
+  
+  #root {
+    overflow-x: hidden;
+  }
+}
+
+/* ============================================
+   MOBILE TABLE RESPONSIVENESS
+   ============================================ */
+
+/* Make tables scrollable with visible indicator */
+@media (max-width: 768px) {
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    position: relative;
+  }
+  
+  /* Add subtle scroll indicator */
+  .overflow-x-auto::after {
+    content: '← Scroll →';
+    display: block;
+    text-align: center;
+    font-size: 8px;
+    color: #94a3b8;
+    padding: 4px 0;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    background: linear-gradient(to right, transparent, #f1f5f9 20%, #f1f5f9 80%, transparent);
+  }
+  
+  /* Make progress bars more compact on mobile */
+  .w-16 {
+    width: 48px !important;
+  }
+  
+  /* Reduce padding in tables on mobile */
+  table td,
+  table th {
+    padding: 6px 8px !important;
+  }
+  
+  /* Make stage dots smaller on mobile */
+  .w-5.h-5 {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  /* Reduce gap between stage dots */
+  .w-4.h-0\.5 {
+    width: 6px !important;
+  }
+  
+  /* Make status badges smaller on mobile */
+  .px-2.py-0\.5 {
+    padding: 2px 4px !important;
+    font-size: 7px !important;
+  }
+}
+
+/* Fix table cells on mobile */
+@media (max-width: 640px) {
+  table {
+    font-size: 11px;
+  }
+  
+  table th,
+  table td {
+    padding: 6px 8px !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+  
+  /* Make feed names more compact */
+  table td:first-child {
+    min-width: 80px;
+    max-width: 120px;
+  }
+  
+  /* Make stage indicators smaller */
+  table td .flex.items-center {
+    gap: 2px !important;
+  }
+  
+  table td .w-5.h-5 {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  table td .w-4.h-0\.5 {
+    width: 6px !important;
+  }
+  
+  /* Hide less important columns on very small screens */
+  table th:last-child,
+  table td:last-child {
+    display: none;
+  }
+  
+  /* Progress bar width on mobile */
+  .w-16 {
+    width: 40px !important;
+  }
+}
+
+/* Very small phones */
+@media (max-width: 400px) {
+  table {
+    font-size: 10px;
+  }
+  
+  table th,
+  table td {
+    padding: 4px 4px !important;
+  }
+  
+  /* Stack stage indicators vertically if needed */
+  table td .flex.items-center {
+    flex-wrap: wrap;
+    gap: 2px !important;
+  }
+  
+  /* Make stage circles even smaller */
+  table td .w-5.h-5 {
+    width: 12px !important;
+    height: 12px !important;
+  }
+  
+  table td .w-4.h-0\.5 {
+    width: 4px !important;
+  }
+  
+  /* Hide progress bar on very small screens, show only percentage */
+  table td .w-16 {
+    display: none !important;
+  }
+  
+  /* Make status text smaller */
+  table td .text-\[8px\] {
+    font-size: 6px !important;
+  }
+}
+
+/* ============================================
+   FEED STATUS PAGE SPECIFIC FIXES
+   ============================================ */
+
+/* Make stage steps more compact on mobile */
+@media (max-width: 768px) {
+  .stages-container {
+    gap: 2px !important;
+  }
+  
+  .stage-label {
+    font-size: 6px !important;
+  }
+  
+  /* Stats grid compact on mobile */
+  .grid-cols-6 {
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 4px !important;
+  }
+  
+  /* Feed name + record count on same line */
+  .feed-name-row {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 2px !important;
+  }
+  
+  .record-count-badge {
+    font-size: 7px !important;
+    padding: 1px 4px !important;
+  }
+}
+
+/* ============================================
+   IMPROVED TOUCH TARGETS FOR MOBILE
+   ============================================ */
+
+@media (max-width: 640px) {
+  /* All clickable elements should have good touch targets */
+  button,
+  a,
+  [role="button"],
+  select,
+  input[type="file"] {
+    min-height: 44px;
+  }
+  
+  /* Make dropdown selects easier to tap */
+  select {
+    padding: 8px 12px !important;
+    font-size: 14px !important;
+  }
+  
+  /* Make input fields easier to tap */
+  input,
+  textarea {
+    font-size: 14px !important;
+  }
+  
+  /* Prevent zoom on input focus (iOS) */
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* ============================================
+   SAFE AREA INSETS FOR NOTCHED PHONES
+   ============================================ */
+
+@supports (padding: max(0px)) {
+  body {
+    padding-left: min(0px, env(safe-area-inset-left));
+    padding-right: min(0px, env(safe-area-inset-right));
+    padding-top: min(0px, env(safe-area-inset-top));
+    padding-bottom: min(0px, env(safe-area-inset-bottom));
+  }
 }

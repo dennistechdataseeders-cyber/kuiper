@@ -23,13 +23,17 @@ import {
   FolderKanban,
   TrendingUp,
   Building2,
+  RefreshCw,
   Target,
   Logs,
   ChartBar,
   Ticket,
   Bell,
   GitFork,
-  FolderOpen
+  FolderOpen,
+  Calendar,
+  Clock,
+  BarChart3
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -49,6 +53,7 @@ const Sidebar = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [openTicketCount, setOpenTicketCount] = useState(0);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const menuRef = useRef(null);
 
@@ -69,6 +74,21 @@ const Sidebar = () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // HANDLE RESIZE FOR MOBILE DETECTION
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768;
+      setIsMobile(mobile);
+      // Auto-collapse on mobile
+      if (mobile && !isCollapsed) {
+        toggleSidebar();
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isCollapsed, toggleSidebar]);
 
   // FETCH OPEN TICKET COUNT
   useEffect(() => {
@@ -141,7 +161,7 @@ const Sidebar = () => {
     }
   };
 
-  // MENU ITEMS
+  // MENU ITEMS - UPDATED WITH HRMS ROUTES
   const menuItems = {
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -154,6 +174,7 @@ const Sidebar = () => {
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
+      { path: '/hr', icon: <Users size={18} />, label: 'HR Dashboard' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
@@ -180,6 +201,7 @@ const Sidebar = () => {
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
@@ -189,6 +211,7 @@ const Sidebar = () => {
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
@@ -201,6 +224,7 @@ const Sidebar = () => {
       { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
@@ -208,10 +232,12 @@ const Sidebar = () => {
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-      // { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
     ],
 
     HR: [
+      { path: '/hr', icon: <Users size={18} />, label: 'HR Dashboard' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
@@ -221,6 +247,7 @@ const Sidebar = () => {
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
+      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
     ],
   };
 
@@ -234,6 +261,8 @@ const Sidebar = () => {
     if (path === '/admin') return location.pathname === '/admin';
     if (path === '/teamlead') return location.pathname === '/teamlead';
     if (path === '/knowledge') return location.pathname === '/knowledge';
+    if (path === '/hr') return location.pathname === '/hr';
+    if (path === '/employee') return location.pathname === '/employee';
     return location.pathname.startsWith(path);
   };
 
@@ -242,30 +271,46 @@ const Sidebar = () => {
     return item.label === 'Tickets' && openTicketCount > 0;
   };
 
+  // Determine sidebar classes based on mobile state
+  const getSidebarClasses = () => {
+    const baseClasses = 'fixed top-0 left-0 h-screen bg-black text-slate-400 border-r border-slate-800 shadow-2xl transition-all duration-300 ease-in-out z-50';
+    
+    if (isMobile) {
+      // Mobile: w-64 (256px) instead of w-72 (288px) - more compact
+      return `${baseClasses} ${isCollapsed ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100 w-64'}`;
+    }
+    
+    return `${baseClasses} ${isCollapsed ? 'w-[80px]' : 'w-[264px]'}`;
+  };
+
   return (
     <>
+      {/* Mobile backdrop overlay */}
+      {isMobile && !isCollapsed && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300"
+          onClick={toggleSidebar}
+        />
+      )}
+
       {/* SIDEBAR */}
-      <aside
-        className={`fixed top-0 left-0 h-screen bg-black text-slate-400 border-r border-slate-800 shadow-2xl transition-all duration-300 ease-in-out z-50 ${
-          isCollapsed ? 'w-20' : 'w-64'
-        }`}
-      >
-        {/* HEADER */}
+      <aside className={getSidebarClasses()}>
+        {/* HEADER - Reduced padding on mobile */}
         <div
-          className={`p-6 border-b border-slate-800 transition-all duration-300 ${
-            isCollapsed ? 'px-3' : ''
+          className={`border-b border-slate-800 transition-all duration-300 ${
+            isMobile ? 'p-3' : isCollapsed && !isMobile ? 'p-6 px-3' : 'p-6'
           }`}
         >
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-            <KuiperLogo isExpanded={!isCollapsed} />
+          <div className={`flex items-center ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
+            <KuiperLogo isExpanded={!isCollapsed || isMobile} />
           </div>
         </div>
 
         {/* NOTIFICATIONS SECTION */}
-        <div className={`${isCollapsed ? 'px-2' : 'px-4'} mt-4`}>
-          <div className={`flex items-center ${isCollapsed ? 'justify-center' : 'justify-between'} px-3 py-2 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10`}>
-            {!isCollapsed && (
-              <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em]">
+        <div className={`${isCollapsed && !isMobile ? 'px-2' : 'px-3'} mt-3`}>
+          <div className={`flex items-center ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'} px-2.5 py-1.5 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10`}>
+            {(!isCollapsed || isMobile) && (
+              <span className="text-[7px] font-black text-slate-400 uppercase tracking-[0.3em]">
                 Notifications
               </span>
             )}
@@ -273,18 +318,18 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* USER CARD - Only when expanded - SMALLER SIZE */}
-        {!isCollapsed && (
-          <div className="px-4 mt-3">
-            <div className="flex flex-col items-center justify-center text-center px-3 py-3 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10 transition-all duration-500">
-              <p className="text-[7px] font-black uppercase tracking-[0.3em] text-slate-500 mb-1">
+        {/* USER CARD - Only when expanded or mobile - More compact */}
+        {(!isCollapsed || isMobile) && (
+          <div className="px-3 mt-2">
+            <div className="flex flex-col items-center justify-center text-center px-2 py-2 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10 transition-all duration-500">
+              <p className="text-[6px] font-black uppercase tracking-[0.3em] text-slate-500 mb-0.5">
                 Authenticated
               </p>
-              <h4 className="text-[11px] font-bold text-white truncate max-w-[160px] mb-2">
+              <h4 className="text-[10px] font-bold text-white truncate max-w-[140px] mb-1.5">
                 {userName}
               </h4>
               <span
-                className={`inline-flex items-center justify-center px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest bg-gradient-to-r border ${getRoleStyles(
+                className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest bg-gradient-to-r border ${getRoleStyles(
                   userRole
                 )}`}
               >
@@ -294,11 +339,13 @@ const Sidebar = () => {
           </div>
         )}
 
-        {/* NAVIGATION - Adjust height based on collapsed state */}
+        {/* NAVIGATION - Reduced padding on mobile */}
         <nav
-          className={`p-3 space-y-1.5 overflow-y-auto overflow-x-visible no-scrollbar ${
-            isCollapsed
-              ? 'h-[calc(100vh-100px)]'
+          className={`p-2 space-y-1 overflow-y-auto overflow-x-visible no-scrollbar ${
+            isCollapsed && !isMobile
+              ? 'h-[calc(100vh-90px)]'
+              : isMobile
+              ? 'h-[calc(100vh-320px)]'
               : 'h-[calc(100vh-380px)]'
           }`}
         >
@@ -310,27 +357,33 @@ const Sidebar = () => {
               <NavLink
                 key={item.path}
                 to={item.path}
-                className={`relative flex items-center gap-2.5 p-2 rounded-xl transition-all duration-200 group ${
+                className={`relative flex items-center gap-2 p-1.5 rounded-xl transition-all duration-200 group ${
                   active
                     ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
                     : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
-                } ${isCollapsed ? 'justify-center' : ''}`}
-                title={isCollapsed ? item.label : ''}
+                } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+                title={isCollapsed && !isMobile ? item.label : ''}
+                onClick={() => {
+                  // Close mobile drawer on navigation
+                  if (isMobile && !isCollapsed) {
+                    toggleSidebar();
+                  }
+                }}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
-                {!isCollapsed && (
+                {(!isCollapsed || isMobile) && (
                   <>
-                    <span className="text-[12px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                    <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap flex-1">
                       {item.label}
                     </span>
                     {showBadge && (
-                      <span className="ml-auto bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
                         {openTicketCount > 99 ? '99+' : openTicketCount}
                       </span>
                     )}
                   </>
                 )}
-                {isCollapsed && showBadge && (
+                {isCollapsed && !isMobile && showBadge && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
                     {openTicketCount > 99 ? '99+' : openTicketCount}
                   </span>
@@ -342,23 +395,23 @@ const Sidebar = () => {
 
         {/* ACCOUNT SECTION */}
         <div
-          className={`absolute bottom-0 left-0 right-0 p-3 border-t border-slate-800 ${
-            isCollapsed ? 'px-2' : ''
+          className={`absolute bottom-0 left-0 right-0 p-2 border-t border-slate-800 ${
+            isCollapsed && !isMobile ? 'px-2' : ''
           }`}
           ref={menuRef}
         >
           {/* USER MENU */}
           {showUserMenu && (
             <div
-              className={`absolute bottom-full left-4 mb-4 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-2 min-w-[200px] animate-in slide-in-from-bottom-4 duration-200 z-[60] ${
-                isCollapsed ? 'left-1/2 -translate-x-1/2' : ''
+              className={`absolute bottom-full left-3 mb-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-2 min-w-[180px] animate-in slide-in-from-bottom-4 duration-200 z-[60] ${
+                isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
               }`}
             >
               <button
                 onClick={handleDownloadGuide}
-                className="w-full flex items-center gap-2.5 p-2 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
               >
-                <FileText size={14} className="text-blue-400" />
+                <FileText size={13} className="text-blue-400" />
                 <span>User Guide</span>
               </button>
 
@@ -367,9 +420,9 @@ const Sidebar = () => {
                   navigate('/profile');
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2.5 p-2 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
               >
-                <Settings size={14} className="text-purple-400" />
+                <Settings size={13} className="text-purple-400" />
                 <span>Change Password</span>
               </button>
 
@@ -378,9 +431,9 @@ const Sidebar = () => {
                   navigate('/notifications');
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2.5 p-2 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
               >
-                <Bell size={14} className="text-blue-400" />
+                <Bell size={13} className="text-blue-400" />
                 <span>Notification Settings</span>
               </button>
 
@@ -391,9 +444,9 @@ const Sidebar = () => {
                   setShowLogoutModal(true);
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2.5 p-2 text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-xs font-bold"
+                className="w-full flex items-center gap-2 p-1.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-xs font-bold"
               >
-                <LogOut size={14} />
+                <LogOut size={13} />
                 <span>Logout</span>
               </button>
             </div>
@@ -402,28 +455,28 @@ const Sidebar = () => {
           {/* ACCOUNT BUTTON */}
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className={`flex items-center gap-2.5 w-full p-2 rounded-xl transition-all ${
+            className={`flex items-center gap-2 w-full p-1.5 rounded-xl transition-all ${
               showUserMenu
                 ? 'bg-slate-800 border border-white/5 shadow-xl'
                 : 'hover:bg-slate-800'
-            } ${isCollapsed ? 'justify-center' : ''}`}
+            } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
           >
             <div className="relative">
               <User
-                size={16}
+                size={14}
                 className={showUserMenu ? 'text-blue-400' : 'text-slate-400'}
               />
               {showUserMenu && (
                 <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-blue-500 rounded-full border border-black" />
               )}
             </div>
-            {!isCollapsed && (
+            {(!isCollapsed || isMobile) && (
               <div className="flex items-center justify-between flex-1">
-                <span className="text-[11px] font-semibold text-slate-200">
+                <span className="text-[10px] font-semibold text-slate-200">
                   Account
                 </span>
                 <ChevronUp
-                  size={12}
+                  size={10}
                   className={`transition-transform duration-300 ${
                     showUserMenu ? 'rotate-0' : 'rotate-180'
                   }`}
@@ -434,15 +487,31 @@ const Sidebar = () => {
         </div>
       </aside>
 
-      {/* TOGGLE BUTTON */}
-      <button
-        onClick={toggleSidebar}
-        className={`fixed top-10 bg-blue-600 text-white rounded-full p-1.5 border-4 border-slate-900 hover:bg-blue-500 transition-all duration-300 z-[60] shadow-xl ${
-          isCollapsed ? 'left-[68px]' : 'left-[244px]'
-        }`}
-      >
-        {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-      </button>
+      {/* TOGGLE BUTTON - Hide on mobile */}
+      {!isMobile && (
+        <button
+          onClick={toggleSidebar}
+          className={`fixed top-10 bg-blue-600 text-white rounded-full p-1.5 border-4 border-slate-900 hover:bg-blue-500 transition-all duration-300 z-[60] shadow-xl ${
+            isCollapsed ? 'left-[68px]' : 'left-[252px]'
+          }`}
+        >
+          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+      )}
+
+      {/* Mobile toggle button - smaller and more compact */}
+      {isMobile && (
+        <button
+          onClick={toggleSidebar}
+          className={`fixed top-1 left-1 bg-blue-600 text-white rounded-lg p-2.5 border border-slate-700 hover:bg-blue-500 transition-all duration-300 z-[60] shadow-lg ${
+            !isCollapsed ? 'hidden' : ''
+          }`}
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      )}
 
       {/* LOGOUT MODAL */}
       {showLogoutModal && (

@@ -8,19 +8,18 @@ import API_BASE_URL from '../config';
 import notificationManager from '../utils/notifications';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 
 const NotificationBell = () => {
   const [permission, setPermission] = useState('default');
   const [isSupported, setIsSupported] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
+  const [openTicketCount, setOpenTicketCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
-  const [removingNotificationId, setRemovingNotificationId] = useState(null);
-
+  
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
@@ -99,6 +98,7 @@ const NotificationBell = () => {
       });
       
       setNotificationCount(res.data.unreadCount || 0);
+      setOpenTicketCount(res.data.openTicketCount || 0);
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
@@ -112,12 +112,7 @@ const NotificationBell = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Filter out 'open_ticket' type notifications - only show real notifications
-      const filteredNotifications = (res.data.notifications || []).filter(
-        n => n.type !== 'open_ticket'
-      );
-      
-      setNotifications(filteredNotifications);
+      setNotifications(res.data.notifications || []);
       setNotificationCount(res.data.unreadCount || 0);
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -147,62 +142,42 @@ const NotificationBell = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      setNotifications(prev => 
+        prev.map(n => n._id === notificationId ? { ...n, read: true } : n)
+      );
       setNotificationCount(prev => Math.max(0, prev - 1));
-      return true;
     } catch (error) {
       console.error('Error marking notification as read:', error);
-      return false;
     }
   };
 
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.patch(`${API_BASE_URL}/api/notifications/mark-all-read`, {}, {
+      const response = await axios.patch(`${API_BASE_URL}/api/notifications/mark-all-read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Remove all notifications from the list
-      setNotifications([]);
+      console.log('✅ Mark all read response:', response.data);
+      
+      // Update local state
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setNotificationCount(0);
+      
       toast.success('All notifications marked as read');
+      
+      // Refresh count
+      fetchNotificationCount();
     } catch (error) {
       console.error('Error marking all as read:', error);
-      toast.error('Failed to mark all as read');
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to mark all as read';
+      toast.error(errorMessage);
     }
   };
 
   const handleNotificationClick = async (notification) => {
-    // Set the notification ID for removal animation
-    setRemovingNotificationId(notification._id);
-    
-    try {
-      // Mark as read if it's a notification (not an open ticket)
-      if (notification._id && !notification._id.toString().startsWith('open_')) {
-        await markAsRead(notification._id);
-      }
-      
-      // Remove from local state immediately
-      setNotifications(prev => prev.filter(n => n._id !== notification._id));
-      
-      // Update notification count locally
-      setNotificationCount(prev => Math.max(0, prev - 1));
-      
-      // Close dropdown
-      setShowDropdown(false);
-      
-      // Clear removal state after a moment
-      setTimeout(() => {
-        setRemovingNotificationId(null);
-      }, 300);
-      
-    } catch (error) {
-      console.error('Error handling notification click:', error);
-      // Even if there's an error, remove from local state
-      setNotifications(prev => prev.filter(n => n._id !== notification._id));
-      setNotificationCount(prev => Math.max(0, prev - 1));
-      setRemovingNotificationId(null);
-    }
+    // Close dropdown first
+    setShowDropdown(false);
     
     // If it's a ticket notification, navigate to the ticket
     if (notification.ticketId) {
@@ -210,10 +185,13 @@ const NotificationBell = () => {
         ? notification.ticketId._id 
         : notification.ticketId;
       
-      // Small delay to allow the dropdown to close before navigation
-      setTimeout(() => {
-        navigate(`/tickets/${ticketId}`);
-      }, 200);
+      // Mark as read if it's a notification
+      if (notification._id && !notification._id.toString().startsWith('open_')) {
+        await markAsRead(notification._id);
+      }
+      
+      // Navigate to ticket details
+      navigate(`/tickets/${ticketId}`);
     }
   };
 
@@ -240,6 +218,7 @@ const NotificationBell = () => {
       case 'ticket_assigned': return '📋';
       case 'ticket_commented': return '💬';
       case 'ticket_status_updated': return '🔄';
+      case 'open_ticket': return '📌';
       default: return '🔔';
     }
   };
@@ -314,7 +293,7 @@ const NotificationBell = () => {
             )}
           </div>
           
-          <div className="flex-1 overflow-y-auto max-h-[500px]">
+          <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="p-8 text-center">
                 <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
@@ -327,110 +306,85 @@ const NotificationBell = () => {
                 <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
               </div>
             ) : (
-              <AnimatePresence mode="popLayout">
-                {notifications.map((notification, index) => {
-                  const isRead = notification.read || false;
-                  const ticketTitle = typeof notification.ticketId === 'object' 
-                    ? notification.ticketId?.title || notification.message 
-                    : notification.message;
-                  const lastComment = notification.lastComment || 
-                    (notification.ticketId?.comments && notification.ticketId.comments.length > 0 
-                      ? notification.ticketId.comments[notification.ticketId.comments.length - 1] 
-                      : null);
-                  const isRemoving = removingNotificationId === notification._id;
-                  
-                  return (
-                    <motion.div
-                      key={notification._id || index}
-                      layout
-                      initial={{ opacity: 1, scale: 1, height: 'auto' }}
-                      animate={{ 
-                        opacity: isRemoving ? 0 : 1,
-                        scale: isRemoving ? 0.8 : 1,
-                        height: isRemoving ? 0 : 'auto',
-                        marginBottom: isRemoving ? 0 : undefined,
-                        padding: isRemoving ? 0 : undefined
-                      }}
-                      exit={{ 
-                        opacity: 0, 
-                        scale: 0.8,
-                        height: 0,
-                        marginBottom: 0,
-                        paddingTop: 0,
-                        paddingBottom: 0
-                      }}
-                      transition={{ duration: 0.25, ease: 'easeInOut' }}
-                      style={{
-                        overflow: 'hidden'
-                      }}
-                    >
-                      <div
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-all ${
-                          !isRead ? 'bg-blue-50/50 border-l-4 border-l-blue-500' : ''
-                        } ${isRemoving ? 'pointer-events-none opacity-50' : ''}`}
-                      >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-shrink-0 text-lg mt-0.5">
-                            {notification.type === 'ticket_commented' ? (
-                              <MessageSquare size={16} className="text-purple-500" />
-                            ) : (
-                              getNotificationIcon(notification.type)
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-start justify-between gap-2">
-                              <p className={`text-sm ${!isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                                {ticketTitle || notification.message}
-                              </p>
-                              <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
-                                {getTimeAgo(notification.createdAt)}
+              notifications.map((notification, index) => {
+                const isRead = notification.read || false;
+                const isOpenTicket = notification.type === 'open_ticket';
+                const ticketTitle = typeof notification.ticketId === 'object' 
+                  ? notification.ticketId?.title || notification.message 
+                  : notification.message;
+                const hasComments = notification.hasComments || (notification.ticketId?.comments && notification.ticketId.comments.length > 0);
+                const lastComment = notification.lastComment || 
+                  (notification.ticketId?.comments && notification.ticketId.comments.length > 0 
+                    ? notification.ticketId.comments[notification.ticketId.comments.length - 1] 
+                    : null);
+                
+                return (
+                  <div
+                    key={notification._id || index}
+                    onClick={() => handleNotificationClick(notification)}
+                    className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-all ${
+                      !isRead ? 'bg-blue-50/50 border-l-4 border-l-blue-500' : ''
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0 text-lg mt-0.5">
+                        {notification.type === 'ticket_commented' ? (
+                          <MessageSquare size={16} className="text-purple-500" />
+                        ) : (
+                          getNotificationIcon(notification.type)
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-sm ${!isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                            {ticketTitle || notification.message}
+                          </p>
+                          <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
+                            {getTimeAgo(notification.createdAt)}
+                          </span>
+                        </div>
+                        
+                        {notification.type === 'ticket_commented' && lastComment && (
+                          <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[10px] font-semibold text-gray-600">
+                                {lastComment.userName || 'User'}:
+                              </span>
+                              <span className="text-xs text-gray-600 line-clamp-2">
+                                {lastComment.text || 'No text'}
                               </span>
                             </div>
-                            
-                            {notification.type === 'ticket_commented' && lastComment && (
-                              <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-[10px] font-semibold text-gray-600">
-                                    {lastComment.userName || 'User'}:
-                                  </span>
-                                  <span className="text-xs text-gray-600 line-clamp-2">
-                                    {lastComment.text || 'No text'}
-                                  </span>
-                                </div>
-                                {notification.hasAttachments && (
-                                  <div className="mt-1 text-[10px] text-purple-500">
-                                    📎 Has attachments
-                                  </div>
-                                )}
+                            {notification.hasAttachments && (
+                              <div className="mt-1 text-[10px] text-purple-500">
+                                📎 Has attachments
                               </div>
                             )}
-                            
-                            {notification.ticketId && typeof notification.ticketId === 'object' && notification.ticketId.ticketNumber && (
-                              <p className="text-xs text-gray-400 mt-1">
-                                {notification.ticketId.ticketNumber}
-                                {notification.ticketId.status && (
-                                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[8px] font-medium ${
-                                    notification.ticketId.status === 'Open' ? 'bg-blue-100 text-blue-700' :
-                                    notification.ticketId.status === 'In Progress' ? 'bg-yellow-100 text-yellow-700' :
-                                    notification.ticketId.status === 'Resolved' ? 'bg-green-100 text-green-700' :
-                                    'bg-gray-100 text-gray-700'
-                                  }`}>
-                                    {notification.ticketId.status}
-                                  </span>
-                                )}
-                              </p>
-                            )}
                           </div>
-                          {!isRead && (
-                            <div className="flex-shrink-0 w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
-                          )}
-                        </div>
+                        )}
+                        
+                        {notification.ticketId && typeof notification.ticketId === 'object' && notification.ticketId.ticketNumber && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            {notification.ticketId.ticketNumber}
+                            {notification.ticketId.status && (
+                              <span className={`ml-2 px-1.5 py-0.5 rounded text-[8px] font-medium ${
+                                notification.ticketId.status === 'Open' ? 'bg-blue-100 text-blue-700' :
+                                notification.ticketId.status === 'In Progress' ? 'bg-yellow-100 text-yellow-700' :
+                                notification.ticketId.status === 'Resolved' ? 'bg-green-100 text-green-700' :
+                                'bg-gray-100 text-gray-700'
+                              }`}>
+                                {notification.ticketId.status}
+                              </span>
+                            )}
+                          </p>
+                        )}
                       </div>
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
+                      {!isRead && (
+                        <div className="flex-shrink-0 w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
             )}
           </div>
           
@@ -451,8 +405,8 @@ const NotificationBell = () => {
     );
   };
 
-  // Calculate total count (unread notifications only - no open tickets)
-  const totalCount = notificationCount;
+  // Calculate total count (unread notifications + open tickets)
+  const totalCount = notificationCount + openTicketCount;
 
   return (
     <div className="relative inline-block">

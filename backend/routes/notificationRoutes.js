@@ -5,7 +5,6 @@ const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 
 // GET notification count
-
 router.get('/count', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -84,6 +83,17 @@ router.get('/', protect, async (req, res) => {
     } else if (req.user.role === 'Client') {
       openTickets = await Ticket.find({
         createdBy: req.user._id,
+        status: { $in: ['Open', 'In Progress'] }
+      })
+      .populate('createdBy', 'name')
+      .populate({
+        path: 'comments',
+        select: 'text userName userId createdAt',
+        options: { sort: { createdAt: -1 }, limit: 1 }
+      });
+    } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
+      openTickets = await Ticket.find({
+        assignedTo: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
       })
       .populate('createdBy', 'name')
@@ -234,14 +244,29 @@ router.patch('/:notificationId/read', protect, async (req, res) => {
   }
 });
 
-// Mark all notifications as read
+// Mark all notifications as read - FIXED
 router.patch('/mark-all-read', protect, async (req, res) => {
   try {
+    console.log('📝 Marking all notifications as read for user:', req.user._id);
+    
     const user = await User.findById(req.user._id);
-    if (user.unreadNotifications) {
+    
+    if (!user) {
+      console.log('❌ User not found');
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    console.log(`📊 Before: ${user.unreadNotifications?.length || 0} notifications, count: ${user.notificationCount}`);
+    
+    if (user.unreadNotifications && user.unreadNotifications.length > 0) {
+      // Mark all as read
       user.unreadNotifications.forEach(n => n.read = true);
       user.notificationCount = 0;
+      
       await user.save();
+      
+      console.log(`✅ Marked ${user.unreadNotifications.length} notifications as read`);
+      console.log(`📊 After: count: ${user.notificationCount}`);
       
       // Emit socket update
       const io = global.io;
@@ -251,11 +276,21 @@ router.patch('/mark-all-read', protect, async (req, res) => {
           count: 0
         });
       }
+    } else {
+      console.log('ℹ️ No notifications to mark as read');
     }
-    res.json({ success: true });
+    
+    res.json({ 
+      success: true, 
+      message: 'All notifications marked as read',
+      count: user.unreadNotifications?.length || 0
+    });
   } catch (error) {
-    console.error('Error marking all notifications as read:', error);
-    res.status(500).json({ error: 'Failed to mark all as read' });
+    console.error('❌ Error marking all notifications as read:', error);
+    res.status(500).json({ 
+      error: 'Failed to mark all as read',
+      details: error.message 
+    });
   }
 });
 

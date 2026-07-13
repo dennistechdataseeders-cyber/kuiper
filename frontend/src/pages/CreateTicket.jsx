@@ -809,7 +809,7 @@ const CreateTicket = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-8' : 'ml-64'}`}>
       <div className="w-full">
         <div className="mb-8">
           <button

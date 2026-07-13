@@ -118,13 +118,23 @@ const ProjectFeedStatus = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [expandedFeed, setExpandedFeed] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
   const { isCollapsed } = useSidebar();
   const socketRef = useRef(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
   const [copiedPath, setCopiedPath] = useState(null);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  // Handle resize for mobile detection
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   // ============================================
   // FILE UPLOAD STATE
@@ -322,18 +332,54 @@ const ProjectFeedStatus = () => {
     return [];
   };
 
-  // Copy single or multi paths to clipboard
+  // Fallback copy method using a temporary textarea
+  const fallbackCopy = (text, identifier, pathData) => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      
+      if (successful) {
+        setCopiedPath(identifier);
+        toast.success(Array.isArray(pathData) && pathData.length > 1 ? 'All paths copied!' : 'Path copied to clipboard!');
+        setTimeout(() => setCopiedPath(null), 2000);
+      } else {
+        toast.error('Failed to copy path. Please copy manually.');
+      }
+    } catch (err) {
+      toast.error('Failed to copy path. Please copy manually.');
+    }
+  };
+
+  // Copy single or multi paths to clipboard with fallback
   const copyToClipboard = (pathData, identifier) => {
     if (!pathData) return;
     const textToCopy = Array.isArray(pathData) ? pathData.join('\n') : pathData;
 
-    navigator.clipboard.writeText(textToCopy).then(() => {
-      setCopiedPath(identifier);
-      toast.success(Array.isArray(pathData) && pathData.length > 1 ? 'All paths copied!' : 'Path copied to clipboard!');
-      setTimeout(() => setCopiedPath(null), 2000);
-    }).catch(() => {
-      toast.error('Failed to copy path');
-    });
+    // Try using the modern Clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(textToCopy)
+        .then(() => {
+          setCopiedPath(identifier);
+          toast.success(Array.isArray(pathData) && pathData.length > 1 ? 'All paths copied!' : 'Path copied to clipboard!');
+          setTimeout(() => setCopiedPath(null), 2000);
+        })
+        .catch(() => {
+          // Fallback for clipboard errors
+          fallbackCopy(textToCopy, identifier, pathData);
+        });
+    } else {
+      // Fallback for browsers that don't support Clipboard API
+      fallbackCopy(textToCopy, identifier, pathData);
+    }
   };
 
   // ============================================
@@ -354,8 +400,6 @@ const ProjectFeedStatus = () => {
           socketRef.current = null;
         }
 
-        console.log('🔌 Attempting WebSocket connection...');
-        
         newSocket = io(API_BASE_URL, {
           transports: ['websocket', 'polling'],
           auth: { token },
@@ -370,14 +414,12 @@ const ProjectFeedStatus = () => {
         socketRef.current = newSocket;
 
         newSocket.on('connect', () => {
-          console.log('✅ WebSocket connected successfully');
           setIsSocketConnected(true);
           reconnectAttempts.current = 0;
           newSocket.emit('join-project-room', actualProjectId);
         });
 
         newSocket.on('connect_error', (error) => {
-          console.error('❌ WebSocket connection error:', error.message);
           setIsSocketConnected(false);
           reconnectAttempts.current += 1;
           if (reconnectAttempts.current >= maxReconnectAttempts) {
@@ -389,7 +431,6 @@ const ProjectFeedStatus = () => {
         });
 
         newSocket.on('disconnect', (reason) => {
-          console.log('🔴 WebSocket disconnected:', reason);
           setIsSocketConnected(false);
           if (reason === 'io server disconnect') {
             setTimeout(() => { if (newSocket) newSocket.connect(); }, 2000);
@@ -397,7 +438,6 @@ const ProjectFeedStatus = () => {
         });
 
         newSocket.on('reconnect', (attemptNumber) => {
-          console.log(`🔄 WebSocket reconnected after ${attemptNumber} attempts`);
           setIsSocketConnected(true);
           reconnectAttempts.current = 0;
           if (newSocket) {
@@ -406,8 +446,6 @@ const ProjectFeedStatus = () => {
         });
 
         newSocket.on('feed_status_updated', (data) => {
-          console.log('📡 Real-time feed status update:', data);
-          
           setFeeds(prevFeeds => {
             return prevFeeds.map(feed => {
               const feedName = feed.feed_name || feed.name;
@@ -433,8 +471,6 @@ const ProjectFeedStatus = () => {
                 }
 
                 const inboundCount = data.record_count !== undefined ? data.record_count : (data.count !== undefined ? data.count : null);
-                
-                console.log(`📊 Updating feed "${feed.feed_name}" record_count from ${feed.record_count} to ${inboundCount}`);
                 
                 return {
                   ...feed,
@@ -506,7 +542,6 @@ const ProjectFeedStatus = () => {
         });
 
       } catch (error) {
-        console.error('❌ Socket creation error:', error);
         setIsSocketConnected(false);
       }
     };
@@ -600,10 +635,6 @@ const ProjectFeedStatus = () => {
           recordCount = feed.count;
         }
 
-        if (recordCount !== null) {
-          console.log(`📊 Feed "${feed.feed_name || feed.name}" has record_count: ${recordCount}`);
-        }
-
         return {
           feed_name: feed.feed_name || feed.name || 'Unnamed Feed',
           _id: feedId,
@@ -634,7 +665,6 @@ const ProjectFeedStatus = () => {
         setProjectName(transformedFeeds[0].projectCustomId || transformedFeeds[0].project || 'Project');
       }
     } catch (error) {
-      console.error('❌ Error fetching feeds:', error);
       toast.error(error.response?.data?.error || 'Failed to load feeds');
     } finally {
       setLoading(false);
@@ -713,7 +743,7 @@ const ProjectFeedStatus = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-4 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className={`min-h-screen bg-slate-50 p-4 transition-all duration-300 ${isCollapsed ? 'ml-7' : 'ml-64'}`}>
       {/* Header Controls */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-4">
@@ -771,16 +801,72 @@ const ProjectFeedStatus = () => {
         </div>
       </div>
 
-      {/* Stats Row */}
-      <div className="grid grid-cols-6 gap-2 mb-4">
-        <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm"><p className="text-[7px] font-black uppercase text-slate-400">Total</p><p className="text-base font-black text-slate-800">{stats.total}</p></div>
-        <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm"><p className="text-[7px] font-black uppercase text-emerald-500">Done</p><p className="text-base font-black text-emerald-600">{stats.completed}</p></div>
-        <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm"><p className="text-[7px] font-black uppercase text-blue-500">In Prog</p><p className="text-base font-black text-blue-600">{stats.inProgress}</p></div>
-        <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm"><p className="text-[7px] font-black uppercase text-red-500">Failed</p><p className="text-base font-black text-red-600">{stats.failed}</p></div>
-        <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm"><p className="text-[7px] font-black uppercase text-amber-500">Pending</p><p className="text-base font-black text-amber-600">{stats.pending}</p></div>
-        <div className="bg-white rounded-lg border border-slate-200 p-2 shadow-sm flex flex-col justify-center">
+      {/* Stats Row - Clickable cards with filter functionality */}
+      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 mb-2">
+        {/* Total - Shows all feeds */}
+        <div 
+          onClick={() => setStatusFilter('All')}
+          className={`bg-white rounded-lg border p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'All' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-[7px] font-black uppercase text-slate-400">Total</p>
+          <p className="text-base font-black text-slate-800">{stats.total}</p>
+        </div>
+
+        {/* Done/Completed */}
+        <div 
+          onClick={() => setStatusFilter('Completed')}
+          className={`bg-white rounded-lg border p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'Completed' ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-[7px] font-black uppercase text-emerald-500">Done</p>
+          <p className="text-base font-black text-emerald-600">{stats.completed}</p>
+        </div>
+
+        {/* In Progress */}
+        <div 
+          onClick={() => setStatusFilter('In Progress')}
+          className={`bg-white rounded-lg border p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'In Progress' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-[7px] font-black uppercase text-blue-500">In Prog</p>
+          <p className="text-base font-black text-blue-600">{stats.inProgress}</p>
+        </div>
+
+        {/* Failed */}
+        <div 
+          onClick={() => setStatusFilter('Failed')}
+          className={`bg-white rounded-lg border p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'Failed' ? 'border-red-500 ring-2 ring-red-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-[7px] font-black uppercase text-red-500">Failed</p>
+          <p className="text-base font-black text-red-600">{stats.failed}</p>
+        </div>
+
+        {/* Pending */}
+        <div 
+          onClick={() => setStatusFilter('Pending')}
+          className={`bg-white rounded-lg border p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'Pending' ? 'border-amber-500 ring-2 ring-amber-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-[7px] font-black uppercase text-amber-500">Pending</p>
+          <p className="text-base font-black text-amber-600">{stats.pending}</p>
+        </div>
+
+        {/* Completion Percentage - Shows all feeds */}
+        <div 
+          onClick={() => setStatusFilter('All')}
+          className={`bg-white rounded-lg border p-2 shadow-sm flex flex-col justify-center cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'All' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+          }`}
+        >
           <div className="flex items-center justify-between">
-            <span className="text-[7px] font-black uppercase text-slate-400">Completion</span>
+            <span className="text-[7px] font-black uppercase text-slate-400">Comp</span>
             <span className="text-[10px] font-black text-emerald-600">{stats.completionPercentage}%</span>
           </div>
           <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden mt-0.5">
@@ -789,278 +875,391 @@ const ProjectFeedStatus = () => {
         </div>
       </div>
 
-      {/* Feeds Table */}
+      {/* Feeds Table - Responsive with mobile card view */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-              <tr>
-                <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500 w-[22%]">Feed Name</th>
-                <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500 w-[26%]">Stages</th>
-                <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500 w-[12%]">Progress</th>
-                <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500 w-[10%]">Status</th>
-                <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500 w-[10%]">Records Count</th>
-                <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500 w-[20%]">Path(s)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {currentFeeds.length > 0 ? (
-                currentFeeds.map((feed) => {
-                  const totalStages = STAGES.length;
-                  const completedStages = STAGES.filter(stage => feed.stages?.[stage.key]?.completed === true).length;
-                  const calculatedProgress = Math.round((completedStages / totalStages) * 100);
-                  const isExpanded = expandedFeed === (feed._id || feed.feed_name);
-                  
-                  const normalizedPaths = getNormalizedPaths(feed.output_path);
-                  const hasPaths = normalizedPaths.length > 0;
-
-                  const stageStates = DISPLAY_STAGES.map((stage) => {
-                    const isVirtual = !!stage.virtual;
-                    const stageData = isVirtual ? null : feed.stages?.[stage.key];
-                    return { isCompleted: isVirtual ? true : stageData?.completed === true, completedAt: stageData?.completed_at };
-                  });
-                  const currentStageIndex = stageStates.reduce((acc, s, idx) => (s.isCompleted ? idx : acc), -1);
-                  const activeStageIndex = feed.status === 'Completed' ? DISPLAY_STAGES.length - 1 : Math.min(currentStageIndex + 1, DISPLAY_STAGES.length - 1);
-                  const failedStageIndex = feed.failed ? activeStageIndex : -1;
-                  
-                  // Check if record_count exists and is valid
-                  const hasRecordCount = feed.record_count !== null && feed.record_count !== undefined;
-                  
-                  // Debug log for record count
-                  if (hasRecordCount) {
-                    console.log(`✅ Displaying record_count for "${feed.feed_name}": ${feed.record_count}`);
-                  }
-                  
-                  return (
-                    <React.Fragment key={feed._id || feed.feed_name}>
-                      <tr 
-                        className="border-b border-slate-100 hover:bg-slate-50/60 transition-all cursor-pointer"
-                        onClick={() => toggleExpand(feed._id || feed.feed_name)}
-                      >
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className={`w-1.5 h-6 rounded-full ${feed.failed ? 'bg-red-500' : feed.status === 'Completed' ? 'bg-green-500' : feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                            <div className="flex flex-col">
-                              <span className="text-xs font-bold text-slate-800 truncate">{feed.feed_name || feed.name}</span>
-                              {/* Display record count below feed name */}
-                              {hasRecordCount && (
-                                <span className="text-[9px] font-mono font-semibold text-emerald-600 mt-0.5 flex items-center gap-1">
-                                  <Hash size={10} className="text-emerald-500" />
-                                  {Number(feed.record_count).toLocaleString('en-IN')} records
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-
-                        <td className="px-3 py-2">
-                          <div className="flex items-center">
-                            {DISPLAY_STAGES.map((stage, idx) => {
-                              const isVirtual = !!stage.virtual;
-                              const { isCompleted, completedAt } = stageStates[idx];
-                              const isInProgress = isVirtual ? false : (!isCompleted && (idx - 1) <= completedStages);
-                              const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
-                              const timeStr = completedAt ? formatISTTime(completedAt) : null;
-                              
-                              return (
-                                <React.Fragment key={`${feed._id || feed.feed_name}-stage-${stage.key}`}>
-                                  <div className="relative group flex items-center">
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all cursor-default ${isCompleted ? 'bg-green-500 border-green-500 text-white' : isFailed ? 'bg-red-500 border-red-500 text-white' : isInProgress ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-gray-300 text-gray-300'}`}>
-                                      {isCompleted ? <CheckCircle size={8} /> : isFailed ? <XCircle size={8} /> : isInProgress ? <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div> : <div className="w-1.5 h-1.5 bg-gray-300 rounded-full"></div>}
-                                    </div>
-                                    {timeStr && (
-                                      <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-                                        <div className="bg-gray-900 text-white text-[7px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap shadow-lg">{stage.label}: {timeStr}</div>
-                                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
-                                      </div>
-                                    )}
-                                  </div>
-                                  {idx < DISPLAY_STAGES.length - 1 && <div className={`w-4 h-0.5 mx-0.5 ${isCompleted ? 'bg-green-400' : isInProgress ? 'bg-blue-300' : 'bg-gray-300'}`}></div>}
-                                </React.Fragment>
-                              );
-                            })}
-                            <div className="ml-2">{isExpanded ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}</div>
-                          </div>
-                        </td>
-
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                              <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} style={{ width: `${Math.min(calculatedProgress, 100)}%` }} />
-                            </div>
-                            <span className="text-[10px] font-bold text-slate-700 min-w-[30px]">{calculatedProgress}%</span>
-                          </div>
-                        </td>
-
-                        <td className="px-3 py-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`px-2 py-0.5 text-[8px] font-semibold rounded-md ${getStatusColor(feed.status)}`}>{feed.status || 'Pending'}</span>
-                            {feed.failed && <AlertCircle size={10} className="text-red-500" />}
-                          </div>
-                        </td>
-
-                        {/* Inline Table Record Count Display */}
-                        <td className="px-3 py-2 font-medium">
-                          {hasRecordCount ? (
-                            <span className="text-[10px] font-mono text-slate-700 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/40">
-                              {Number(feed.record_count).toLocaleString('en-IN')}
-                            </span>
+        {isMobile ? (
+          // Mobile Card View - with Copy Path at the top
+          <div className="divide-y divide-slate-100">
+            {currentFeeds.length > 0 ? (
+              currentFeeds.map((feed) => {
+                const hasRecordCount = feed.record_count !== null && feed.record_count !== undefined;
+                const isExpanded = expandedFeed === (feed._id || feed.feed_name);
+                const normalizedPaths = getNormalizedPaths(feed.output_path);
+                const hasPaths = normalizedPaths.length > 0;
+                
+                return (
+                  <div key={feed._id || feed.feed_name} className="p-4 hover:bg-slate-50/60 transition-all">
+                    {/* Copy Path - Moved to the top */}
+                    {hasPaths && (
+                      <div className="mb-2 flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-200">
+                        <code className="text-[8px] font-mono text-slate-600 truncate flex-1">
+                          {normalizedPaths.length === 1 
+                            ? normalizedPaths[0] 
+                            : `${normalizedPaths.length} output files`}
+                        </code>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(normalizedPaths, `${feed._id}-mobile`);
+                          }}
+                          className="p-1.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0 ml-2"
+                          title={normalizedPaths.length > 1 ? "Copy all paths" : "Copy path"}
+                        >
+                          {copiedPath === `${feed._id}-mobile` ? (
+                            <Check size={14} className="text-green-600" />
                           ) : (
-                            <span className="text-[9px] text-slate-400 select-none">—</span>
+                            <Copy size={14} className="text-slate-400" />
                           )}
-                        </td>
+                        </button>
+                      </div>
+                    )}
 
-                        <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                          {hasPaths ? (
-                            <div className="flex items-center gap-1.5 group justify-between max-w-[180px]">
-                              <code className="text-[8px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 truncate flex-1 text-left">
-                                {normalizedPaths.length === 1 
-                                  ? normalizedPaths[0] 
-                                  : `📦 ${normalizedPaths.length} Output Files`}
-                              </code>
-                              <button
-                                onClick={() => copyToClipboard(normalizedPaths, `${feed._id}-row`)}
-                                className="p-0.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0 opacity-60 group-hover:opacity-100"
-                                title={normalizedPaths.length > 1 ? "Copy all paths" : "Copy path"}
-                              >
-                                {copiedPath === `${feed._id}-row` ? (
-                                  <Check size={12} className="text-green-600" />
-                                ) : (
-                                  <Copy size={12} className="text-slate-400" />
+                    {/* Feed Header */}
+                    <div 
+                      className="flex items-start justify-between cursor-pointer"
+                      onClick={() => toggleExpand(feed._id || feed.feed_name)}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${feed.failed ? 'bg-red-500' : feed.status === 'Completed' ? 'bg-green-500' : feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'}`} />
+                          <span className="text-sm font-bold text-slate-800 truncate">{feed.feed_name || feed.name}</span>
+                        </div>
+                        {hasRecordCount && (
+                          <span className="text-[9px] font-mono font-semibold text-emerald-600 mt-0.5 flex items-center gap-1">
+                            <Hash size={10} className="text-emerald-500" />
+                            {Number(feed.record_count).toLocaleString('en-IN')} records
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 ml-2">
+                        <span className={`px-2 py-0.5 text-[8px] font-semibold rounded-md ${getStatusColor(feed.status)}`}>
+                          {feed.status || 'Pending'}
+                        </span>
+                        {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                      </div>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="mt-2 flex items-center gap-2">
+                      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} 
+                             style={{ width: `${Math.min(feed.progress, 100)}%` }} />
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-600 min-w-[30px]">{feed.progress}%</span>
+                    </div>
+
+                    {/* Expanded Details */}
+                    {isExpanded && (
+                      <div className="mt-3 pt-3 border-t border-slate-100 space-y-2">
+                        {/* Stages */}
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {DISPLAY_STAGES.map((stage, idx) => {
+                            const stageData = stage.virtual ? null : feed.stages?.[stage.key];
+                            const isCompleted = stage.virtual ? true : stageData?.completed === true;
+                            const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
+                            
+                            return (
+                              <React.Fragment key={`${feed._id || feed.feed_name}-mobile-${stage.key}`}>
+                                <div className={`w-4 h-4 rounded-full flex items-center justify-center border transition-all ${
+                                  isCompleted ? 'bg-green-500 border-green-500 text-white' : 
+                                  isFailed ? 'bg-red-500 border-red-500 text-white' : 
+                                  'bg-white border-gray-300 text-gray-300'
+                                }`}>
+                                  {isCompleted ? <CheckCircle size={6} /> : isFailed ? <XCircle size={6} /> : null}
+                                </div>
+                                {idx < DISPLAY_STAGES.length - 1 && (
+                                  <div className={`w-3 h-0.5 ${isCompleted ? 'bg-green-400' : 'bg-gray-300'}`} />
                                 )}
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-[8px] text-slate-400 italic">—</span>
-                          )}
-                        </td>
-                        
-                      </tr>
+                              </React.Fragment>
+                            );
+                          })}
+                        </div>
 
-                      {isExpanded && (
-                        <tr className="bg-slate-50/80">
-                          <td colSpan={6} className="px-3 py-3">
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
-                              <div className="md:col-span-2 bg-white rounded-lg border border-slate-200 p-4">
-                                <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-wider mb-5 flex items-center gap-1.5">
-                                  <CheckCircle size={12} className="text-blue-600" />
-                                  Feed Progress
-                                </h4>
+                        {/* Additional Paths (if more than shown in the top section) */}
+                        {hasPaths && normalizedPaths.length > 1 && (
+                          <div className="space-y-0.5 mt-1">
+                            <p className="text-[6px] font-bold text-slate-500 uppercase tracking-wider">All paths:</p>
+                            {normalizedPaths.map((path, idx) => (
+                              <code key={idx} className="text-[7px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 truncate block">
+                                {path}
+                              </code>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            ) : (
+              <div className="p-12 text-center">
+                <Activity size={32} className="text-slate-300 mx-auto mb-2" />
+                <p className="text-sm text-slate-500 font-medium">No feeds found</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          // Desktop Table View
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+                <tr>
+                  <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Feed Name</th>
+                  <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Stages</th>
+                  <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Progress</th>
+                  <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Status</th>
+                  <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Records</th>
+                  <th className="text-left px-3 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Path(s)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentFeeds.length > 0 ? (
+                  currentFeeds.map((feed) => {
+                    const totalStages = STAGES.length;
+                    const completedStages = STAGES.filter(stage => feed.stages?.[stage.key]?.completed === true).length;
+                    const calculatedProgress = Math.round((completedStages / totalStages) * 100);
+                    const isExpanded = expandedFeed === (feed._id || feed.feed_name);
+                    
+                    const normalizedPaths = getNormalizedPaths(feed.output_path);
+                    const hasPaths = normalizedPaths.length > 0;
 
-                                <div className="relative px-2">
-                                  <div className="absolute top-3 left-4 right-4 h-1 bg-gray-200 rounded-full" />
-                                  <div className="absolute top-3 left-4 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500" style={{ width: `calc(${Math.min((Math.max(currentStageIndex, 0) / (DISPLAY_STAGES.length - 1)) * 100, 100)}% - 8px)` }} />
-
-                                  <div className="flex justify-between items-start relative">
-                                    {DISPLAY_STAGES.map((stage, idx) => {
-                                      const { isCompleted, completedAt } = stageStates[idx];
-                                      const isCurrent = !isCompleted && idx === activeStageIndex && (feed.status !== 'Pending' || stage.virtual);
-                                      const isFailed = failedStageIndex === idx && !isCompleted;
-                                      const timeStr = completedAt ? formatISTTime(completedAt) : null;
-
-                                      return (
-                                        <div key={`${feed._id || feed.feed_name}-expanded-${stage.key}`} className="flex flex-col items-center relative group" style={{ minWidth: '48px', flex: '1 1 0%' }}>
-                                          <div className="relative z-10">
-                                            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-default ${isCompleted ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' : isFailed ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-md' : 'bg-gray-200 text-gray-500'} ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500 shadow-md' : ''}`}>
-                                              {isCompleted ? <CheckCircle size={13} /> : isFailed ? <XCircle size={13} /> : idx + 1}
-                                            </div>
-                                          </div>
-                                          <div className="mt-2 text-center min-h-[28px] flex flex-col items-center">
-                                            <p className={`text-[7px] font-bold leading-tight transition-colors ${isCompleted ? 'text-green-700' : isFailed ? 'text-red-600' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>{stage.label}</p>
-                                            {isCurrent && <span className="mt-0.5 text-[6px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">● Current</span>}
-                                          </div>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Pipeline Metrics Box Panel */}
-                              <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between">
-                                <div>
-                                  <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                    <Hash size={12} className="text-blue-600" />
-                                    Pipeline Metrics
-                                  </h4>
-                                  <p className="text-[10px] text-slate-400 leading-tight">Data verification metrics captured during file integrity step cycles.</p>
-                                </div>
-                                <div className="my-auto py-2">
-                                  {hasRecordCount ? (
-                                    <div>
-                                      <span className="text-2xl font-black text-slate-800 font-mono tracking-tight">
-                                        {Number(feed.record_count).toLocaleString('en-IN')}
-                                      </span>
-                                    </div>
-                                  ) : (
-                                    <div className="text-xs text-slate-400 italic">No counting metrics calculated yet.</div>
-                                  )}
-                                </div>
-                                
-                              </div>
-                            </div>
-
-                            {hasPaths && (
-                              <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-[7px] font-bold text-slate-500 uppercase tracking-wider">
-                                    Output Paths ({normalizedPaths.length}):
+                    const stageStates = DISPLAY_STAGES.map((stage) => {
+                      const isVirtual = !!stage.virtual;
+                      const stageData = isVirtual ? null : feed.stages?.[stage.key];
+                      return { isCompleted: isVirtual ? true : stageData?.completed === true, completedAt: stageData?.completed_at };
+                    });
+                    const currentStageIndex = stageStates.reduce((acc, s, idx) => (s.isCompleted ? idx : acc), -1);
+                    const activeStageIndex = feed.status === 'Completed' ? DISPLAY_STAGES.length - 1 : Math.min(currentStageIndex + 1, DISPLAY_STAGES.length - 1);
+                    const failedStageIndex = feed.failed ? activeStageIndex : -1;
+                    
+                    const hasRecordCount = feed.record_count !== null && feed.record_count !== undefined;
+                    
+                    return (
+                      <React.Fragment key={feed._id || feed.feed_name}>
+                        <tr 
+                          className="border-b border-slate-100 hover:bg-slate-50/60 transition-all cursor-pointer"
+                          onClick={() => toggleExpand(feed._id || feed.feed_name)}
+                        >
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-1.5 h-6 rounded-full ${feed.failed ? 'bg-red-500' : feed.status === 'Completed' ? 'bg-green-500' : feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                              <div className="flex flex-col">
+                                <span className="text-xs font-bold text-slate-800 truncate">{feed.feed_name || feed.name}</span>
+                                {hasRecordCount && (
+                                  <span className="text-[9px] font-mono font-semibold text-emerald-600 mt-0.5 flex items-center gap-1">
+                                    <Hash size={10} className="text-emerald-500" />
+                                    {Number(feed.record_count).toLocaleString('en-IN')} records
                                   </span>
-                                  {normalizedPaths.length > 1 && (
-                                    <button
-                                      onClick={() => copyToClipboard(normalizedPaths, `${feed._id}-all`)}
-                                      className="flex items-center gap-1 text-[8px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
-                                    >
-                                      {copiedPath === `${feed._id}-all` ? (
-                                        <><Check size={10} /> Copied All</>
-                                      ) : (
-                                        <><Copy size={10} /> Copy All Paths</>
-                                      )}
-                                    </button>
-                                  )}
-                                </div>
-                                <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
-                                  {normalizedPaths.map((singlePath, pIdx) => (
-                                    <div key={`${feed._id}-path-${pIdx}`} className="flex items-center gap-2 group/item bg-slate-50 border border-slate-200/60 p-1.5 rounded">
-                                      <span className="text-[8px] font-black text-slate-400 min-w-[12px]">{pIdx + 1}.</span>
-                                      <code className="text-[8px] font-mono text-slate-700 truncate flex-1 text-left select-all">
-                                        {singlePath}
-                                      </code>
-                                      <button
-                                        onClick={() => copyToClipboard(singlePath, `${feed._id}-p-${pIdx}`)}
-                                        className="p-1 rounded hover:bg-slate-200 transition-colors flex-shrink-0 opacity-40 group-hover/item:opacity-100"
-                                        title="Copy single path"
-                                      >
-                                        {copiedPath === `${feed._id}-p-${pIdx}` ? (
-                                          <Check size={11} className="text-green-600" />
-                                        ) : (
-                                          <Copy size={11} className="text-slate-400" />
-                                        )}
-                                      </button>
-                                    </div>
-                                  ))}
-                                </div>
+                                )}
                               </div>
+                            </div>
+                          </td>
+
+                          <td className="px-3 py-2">
+                            <div className="flex items-center">
+                              {DISPLAY_STAGES.map((stage, idx) => {
+                                const isVirtual = !!stage.virtual;
+                                const { isCompleted, completedAt } = stageStates[idx];
+                                const isInProgress = isVirtual ? false : (!isCompleted && (idx - 1) <= completedStages);
+                                const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
+                                const timeStr = completedAt ? formatISTTime(completedAt) : null;
+                                
+                                return (
+                                  <React.Fragment key={`${feed._id || feed.feed_name}-stage-${stage.key}`}>
+                                    <div className="relative group flex items-center">
+                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all cursor-default ${isCompleted ? 'bg-green-500 border-green-500 text-white' : isFailed ? 'bg-red-500 border-red-500 text-white' : isInProgress ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-gray-300 text-gray-300'}`}>
+                                        {isCompleted ? <CheckCircle size={8} /> : isFailed ? <XCircle size={8} /> : isInProgress ? <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div> : <div className="w-1.5 h-1.5 bg-gray-300 rounded-full"></div>}
+                                      </div>
+                                      {timeStr && (
+                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                          <div className="bg-gray-900 text-white text-[7px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap shadow-lg">{stage.label}: {timeStr}</div>
+                                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                        </div>
+                                      )}
+                                    </div>
+                                    {idx < DISPLAY_STAGES.length - 1 && <div className={`w-4 h-0.5 mx-0.5 ${isCompleted ? 'bg-green-400' : isInProgress ? 'bg-blue-300' : 'bg-gray-300'}`}></div>}
+                                  </React.Fragment>
+                                );
+                              })}
+                              <div className="ml-2">{isExpanded ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}</div>
+                            </div>
+                          </td>
+
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-2">
+                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} style={{ width: `${Math.min(calculatedProgress, 100)}%` }} />
+                              </div>
+                              <span className="text-[10px] font-bold text-slate-700 min-w-[30px]">{calculatedProgress}%</span>
+                            </div>
+                          </td>
+
+                          <td className="px-3 py-2">
+                            <div className="flex items-center gap-1.5">
+                              <span className={`px-2 py-0.5 text-[8px] font-semibold rounded-md ${getStatusColor(feed.status)}`}>{feed.status || 'Pending'}</span>
+                              {feed.failed && <AlertCircle size={10} className="text-red-500" />}
+                            </div>
+                          </td>
+
+                          <td className="px-3 py-2 font-medium">
+                            {hasRecordCount ? (
+                              <span className="text-[10px] font-mono text-slate-700 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200/40">
+                                {Number(feed.record_count).toLocaleString('en-IN')}
+                              </span>
+                            ) : (
+                              <span className="text-[9px] text-slate-400 select-none">—</span>
+                            )}
+                          </td>
+
+                          <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                            {hasPaths ? (
+                              <div className="flex items-center gap-1.5 group justify-between max-w-[180px]">
+                                <code className="text-[8px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 truncate flex-1 text-left">
+                                  {normalizedPaths.length === 1 
+                                    ? normalizedPaths[0] 
+                                    : `📦 ${normalizedPaths.length} Output Files`}
+                                </code>
+                                <button
+                                  onClick={() => copyToClipboard(normalizedPaths, `${feed._id}-row`)}
+                                  className="p-0.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0 opacity-60 group-hover:opacity-100"
+                                  title={normalizedPaths.length > 1 ? "Copy all paths" : "Copy path"}
+                                >
+                                  {copiedPath === `${feed._id}-row` ? (
+                                    <Check size={12} className="text-green-600" />
+                                  ) : (
+                                    <Copy size={12} className="text-slate-400" />
+                                  )}
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-[8px] text-slate-400 italic">—</span>
                             )}
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center">
-                    <div className="flex flex-col items-center">
-                      <Activity size={32} className="text-slate-300 mx-auto mb-2" />
-                      <p className="text-sm text-slate-500 font-medium">No feeds found</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+
+                        {isExpanded && (
+                          <tr className="bg-slate-50/80">
+                            <td colSpan={6} className="px-3 py-3">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+                                <div className="md:col-span-2 bg-white rounded-lg border border-slate-200 p-4">
+                                  <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-wider mb-5 flex items-center gap-1.5">
+                                    <CheckCircle size={12} className="text-blue-600" />
+                                    Feed Progress
+                                  </h4>
+
+                                  <div className="relative px-2">
+                                    <div className="absolute top-3 left-4 right-4 h-1 bg-gray-200 rounded-full" />
+                                    <div className="absolute top-3 left-4 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500" style={{ width: `calc(${Math.min((Math.max(currentStageIndex, 0) / (DISPLAY_STAGES.length - 1)) * 100, 100)}% - 8px)` }} />
+
+                                    <div className="flex justify-between items-start relative">
+                                      {DISPLAY_STAGES.map((stage, idx) => {
+                                        const { isCompleted, completedAt } = stageStates[idx];
+                                        const isCurrent = !isCompleted && idx === activeStageIndex && (feed.status !== 'Pending' || stage.virtual);
+                                        const isFailed = failedStageIndex === idx && !isCompleted;
+                                        const timeStr = completedAt ? formatISTTime(completedAt) : null;
+
+                                        return (
+                                          <div key={`${feed._id || feed.feed_name}-expanded-${stage.key}`} className="flex flex-col items-center relative group" style={{ minWidth: '48px', flex: '1 1 0%' }}>
+                                            <div className="relative z-10">
+                                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-default ${isCompleted ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' : isFailed ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-md' : 'bg-gray-200 text-gray-500'} ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500 shadow-md' : ''}`}>
+                                                {isCompleted ? <CheckCircle size={13} /> : isFailed ? <XCircle size={13} /> : idx + 1}
+                                              </div>
+                                            </div>
+                                            <div className="mt-2 text-center min-h-[28px] flex flex-col items-center">
+                                              <p className={`text-[7px] font-bold leading-tight transition-colors ${isCompleted ? 'text-green-700' : isFailed ? 'text-red-600' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>{stage.label}</p>
+                                              {isCurrent && <span className="mt-0.5 text-[6px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">● Current</span>}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between">
+                                  <div>
+                                    <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                      <Hash size={12} className="text-blue-600" />
+                                      Pipeline Metrics
+                                    </h4>
+                                    <p className="text-[10px] text-slate-400 leading-tight">Data verification metrics captured during file integrity step cycles.</p>
+                                  </div>
+                                  <div className="my-auto py-2">
+                                    {hasRecordCount ? (
+                                      <div>
+                                        <span className="text-2xl font-black text-slate-800 font-mono tracking-tight">
+                                          {Number(feed.record_count).toLocaleString('en-IN')}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <div className="text-xs text-slate-400 italic">No counting metrics calculated yet.</div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {hasPaths && (
+                                <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[7px] font-bold text-slate-500 uppercase tracking-wider">
+                                      Output Paths ({normalizedPaths.length}):
+                                    </span>
+                                    {normalizedPaths.length > 1 && (
+                                      <button
+                                        onClick={() => copyToClipboard(normalizedPaths, `${feed._id}-all`)}
+                                        className="flex items-center gap-1 text-[8px] font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-2 py-1 rounded transition-colors"
+                                      >
+                                        {copiedPath === `${feed._id}-all` ? (
+                                          <><Check size={10} /> Copied All</>
+                                        ) : (
+                                          <><Copy size={10} /> Copy All Paths</>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="max-h-40 overflow-y-auto space-y-1.5 pr-1">
+                                    {normalizedPaths.map((singlePath, pIdx) => (
+                                      <div key={`${feed._id}-path-${pIdx}`} className="flex items-center gap-2 group/item bg-slate-50 border border-slate-200/60 p-1.5 rounded">
+                                        <span className="text-[8px] font-black text-slate-400 min-w-[12px]">{pIdx + 1}.</span>
+                                        <code className="text-[8px] font-mono text-slate-700 truncate flex-1 text-left select-all">
+                                          {singlePath}
+                                        </code>
+                                        <button
+                                          onClick={() => copyToClipboard(singlePath, `${feed._id}-p-${pIdx}`)}
+                                          className="p-1 rounded hover:bg-slate-200 transition-colors flex-shrink-0 opacity-40 group-hover/item:opacity-100"
+                                          title="Copy single path"
+                                        >
+                                          {copiedPath === `${feed._id}-p-${pIdx}` ? (
+                                            <Check size={11} className="text-green-600" />
+                                          ) : (
+                                            <Copy size={11} className="text-slate-400" />
+                                          )}
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center">
+                        <Activity size={32} className="text-slate-300 mx-auto mb-2" />
+                        <p className="text-sm text-slate-500 font-medium">No feeds found</p>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

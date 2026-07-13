@@ -237,18 +237,40 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
 });
 
 // PUT /users/:id - Update user (Single route - no duplicate)
+// PUT /users/:id - Update user
 router.put('/users/:id', authorize('Admin'), async (req, res) => {
   try {
-    const { name, email, role, githubUsername, organizationId, department, isPrimaryPOC, password } = req.body;
+    const { 
+      name, 
+      email, 
+      role, 
+      githubUsername, 
+      organizationId, 
+      department, 
+      isPrimaryPOC, 
+      password,
+      employeeCode 
+    } = req.body;
     
+    // First, get the existing user to preserve GitHub info
+    const existingUser = await User.findById(req.params.id);
+    if (!existingUser) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    // Build update data - preserve GitHub info if not provided in request
     const updateData = { 
       name, 
       email, 
       role, 
-      githubUsername: githubUsername || null,
+      // Only update githubUsername if provided, otherwise keep existing
+      githubUsername: githubUsername !== undefined ? githubUsername : existingUser.githubUsername,
+      // Only update githubLinked if provided, otherwise keep existing
+      githubLinked: existingUser.githubLinked, // Preserve existing GitHub linked status
       organizationId: organizationId || null,
       department: department || 'Other',
-      isPrimaryPOC: isPrimaryPOC || false
+      isPrimaryPOC: isPrimaryPOC || false,
+      employeeCode: employeeCode || null
     };
     
     // Only update password if provided
@@ -280,13 +302,26 @@ router.delete('/users/:id', authorize('Admin'), async (req, res) => {
   }
 });
 
+// POST /users/:userId/link-github - Link GitHub account for a developer
 router.post('/users/:userId/link-github', authorize('Admin', 'Project Manager'), async (req, res) => {
   try {
     const { userId } = req.params;
+    
+    // Validate userId
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'User ID is required' 
+      });
+    }
+
     const user = await User.findById(userId);
     
     if (!user) {
-      return res.status(404).json({ success: false, error: 'User not found' });
+      return res.status(404).json({ 
+        success: false, 
+        error: 'User not found' 
+      });
     }
     
     if (user.role !== 'Developer') {
@@ -296,56 +331,126 @@ router.post('/users/:userId/link-github', authorize('Admin', 'Project Manager'),
       });
     }
 
-    // 🔍 Debug: directly call GitHub search and log the raw result
-    console.log(`🔍 Searching GitHub for email: ${user.email}`);
-    
-    if (!gitService.octokit) {
-      return res.status(500).json({ success: false, error: 'GitHub service not initialized. Check GITHUB_TOKEN.' });
-    }
-
-    const searchResult = await gitService.octokit.search.users({
-      q: `${user.email} in:email`,
-      per_page: 5
-    });
-
-    console.log(`🔍 GitHub search result for ${user.email}:`);
-    console.log(`   total_count: ${searchResult.data.total_count}`);
-    console.log(`   items: ${JSON.stringify(searchResult.data.items.map(i => ({ login: i.login, id: i.id })))}`);
-
-    if (searchResult.data.total_count === 0) {
-      return res.status(200).json({
+    // Check if GitHub token is configured
+    if (!process.env.GITHUB_TOKEN) {
+      console.error('❌ GITHUB_TOKEN not configured in .env');
+      return res.status(500).json({
         success: false,
-        error: `GitHub returned 0 results for email: ${user.email}. The email is either still private on GitHub or not associated with any account.`,
-        githubLinked: false,
+        error: 'GitHub service is not configured. Please check the GITHUB_TOKEN environment variable.',
         debug: {
-          emailSearched: user.email,
-          totalCount: 0,
-          tip: 'Go to github.com/settings/profile and make sure the email is shown in your public profile'
+          hasToken: false,
+          tip: 'Add GITHUB_TOKEN to your .env file'
         }
       });
     }
 
-    const username = searchResult.data.items[0].login;
-    console.log(`✅ Found GitHub user: ${username}`);
+    // Check if octokit is initialized
+    if (!gitService.octokit) {
+      console.error('❌ Octokit not initialized. Check GITHUB_TOKEN.');
+      return res.status(500).json({
+        success: false,
+        error: 'GitHub service is not initialized. Please check the GITHUB_TOKEN environment variable.',
+        debug: {
+          hasToken: !!process.env.GITHUB_TOKEN,
+          tokenPrefix: process.env.GITHUB_TOKEN?.substring(0, 4),
+          tip: 'Make sure GITHUB_TOKEN starts with "ghp_" and has the correct permissions'
+        }
+      });
+    }
 
-    // Get full profile
-    const userDetails = await gitService.octokit.users.getByUsername({ username });
+    console.log(`🔍 Searching GitHub for email: ${user.email}`);
+    
+    try {
+      // Search for user by email
+      const searchResult = await gitService.octokit.search.users({
+        q: `${user.email} in:email`,
+        per_page: 5
+      });
 
-    user.githubUsername = userDetails.data.login;
-    user.githubLinked = true;
-    await user.save();
+      console.log(`🔍 GitHub search result for ${user.email}:`);
+      console.log(`   total_count: ${searchResult.data.total_count}`);
+      
+      if (searchResult.data.items && searchResult.data.items.length > 0) {
+        console.log(`   items:`, searchResult.data.items.map(i => ({ 
+          login: i.login, 
+          id: i.id,
+          type: i.type
+        })));
+      }
 
-    res.json({
-      success: true,
-      message: `GitHub account ${userDetails.data.login} linked successfully`,
-      githubUsername: userDetails.data.login,
-      githubLinked: true,
-      profile_url: userDetails.data.html_url
-    });
+      if (searchResult.data.total_count === 0) {
+        return res.status(200).json({
+          success: false,
+          error: `No GitHub account found for email: ${user.email}. The email may be private or not associated with a GitHub account.`,
+          githubLinked: false,
+          debug: {
+            emailSearched: user.email,
+            totalCount: 0,
+            tip: 'Go to github.com/settings/profile and make sure the email is visible in your public profile'
+          }
+        });
+      }
+
+      const username = searchResult.data.items[0].login;
+      console.log(`✅ Found GitHub user: ${username}`);
+
+      // Get full profile
+      const userDetails = await gitService.octokit.users.getByUsername({ 
+        username 
+      });
+
+      // Update user with GitHub info
+      user.githubUsername = userDetails.data.login;
+      user.githubLinked = true;
+      await user.save();
+
+      console.log(`✅ GitHub account linked for ${user.email}: ${userDetails.data.login}`);
+
+      res.json({
+        success: true,
+        message: `GitHub account ${userDetails.data.login} linked successfully`,
+        githubUsername: userDetails.data.login,
+        githubLinked: true,
+        profile_url: userDetails.data.html_url,
+        avatar_url: userDetails.data.avatar_url
+      });
+
+    } catch (searchError) {
+      console.error('❌ GitHub search error:', searchError.message);
+      
+      // Handle rate limiting
+      if (searchError.status === 403 && searchError.message.includes('rate limit')) {
+        return res.status(429).json({
+          success: false,
+          error: 'GitHub API rate limit exceeded. Please try again later or use a GitHub token with higher limits.',
+          githubLinked: false
+        });
+      }
+      
+      // Handle not found
+      if (searchError.status === 404) {
+        return res.status(200).json({
+          success: false,
+          error: `No GitHub account found for email: ${user.email}`,
+          githubLinked: false,
+          debug: {
+            emailSearched: user.email,
+            status: 404,
+            tip: 'Make sure the email is public on GitHub'
+          }
+        });
+      }
+      
+      throw searchError;
+    }
 
   } catch (error) {
-    console.error('Error linking GitHub account:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Error linking GitHub account:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message || 'Failed to link GitHub account',
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 });
 

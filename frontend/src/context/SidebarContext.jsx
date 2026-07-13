@@ -12,10 +12,19 @@ export const useSidebar = () => {
 
 export const SidebarProvider = ({ children }) => {
   const [isCollapsed, setIsCollapsed] = useState(() => {
-    // Persist state in localStorage
+  try {
     const saved = localStorage.getItem('sidebarCollapsed');
-    return saved ? JSON.parse(saved) : false;
-  });
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return typeof parsed === 'boolean' ? parsed : false;
+    }
+    return false;
+  } catch (e) {
+    // If corrupted, reset it
+    localStorage.removeItem('sidebarCollapsed');
+    return false;
+  }
+});
 
   useEffect(() => {
     localStorage.setItem('sidebarCollapsed', JSON.stringify(isCollapsed));
