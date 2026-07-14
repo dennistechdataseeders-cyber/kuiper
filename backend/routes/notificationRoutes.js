@@ -1,10 +1,13 @@
+// backend/routes/notificationRoutes.js
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 
-// GET notification count
+// ============================================
+// GET notification count - ONLY unread
+// ============================================
 router.get('/count', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
@@ -15,24 +18,20 @@ router.get('/count', protect, async (req, res) => {
     // Count open tickets (for non-admin users)
     let openTicketCount = 0;
     if (req.user.role === 'Admin') {
-      // Admin sees all open tickets
       openTicketCount = await Ticket.countDocuments({ 
         status: { $in: ['Open', 'In Progress'] } 
       });
     } else if (req.user.role === 'Client') {
-      // Client sees their own open tickets
       openTicketCount = await Ticket.countDocuments({
         createdBy: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
       });
     } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
-      // HR and Finance see tickets assigned to them
       openTicketCount = await Ticket.countDocuments({
         assignedTo: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
       });
     } else {
-      // PM, Developer, Team Lead see tickets they're involved with
       openTicketCount = await Ticket.countDocuments({
         $or: [
           { createdBy: req.user._id },
@@ -54,7 +53,9 @@ router.get('/count', protect, async (req, res) => {
   }
 });
 
-// GET all notifications with comment details
+// ============================================
+// GET all notifications - ONLY UNREAD
+// ============================================
 router.get('/', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -67,6 +68,12 @@ router.get('/', protect, async (req, res) => {
           options: { sort: { createdAt: -1 }, limit: 1 }
         }
       });
+    
+    // ============================================
+    // FIX 1: Only get UNREAD notifications
+    // ============================================
+    const unreadNotifications = (user.unreadNotifications || [])
+      .filter(n => n.read === false);
     
     // Get open tickets as notifications
     let openTickets = [];
@@ -142,17 +149,17 @@ router.get('/', protect, async (req, res) => {
       };
     });
     
-    // Process unread notifications with comment details
-    const processedNotifications = (user.unreadNotifications || []).map(notification => {
+    // ============================================
+    // Process UNREAD notifications only
+    // ============================================
+    const processedNotifications = unreadNotifications.map(notification => {
       const notif = notification.toObject ? notification.toObject() : notification;
       const ticketData = notif.ticketId;
       
-      // Check if this is a comment notification and extract comment data
       let lastComment = null;
       let hasComments = false;
       
       if (notif.type === 'ticket_commented' && ticketData) {
-        // If the ticket was populated with comments
         if (ticketData.comments && ticketData.comments.length > 0) {
           const latestComment = ticketData.comments[ticketData.comments.length - 1];
           lastComment = {
@@ -163,7 +170,6 @@ router.get('/', protect, async (req, res) => {
           hasComments = true;
         }
         
-        // If comment data was stored directly in the notification
         if (notif.commentData) {
           lastComment = {
             text: notif.commentData.text,
@@ -187,12 +193,13 @@ router.get('/', protect, async (req, res) => {
       };
     });
     
+    // Combine unread notifications with open tickets
     const allNotifications = [
       ...processedNotifications,
       ...openTicketNotifications
     ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     
-    // Calculate unread count from database
+    // Calculate unread count
     const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
     
     res.json({
@@ -207,25 +214,32 @@ router.get('/', protect, async (req, res) => {
   }
 });
 
-// Mark notification as read
+// ============================================
+// Mark notification as read - REMOVE from array
+// ============================================
 router.patch('/:notificationId/read', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
     // Check if it's an open ticket notification (starts with 'open_')
     if (req.params.notificationId && req.params.notificationId.toString().startsWith('open_')) {
-      // Open ticket notifications are read-only, just return success
       return res.json({ success: true, message: 'Open ticket notification marked as read' });
     }
     
-    const notification = user.unreadNotifications?.find(
+    // ============================================
+    // FIX 2: REMOVE the notification from the array
+    // ============================================
+    const notificationIndex = user.unreadNotifications?.findIndex(
       n => n._id.toString() === req.params.notificationId
     );
     
-    if (notification) {
-      notification.read = true;
+    if (notificationIndex !== undefined && notificationIndex !== -1) {
+      // Remove the notification from the array
+      user.unreadNotifications.splice(notificationIndex, 1);
       user.notificationCount = Math.max(0, (user.notificationCount || 0) - 1);
       await user.save();
+      
+      console.log(`✅ Notification ${req.params.notificationId} removed from user's notifications`);
       
       // Emit socket update
       const io = global.io;
@@ -235,6 +249,8 @@ router.patch('/:notificationId/read', protect, async (req, res) => {
           count: user.notificationCount
         });
       }
+    } else {
+      console.log(`⚠️ Notification ${req.params.notificationId} not found in user's notifications`);
     }
     
     res.json({ success: true });
@@ -244,10 +260,12 @@ router.patch('/:notificationId/read', protect, async (req, res) => {
   }
 });
 
-// Mark all notifications as read - FIXED
+// ============================================
+// Mark all notifications as read - CLEAR array
+// ============================================
 router.patch('/mark-all-read', protect, async (req, res) => {
   try {
-    console.log('📝 Marking all notifications as read for user:', req.user._id);
+    console.log('📝 Clearing all notifications for user:', req.user._id);
     
     const user = await User.findById(req.user._id);
     
@@ -258,14 +276,17 @@ router.patch('/mark-all-read', protect, async (req, res) => {
     
     console.log(`📊 Before: ${user.unreadNotifications?.length || 0} notifications, count: ${user.notificationCount}`);
     
+    // ============================================
+    // FIX 3: CLEAR the entire array
+    // ============================================
     if (user.unreadNotifications && user.unreadNotifications.length > 0) {
-      // Mark all as read
-      user.unreadNotifications.forEach(n => n.read = true);
+      // Clear all notifications
+      user.unreadNotifications = [];
       user.notificationCount = 0;
       
       await user.save();
       
-      console.log(`✅ Marked ${user.unreadNotifications.length} notifications as read`);
+      console.log(`✅ Cleared all notifications`);
       console.log(`📊 After: count: ${user.notificationCount}`);
       
       // Emit socket update
@@ -277,24 +298,26 @@ router.patch('/mark-all-read', protect, async (req, res) => {
         });
       }
     } else {
-      console.log('ℹ️ No notifications to mark as read');
+      console.log('ℹ️ No notifications to clear');
     }
     
     res.json({ 
       success: true, 
-      message: 'All notifications marked as read',
-      count: user.unreadNotifications?.length || 0
+      message: 'All notifications cleared',
+      count: 0
     });
   } catch (error) {
-    console.error('❌ Error marking all notifications as read:', error);
+    console.error('❌ Error clearing notifications:', error);
     res.status(500).json({ 
-      error: 'Failed to mark all as read',
+      error: 'Failed to clear notifications',
       details: error.message 
     });
   }
 });
 
+// ============================================
 // Get unread count only (lightweight endpoint)
+// ============================================
 router.get('/unread-count', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);

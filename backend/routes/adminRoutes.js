@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto'); 
+const multer = require('multer'); // <-- ADD THIS LINE
+const path = require('path');     // <-- ADD THIS LINE
+const fs = require('fs');  
 const Task = require('../models/Task');
 const gitService = require('../services/gitService');
 
@@ -19,6 +22,7 @@ const { register, login, forgotPassword, resetPassword } = require('../controlle
 // --- MIDDLEWARE ---
 const { authorize } = require('../middleware/roleCheck');
 const getWelcomeTemplate = require('../templates/welcomeEmail');
+const { protect } = require('../middleware/authMiddleware'); // <-- ADD THIS LINE
 
 // --- NODEMAILER TRANSPORTER (kept for bulk-invite and other emails) ---
 const nodemailer = require('nodemailer');
@@ -1538,7 +1542,105 @@ router.get('/projects/teamlead', authorize('Team Lead'), async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+// backend/routes/adminRoutes.js - Add this endpoint
 
+// ============================================
+// PROFILE IMAGE UPLOAD
+// ============================================
+
+// Configure multer for profile images
+const profileStorage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const uploadDir = path.join(__dirname, '../uploads/profiles');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, 'profile-' + req.user._id + '-' + uniqueSuffix + ext);
+  }
+});
+
+const profileUpload = multer({
+  storage: profileStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB max
+  },
+  fileFilter: function (req, file, cb) {
+    const allowedTypes = /jpeg|jpg|png|gif|webp/;
+    const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
+    const mimetype = allowedTypes.test(file.mimetype);
+    if (mimetype && extname) {
+      return cb(null, true);
+    }
+    cb(new Error('Only image files are allowed (jpeg, jpg, png, gif, webp)'));
+  }
+});
+
+// POST /upload-profile-image - Upload profile image
+router.post('/upload-profile-image', protect, profileUpload.single('profileImage'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No image file provided' });
+    }
+
+    // Delete old profile image if exists
+    const user = await User.findById(req.user._id);
+    if (user.profileImage) {
+      const oldImagePath = path.join(__dirname, '../uploads/profiles', path.basename(user.profileImage));
+      if (fs.existsSync(oldImagePath)) {
+        fs.unlinkSync(oldImagePath);
+      }
+    }
+
+    // Construct the URL for the uploaded image
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const imageUrl = `${baseUrl}/uploads/profiles/${req.file.filename}`;
+
+    // Update user with profile image URL
+    user.profileImage = imageUrl;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile image uploaded successfully',
+      profileImage: imageUrl
+    });
+  } catch (error) {
+    console.error('Profile image upload error:', error);
+    res.status(500).json({ error: 'Failed to upload profile image' });
+  }
+});
+
+// DELETE /remove-profile-image - Remove profile image
+router.delete('/remove-profile-image', protect, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+    if (!user || !user.profileImage) {
+      return res.status(404).json({ error: 'No profile image found' });
+    }
+
+    // Delete the file
+    const imagePath = path.join(__dirname, '../uploads/profiles', path.basename(user.profileImage));
+    if (fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+    }
+
+    user.profileImage = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Profile image removed successfully'
+    });
+  } catch (error) {
+    console.error('Profile image removal error:', error);
+    res.status(500).json({ error: 'Failed to remove profile image' });
+  }
+});
 // ============================================
 // COUNTRY MAP
 // ============================================

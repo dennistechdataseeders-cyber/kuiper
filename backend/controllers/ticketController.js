@@ -237,6 +237,8 @@ async function getAssigneeEmailFromRules(category, subcategory = '', subItem = '
   }
 }
 
+// backend/controllers/ticketController.js
+
 async function notifyCommentStakeholders(ticket, commentAuthor, commentText, hasImages = false, hasFiles = false) {
   const project = await Project.findById(ticket.projectId)
     .populate('projectManager', 'name email')
@@ -245,6 +247,9 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
   
   const stakeholders = new Map();
   
+  // ============================================
+  // 1. ADD TICKET CREATOR
+  // ============================================
   const creator = await User.findById(ticket.createdBy).select('name email');
   if (creator && creator.email !== commentAuthor.email) {
     stakeholders.set(creator._id.toString(), { 
@@ -255,6 +260,9 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     });
   }
   
+  // ============================================
+  // 2. ADD TICKET ASSIGNEE
+  // ============================================
   if (ticket.assignedTo) {
     const assignee = await User.findById(ticket.assignedTo).select('name email');
     if (assignee && assignee.email !== commentAuthor.email) {
@@ -267,24 +275,39 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     }
   }
   
-  if (project && project.projectManager && project.projectManager.email !== commentAuthor.email) {
-    stakeholders.set(project.projectManager._id.toString(), {
-      _id: project.projectManager._id,
-      name: project.projectManager.name,
-      email: project.projectManager.email,
-      role: 'Project Manager'
-    });
+  // ============================================
+  // 3. ADD PROJECT MANAGER
+  // ============================================
+  if (project && project.projectManager) {
+    const pm = project.projectManager;
+    if (pm.email !== commentAuthor.email && !stakeholders.has(pm._id.toString())) {
+      stakeholders.set(pm._id.toString(), {
+        _id: pm._id,
+        name: pm.name,
+        email: pm.email,
+        role: 'Project Manager'
+      });
+    }
   }
   
-  if (project && project.teamLead && project.teamLead.email !== commentAuthor.email) {
-    stakeholders.set(project.teamLead._id.toString(), {
-      _id: project.teamLead._id,
-      name: project.teamLead.name,
-      email: project.teamLead.email,
-      role: 'Team Lead'
-    });
+  // ============================================
+  // 4. ADD TEAM LEAD
+  // ============================================
+  if (project && project.teamLead) {
+    const tl = project.teamLead;
+    if (tl.email !== commentAuthor.email && !stakeholders.has(tl._id.toString())) {
+      stakeholders.set(tl._id.toString(), {
+        _id: tl._id,
+        name: tl.name,
+        email: tl.email,
+        role: 'Team Lead'
+      });
+    }
   }
   
+  // ============================================
+  // 5. ADD FEED DEVELOPERS
+  // ============================================
   if (ticket.feedId) {
     const feed = await Feed.findById(ticket.feedId).populate('assignedDevelopers', 'name email');
     if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
@@ -301,6 +324,69 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     }
   }
   
+  // ============================================
+  // 6. ADD POCs (from project clients & organizations)
+  // ============================================
+  // 6a. Add direct clients
+  if (project && project.clients && project.clients.length > 0) {
+    for (const client of project.clients) {
+      const clientUser = await User.findById(client._id || client).select('name email role organizationId');
+      if (clientUser) {
+        const isCreator = clientUser._id.toString() === creator?._id?.toString();
+        if (!isCreator && clientUser.email !== commentAuthor.email && !stakeholders.has(clientUser._id.toString())) {
+          stakeholders.set(clientUser._id.toString(), {
+            _id: clientUser._id,
+            name: clientUser.name,
+            email: clientUser.email,
+            role: 'POC'
+          });
+        }
+      }
+    }
+  }
+  
+  // 6b. Add POCs from organizations
+  if (project && project.organizations && project.organizations.length > 0) {
+    for (const orgId of project.organizations) {
+      const org = await Organization.findById(orgId).select('pointsOfContact clientUserId');
+      if (org) {
+        // Add client user
+        if (org.clientUserId) {
+          const clientUser = await User.findById(org.clientUserId).select('name email role');
+          if (clientUser && !stakeholders.has(clientUser._id.toString())) {
+            const isCreator = clientUser._id.toString() === creator?._id?.toString();
+            if (!isCreator && clientUser.email !== commentAuthor.email) {
+              stakeholders.set(clientUser._id.toString(), {
+                _id: clientUser._id,
+                name: clientUser.name,
+                email: clientUser.email,
+                role: 'POC'
+              });
+            }
+          }
+        }
+        // Add POCs from pointsOfContact
+        if (org.pointsOfContact && org.pointsOfContact.length > 0) {
+          for (const poc of org.pointsOfContact) {
+            if (poc.pocEmail && poc.pocEmail !== commentAuthor.email) {
+              const isCreator = poc.pocEmail === creator?.email;
+              if (!isCreator && !Array.from(stakeholders.values()).some(s => s.email === poc.pocEmail)) {
+                stakeholders.set(`poc_${poc.pocEmail}`, {
+                  name: poc.pocName || 'POC',
+                  email: poc.pocEmail,
+                  role: 'POC'
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ============================================
+  // SEND EMAIL NOTIFICATIONS
+  // ============================================
   const frontendUrl = process.env.FRONTEND_URL || 'http://192.168.1.105:5173';
   const commentPreview = commentText ? commentText.substring(0, 200) : 'No text provided';
   const hasAttachments = hasImages || hasFiles;
@@ -313,98 +399,91 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
     attachmentText = ` (with ${parts.join(' & ')})`;
   }
   
-  for (const [userId, stakeholder] of stakeholders) {
+  // Send notifications to each stakeholder
+  for (const [key, stakeholder] of stakeholders) {
     try {
-      const user = await User.findById(userId);
-      if (!user) continue;
-      
-      if (!user.unreadNotifications) {
-        user.unreadNotifications = [];
-      }
-      
-      const message = `${commentAuthor.name} commented on ${ticket.ticketNumber}${attachmentText}`;
-      
-      user.unreadNotifications.push({
-        type: 'ticket_commented',
-        ticketId: ticket._id,
-        message: message,
-        createdAt: new Date(),
-        read: false,
-        commentData: {
-          text: commentPreview,
-          author: commentAuthor.name,
-          hasAttachments: hasAttachments,
-          hasImages: hasImages,
-          hasFiles: hasFiles,
-          timestamp: new Date()
+      // If stakeholder has an _id, create DB notification
+      if (stakeholder._id) {
+        const user = await User.findById(stakeholder._id);
+        if (user) {
+          if (!user.unreadNotifications) {
+            user.unreadNotifications = [];
+          }
+          
+          const message = `${commentAuthor.name} commented on ${ticket.ticketNumber}${attachmentText}`;
+          
+          user.unreadNotifications.push({
+            type: 'ticket_commented',
+            ticketId: ticket._id,
+            message: message,
+            createdAt: new Date(),
+            read: false,
+            commentData: {
+              text: commentPreview,
+              author: commentAuthor.name,
+              hasAttachments: hasAttachments,
+              hasImages: hasImages,
+              hasFiles: hasFiles,
+              timestamp: new Date()
+            }
+          });
+          
+          user.notificationCount = (user.notificationCount || 0) + 1;
+          await user.save();
+          
+          // Emit socket notification
+          const io = global.io;
+          if (io) {
+            io.to(user._id.toString()).emit('notification_count_update', {
+              type: 'ticket_commented',
+              ticketId: ticket._id,
+              count: user.notificationCount,
+              message: message,
+              comment: {
+                text: commentPreview,
+                author: commentAuthor.name,
+                hasAttachments: hasAttachments,
+                ticketNumber: ticket.ticketNumber,
+                ticketTitle: ticket.title
+              }
+            });
+            
+            io.to(`ticket_${ticket._id}`).emit('ticket_commented', {
+              ticketId: ticket._id,
+              comment: {
+                text: commentPreview,
+                author: commentAuthor.name,
+                hasAttachments: hasAttachments
+              }
+            });
+          }
         }
-      });
-      
-      user.notificationCount = (user.notificationCount || 0) + 1;
-      await user.save();
-      
-      const io = global.io;
-      if (io) {
-        io.to(userId.toString()).emit('notification_count_update', {
-          type: 'ticket_commented',
-          ticketId: ticket._id,
-          count: user.notificationCount,
-          message: message,
-          comment: {
-            text: commentPreview,
-            author: commentAuthor.name,
-            hasAttachments: hasAttachments,
-            ticketNumber: ticket.ticketNumber,
-            ticketTitle: ticket.title
-          }
-        });
-        
-        io.to(`ticket_${ticket._id}`).emit('ticket_commented', {
-          ticketId: ticket._id,
-          comment: {
-            text: commentPreview,
-            author: commentAuthor.name,
-            hasAttachments: hasAttachments
-          }
-        });
       }
       
+      // Send email to ALL stakeholders (whether they have an _id or not)
       try {
         const commentUrl = `${frontendUrl}/tickets/${ticket._id}`;
-        const emailHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-</head>
-<body style="margin:0; padding:40px; font-family: 'Segoe UI', Arial, sans-serif; background:#f8fafc;">
-<div style="max-width:550px; margin:auto; background:white; border-radius:20px; border:1px solid #e2e8f0;">
-  <div style="background:#7c3aed; padding:20px; text-align:center;">
-    <h2 style="margin:0; font-size:18px; color:white;">💬 New Comment on Ticket</h2>
-  </div>
-  <div style="padding:24px;">
-    <p style="margin-bottom:16px;"><strong>${commentAuthor.name}</strong> commented on <strong>${ticket.ticketNumber}</strong>${attachmentText}:</p>
-    <div style="background:#f3e8ff; padding:16px; border-radius:12px; margin:16px 0;">
-      <p style="margin:0; color:#6d28d9;">"${commentPreview.replace(/</g, '&lt;').replace(/>/g, '&gt;')}"</p>
-    </div>
-    <div style="margin:20px 0; padding:12px; background:#f8fafc; border-radius:12px;">
-      <p style="margin:0; font-size:12px; font-weight:600; color:#1e293b;">Ticket: ${ticket.title}</p>
-      <p style="margin:4px 0 0 0; font-size:11px; color:#64748b;">Status: ${ticket.status} | Priority: ${ticket.priority}</p>
-    </div>
-    <a href="${commentUrl}" style="display:block; text-align:center; background:#7c3aed; color:white; text-decoration:none; padding:12px; border-radius:12px; font-weight:700; font-size:13px;">
-      View Comment →
-    </a>
-  </div>
-</div>
-</body>
-</html>
-        `;
+        
+        // Generate a different email template based on role
+        let emailHtml = getCommentEmailTemplate(
+          stakeholder.name || stakeholder.email,
+          commentAuthor.name,
+          commentPreview,
+          ticket,
+          commentUrl,
+          hasAttachments,
+          hasImages,
+          hasFiles,
+          stakeholder.role
+        );
         
         await sendEmail({
           to: stakeholder.email,
-          subject: `💬 New Comment on ${ticket.ticketNumber}`,
+          subject: `💬 New Comment on ${ticket.ticketNumber} (${stakeholder.role})`,
           html: emailHtml
         });
+        
+        console.log(`📧 Comment email sent to: ${stakeholder.email} (${stakeholder.role})`);
       } catch (emailErr) {
         console.error(`Failed to send comment email to ${stakeholder.email}:`, emailErr.message);
       }
@@ -413,8 +492,137 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
       console.error(`Failed to notify ${stakeholder.email}:`, err.message);
     }
     
+    // Small delay between notifications
     await new Promise(resolve => setTimeout(resolve, 200));
   }
+}
+
+// ============================================
+// COMMENT EMAIL TEMPLATE
+// ============================================
+function getCommentEmailTemplate(recipientName, commentAuthor, commentText, ticket, ticketUrl, hasAttachments, hasImages, hasFiles, role) {
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric'
+  });
+  
+  let attachmentText = '';
+  if (hasAttachments) {
+    const parts = [];
+    if (hasImages) parts.push('📷 images');
+    if (hasFiles) parts.push('📎 files');
+    attachmentText = ` with ${parts.join(' & ')}`;
+  }
+  
+  const roleColor = {
+    'POC': '#7c3aed',
+    'Project Manager': '#2563eb',
+    'Team Lead': '#8b5cf6',
+    'Developer': '#059669',
+    'Creator': '#1e293b',
+    'Assignee': '#d97706',
+  }[role] || '#475569';
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#f0f4f8; color:#1e293b;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; width:100%; background:#ffffff; border-radius:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05); overflow:hidden;">
+          <tr>
+            <td style="padding:28px 36px; border-bottom:1px solid #e2e8f0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#2563eb;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Engineered for Operations</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; padding:24px 36px;">
+              <div style="font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.08em;">New Comment</div>
+              <div style="font-size:13px; font-weight:600; color:#0f172a; margin-top:4px;">
+                <span style="color:#2563eb;">${commentAuthor}</span> commented on <strong>${ticket.ticketNumber}</strong>${attachmentText}
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 36px;">
+              <div style="background:#ffffff; padding:20px 24px; border-radius:14px; border:1px solid #e2e8f0; margin-bottom:16px;">
+                <p style="margin:0; font-size:14px; line-height:1.7; color:#334155; white-space: pre-wrap;">
+                  "${commentText || 'No text provided'}"
+                </p>
+              </div>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border-radius:14px; border:1px solid #e2e8f0; border-collapse: separate;">
+                <tr>
+                  <td width="50%" style="padding:12px 16px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
+                    <div style="font-size:9px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Ticket</div>
+                    <div style="font-size:13px; font-weight:700; color:#0f172a; margin-top:2px;">${ticket.title}</div>
+                  </td>
+                  <td width="50%" style="padding:12px 16px; border-bottom:1px solid #e2e8f0;">
+                    <div style="font-size:9px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Status</div>
+                    <div style="font-size:12px; font-weight:600; color:#1e293b; margin-top:2px;">
+                      <span style="background:${ticket.status === 'Open' ? '#dbeafe' : ticket.status === 'In Progress' ? '#fef3c7' : ticket.status === 'Resolved' ? '#d1fae5' : '#f1f5f9'}; padding:2px 10px; border-radius:12px;">${ticket.status}</span>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:12px 16px; border-right:1px solid #e2e8f0;">
+                    <div style="font-size:9px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Priority</div>
+                    <div style="font-size:12px; font-weight:600; color:#1e293b; margin-top:2px;">
+                      <span style="background:${ticket.priority === 'Urgent' ? '#fee2e2' : ticket.priority === 'High' ? '#fed7aa' : ticket.priority === 'Medium' ? '#fef3c7' : '#d1fae5'}; padding:2px 10px; border-radius:12px;">${ticket.priority}</span>
+                    </div>
+                  </td>
+                  <td style="padding:12px 16px;">
+                    <div style="font-size:9px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em;">Your Role</div>
+                    <div style="font-size:12px; font-weight:700; color:${roleColor}; margin-top:2px;">${role}</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 28px 36px;">
+              <a href="${ticketUrl}" style="display:block; text-align:center; background:#2563eb; color:white; text-decoration:none; padding:14px; border-radius:14px; font-weight:700; font-size:13px;">
+                View Ticket →
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 36px 28px 36px; text-align:center;">
+              <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1779973871/image_1_1_c60r0l.png" alt="KUIPER Footer" style="width:140px; max-width:60%; display:inline-block;">
+            </td>
+          </tr>
+          <tr>
+            <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
+              <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Automated Comment Notification</div>
+              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">${currentDate}</div>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `;
 }
 
 function isInternalTicket(creatorRole) {

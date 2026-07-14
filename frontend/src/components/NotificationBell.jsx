@@ -112,6 +112,7 @@ const NotificationBell = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      console.log('📊 Notifications fetched:', res.data);
       setNotifications(res.data.notifications || []);
       setNotificationCount(res.data.unreadCount || 0);
     } catch (error) {
@@ -135,6 +136,9 @@ const NotificationBell = () => {
     }
   };
 
+  // ============================================
+  // Mark notification as read and remove it
+  // ============================================
   const markAsRead = async (notificationId) => {
     try {
       const token = localStorage.getItem('token');
@@ -142,41 +146,51 @@ const NotificationBell = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setNotifications(prev => 
-        prev.map(n => n._id === notificationId ? { ...n, read: true } : n)
-      );
+      // Remove the notification from the list
+      setNotifications(prev => {
+        const updated = prev.filter(n => n._id !== notificationId);
+        return updated;
+      });
+      
+      // Update the count
       setNotificationCount(prev => Math.max(0, prev - 1));
+      
+      console.log(`✅ Notification ${notificationId} marked as read and removed`);
+      
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
   };
 
+  // ============================================
+  // Mark all as read and clear all
+  // ============================================
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.patch(`${API_BASE_URL}/api/notifications/mark-all-read`, {}, {
+      await axios.patch(`${API_BASE_URL}/api/notifications/mark-all-read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('✅ Mark all read response:', response.data);
-      
-      // Update local state
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      // Clear all notifications and reset count
+      setNotifications([]);
       setNotificationCount(0);
       
-      toast.success('All notifications marked as read');
+      toast.success('All notifications cleared');
       
-      // Refresh count
+      // Refresh count from server
       fetchNotificationCount();
     } catch (error) {
       console.error('Error marking all as read:', error);
-      const errorMessage = error.response?.data?.error || error.message || 'Failed to mark all as read';
-      toast.error(errorMessage);
+      toast.error('Failed to clear notifications');
     }
   };
 
+  // ============================================
+  // Handle notification click - remove and navigate
+  // ============================================
   const handleNotificationClick = async (notification) => {
-    // Close dropdown first
+    // Close dropdown immediately
     setShowDropdown(false);
     
     // If it's a ticket notification, navigate to the ticket
@@ -185,13 +199,47 @@ const NotificationBell = () => {
         ? notification.ticketId._id 
         : notification.ticketId;
       
-      // Mark as read if it's a notification
+      // Mark as read if it's a notification (not an open ticket)
       if (notification._id && !notification._id.toString().startsWith('open_')) {
-        await markAsRead(notification._id);
+        // Remove from list immediately
+        setNotifications(prev => prev.filter(n => n._id !== notification._id));
+        setNotificationCount(prev => Math.max(0, prev - 1));
+        
+        // Also call the API to mark as read on the server
+        try {
+          const token = localStorage.getItem('token');
+          await axios.patch(`${API_BASE_URL}/api/notifications/${notification._id}/read`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+        } catch (error) {
+          console.error('Error marking notification as read:', error);
+        }
       }
       
-      // Navigate to ticket details
-      navigate(`/tickets/${ticketId}`);
+      // Navigate to ticket details after a small delay
+      setTimeout(() => {
+        navigate(`/tickets/${ticketId}`);
+      }, 150);
+    }
+  };
+
+  // ============================================
+  // Handle open ticket click (read-only notifications)
+  // ============================================
+  const handleOpenTicketClick = async (notification) => {
+    // Close dropdown
+    setShowDropdown(false);
+    
+    if (notification.ticketId) {
+      const ticketId = typeof notification.ticketId === 'object' 
+        ? notification.ticketId._id 
+        : notification.ticketId;
+      
+      // For open tickets, we don't remove them since they're not in the notification list
+      // Just navigate
+      setTimeout(() => {
+        navigate(`/tickets/${ticketId}`);
+      }, 150);
     }
   };
 
@@ -288,7 +336,7 @@ const NotificationBell = () => {
                 onClick={markAllAsRead}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
               >
-                Mark all read
+                Clear all
               </button>
             )}
           </div>
@@ -318,10 +366,21 @@ const NotificationBell = () => {
                     ? notification.ticketId.comments[notification.ticketId.comments.length - 1] 
                     : null);
                 
+                // Check if this notification has been marked as read (should be filtered out)
+                if (isRead && !isOpenTicket) {
+                  return null; // Skip rendering read notifications
+                }
+                
                 return (
                   <div
                     key={notification._id || index}
-                    onClick={() => handleNotificationClick(notification)}
+                    onClick={() => {
+                      if (isOpenTicket) {
+                        handleOpenTicketClick(notification);
+                      } else {
+                        handleNotificationClick(notification);
+                      }
+                    }}
                     className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-all ${
                       !isRead ? 'bg-blue-50/50 border-l-4 border-l-blue-500' : ''
                     }`}
@@ -350,7 +409,7 @@ const NotificationBell = () => {
                               <span className="text-[10px] font-semibold text-gray-600">
                                 {lastComment.userName || 'User'}:
                               </span>
-                              <span className="text-xs text-gray-600 line-clamp-2">
+                              <span className="text-xs text-gray-600 line-clamp-2 whitespace-pre-wrap">
                                 {lastComment.text || 'No text'}
                               </span>
                             </div>
@@ -378,13 +437,13 @@ const NotificationBell = () => {
                           </p>
                         )}
                       </div>
-                      {!isRead && (
+                      {!isRead && !isOpenTicket && (
                         <div className="flex-shrink-0 w-2 h-2 mt-1.5 bg-blue-500 rounded-full"></div>
                       )}
                     </div>
                   </div>
                 );
-              })
+              }).filter(Boolean) // Remove any null items
             )}
           </div>
           

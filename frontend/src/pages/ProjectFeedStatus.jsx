@@ -878,7 +878,7 @@ const ProjectFeedStatus = () => {
       {/* Feeds Table - Responsive with mobile card view */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {isMobile ? (
-          // Mobile Card View - with Copy Path at the top
+          // Mobile Card View - Path after progress bar
           <div className="divide-y divide-slate-100">
             {currentFeeds.length > 0 ? (
               currentFeeds.map((feed) => {
@@ -889,31 +889,6 @@ const ProjectFeedStatus = () => {
                 
                 return (
                   <div key={feed._id || feed.feed_name} className="p-4 hover:bg-slate-50/60 transition-all">
-                    {/* Copy Path - Moved to the top */}
-                    {hasPaths && (
-                      <div className="mb-2 flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-200">
-                        <code className="text-[8px] font-mono text-slate-600 truncate flex-1">
-                          {normalizedPaths.length === 1 
-                            ? normalizedPaths[0] 
-                            : `${normalizedPaths.length} output files`}
-                        </code>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyToClipboard(normalizedPaths, `${feed._id}-mobile`);
-                          }}
-                          className="p-1.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0 ml-2"
-                          title={normalizedPaths.length > 1 ? "Copy all paths" : "Copy path"}
-                        >
-                          {copiedPath === `${feed._id}-mobile` ? (
-                            <Check size={14} className="text-green-600" />
-                          ) : (
-                            <Copy size={14} className="text-slate-400" />
-                          )}
-                        </button>
-                      </div>
-                    )}
-
                     {/* Feed Header */}
                     <div 
                       className="flex items-start justify-between cursor-pointer"
@@ -947,6 +922,31 @@ const ProjectFeedStatus = () => {
                       </div>
                       <span className="text-[9px] font-bold text-slate-600 min-w-[30px]">{feed.progress}%</span>
                     </div>
+
+                    {/* Path - Now shown after progress bar */}
+                    {hasPaths && (
+                      <div className="mt-2 flex items-center justify-between bg-slate-50 rounded-lg p-2 border border-slate-200">
+                        <code className="text-[8px] font-mono text-slate-600 truncate flex-1">
+                          {normalizedPaths.length === 1 
+                            ? normalizedPaths[0] 
+                            : `${normalizedPaths.length} output files`}
+                        </code>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyToClipboard(normalizedPaths, `${feed._id}-mobile`);
+                          }}
+                          className="p-1.5 rounded hover:bg-slate-200 transition-colors flex-shrink-0 ml-2"
+                          title={normalizedPaths.length > 1 ? "Copy all paths" : "Copy path"}
+                        >
+                          {copiedPath === `${feed._id}-mobile` ? (
+                            <Check size={14} className="text-green-600" />
+                          ) : (
+                            <Copy size={14} className="text-slate-400" />
+                          )}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Expanded Details */}
                     {isExpanded && (

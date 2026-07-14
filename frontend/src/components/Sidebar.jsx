@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
+import toast from 'react-hot-toast';
 import {
   LayoutDashboard,
   Users,
@@ -33,7 +34,9 @@ import {
   FolderOpen,
   Calendar,
   Clock,
-  BarChart3
+  BarChart3,
+  Camera,
+  X
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -41,6 +44,7 @@ import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
 import API_BASE_URL from '../config';
+import companyLogoVideo from '../assets/Company_Logo_mp4.mp4'; // Import the video
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -54,11 +58,20 @@ const Sidebar = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [openTicketCount, setOpenTicketCount] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  
+  // PROFILE IMAGE STATES
+  const [profileImage, setProfileImage] = useState(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [showImageUploadModal, setShowImageUploadModal] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
 
   const menuRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const userRole = localStorage.getItem('role') || 'User';
   const userName = localStorage.getItem('userName') || 'User';
+  const userId = localStorage.getItem('userId');
 
   // CLOSE MENU ON OUTSIDE CLICK
   useEffect(() => {
@@ -89,6 +102,29 @@ const Sidebar = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isCollapsed, toggleSidebar]);
+
+  // FETCH PROFILE IMAGE
+  useEffect(() => {
+    const fetchProfileImage = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token || !userId) return;
+        
+        const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        const user = res.data.find(u => u._id === userId);
+        if (user && user.profileImage) {
+          setProfileImage(user.profileImage);
+        }
+      } catch (error) {
+        console.error('Error fetching profile image:', error);
+      }
+    };
+    
+    fetchProfileImage();
+  }, [userId]);
 
   // FETCH OPEN TICKET COUNT
   useEffect(() => {
@@ -137,6 +173,101 @@ const Sidebar = () => {
     );
   };
 
+  // HANDLE FILE SELECTION
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error('Please select a valid image file (JPEG, PNG, GIF, WEBP)');
+      return;
+    }
+    
+    // Validate file size (5MB max)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size must be less than 5MB');
+      return;
+    }
+    
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      setImagePreview(e.target.result);
+    };
+    reader.readAsDataURL(file);
+    setShowImageUploadModal(true);
+  };
+
+  // UPLOAD PROFILE IMAGE
+  const uploadProfileImage = async () => {
+    if (!selectedFile) return;
+    
+    setUploadingImage(true);
+    const formData = new FormData();
+    formData.append('profileImage', selectedFile);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_BASE_URL}/api/admin/upload-profile-image`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+      
+      if (res.data.success) {
+        setProfileImage(res.data.profileImage);
+        setShowImageUploadModal(false);
+        setSelectedFile(null);
+        setImagePreview(null);
+        toast.success('Profile image updated successfully!');
+        // Refresh to update the image in all components
+        setTimeout(() => window.location.reload(), 500);
+      } else {
+        toast.error(res.data.message || 'Failed to upload profile image');
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to upload profile image';
+      toast.error(errorMessage);
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // REMOVE PROFILE IMAGE
+  const removeProfileImage = async () => {
+    if (!profileImage) return;
+    if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.delete(`${API_BASE_URL}/api/admin/remove-profile-image`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (res.data.success) {
+        setProfileImage(null);
+        setShowImageUploadModal(false);
+        toast.success('Profile image removed');
+        setTimeout(() => window.location.reload(), 500);
+      } else {
+        toast.error(res.data.message || 'Failed to remove profile image');
+      }
+    } catch (error) {
+      console.error('Remove error:', error);
+      const errorMessage = error.response?.data?.error || 'Failed to remove profile image';
+      toast.error(errorMessage);
+    }
+  };
+
+  // HANDLE VIDEO LOGO CLICK
+  const handleVideoLogoClick = () => {
+    window.open('https://techdataseeders.in/', '_blank');
+  };
+
   // ROLE BADGE COLORS
   const getRoleStyles = (role) => {
     switch (role) {
@@ -158,6 +289,21 @@ const Sidebar = () => {
         return 'from-green-500/20 to-emerald-500/20 text-green-300 border-green-400/20';
       default:
         return 'from-blue-500/20 to-purple-500/20 text-blue-300 border-blue-400/20';
+    }
+  };
+
+  // Get role display name
+  const getRoleDisplayName = (role) => {
+    switch (role) {
+      case 'Admin': return 'Admin';
+      case 'Sales Manager': return 'Sales Manager';
+      case 'Sales': return 'Sales';
+      case 'Project Manager': return 'Project Manager';
+      case 'Developer': return 'Developer';
+      case 'Team Lead': return 'Team Lead';
+      case 'HR': return 'HR';
+      case 'Finance': return 'Finance';
+      default: return role;
     }
   };
 
@@ -232,7 +378,7 @@ const Sidebar = () => {
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
+      // { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
     ],
 
     HR: [
@@ -276,7 +422,6 @@ const Sidebar = () => {
     const baseClasses = 'fixed top-0 left-0 h-screen bg-black text-slate-400 border-r border-slate-800 shadow-2xl transition-all duration-300 ease-in-out z-50';
     
     if (isMobile) {
-      // Mobile: w-64 (256px) instead of w-72 (288px) - more compact
       return `${baseClasses} ${isCollapsed ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100 w-64'}`;
     }
     
@@ -318,27 +463,6 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* USER CARD - Only when expanded or mobile - More compact */}
-        {(!isCollapsed || isMobile) && (
-          <div className="px-3 mt-2">
-            <div className="flex flex-col items-center justify-center text-center px-2 py-2 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10 transition-all duration-500">
-              <p className="text-[6px] font-black uppercase tracking-[0.3em] text-slate-500 mb-0.5">
-                Authenticated
-              </p>
-              <h4 className="text-[10px] font-bold text-white truncate max-w-[140px] mb-1.5">
-                {userName}
-              </h4>
-              <span
-                className={`inline-flex items-center justify-center px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-widest bg-gradient-to-r border ${getRoleStyles(
-                  userRole
-                )}`}
-              >
-                {userRole}
-              </span>
-            </div>
-          </div>
-        )}
-
         {/* NAVIGATION - Reduced padding on mobile */}
         <nav
           className={`p-2 space-y-1 overflow-y-auto overflow-x-visible no-scrollbar ${
@@ -364,7 +488,6 @@ const Sidebar = () => {
                 } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
                 title={isCollapsed && !isMobile ? item.label : ''}
                 onClick={() => {
-                  // Close mobile drawer on navigation
                   if (isMobile && !isCollapsed) {
                     toggleSidebar();
                   }
@@ -393,13 +516,64 @@ const Sidebar = () => {
           })}
         </nav>
 
-        {/* ACCOUNT SECTION */}
+        {/* ACCOUNT SECTION - WITH VIDEO LOGO ABOVE */}
         <div
           className={`absolute bottom-0 left-0 right-0 p-2 border-t border-slate-800 ${
             isCollapsed && !isMobile ? 'px-2' : ''
           }`}
           ref={menuRef}
         >
+          {/* VIDEO LOGO - Clickable - Above Account Section */}
+          {(!isCollapsed || isMobile) && (
+            <div 
+              className="flex items-center justify-center gap-2 mb-2 px-2 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={handleVideoLogoClick}
+              title="Visit TechDataSeeders"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-20 h-20 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
+                  <video
+                    src={companyLogoVideo}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Collapsed version - smaller video icon only - Clickable */}
+          {isCollapsed && !isMobile && (
+            <div 
+              className="flex justify-center mb-2 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={handleVideoLogoClick}
+              title="Visit TechDataSeeders"
+            >
+              <div className="w-8 h-8 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
+                <video
+                  src={companyLogoVideo}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
+
           {/* USER MENU */}
           {showUserMenu && (
             <div
@@ -407,6 +581,18 @@ const Sidebar = () => {
                 isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
               }`}
             >
+              {/* Update Profile Picture Option */}
+              <button
+                onClick={() => {
+                  setShowImageUploadModal(true);
+                  setShowUserMenu(false);
+                }}
+                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+              >
+                <Camera size={13} className="text-blue-400" />
+                <span>Update Profile Picture</span>
+              </button>
+
               <button
                 onClick={handleDownloadGuide}
                 className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
@@ -452,36 +638,57 @@ const Sidebar = () => {
             </div>
           )}
 
-          {/* ACCOUNT BUTTON */}
+          {/* ACCOUNT BUTTON - ENLARGED VERSION WITH PROFILE IMAGE */}
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className={`flex items-center gap-2 w-full p-1.5 rounded-xl transition-all ${
+            className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${
               showUserMenu
                 ? 'bg-slate-800 border border-white/5 shadow-xl'
                 : 'hover:bg-slate-800'
             } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
           >
-            <div className="relative">
-              <User
-                size={14}
-                className={showUserMenu ? 'text-blue-400' : 'text-slate-400'}
-              />
+            {/* User Avatar - Enlarged with Profile Image */}
+            <div className="relative flex-shrink-0 group">
+              {profileImage ? (
+                <img
+                  src={profileImage}
+                  alt={userName}
+                  className="w-10 h-10 rounded-full object-cover border-2 border-blue-500/30"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+              )}
+              {/* Camera overlay on hover */}
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                <Camera size={14} className="text-white" />
+              </div>
               {showUserMenu && (
-                <div className="absolute -top-1 -right-1 w-1.5 h-1.5 bg-blue-500 rounded-full border border-black" />
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full border-2 border-black" />
               )}
             </div>
+
+            {/* Name and Role - Only when expanded - Enlarged text */}
             {(!isCollapsed || isMobile) && (
-              <div className="flex items-center justify-between flex-1">
-                <span className="text-[10px] font-semibold text-slate-200">
-                  Account
-                </span>
-                <ChevronUp
-                  size={10}
-                  className={`transition-transform duration-300 ${
-                    showUserMenu ? 'rotate-0' : 'rotate-180'
-                  }`}
-                />
+              <div className="flex-1 min-w-0 text-left">
+                <p className="text-sm font-bold text-white truncate">
+                  {userName}
+                </p>
+                <p className={`text-[10px] font-semibold uppercase tracking-wider ${getRoleStyles(userRole).split(' ')[2] || 'text-slate-400'}`}>
+                  {getRoleDisplayName(userRole)}
+                </p>
               </div>
+            )}
+
+            {/* Chevron - Only when expanded - Enlarged */}
+            {(!isCollapsed || isMobile) && (
+              <ChevronUp
+                size={14}
+                className={`transition-transform duration-300 flex-shrink-0 ${
+                  showUserMenu ? 'rotate-0' : 'rotate-180'
+                } ${showUserMenu ? 'text-blue-400' : 'text-slate-500'}`}
+              />
             )}
           </button>
         </div>
@@ -511,6 +718,91 @@ const Sidebar = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
+      )}
+
+      {/* PROFILE IMAGE UPLOAD MODAL */}
+      {showImageUploadModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+            <button
+              onClick={() => {
+                setShowImageUploadModal(false);
+                setSelectedFile(null);
+                setImagePreview(null);
+              }}
+              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-lg font-bold text-white mb-4">Profile Picture</h3>
+
+            {imagePreview ? (
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-blue-500/30">
+                  <img
+                    src={imagePreview}
+                    alt="Preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div className="flex gap-3 w-full">
+                  <button
+                    onClick={() => {
+                      setSelectedFile(null);
+                      setImagePreview(null);
+                      fileInputRef.current.click();
+                    }}
+                    className="flex-1 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-700 transition-all"
+                  >
+                    Change Photo
+                  </button>
+                  <button
+                    onClick={uploadProfileImage}
+                    disabled={uploadingImage}
+                    className="flex-1 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all disabled:opacity-50"
+                  >
+                    {uploadingImage ? 'Uploading...' : 'Upload'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-4 py-8">
+                {profileImage ? (
+                  <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-blue-500/30">
+                    <img
+                      src={profileImage}
+                      alt="Current profile"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
+                    {userName.charAt(0).toUpperCase()}
+                  </div>
+                )}
+                <button
+                  onClick={() => fileInputRef.current.click()}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all"
+                >
+                  Choose Image
+                </button>
+                {profileImage && (
+                  <button
+                    onClick={removeProfileImage}
+                    className="px-6 py-2 bg-red-600/20 text-red-400 rounded-xl font-bold text-sm hover:bg-red-600/30 transition-all"
+                  >
+                    Remove Photo
+                  </button>
+                )}
+                <p className="text-xs text-slate-400 text-center">
+                  Supported formats: JPEG, PNG, GIF, WEBP<br />
+                  Max size: 5MB
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* LOGOUT MODAL */}

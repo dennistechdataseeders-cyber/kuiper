@@ -1008,43 +1008,54 @@ const ProjectManagement = () => {
                         </div>
                       </td>
                       
-                      {/* TL COLUMN */}
-                      <td className="px-3 sm:px-8 py-3 sm:py-6 hidden md:table-cell">
-                        <select
-                          value={project.teamLead?._id || project.teamLead || ''}
-                          onChange={(e) => updateTeamLead(project._id, e.target.value)}
-                          className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-5 sm:pr-8 bg-indigo-50 text-indigo-700 border-indigo-200 min-w-[90px] sm:min-w-[140px]"
-                          style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px sm:right 10px center', backgroundSize: '8px sm:10px' }}
-                        >
-                          <option value="">— None —</option>
-                          {teamLeads.map(tl => (
-                            <option key={tl._id} value={tl._id}>{tl.name}</option>
-                          ))}
-                        </select>
-                      </td>
+              {/* TL COLUMN */}
+<td className="px-3 sm:px-8 py-3 sm:py-6 hidden md:table-cell">
+  <div className="relative">
+    <select
+      value={project.teamLead?._id || project.teamLead || ''}
+      onChange={(e) => updateTeamLead(project._id, e.target.value)}
+      className="w-full inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none bg-indigo-50 text-indigo-700 border-indigo-200 min-w-[90px] sm:min-w-[140px] pr-6 sm:pr-8"
+    >
+      <option value="">— None —</option>
+      {teamLeads.map(tl => (
+        <option key={tl._id} value={tl._id}>{tl.name}</option>
+      ))}
+    </select>
+    {/* Custom arrow */}
+    <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-indigo-500">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+  </div>
+</td>
 
-                      {/* STATUS COLUMN */}
-                      <td className="px-3 sm:px-8 py-3 sm:py-6">
-                        <div className="relative">
-                          <select
-                            value={project.projectStatus || 'New'}
-                            onChange={(e) => updateProjectStatus(project._id, e.target.value)}
-                            disabled={updatingStatus[project._id]}
-                            className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-5 sm:pr-8 min-w-[90px] sm:min-w-[140px] ${getProjectStatusColor(project.projectStatus)}`}
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px sm:right 10px center', backgroundSize: '8px sm:10px' }}
-                          >
-                            {projectStatuses.map(status => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                          {updatingStatus[project._id] && (
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 mr-1 sm:mr-2">
-                              <div className="w-2 sm:w-3 h-2 sm:h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      
+{/* STATUS COLUMN */}
+<td className="px-3 sm:px-8 py-3 sm:py-6">
+  <div className="relative">
+    <select
+      value={project.projectStatus || 'New'}
+      onChange={(e) => updateProjectStatus(project._id, e.target.value)}
+      disabled={updatingStatus[project._id]}
+      className={`w-full inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3.5 py-1.5 sm:py-2.5 rounded-xl text-[8px] sm:text-[10px] font-black uppercase tracking-wider border cursor-pointer transition-all appearance-none pr-6 sm:pr-8 min-w-[90px] sm:min-w-[140px] ${getProjectStatusColor(project.projectStatus)}`}
+    >
+      {projectStatuses.map(status => (
+        <option key={status} value={status}>{status}</option>
+      ))}
+    </select>
+    {/* Custom arrow */}
+    <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-slate-500">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </div>
+    {updatingStatus[project._id] && (
+      <div className="absolute right-6 sm:right-8 top-1/2 -translate-y-1/2">
+        <div className="w-2 sm:w-3 h-2 sm:h-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    )}
+  </div>
+</td>        
                       <td className="px-3 sm:px-8 py-3 sm:py-6">
                         <div className="flex items-center justify-end gap-1.5 sm:gap-2.5">
                           <button 

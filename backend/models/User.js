@@ -110,7 +110,10 @@ const UserSchema = new mongoose.Schema({
       default: false
     }
   }],
-  
+  profileImage: {
+    type: String,
+    default: null
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });

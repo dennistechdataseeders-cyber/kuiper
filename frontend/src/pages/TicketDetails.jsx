@@ -1051,10 +1051,17 @@ const TicketDetails = () => {
                             <div className={`text-[10px] sm:text-xs font-bold mb-0.5 sm:mb-1 ${isCurrentUser ? 'text-blue-100' : 'text-gray-500'}`}>
                               {commentUser}
                             </div>
+                            
                             {comment.text && (
-                              <p className={`text-xs sm:text-sm leading-relaxed ${isCurrentUser ? 'text-white' : 'text-gray-700'} break-words`}>
-                                {comment.text}
-                              </p>
+                              <div className={`text-xs sm:text-sm leading-relaxed ${isCurrentUser ? 'text-white' : 'text-gray-700'} break-words`}>
+                                <div className="whitespace-pre-wrap comment-content" style={{ 
+                                  whiteSpace: 'pre-wrap',
+                                  wordBreak: 'break-word',
+                                  fontFamily: 'inherit'
+                                }}>
+                                  {comment.text}
+                                </div>
+                              </div>
                             )}
                             
                             {hasImages && (
