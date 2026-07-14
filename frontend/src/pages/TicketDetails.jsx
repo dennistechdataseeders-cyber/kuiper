@@ -1,3 +1,5 @@
+// frontend/src/pages/TicketDetails.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -413,12 +415,43 @@ const TicketDetails = () => {
     }
   };
 
+  // ============================================
+  // ENHANCED FILE PROCESSING WITH PASTE SUPPORT
+  // ============================================
+
   const processFiles = (files) => {
     const validFiles = [];
     const validPreviews = [];
 
     files.forEach(file => {
-      if (isAllowedFile(file)) {
+      // Check if it's an image file
+      const isImage = file.type?.startsWith('image/') || isImageFile(file.name);
+      
+      if (isImage) {
+        // For images, check size limit (5MB)
+        if (file.size > MAX_IMAGE_SIZE) {
+          toast.error(`Image "${file.name}" exceeds 5MB limit`);
+          return;
+        }
+        
+        validFiles.push(file);
+        
+        const previewUrl = URL.createObjectURL(file);
+        validPreviews.push({
+          file: file,
+          name: file.name || 'pasted-image.png',
+          size: file.size,
+          type: file.type || 'image/png',
+          preview: previewUrl,
+          id: Date.now() + Math.random().toString(36).substr(2, 9)
+        });
+      } else if (isAllowedFile(file)) {
+        // For other allowed files (documents, etc.)
+        if (file.size > MAX_FILE_SIZE) {
+          toast.error(`File "${file.name}" exceeds 50MB limit`);
+          return;
+        }
+        
         validFiles.push(file);
         
         let previewUrl = null;
@@ -442,9 +475,65 @@ const TicketDetails = () => {
     if (validFiles.length > 0) {
       setSelectedFiles(prev => [...prev, ...validFiles]);
       setFilePreviews(prev => [...prev, ...validPreviews]);
-      toast.success(`${validFiles.length} file(s) added`);
+      
+      const imageCount = validFiles.filter(f => f.type?.startsWith('image/') || isImageFile(f.name)).length;
+      const docCount = validFiles.length - imageCount;
+      
+      let message = `${validFiles.length} file(s) added`;
+      if (imageCount > 0 && docCount > 0) {
+        message = `${imageCount} image(s) and ${docCount} document(s) added`;
+      } else if (imageCount > 0) {
+        message = `${imageCount} image(s) added`;
+      } else {
+        message = `${docCount} document(s) added`;
+      }
+      toast.success(message);
     }
   };
+
+  // ============================================
+  // IMAGE PASTE HANDLER
+  // ============================================
+
+  useEffect(() => {
+    const handlePaste = (e) => {
+      // Only process paste if the textarea is focused
+      if (document.activeElement !== textareaRef.current) return;
+      
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      const imageFiles = [];
+      
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            // Validate file size (5MB max for images)
+            if (file.size > MAX_IMAGE_SIZE) {
+              toast.error(`Image exceeds 5MB limit`);
+              continue;
+            }
+            imageFiles.push(file);
+          }
+        }
+      }
+      
+      if (imageFiles.length > 0) {
+        e.preventDefault(); // Prevent pasting the image as text
+        processFiles(imageFiles);
+        toast.success(`${imageFiles.length} image(s) pasted successfully!`);
+      }
+    };
+    
+    // Add paste event listener
+    document.addEventListener('paste', handlePaste);
+    
+    return () => {
+      document.removeEventListener('paste', handlePaste);
+    };
+  }, []);
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
@@ -1182,7 +1271,7 @@ const TicketDetails = () => {
                   value={newComment}
                   onChange={handleTextareaChange}
                   onKeyDown={handleTextareaKeyDown}
-                  placeholder={isMobile ? "Write..." : "Write your message..."}
+                  placeholder={isMobile ? "Write..." : "Write your message... (paste images directly)"}
                   className="flex-1 bg-transparent px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 outline-none resize-none self-center min-h-[32px] sm:min-h-[38px] max-h-[80px] sm:max-h-[120px]"
                   rows={1}
                   disabled={isSending}
@@ -1224,7 +1313,7 @@ const TicketDetails = () => {
                   <button type="button" onClick={() => fileInputRef.current.click()} className="text-blue-500 hover:underline">
                     Attach
                   </button>
-                  {' '}(5MB images • 50MB files)
+                  {' '}(5MB images • 50MB files • <strong>Paste images with Ctrl+V</strong>)
                 </span>
               </div>
             </div>
