@@ -6,7 +6,7 @@ import {
   Image, File, Paperclip, FileText,
   FileArchive, FileSpreadsheet,
   FileVideo, FileAudio,
-  Download
+  Download, Eye, Link as LinkIcon
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -40,74 +40,41 @@ const CommentSection = ({
 
   // Allowed file types (using extensions for better compatibility)
   const ALLOWED_EXTENSIONS = [
-  // Images
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-  // Documents
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
-  // Archives - ADDED
-  '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
-  // Presentations
-  '.ppt', '.pptx', '.odp',
-  // Video
-  '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
-  // Audio
-  '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
-  // Code/Config - ADDED
-  '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
-  '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
-  '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
-  '.sh', '.bash', '.bat', '.ps1', '.cmd',
-  // Executables - ADDED
-  '.exe'
-];
-
-  // Allowed MIME types (fallback)
-  const ALLOWED_MIME_TYPES = [
-    // Images
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-    // Documents
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'text/plain', 'text/csv',
-    'application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    // Video
-    'video/mp4', 'video/avi', 'video/mkv', 'video/quicktime', 'video/x-ms-wmv',
-    // Audio
-    'audio/mpeg', 'audio/wav', 'audio/aac', 'audio/ogg', 'audio/flac'
+    '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+    '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
+    '.ppt', '.pptx', '.odp',
+    '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
+    '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
+    '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
+    '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
+    '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
+    '.sh', '.bash', '.bat', '.ps1', '.cmd',
+    '.exe'
   ];
 
   const getFileExtension = (filename) => {
+    if (!filename) return '';
     return '.' + filename.split('.').pop()?.toLowerCase() || '';
   };
 
   const isImageFile = (filename) => {
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+    if (!filename) return false;
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
     return imageExtensions.includes(getFileExtension(filename));
   };
 
   const isAllowedFile = (file) => {
-    // Check by extension first
     const ext = getFileExtension(file.name);
-    if (ALLOWED_EXTENSIONS.includes(ext)) {
-      return true;
-    }
-    // Fallback to MIME type check
-    return ALLOWED_MIME_TYPES.includes(file.type);
+    return ALLOWED_EXTENSIONS.includes(ext);
   };
 
   const validateFile = (file) => {
-    // Check file type
     if (!isAllowedFile(file)) {
-      toast.error(`File type "${file.name}" is not supported. Please upload images, documents, or media files.`);
+      toast.error(`File type "${file.name}" is not supported.`);
       return false;
     }
 
-    // Check file size
     const isImage = isImageFile(file.name);
     const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     
@@ -122,13 +89,14 @@ const CommentSection = ({
   };
 
   const getFileIcon = (file) => {
-    const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+    const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
+    if (!filename) return <File size={16} className="text-slate-400" />;
     
-    // Image types
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+    
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
       return <Image size={16} className="text-blue-500" />;
     }
-    // Document types
     if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
     if (['doc', 'docx'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
     if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
@@ -145,7 +113,10 @@ const CommentSection = ({
   };
 
   const getFileTypeLabel = (file) => {
-    const ext = file.name?.split('.').pop()?.toLowerCase() || '';
+    const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
+    if (!filename) return 'File';
+    
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
     const typeMap = {
       'pdf': 'PDF',
       'doc': 'Word',
@@ -202,6 +173,16 @@ const CommentSection = ({
       const res = await axios.get(getEndpoint(), {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      console.log('📝 Fetched comments:', res.data.comments);
+      
+      // Debug: Check if any comments have files
+      res.data.comments?.forEach((comment, idx) => {
+        if (comment.files && comment.files.length > 0) {
+          console.log(`📎 Comment ${idx} has ${comment.files.length} file(s):`, comment.files);
+        }
+      });
+      
       setComments(res.data.comments || []);
     } catch (err) {
       console.error('Error fetching comments:', err);
@@ -222,7 +203,6 @@ const CommentSection = ({
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
     processFiles(files);
-    // Reset the input so the same file can be selected again
     e.target.value = '';
   };
 
@@ -298,44 +278,41 @@ const CommentSection = ({
   };
 
   const uploadFiles = async () => {
-  if (selectedFiles.length === 0) return [];
-  
-  const uploadedUrls = [];
-  setUploadingFiles(true);
-
-  // Get token inside the function
-  const token = localStorage.getItem('token');
-
-  for (const file of selectedFiles) {
-    const formData = new FormData();
-    formData.append('file', file);
+    if (selectedFiles.length === 0) return [];
     
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
-      
-      if (response.data.success) {
-        uploadedUrls.push({
-          url: response.data.url,
-          filename: response.data.filename,
-          originalName: response.data.originalName,
-          size: response.data.size,
-          type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
-        });
-      }
-    } catch (error) {
-      console.error('File upload failed:', error);
-      toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
-    }
-  }
+    const uploadedUrls = [];
+    setUploadingFiles(true);
 
-  setUploadingFiles(false);
-  return uploadedUrls;
-};
+    for (const file of selectedFiles) {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+        
+        if (response.data.success) {
+          uploadedUrls.push({
+            url: response.data.url,
+            filename: response.data.filename,
+            originalName: response.data.originalName,
+            size: response.data.size,
+            type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
+          });
+        }
+      } catch (error) {
+        console.error('File upload failed:', error);
+        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+      }
+    }
+
+    setUploadingFiles(false);
+    return uploadedUrls;
+  };
 
   const addComment = async (e) => {
     if (e) e.preventDefault();
@@ -358,7 +335,7 @@ const CommentSection = ({
         files: uploadedFiles
       };
       
-      const res = await axios.post(`${API_BASE_URL}/api/tickets/${entityId}/comments`, payload, {
+      const res = await axios.post(getEndpoint(), payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -433,6 +410,109 @@ const CommentSection = ({
     return isOwn ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200';
   };
 
+  // ============================================
+  // RENDER FILE ATTACHMENTS FOR A COMMENT
+  // ============================================
+  const renderFileAttachments = (comment) => {
+    // Check if comment has files
+    const hasFiles = comment.files && comment.files.length > 0;
+    
+    if (!hasFiles) return null;
+    
+    console.log(`📎 Rendering ${comment.files.length} file(s) for comment:`, comment.files);
+    
+    return (
+      <div className="mt-3 space-y-2">
+        {comment.files.map((file, idx) => {
+          // Determine if it's an image - check multiple sources
+          const isImage = file.type === 'image' || 
+                          (file.originalName && isImageFile(file.originalName)) ||
+                          (file.filename && isImageFile(file.filename));
+          
+          const displayName = file.originalName || file.filename || 'Attachment';
+          const fileUrl = file.url;
+          
+          // If no URL, skip this file
+          if (!fileUrl) {
+            console.warn(`⚠️ File ${idx} has no URL:`, file);
+            return null;
+          }
+          
+          return (
+            <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group">
+              {/* File Icon / Preview */}
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden">
+                {isImage ? (
+                  <img 
+                    src={fileUrl} 
+                    alt={displayName}
+                    className="w-full h-full object-cover rounded-lg"
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.style.display = 'none';
+                      const parent = e.target.parentElement;
+                      if (parent) {
+                        parent.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`;
+                      }
+                    }}
+                  />
+                ) : (
+                  getFileIcon(file)
+                )}
+              </div>
+              
+              {/* File Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-slate-700 truncate" title={displayName}>
+                  {displayName}
+                </p>
+                <p className="text-[9px] text-slate-400 flex items-center gap-2">
+                  {file.size && <span>{formatFileSize(file.size)}</span>}
+                  {file.size && <span>•</span>}
+                  <span>{getFileTypeLabel(file)}</span>
+                </p>
+              </div>
+              
+              {/* Actions */}
+              <div className="flex items-center gap-1">
+                {isImage && (
+                  <button
+                    onClick={() => window.open(fileUrl, '_blank')}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
+                    title="View image"
+                  >
+                    <Eye size={14} />
+                  </button>
+                )}
+                <a
+                  href={fileUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
+                  title="Download file"
+                  onClick={(e) => {
+                    // For non-images, trigger download
+                    if (!isImage) {
+                      e.preventDefault();
+                      const link = document.createElement('a');
+                      link.href = fileUrl;
+                      link.download = displayName;
+                      document.body.appendChild(link);
+                      link.click();
+                      document.body.removeChild(link);
+                    }
+                  }}
+                >
+                  <Download size={14} />
+                </a>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center py-8">
@@ -463,6 +543,7 @@ const CommentSection = ({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
+                    {/* User Info */}
                     <div className="flex items-center gap-2 mb-1.5">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs ${
                         isOwn ? 'bg-blue-600' : 'bg-slate-400'
@@ -483,55 +564,21 @@ const CommentSection = ({
                       )}
                     </div>
                     
+                    {/* Comment Text */}
                     {comment.text && (
-                      <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
-                        {comment.text}
-                      </p>
+                      <div 
+                        className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words"
+                        dangerouslySetInnerHTML={{ __html: comment.text.replace(/\n/g, '<br />') }}
+                      />
                     )}
                     
-                    {/* File Attachments */}
-                    {hasFiles && (
-                      <div className="mt-3 space-y-2">
-                        {comment.files.map((file, idx) => (
-                          <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group">
-                            <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                              {file.type === 'image' ? (
-                                <img 
-                                  src={file.url} 
-                                  alt={file.originalName || 'Attachment'}
-                                  className="w-full h-full object-cover rounded-lg"
-                                />
-                              ) : (
-                                getFileIcon({ name: file.originalName || file.filename })
-                              )}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-xs font-semibold text-slate-700 truncate">
-                                {file.originalName || file.filename}
-                              </p>
-                              <p className="text-[9px] text-slate-400 flex items-center gap-2">
-                                <span>{formatFileSize(file.size)}</span>
-                                <span>•</span>
-                                <span>{getFileTypeLabel({ name: file.originalName || file.filename })}</span>
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <a
-                                href={file.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
-                                title="Download or view file"
-                              >
-                                <Download size={14} />
-                              </a>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    {/* ============================================
+                        RENDER FILE ATTACHMENTS
+                        ============================================ */}
+                    {hasFiles && renderFileAttachments(comment)}
                   </div>
                   
+                  {/* Delete Button */}
                   {canDeleteComment(comment) && (
                     <button
                       onClick={() => handleDelete(comment._id)}

@@ -1,4 +1,5 @@
-// backend/models/User.js
+// backend/models/User.js - Add leave balances
+
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
@@ -47,7 +48,6 @@ const UserSchema = new mongoose.Schema({
     default: false
   },
   
-  // Additional fields
   jobTitle: {
     type: String,
     default: ''
@@ -69,15 +69,47 @@ const UserSchema = new mongoose.Schema({
     default: true
   },
   
-  // ============================================
-  // EMPLOYEE CODE - ADDED
-  // ============================================
+  // Employee Code
   employeeCode: {
     type: String,
     unique: true,
     sparse: true,
     default: null
   },
+  
+  // ============================================
+  // LEAVE BALANCES
+  // ============================================
+  leaveBalances: {
+    type: Map,
+    of: Number,
+    default: {
+      'Paid Leave': 12,
+      'Sick Leave': 4,
+      'Casual Leave': 2,
+      'Unpaid Leave': 0 // Unlimited
+    }
+  },
+  
+  // Track when balances were last updated
+  leaveBalancesLastUpdated: {
+    type: Date,
+    default: Date.now
+  },
+  
+  // Track leave balance history (audit trail)
+  leaveBalanceHistory: [{
+    type: {
+      type: String,
+      enum: ['granted', 'deducted', 'adjusted']
+    },
+    leaveType: String,
+    amount: Number,
+    previousBalance: Number,
+    newBalance: Number,
+    reason: String,
+    date: { type: Date, default: Date.now }
+  }],
   
   // Notification fields
   notificationCount: {
@@ -91,7 +123,7 @@ const UserSchema = new mongoose.Schema({
   unreadNotifications: [{
     type: {
       type: String,
-      enum: ['ticket_created', 'ticket_assigned', 'ticket_commented', 'ticket_status_updated', 'open_ticket']
+      enum: ['ticket_created', 'ticket_assigned', 'ticket_commented', 'ticket_status_updated', 'open_ticket', 'leave_request', 'leave_approved', 'leave_rejected']
     },
     ticketId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -118,113 +150,66 @@ const UserSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Middleware to update the updatedAt timestamp
-UserSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-});
-
-// Middleware for primary POC
-UserSchema.pre('save', async function(next) {
-  if (this.isPrimaryPOC && this.organizationId && this.role === 'POC') {
-    try {
-      await this.constructor.updateMany(
-        {
-          organizationId: this.organizationId,
-          role: 'POC',
-          _id: { $ne: this._id }
-        },
-        { $set: { isPrimaryPOC: false } }
-      );
-    } catch (error) {
-      console.error('Error in primary POC middleware:', error);
-    }
-  }
-});
-
-// Virtual for organization name
-UserSchema.virtual('organizationName').get(function() {
-  if (this.organizationId && typeof this.organizationId === 'object') {
-    return this.organizationId.companyName;
-  }
-  return null;
-});
-
-// Indexes
-UserSchema.index({ organizationId: 1, role: 1 });
-UserSchema.index({ isPrimaryPOC: 1, organizationId: 1 });
-
-// Notification methods
-UserSchema.methods.addNotification = function(notificationData) {
-  if (!this.unreadNotifications) {
-    this.unreadNotifications = [];
-  }
+// Update leave balances monthly (for Paid Leave accrual)
+UserSchema.methods.updateLeaveBalances = async function() {
+  const now = new Date();
+  const lastUpdated = this.leaveBalancesLastUpdated || this.createdAt;
   
-  this.unreadNotifications.push({
-    type: notificationData.type || 'ticket_created',
-    ticketId: notificationData.ticketId,
-    message: notificationData.message,
-    createdAt: new Date(),
-    read: false
-  });
+  // Calculate months passed
+  const monthsPassed = (now.getFullYear() - lastUpdated.getFullYear()) * 12 + 
+                       (now.getMonth() - lastUpdated.getMonth());
   
-  this.notificationCount = (this.notificationCount || 0) + 1;
-  return this.save();
+  if (monthsPassed > 0) {
+    // Get current balance or default
+    const currentPL = this.leaveBalances.get('Paid Leave') || 12;
+    
+    // Add 1 day per month, up to max of 12
+    const newPL = Math.min(12, currentPL + monthsPassed);
+    
+    // Update balance
+    this.leaveBalances.set('Paid Leave', newPL);
+    this.leaveBalancesLastUpdated = now;
+    
+    // Log the update
+    this.leaveBalanceHistory.push({
+      type: 'granted',
+      leaveType: 'Paid Leave',
+      amount: monthsPassed,
+      previousBalance: currentPL,
+      newBalance: newPL,
+      reason: `Monthly accrual (${monthsPassed} month${monthsPassed > 1 ? 's' : ''})`
+    });
+    
+    await this.save();
+  }
 };
 
-UserSchema.methods.markNotificationAsRead = function(notificationId) {
-  const notification = this.unreadNotifications?.find(
-    n => n._id.toString() === notificationId.toString()
-  );
+// Grant annual leaves (run at start of year)
+UserSchema.methods.grantAnnualLeaves = async function() {
+  const now = new Date();
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const lastUpdated = this.leaveBalancesLastUpdated || this.createdAt;
   
-  if (notification && !notification.read) {
-    notification.read = true;
-    this.notificationCount = Math.max(0, (this.notificationCount || 0) - 1);
-    return this.save();
+  // Check if this is a new year
+  if (lastUpdated.getFullYear() < now.getFullYear()) {
+    // Reset and grant new year leaves
+    this.leaveBalances.set('Paid Leave', 12);
+    this.leaveBalances.set('Sick Leave', 4);
+    this.leaveBalances.set('Casual Leave', 2);
+    this.leaveBalances.set('Unpaid Leave', 0);
+    this.leaveBalancesLastUpdated = yearStart;
+    
+    this.leaveBalanceHistory.push({
+      type: 'granted',
+      leaveType: 'Annual Grant',
+      amount: 18, // 12 + 4 + 2
+      previousBalance: 0,
+      newBalance: 18,
+      reason: `Annual leave grant for ${now.getFullYear()}`
+    });
+    
+    await this.save();
   }
-  return Promise.resolve(this);
-};
-
-UserSchema.methods.markAllNotificationsAsRead = function() {
-  if (this.unreadNotifications) {
-    this.unreadNotifications.forEach(n => n.read = true);
-    this.notificationCount = 0;
-    return this.save();
-  }
-  return Promise.resolve(this);
-};
-
-UserSchema.methods.getUnreadCount = function() {
-  return this.unreadNotifications?.filter(n => !n.read).length || 0;
-};
-
-UserSchema.methods.getNotificationsWithDetails = async function() {
-  await this.populate('unreadNotifications.ticketId', 'title ticketNumber status createdAt');
-  return this.unreadNotifications || [];
-};
-
-UserSchema.methods.isPOC = function() {
-  return this.role === 'POC' || this.role === 'Client';
-};
-
-UserSchema.methods.getPOCDetails = async function() {
-  if (this.organizationId) {
-    await this.populate('organizationId', 'companyName website address');
-  }
-  return {
-    id: this._id,
-    name: this.name,
-    email: this.email,
-    department: this.department,
-    isPrimaryPOC: this.isPrimaryPOC,
-    jobTitle: this.jobTitle,
-    phoneNumber: this.phoneNumber,
-    linkedinProfile: this.linkedinProfile,
-    organization: this.organizationId ? {
-      id: this.organizationId._id,
-      name: this.organizationId.companyName,
-      website: this.organizationId.website
-    } : null
-  };
 };
 
 module.exports = mongoose.models.User || mongoose.model('User', UserSchema);

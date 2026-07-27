@@ -7,7 +7,8 @@ import {
   Target, User, Mail, Phone, Clock, TrendingUp, Briefcase, 
   Calendar as CalendarIcon, CheckCircle, X, ChevronRight, PhoneCall, MessageSquare, 
   ExternalLink, Upload, FileText, Loader2, ChevronLeft, ChevronDown, ChevronUp, AlertCircle,
-  Send, CalendarDays, Copy, Check, AlertTriangle, Building2, Search as SearchIcon, Plus
+  Send, CalendarDays, Copy, Check, AlertTriangle, Building2, Search as SearchIcon, Plus,
+  ArrowRight, Ban, Users, Search
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import tips from '../data/salesTips';
@@ -186,7 +187,6 @@ const SalesDashboard = () => {
   const [generatedLeads, setGeneratedLeads] = useState([]);
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [followUps, setFollowUps] = useState([]);
-  const [feasibilityTasks, setFeasibilityTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedLead, setSelectedLead] = useState(null);
   const [showActionModal, setShowActionModal] = useState(false);
@@ -203,6 +203,15 @@ const SalesDashboard = () => {
   const [scheduledCurrentPage, setScheduledCurrentPage] = useState(1);
   const scheduledItemsPerPage = 5;
 
+  // Search states for each bucket
+  const [leadSearchTerm, setLeadSearchTerm] = useState('');
+  const [followUpSearchTerm, setFollowUpSearchTerm] = useState('');
+  const [approachSearchTerm, setApproachSearchTerm] = useState('');
+
+  // Table search states
+  const [followUpTableSearch, setFollowUpTableSearch] = useState('');
+  const [approachTableSearch, setApproachTableSearch] = useState('');
+
   // Organization selection state for project modal
   const [organizations, setOrganizations] = useState([]);
   const [searchOrgTerm, setSearchOrgTerm] = useState('');
@@ -214,15 +223,26 @@ const SalesDashboard = () => {
     address: ''
   });
 
+  // Helper function to check if PM is selected
+  const isPMSelected = () => {
+    return projectForm.projectManager && projectForm.projectManager !== '';
+  };
+
+  // Close Lead Modal State
+  const [showCloseModal, setShowCloseModal] = useState(false);
+  const [closingData, setClosingData] = useState({ reason: 'won', description: '' });
+  const [showProductionForm, setShowProductionForm] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
+
   const today = new Date();
   const oneWeekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
   const oneMonthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-const [followUpData, setFollowUpData] = useState({
-  date: new Date().toISOString().split('T')[0],
-  type: 'call',
-  description: ''
-});
+  const [followUpData, setFollowUpData] = useState({
+    date: new Date().toISOString().split('T')[0],
+    type: 'call',
+    description: ''
+  });
   
   const overviewCount = allData.filter(l => {
     const leadDate = new Date(l.createdAt);
@@ -235,10 +255,9 @@ const [followUpData, setFollowUpData] = useState({
     taskDetails: '',
     attachment: null,
     feasibilityDate: new Date().toISOString().split('T')[0],
-    nextFollowUpDate: '' 
+    nextFollowUpDate: '' ,
+    attachmentName: '' 
   });
-
-  const [closingData, setClosingData] = useState({ reason: 'won', description: '' });
 
   const generateFeasibilityId = (leadNumber) => `FSL${String(leadNumber || 0).padStart(4, '0')}`;
 
@@ -272,118 +291,92 @@ const [followUpData, setFollowUpData] = useState({
   };
 
   const fetchData = async () => {
-  setLoading(true);
-  try {
-    const token = localStorage.getItem('token');
-    const headers = { Authorization: `Bearer ${token}` };
+    setLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      const headers = { Authorization: `Bearer ${token}` };
 
-    const [res, prospect_res] = await Promise.all([
-      axios.get(`${API_BASE_URL}/api/lead-generation`, { headers }),
-      axios.get(`${API_BASE_URL}/api/prospects`, { headers })
-    ]);
+      const [res, prospect_res] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/lead-generation`, { headers }),
+        axios.get(`${API_BASE_URL}/api/prospects`, { headers })
+      ]);
 
-    const data = Array.isArray(res.data) ? res.data : [];
-    const prospect_data = Array.isArray(prospect_res.data) ? prospect_res.data : [];
+      const data = Array.isArray(res.data) ? res.data : [];
+      const prospect_data = Array.isArray(prospect_res.data) ? prospect_res.data : [];
 
-    setAllData(data);
+      setAllData(data);
 
-    const todayStr = new Date().toLocaleDateString('en-CA');
-    
-    setGeneratedLeads(data.filter(l => 
-      new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
-      (!l.status || l.status === 'New')
-    ));
-
-    // ============================================
-    // FIXED: Only show today's and past follow-ups
-    // ============================================
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const allPendingFollowUps = data.filter(l => {
-      if (!l.followUpDate || l.status !== 'Follow-up Scheduled' || l.completedAt) {
-        return false;
-      }
+      const todayStr = new Date().toLocaleDateString('en-CA');
       
-      const followUpDate = new Date(l.followUpDate);
-      followUpDate.setHours(0, 0, 0, 0);
-      
-      // Only show today's and past (missed) follow-ups
-      return followUpDate <= today;
-    });
-    
-    setFollowUps(allPendingFollowUps);
+      setGeneratedLeads(data.filter(l => 
+        new Date(l.createdAt).toLocaleDateString('en-CA') === todayStr && 
+        (!l.status || l.status === 'New')
+      ));
 
-    // ============================================
-    // FIXED: Only show today's and past feasibility tasks
-    // ============================================
-    const allPendingFeasibility = data.filter(l => {
-      if (!l.followUpDate || l.status !== 'Feasibility' || l.completedAt) {
-        return false;
-      }
-      
-      const followUpDate = new Date(l.followUpDate);
-      followUpDate.setHours(0, 0, 0, 0);
-      
-      // Only show today's and past (missed) feasibility tasks
-      return followUpDate <= today;
-    });
-    
-    setFeasibilityTasks(allPendingFeasibility);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
 
-    // ============================================
-    // Approaches filtering - already only shows today's
-    // ============================================
-    const filteredApproaches = prospect_data.filter(item => {
-      const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
-      if (dateValue) {
-        const followUpDate = new Date(dateValue);
-        const todayDate = new Date();
+      const allPendingFollowUps = data.filter(l => {
+        if (!l.followUpDate || l.status !== 'Follow-up Scheduled' || l.completedAt) {
+          return false;
+        }
+        
+        const followUpDate = new Date(l.followUpDate);
         followUpDate.setHours(0, 0, 0, 0);
-        todayDate.setHours(0, 0, 0, 0);
-        return followUpDate <= todayDate && item.status === 'Approached';
-      }
-      return false;
-    });
+        
+        return followUpDate <= today;
+      });
+      
+      setFollowUps(allPendingFollowUps);
 
-    setApproachesToday(filteredApproaches);
+      const filteredApproaches = prospect_data.filter(item => {
+        const dateValue = item.nextFollowUpDate?.$date || item.nextFollowUpDate;
+        if (dateValue) {
+          const followUpDate = new Date(dateValue);
+          const todayDate = new Date();
+          followUpDate.setHours(0, 0, 0, 0);
+          todayDate.setHours(0, 0, 0, 0);
+          return followUpDate <= todayDate && item.status === 'Approached';
+        }
+        return false;
+      });
 
-    // ============================================
-    // Scheduled items for calendar - keep all for calendar view
-    // ============================================
-    const scheduledFollowUps = data
-      .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled' && !l.completedAt)
-      .map(l => ({
-        id: l._id,
-        title: l.pocName,
-        orgName: l.organizationId?.companyName || 'No Org',
-        type: 'followup',
-        date: new Date(l.followUpDate),
-        originalLead: l,
-        isOverdue: isOverdue(l.followUpDate)
-      }));
-    
-    const scheduledFeasibility = data
-      .filter(l => l.followUpDate && l.status === 'Feasibility' && !l.completedAt)
-      .map(l => ({
-        id: l._id,
-        title: l.pocName,
-        orgName: l.organizationId?.companyName || 'No Org',
-        type: 'feasibility',
-        date: new Date(l.followUpDate),
-        originalLead: l,
-        isOverdue: isOverdue(l.followUpDate)
-      }));
-    
-    setAllScheduledItems([...scheduledFollowUps, ...scheduledFeasibility]);
-    
-  } catch (err) {
-    console.error("Fetch error:", err);
-    toast.error("Failed to load dashboard data");
-  } finally {
-    setLoading(false);
-  }
-};
+      setApproachesToday(filteredApproaches);
+
+      const scheduledFollowUps = data
+        .filter(l => l.followUpDate && l.status === 'Follow-up Scheduled' && !l.completedAt)
+        .map(l => ({
+          id: l._id,
+          title: l.pocName,
+          orgName: l.organizationId?.companyName || 'No Org',
+          type: 'followup',
+          date: new Date(l.followUpDate),
+          originalLead: l,
+          isOverdue: isOverdue(l.followUpDate)
+        }));
+      
+      const scheduledFeasibility = data
+        .filter(l => l.followUpDate && l.status === 'Feasibility' && !l.completedAt)
+        .map(l => ({
+          id: l._id,
+          title: l.pocName,
+          orgName: l.organizationId?.companyName || 'No Org',
+          type: 'feasibility',
+          date: new Date(l.followUpDate),
+          originalLead: l,
+          isOverdue: isOverdue(l.followUpDate)
+        }));
+      
+      setAllScheduledItems([...scheduledFollowUps, ...scheduledFeasibility]);
+      
+    } catch (err) {
+      console.error("Fetch error:", err);
+      toast.error("Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchOrganizations = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -435,6 +428,40 @@ const [followUpData, setFollowUpData] = useState({
     industry: '',
   });
   
+  const [feasibilityPM, setFeasibilityPM] = useState('');
+  const [projectManagersList, setProjectManagersList] = useState([]);
+  const [loadingPMs, setLoadingPMs] = useState(false);
+  
+  const fetchProjectManagers = async () => {
+    setLoadingPMs(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const pms = res.data.filter(u => u.role === 'Project Manager');
+      setProjectManagersList(pms);
+      setProjectManagers(pms);
+      console.log('✅ Project Managers fetched:', pms.length);
+    } catch (err) {
+      console.error("Error fetching PMs:", err);
+      toast.error("Failed to load Project Managers");
+    } finally {
+      setLoadingPMs(false);
+    }
+  };
+  
+  // Auto-select the first Project Manager when they load
+  useEffect(() => {
+    if (projectManagers.length > 0 && !projectForm.projectManager) {
+      setProjectForm(prev => ({
+        ...prev,
+        projectManager: projectManagers[0]._id
+      }));
+      console.log('✅ Auto-selected Project Manager:', projectManagers[0].name);
+    }
+  }, [projectManagers]);
+
   useEffect(() => {
     const fetchPMs = async () => {
       const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
@@ -445,6 +472,7 @@ const [followUpData, setFollowUpData] = useState({
     fetchPMs();
     fetchData();
     fetchOrganizations();
+    fetchProjectManagers();
     
     const randomIndex = Math.floor(Math.random() * tips.length);
     setRandomTip(tips[randomIndex]);
@@ -455,22 +483,33 @@ const [followUpData, setFollowUpData] = useState({
   );
 
   const handleFollowUpSubmit = async () => {
-  try {
-    const token = localStorage.getItem('token');
-    await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, { 
-      status: 'Follow-up Scheduled',
-      followUpDate: followUpData.date,
-      followUpType: followUpData.type,
-      lastInteractionDesc: followUpData.description,
-      completedAt: null
-    }, { headers: { Authorization: `Bearer ${token}` } });
-    toast.success('Follow-up scheduled successfully!');
-    fetchData(); 
-    closeModal();
-  } catch (err) { 
-    toast.error(err.response?.data?.error || "Follow-up update failed");
-  }
-};
+    // ✅ Add validation for Follow-up
+    if (!selectedLead) {
+      toast.error("No lead selected");
+      return;
+    }
+    
+    if (!followUpData.date) {
+      toast.error("Please select a follow-up date");
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, { 
+        status: 'Follow-up Scheduled',
+        followUpDate: followUpData.date,
+        followUpType: followUpData.type,
+        lastInteractionDesc: followUpData.description,
+        completedAt: null
+      }, { headers: { Authorization: `Bearer ${token}` } });
+      toast.success('Follow-up scheduled successfully!');
+      fetchData(); 
+      closeModal();
+    } catch (err) { 
+      toast.error(err.response?.data?.error || "Follow-up update failed");
+    }
+  };
   
   const handleCompleteTask = async (lead) => {
     try {
@@ -490,8 +529,32 @@ const [followUpData, setFollowUpData] = useState({
   const leadsPerPage = 5;
   const indexOfLastLead = currentPage * leadsPerPage;
   const indexOfFirstLead = indexOfLastLead - leadsPerPage;
-  const currentLeads = generatedLeads.slice(indexOfFirstLead, indexOfLastLead);
-  const totalPages = Math.ceil(generatedLeads.length / leadsPerPage);
+  
+  // Filter leads by search term
+  const filteredLeads = generatedLeads.filter(lead =>
+    lead.pocName?.toLowerCase().includes(leadSearchTerm.toLowerCase()) ||
+    lead.organizationId?.companyName?.toLowerCase().includes(leadSearchTerm.toLowerCase())
+  );
+  
+  const currentLeads = filteredLeads.slice(indexOfFirstLead, indexOfLastLead);
+  const totalPages = Math.ceil(filteredLeads.length / leadsPerPage);
+  
+  // Filter follow-ups by table search term (name, email, org)
+  const filteredFollowUps = followUps.filter(lead => {
+    const search = followUpTableSearch.toLowerCase();
+    return lead.pocName?.toLowerCase().includes(search) ||
+           lead.pocEmail?.toLowerCase().includes(search) ||
+           lead.organizationId?.companyName?.toLowerCase().includes(search) ||
+           lead.lastInteractionDesc?.toLowerCase().includes(search);
+  });
+  
+  // Filter approaches by table search term (name, company)
+  const filteredApproaches = approachesToday.filter(lead => {
+    const search = approachTableSearch.toLowerCase();
+    return lead.pocName?.toLowerCase().includes(search) ||
+           lead.companyName?.toLowerCase().includes(search) ||
+           lead.pocEmail?.toLowerCase().includes(search);
+  });
   
   const POPULAR_COUNTRIES = [
     { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
@@ -540,6 +603,13 @@ const [followUpData, setFollowUpData] = useState({
   
   const handleFeasibilitySubmit = async (e) => {
     e.preventDefault();
+    
+    // ✅ Add PM validation for Feasibility
+    if (!feasibilityPM) {
+      toast.error("⚠️ Please select a Project Manager for this feasibility request");
+      return;
+    }
+    
     setIsUploading(true);
 
     try {
@@ -556,15 +626,20 @@ const [followUpData, setFollowUpData] = useState({
       formData.append('feasibilityDate', safeFeasibilityDate);
       formData.append('taskDetails', feasibilityData.taskDetails);
       
+      if (feasibilityPM) {
+        formData.append('projectManagerId', feasibilityPM);
+      }
+      
       if (safeFollowUpDate) {
         formData.append('followUpDate', safeFollowUpDate);
       }
 
+      // Handle file attachment - supports all file types
       if (feasibilityData.attachment) {
         formData.append('file', feasibilityData.attachment);
       }
 
-      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, formData, {
+      const response = await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`, 
           'Content-Type': 'multipart/form-data' 
@@ -573,6 +648,7 @@ const [followUpData, setFollowUpData] = useState({
       
       setIsUploading(false);
       setShowSuccess(true);
+      setFeasibilityPM('');
       
       setTimeout(() => { 
         setShowSuccess(false); 
@@ -581,52 +657,138 @@ const [followUpData, setFollowUpData] = useState({
       }, 2500);
 
     } catch (err) {
-      setIsUploading(true);
       console.error("Submission Error:", err);
-      alert(err.response?.data?.error || "Feasibility submission failed");
-    } finally {
+      toast.error(err.response?.data?.error || "Feasibility submission failed");
       setIsUploading(false);
+    }
+  };
+  
+  // ============================================
+  // CLOSE LEAD HANDLERS
+  // ============================================
+  
+  const openCloseLeadModal = () => {
+    setClosingData({ reason: 'won', description: '' });
+    setShowProductionForm(false);
+    setShowCloseModal(true);
+    setShowActionModal(false);
+    
+    // Auto-select the first PM if available
+    const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
+    
+    setProjectForm({
+      name: selectedLead?.organizationId?.companyName || selectedLead?.pocName || '',
+      organizationId: selectedLead?.organizationId?._id || selectedLead?.organizationId || '',
+      projectManager: defaultPM,
+      description: `Project from lead: ${selectedLead?.pocName}`,
+      country: 'United States',
+      industry: 'ECOM',
+    });
+  };
+
+  const handleProductionSubmit = async (e) => {
+    e.preventDefault();
+
+    // Check if PM is selected
+    if (!projectForm.projectManager) {
+      toast.error("⚠️ Please select a Project Manager");
+      return;
+    }
+
+    setIsClosing(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      const payload = {
+        status: 'Production Ready',
+        lastInteractionDesc: closingData.description || 'Lead marked as Production Ready',
+        projectManagerId: projectForm.projectManager,
+        industry: projectForm.industry,
+        country: projectForm.country,
+        projectBriefName: projectForm.name,
+        organizationId: selectedLead?.organizationId?._id || selectedLead?.organizationId,
+      };
+      
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, payload, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      toast.success('✅ Project created and assigned to Project Manager!');
+      
+      setShowCloseModal(false);
+      setShowProductionForm(false);
+      setSelectedLead(null);
+      setClosingData({ reason: 'won', description: '' });
+      
+      fetchData();
+      
+    } catch (err) {
+      console.error("Production Ready Error:", err);
+      toast.error(err.response?.data?.error || "Failed to mark as Production Ready");
+    } finally {
+      setIsClosing(false);
     }
   };
 
   const handleCloseLead = async () => {
-  // Validate that reason is selected
-  if (!closingData.reason) {
-    toast.error("Please select an outcome (Won or Lost)");
-    return;
-  }
+    if (!closingData.reason) {
+      toast.error("Please select an outcome (Won or Lost)");
+      return;
+    }
 
-  // Validate that description is provided for lost leads
-  if (closingData.reason === 'lost' && !closingData.description.trim()) {
-    toast.error("Please provide a reason for losing the lead");
-    return;
-  }
+    if (closingData.reason === 'won') {
+      setShowProductionForm(true);
+      return;
+    }
 
-  try {
-    const token = localStorage.getItem('token');
-    const payload = {
-      status: closingData.reason === 'won' ? 'Production Ready' : 'Closed',
-      lastInteractionDesc: closingData.description || 'No description provided',
-      projectManagerId: null 
-    };
-    
-    await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, payload, { 
-      headers: { Authorization: `Bearer ${token}` } 
-    });
-    
-    toast.success(`Lead marked as ${payload.status}`);
-    fetchData(); 
-    closeModal();
-  } catch (err) { 
-    console.error("Close Lead Error:", err.response?.data);
-    toast.error(err.response?.data?.error || "Failed to close lead"); 
-  }
-};
+    if (closingData.reason === 'lost' && !closingData.description.trim()) {
+      toast.error("Please provide a reason for losing the lead");
+      return;
+    }
+
+    setIsClosing(true);
+
+    try {
+      const token = localStorage.getItem('token');
+      
+      const payload = {
+        status: 'Closed',
+        lastInteractionDesc: closingData.description || 'No description provided',
+      };
+      
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, payload, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      toast.success('Lead marked as Closed');
+      
+      setShowCloseModal(false);
+      setSelectedLead(null);
+      setClosingData({ reason: 'won', description: '' });
+      
+      fetchData();
+      
+    } catch (err) {
+      console.error("Close Lead Error:", err);
+      toast.error(err.response?.data?.error || "Failed to close lead");
+    } finally {
+      setIsClosing(false);
+    }
+  };
 
   const closeModal = () => {
     if (isUploading) return;
     setShowActionModal(false);
     setShowFeasibilityModal(false);
+    setShowCloseModal(false);
+    setShowProductionForm(false);
     setShowSuccess(false);
     setActionStep(1);
     setFollowUpData({ 
@@ -641,21 +803,23 @@ const [followUpData, setFollowUpData] = useState({
       feasibilityDate: new Date().toISOString().split('T')[0],
       nextFollowUpDate: ''
     });
+    setFeasibilityPM('');
+    setClosingData({ reason: 'won', description: '' });
   };
   
   const [followUpPage, setFollowUpPage] = useState(1);
-  const [feasibilityPage, setFeasibilityPage] = useState(1);
-  const itemsPerPage = 3;
+  const [approachPage, setApproachPage] = useState(1);
+  const itemsPerPage = 5;
   
   const lastFollowUpIndex = followUpPage * itemsPerPage;
   const firstFollowUpIndex = lastFollowUpIndex - itemsPerPage;
-  const currentFollowUps = followUps.slice(firstFollowUpIndex, lastFollowUpIndex);
-  const totalFollowUpPages = Math.ceil(followUps.length / itemsPerPage);
+  const currentFollowUps = filteredFollowUps.slice(firstFollowUpIndex, lastFollowUpIndex);
+  const totalFollowUpPages = Math.ceil(filteredFollowUps.length / itemsPerPage);
   
-  const lastFeasibilityIndex = feasibilityPage * itemsPerPage;
-  const firstFeasibilityIndex = lastFeasibilityIndex - itemsPerPage;
-  const currentFeasibility = feasibilityTasks.slice(firstFeasibilityIndex, lastFeasibilityIndex);
-  const totalFeasibilityPages = Math.ceil(feasibilityTasks.length / itemsPerPage);
+  const lastApproachIndex = approachPage * itemsPerPage;
+  const firstApproachIndex = lastApproachIndex - itemsPerPage;
+  const currentApproaches = filteredApproaches.slice(firstApproachIndex, lastApproachIndex);
+  const totalApproachPages = Math.ceil(filteredApproaches.length / itemsPerPage);
   
   const [isApproachModalOpen, setIsApproachModalOpen] = useState(false);
   const [selectedProspect, setSelectedProspect] = useState(null);
@@ -694,90 +858,92 @@ const [followUpData, setFollowUpData] = useState({
     }
   };
   
- const handleStatusUpdate = async (leadId, status, extraData = {}) => {
-  if (status === 'Production Ready') {
-    const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
-    setProjectForm({
-      name: selectedLead.companyName || '',
-      organizationId: selectedLead.organizationId?._id || selectedLead.organizationId || '',
-      projectManager: defaultPM,
-      description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
-      country: selectedLead.country || '',
-      industry: selectedLead.industry || '',
-    });
-    setShowProjectModal(true);
-    setShowActionModal(false);
-    return;
-  }
-  // ... rest of the function
-};
-  
-const handleProjectSubmit = async (e) => {
-  if (e) e.preventDefault();
-  if (isSubmittingProject) return;
-  
-  let finalOrgId = projectForm.organizationId;
-  
-  if (showNewOrgForm && newOrgData.companyName.trim()) {
-    const newOrg = await createNewOrganization();
-    if (newOrg) {
-      finalOrgId = newOrg._id;
-    } else {
+  const handleStatusUpdate = async (leadId, status, extraData = {}) => {
+    if (status === 'Production Ready') {
+      // Auto-select the first PM if available
+      const defaultPM = projectManagers.length > 0 ? projectManagers[0]._id : '';
+      
+      setProjectForm({
+        name: selectedLead.companyName || '',
+        organizationId: selectedLead.organizationId?._id || selectedLead.organizationId || '',
+        projectManager: defaultPM,
+        description: `Lead converted from Sales Dashboard. POC: ${selectedLead.pocName}`,
+        country: selectedLead.country || '',
+        industry: selectedLead.industry || '',
+      });
+      setShowProjectModal(true);
+      setShowActionModal(false);
       return;
     }
-  }
+  };
   
-  if (!finalOrgId) {
-    toast.error("Please select or create an organization");
-    return;
-  }
-  
-  try {
-    setIsSubmittingProject(true);
-    const token = localStorage.getItem('token');
+  const handleProjectSubmit = async (e) => {
+    if (e) e.preventDefault();
+
+    if (!projectForm.projectManager) {
+      toast.error("⚠️ Please select a Project Manager before launching the project");
+      return;
+    }
+    if (isSubmittingProject) return;
     
-    await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
-      { 
-        status: 'Production Ready',
-        projectManagerId: projectForm.projectManager,
-        industry: projectForm.industry,
-        country: projectForm.country,
-        projectBriefName: projectForm.name,
-        organizations: [finalOrgId]
-      }, 
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    let finalOrgId = projectForm.organizationId;
     
-    toast.success("Project launched successfully!");
-    
-    // Close all modals
-    setShowProjectModal(false);
-    setShowActionModal(false);
-    setShowNewOrgForm(false);
-    setNewOrgData({ companyName: '', website: '', address: '' });
-    setSearchOrgTerm('');
-    
-    // Refresh data
-    await fetchData();
-    
-    // Redirect to project management page (for PM) or admin projects (for Admin)
-    const userRole = localStorage.getItem('role');
-    if (userRole === 'Admin') {
-      navigate('/admin/projects');
-    } else if (userRole === 'Project Manager') {
-      navigate('/admin/projects');
-    } else {
-      // For sales, stay on dashboard but refresh
-      toast.success("Project created! Project Manager can now access it.");
+    if (showNewOrgForm && newOrgData.companyName.trim()) {
+      const newOrg = await createNewOrganization();
+      if (newOrg) {
+        finalOrgId = newOrg._id;
+      } else {
+        return;
+      }
     }
     
-  } catch (err) {
-    console.error("Project launch error:", err);
-    toast.error(err.response?.data?.error || "Failed to launch project");
-  } finally {
-    setIsSubmittingProject(false);
-  }
-};
+    if (!finalOrgId) {
+      toast.error("Please select or create an organization");
+      return;
+    }
+    
+    try {
+      setIsSubmittingProject(true);
+      const token = localStorage.getItem('token');
+      
+      await axios.patch(`${API_BASE_URL}/api/lead-generation/${selectedLead._id}/action`, 
+        { 
+          status: 'Production Ready',
+          projectManagerId: projectForm.projectManager,
+          industry: projectForm.industry,
+          country: projectForm.country,
+          projectBriefName: projectForm.name,
+          organizations: [finalOrgId]
+        }, 
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      toast.success("Project launched successfully!");
+      
+      setShowProjectModal(false);
+      setShowActionModal(false);
+      setShowNewOrgForm(false);
+      setNewOrgData({ companyName: '', website: '', address: '' });
+      setSearchOrgTerm('');
+      
+      await fetchData();
+      
+      const userRole = localStorage.getItem('role');
+      if (userRole === 'Admin') {
+        navigate('/admin/projects');
+      } else if (userRole === 'Project Manager') {
+        navigate('/admin/projects');
+      } else {
+        toast.success("Project created! Project Manager can now access it.");
+      }
+      
+    } catch (err) {
+      console.error("Project launch error:", err);
+      toast.error(err.response?.data?.error || "Failed to launch project");
+    } finally {
+      setIsSubmittingProject(false);
+    }
+  };
 
   const getItemsForDate = (date) => {
     const dateStr = date.toLocaleDateString('en-CA');
@@ -810,327 +976,451 @@ const handleProjectSubmit = async (e) => {
     return null;
   };
 
+  // Approach Status Style
+  const getApproachStatusStyle = (status) => {
+    switch(status) {
+      case 'Completed': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+      case 'Pending': return 'bg-amber-100 text-amber-700 border-amber-200';
+      case 'Missed': return 'bg-red-100 text-red-700 border-red-200';
+      default: return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
   return (
     <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>      
       <div className="max-w-[1600px] mx-auto">
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 lg:gap-10">
-          <div className="xl:col-span-3 space-y-10">
-            {/* PIPELINE SECTION */}
-            <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                  <Target size={20} className="text-blue-600"/> Today's Generated Pipeline
-                </h2>
+        
+        {/* TOP ROW - THREE BUCKETS IN ONE LINE */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {/* TODAY'S LEADS */}
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl shadow-lg border border-blue-400/30 p-3 text-white">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <div className="p-1 bg-white/20 rounded-lg">
+                  <Target size={12} className="text-white" />
+                </div>
+                <span className="text-[8px] font-black text-white/80 uppercase tracking-wider">Today's Leads</span>
+              </div>
+              <span className="text-lg font-black text-white">{filteredLeads.length}</span>
+            </div>
+          </div>
+
+          {/* FOLLOW-UPS */}
+          <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-2xl shadow-lg border border-orange-400/30 p-3 text-white">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <div className="p-1 bg-white/20 rounded-lg">
+                  <Clock size={12} className="text-white" />
+                </div>
+                <span className="text-[8px] font-black text-white/80 uppercase tracking-wider">Follow-ups</span>
+              </div>
+              <span className="text-lg font-black text-white">{filteredFollowUps.length}</span>
+            </div>
+          </div>
+
+          {/* APPROACHES */}
+          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg border border-purple-400/30 p-3 text-white">
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <div className="p-1 bg-white/20 rounded-lg">
+                  <Users size={12} className="text-white" />
+                </div>
+                <span className="text-[8px] font-black text-white/80 uppercase tracking-wider">Approaches</span>
+              </div>
+              <span className="text-lg font-black text-white">{filteredApproaches.length}</span>
+            </div>
+          </div>
+
+          {/* OVERVIEW */}
+          <div className="bg-gradient-to-br from-cyan-500 to-cyan-600 rounded-2xl shadow-lg border border-cyan-400/30 p-3 text-white">
+            <div className="flex items-center justify-between mb-1.5">
+              <div>
+                <h3 className="text-[10px] font-black text-white/80">Overview</h3>
+                <p className="text-[7px] text-white/60 font-bold uppercase tracking-tight">Lead Volume</p>
+              </div>
+              <div className="flex bg-white/20 p-0.5 rounded-lg">
+                <button 
+                  onClick={() => setOverviewRange(7)} 
+                  className={`px-2 py-0.5 rounded-lg text-[8px] font-black transition-all ${
+                    overviewRange === 7 
+                      ? 'bg-white text-cyan-700 shadow-sm' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  7D
+                </button>
+                <button 
+                  onClick={() => setOverviewRange(30)} 
+                  className={`px-2 py-0.5 rounded-lg text-[8px] font-black transition-all ${
+                    overviewRange === 30 
+                      ? 'bg-white text-cyan-700 shadow-sm' 
+                      : 'text-white/70 hover:text-white'
+                  }`}
+                >
+                  30D
+                </button>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <h4 className="text-xl font-black text-white">{overviewCount}</h4>
+              <span className="text-[10px] font-bold text-white/80">leads</span>
+              <span className="text-[8px] font-black text-white/70 bg-white/20 px-1.5 py-0.5 rounded-full">
+                Last {overviewRange}d
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* PRO TIP - SECOND ROW (Full width) */}
+        <div className="mb-6">
+          <div className="bg-gradient-to-r from-amber-400 to-orange-400 rounded-2xl p-3 border border-amber-300/50 shadow-lg">
+            <div className="flex items-center gap-2">
+              <div className="p-1 bg-white/30 text-white rounded-lg shadow-md flex-shrink-0">
+                <AlertCircle size={14} />
+              </div>
+              <div>
+                <h3 className="text-[9px] font-black text-white/90 uppercase tracking-tight">Pro Tip</h3>
+                <p className="text-amber-50 text-[10px] leading-relaxed font-bold italic line-clamp-1">
+                  {randomTip || "Loading your daily wisdom..."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* PIPELINE SECTION */}
+        <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+              <Target size={20} className="text-blue-600"/> Today's Generated Pipeline
+            </h2>
+            {totalPages > 1 && (
+              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Page {currentPage} of {totalPages}
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            {loading ? (
+              <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-300" /></div>
+            ) : currentLeads.length === 0 ? (
+              <p className="text-slate-400 text-sm italic text-center py-10">No leads generated today yet.</p>
+            ) : (
+              <>
+                {currentLeads.map((lead) => (
+                  <LeadCard 
+                    key={lead._id} 
+                    lead={lead} 
+                    getStatusStyle={getStatusStyle}
+                    setSelectedLead={setSelectedLead} 
+                    setShowActionModal={setShowActionModal}
+                    type="pipeline"
+                  />
+                ))}
+
                 {totalPages > 1 && (
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    Page {currentPage} of {totalPages}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-4">
-                {loading ? (
-                  <div className="flex justify-center py-10"><Loader2 className="animate-spin text-slate-300" /></div>
-                ) : generatedLeads.length === 0 ? (
-                  <p className="text-slate-400 text-sm italic text-center py-10">No leads generated today yet.</p>
-                ) : (
-                  <>
-                    {currentLeads.map((lead) => (
-                      <LeadCard 
-                        key={lead._id} 
-                        lead={lead} 
-                        getStatusStyle={getStatusStyle}
-                        setSelectedLead={setSelectedLead} 
-                        setShowActionModal={setShowActionModal}
-                        type="pipeline"
-                      />
-                    ))}
-
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-slate-50">
-                        <button onClick={() => paginate(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
-                          <ChevronDown className="rotate-90" size={18} />
-                        </button>
-                        <div className="flex gap-1">
-                          {[...Array(totalPages)].map((_, i) => (
-                            <button key={i + 1} onClick={() => paginate(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'text-slate-400 hover:bg-slate-50'}`}>
-                              {i + 1}
-                            </button>
-                          ))}
-                        </div>
-                        <button onClick={() => paginate(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
-                          <ChevronDown className="-rotate-90" size={18} />
-                        </button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>  
-            </div>
-
-            {/* SCHEDULED FOR TODAY SECTION */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* FOLLOW-UPS LIST */}
-              <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                      <Clock size={20} className="text-orange-600"/>  Follow up Due Today
-                    </h2>
-                    <button onClick={() => setShowScheduledModal(true)} className="flex items-center gap-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-xl text-xs font-black transition-all">
-                      <CalendarDays size={14} />
-                      Scheduled
+                  <div className="flex items-center justify-center gap-2 mt-8 pt-6 border-t border-slate-50">
+                    <button onClick={() => paginate(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
+                      <ChevronDown className="rotate-90" size={18} />
                     </button>
-                  </div>
-                 <div className="space-y-4">
-                      {followUps.length === 0 ? (
-                        <p className="text-slate-400 text-sm italic text-center py-6">No pending follow-ups.</p>
-                      ) : currentFollowUps.map((lead) => {
-                        const isOverdueTask = isOverdue(lead.followUpDate);
-                        return (
-                          <div key={lead._id} className={`p-5 rounded-3xl border flex items-center justify-between group transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-100 hover:border-orange-200'}`}>
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className="p-3 bg-white/80 text-orange-600 rounded-2xl group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0">
-                                {lead.followUpType === 'email' ? <Mail size={18}/> : <PhoneCall size={18}/>}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-                                  <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
-                                    {lead.organizationId?.companyName || 'No Org'}
-                                  </span>
-                                  {isOverdueTask && (
-                                    <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                      <AlertTriangle size={8} />
-                                      Pending SLA
-                                    </span>
-                                  )}
-                                </div>
-                                
-                                {/* POC Contact Details - Added above date */}
-                                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                  {lead.pocEmail && (
-                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                      <Mail size={10} className="text-slate-400" />
-                                      {lead.pocEmail}
-                                    </span>
-                                  )}
-                                  {lead.pocPhone && (
-                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                      <Phone size={10} className="text-slate-400" />
-                                      {lead.pocPhone}
-                                    </span>
-                                    
-                                  )}
-                                   <span className="text-[8px] font-medium text-slate-00 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                        Scheduled: {new Date(lead.followUpDate).toLocaleDateString()}
-                                    </span>
-                                </div>
-                                
-                                {lead.lastInteractionDesc && (
-                                  <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
-                                    📝 {lead.lastInteractionDesc}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-orange-600 transition-colors">
-                                <ExternalLink size={16}/>
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div className="flex gap-1">
+                      {[...Array(totalPages)].map((_, i) => (
+                        <button key={i + 1} onClick={() => paginate(i + 1)} className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${currentPage === i + 1 ? 'bg-blue-600 text-white shadow-md shadow-blue-100' : 'text-slate-400 hover:bg-slate-50'}`}>
+                          {i + 1}
+                        </button>
+                      ))}
                     </div>
-                </div>
-
-                {totalFollowUpPages > 1 && (
-                  <div className="flex items-center justify-center gap-3 mt-6">
-                    <button onClick={() => setFollowUpPage(p => Math.max(1, p - 1))} disabled={followUpPage === 1} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all">{"<"}</button>
-                    <span className="text-[10px] font-black text-slate-500 uppercase">Page {followUpPage} / {totalFollowUpPages}</span>
-                    <button onClick={() => setFollowUpPage(p => Math.min(totalFollowUpPages, p + 1))} disabled={followUpPage === totalFollowUpPages} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all">{">"}</button>
-                  </div>
-                )}
-              </div>
-
-              {/* FEASIBILITY TODAY LIST */}
-              <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                      <FileText size={20} className="text-purple-600"/> Pending Feasibility
-                    </h2>
-                    <button onClick={() => setShowScheduledModal(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-xl text-xs font-black transition-all">
-                      <CalendarDays size={14} />
-                      Scheduled
+                    <button onClick={() => paginate(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="p-2 rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors">
+                      <ChevronDown className="-rotate-90" size={18} />
                     </button>
                   </div>
-                  <div className="space-y-4">
-                    {feasibilityTasks.length === 0 ? (
-                      <p className="text-slate-400 text-sm italic text-center py-6">No pending feasibility tasks.</p>
-                    ) : currentFeasibility.map((lead) => {
-                      const isOverdueTask = isOverdue(lead.followUpDate);
-                      return (
-                        <div key={lead._id} className={`relative p-5 rounded-3xl border flex flex-col transition-all ${isOverdueTask ? 'bg-red-50 border-red-200' : 'bg-purple-50 border-purple-100 hover:border-purple-200'}`}>
-                          <p className="absolute top-2 left-4 text-[9px] font-black text-purple-700 uppercase tracking-widest">
-                            {lead.feasibilityId}
-                          </p>
-                          <div className="flex items-center justify-between mt-6">
-                            <div className="flex items-center gap-4 flex-1">
-                              <div className="p-3 bg-white/80 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-                                <Briefcase size={18}/>
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-                                  <span className="text-[9px] font-bold text-slate-600 bg-white/60 px-1.5 py-0.5 rounded-full">
-                                    {lead.organizationId?.companyName || 'No Org'}
-                                  </span>
-                                  {isOverdueTask && (
-                                    <span className="text-[8px] font-black bg-red-500 text-white px-1.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                                      <AlertTriangle size={8} />
-                                      Pending SLA
-                                    </span>
-                                  )}
-                                </div>
-                                
-                                {/* POC Contact Details - Added above date */}
-                                <div className="flex items-center gap-3 mt-1 flex-wrap">
-                                  {lead.pocEmail && (
-                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                      <Mail size={10} className="text-slate-400" />
-                                      {lead.pocEmail}
-                                    </span>
-                                  )}
-                                  {lead.pocPhone && (
-                                    <span className="text-[8px] font-medium text-slate-600 flex items-center gap-1 bg-white/50 px-1.5 py-0.5 rounded">
-                                      <Phone size={10} className="text-slate-400" />
-                                      {lead.pocPhone}
-                                    </span>
-                                  )}
-                                </div>
-                                
-                                <p className="text-[9px] text-slate-500 mt-1">Due: {new Date(lead.followUpDate).toLocaleDateString()}</p>
-                                {lead.lastInteractionDesc && (
-                                  <p className="text-[9px] text-slate-500 italic mt-1 truncate max-w-[200px]">
-                                    💬 {lead.lastInteractionDesc}
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <button onClick={() => { setSelectedLead(lead); setShowActionModal(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors">
-                                <ExternalLink size={16}/>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {totalFeasibilityPages > 1 && (
-                  <div className="flex items-center justify-center gap-3 mt-6">
-                    <button onClick={() => setFeasibilityPage(p => Math.max(1, p - 1))} disabled={feasibilityPage === 1} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"><ChevronLeft size={16} /></button>
-                    <span className="text-[10px] font-black text-slate-500 uppercase">Page {feasibilityPage} / {totalFeasibilityPages}</span>
-                    <button onClick={() => setFeasibilityPage(p => Math.min(totalFeasibilityPages, p + 1))} disabled={feasibilityPage === totalFeasibilityPages} className="p-1.5 rounded-lg bg-white/50 disabled:opacity-30 hover:bg-white text-slate-600 transition-all"><ChevronRight size={16} /></button>
-                  </div>
                 )}
+              </>
+            )}
+          </div>  
+        </div>
+
+        {/* FOLLOW-UPS TABLE */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden mb-6">
+          <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-orange-100 rounded-lg">
+                <Clock size={16} className="text-orange-600" />
               </div>
-              
-              <div className="bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-slate-100 flex flex-col justify-between">
-                <div>
-                  <h2 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                    <FileText size={20} className="text-purple-600"/>Today's Approaches
-                  </h2>
-                  <div className="space-y-4">
-                    {approachesToday.length === 0 ? (
-                      <p className="text-slate-400 text-sm italic text-center py-6">No approaches scheduled for today.</p>
-                    ) : (
-                      approachesToday.map((lead) => {
-                        return (
-                          <div key={lead._id.$oid || lead._id} onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })} className="p-5 rounded-3xl border border-slate-100 bg-blue-50 flex items-center justify-between group hover:border-purple-200 transition-all cursor-pointer">
-                            <div className="flex items-center gap-4">
-                              <div className="p-3 bg-white/80 text-purple-600 rounded-2xl group-hover:bg-purple-500 group-hover:text-white transition-all shrink-0">
-                                <Briefcase size={18}/>
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="font-bold text-slate-800 text-sm truncate">{lead.pocName}</h4>
-                                <div className="flex items-center gap-2">
-                                  <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest">{lead.companyName}</p>
-                                  <span className="text-[9px] text-purple-600 font-bold italic px-1 bg-white/60 rounded">Follow-up {lead.currentFollowUpStep}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <button onClick={(e) => { e.stopPropagation(); setSelectedProspect(lead); setIsApproachModalOpen(true); }} className="p-2 bg-white rounded-lg border border-slate-200 text-slate-900 hover:text-purple-600 transition-colors">
-                              <ExternalLink size={16}/>
-                            </button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
+              <h2 className="text-sm font-black text-slate-800">Follow-up Due Today</h2>
+              <span className="text-xs font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full">
+                {filteredFollowUps.length}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name, email, org..."
+                  value={followUpTableSearch}
+                  onChange={(e) => setFollowUpTableSearch(e.target.value)}
+                  className="w-40 pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-200 outline-none focus:border-blue-400 transition-colors bg-slate-50"
+                />
               </div>
+              <button 
+                onClick={() => setShowScheduledModal(true)} 
+                className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-[8px] font-black transition-all"
+              >
+                <CalendarDays size={12} />
+                Calendar
+              </button>
             </div>
           </div>
 
-          {/* SIDEBAR COLUMN */}
-          <div className="xl:col-span-1 space-y-6">
-            <div className="bg-gradient-to-r from-blue-100 to-indigo-100 rounded-2xl p-4 shadow-sm border border-slate-100 transition-all hover:shadow-md">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-blue-500 text-white flex items-center justify-center"><Briefcase size={14} /></div>
-                  <div><p className="text-[7px] font-black text-slate-900 uppercase">Today's Leads</p><p className="text-lg font-black text-blue-600 leading-tight">{generatedLeads.length}</p></div>
-                </div>
-                <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-orange-500 text-white flex items-center justify-center"><CalendarIcon size={14} /></div>
-                  <div><p className="text-[7px] font-black text-slate-900 uppercase">Follow-ups</p><p className="text-lg font-black text-orange-600 leading-tight">{followUps.length}</p></div>
-                </div>
-                <div className="w-px h-8 bg-slate-200 hidden sm:block"></div>
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-purple-500 text-white flex items-center justify-center"><TrendingUp size={14} /></div>
-                  <div><p className="text-[7px] font-black text-slate-900 uppercase">Feasibility</p><p className="text-lg font-black text-purple-600 leading-tight">{feasibilityTasks.length}</p></div>
-                </div>
-              </div>
-            </div>  
-            
-            {/* LEADS OVERVIEW SELECTOR */}
-            <div className="bg-blue-300 rounded-[2.5rem] p-5 shadow-sm border border-slate-100 transition-all duration-300 ease-in-out hover:scale-105 hover:shadow-xl hover:border-indigo-200">
-              <div className="flex items-center justify-between mb-8">
-                <div><h3 className="text-lg font-black text-slate-800">Overview</h3><p className="text-[10px] text-slate-900 font-bold uppercase tracking-tight">Lead Volume</p></div>
-                <div className="flex bg-slate-100 p-1 rounded-xl">
-                  <button onClick={() => setOverviewRange(7)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 7 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>7D</button>
-                  <button onClick={() => setOverviewRange(30)} className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all ${overviewRange === 30 ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-400'}`}>30D</button>
-                </div>
-              </div>
-              <div className="relative group p-4 bg-slate-50 rounded-[2rem] border border-slate-100">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Leads (Last {overviewRange} Days)</p>
-                </div>
-                <div className="flex items-end gap-2">
-                  <h4 className="text-4xl font-black text-slate-900 leading-none">{overviewCount}</h4>
-                  <span className="text-sm font-bold text-slate-400 mb-1">leads</span>
-                </div>
-                <div className="absolute bottom-4 right-6"><TrendingUp size={40} className="text-slate-900" /></div>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50/80 border-b border-slate-100">
+                <tr>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Lead</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Organization</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Method</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Scheduled</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Status</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Description</th>
+                  <th className="text-right px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {currentFollowUps.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-6 text-center text-slate-400 text-xs">
+                      No pending follow-ups for today 🎉
+                    </td>
+                  </tr>
+                ) : (
+                  currentFollowUps.map((lead) => {
+                    const isOverdueTask = isOverdue(lead.followUpDate);
+                    return (
+                      <tr key={lead._id} className={`hover:bg-slate-50/60 transition-all ${isOverdueTask ? 'bg-red-50/30' : ''}`}>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center text-[8px] font-bold">
+                              {lead.pocName?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">{lead.pocName}</p>
+                              {lead.pocEmail && (
+                                <span className="text-[7px] text-slate-400 flex items-center gap-0.5">
+                                  <Mail size={7} />
+                                  {lead.pocEmail}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-[10px] font-medium text-slate-600">
+                            {lead.organizationId?.companyName || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase bg-slate-100 text-slate-600">
+                            {lead.followUpType === 'email' ? '📧' : 
+                             lead.followUpType === 'call' ? '📞' :
+                             lead.followUpType === 'message' ? '💬' :
+                             lead.followUpType === 'meeting' ? '🤝' : '📝'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`text-[10px] font-medium ${isOverdueTask ? 'text-red-600' : 'text-slate-600'}`}>
+                            {new Date(lead.followUpDate).toLocaleDateString()}
+                            {isOverdueTask && (
+                              <span className="ml-1 text-[7px] font-black text-red-600 bg-red-100 px-1 py-0.5 rounded-full">Overdue</span>
+                            )}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex px-1.5 py-0.5 rounded-full text-[7px] font-black bg-amber-100 text-amber-700">
+                            Pending
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-[9px] text-slate-500 truncate max-w-[150px] block">
+                            {lead.lastInteractionDesc || '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button 
+                            onClick={() => { setSelectedLead(lead); setShowActionModal(true); }}
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-[8px] font-black transition-all"
+                          >
+                            Take Action
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {totalFollowUpPages > 1 && (
+            <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[8px] font-black text-slate-400">
+                Page {followUpPage} of {totalFollowUpPages}
+              </span>
+              <div className="flex gap-1">
+                <button 
+                  onClick={() => setFollowUpPage(p => Math.max(1, p - 1))} 
+                  disabled={followUpPage === 1}
+                  className="p-1 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"
+                >
+                  <ChevronLeft size={12} />
+                </button>
+                <button 
+                  onClick={() => setFollowUpPage(p => Math.min(totalFollowUpPages, p + 1))} 
+                  disabled={followUpPage === totalFollowUpPages}
+                  className="p-1 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"
+                >
+                  <ChevronRight size={12} />
+                </button>
               </div>
             </div>
-            
-            {/* PRO TIP CARD */}
-            <div className="bg-orange-100 rounded-[2.5rem] p-4 border border-amber-100 shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-orange-500 text-white rounded-xl shadow-md shadow-amber-200"><AlertCircle size={18}/></div>
-                <h3 className="text-sm font-black text-amber-900 uppercase tracking-tight">Pro Tip</h3>
+          )}
+        </div>
+
+        {/* APPROACHES TABLE */}
+        <div className="bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+          <div className="p-3 border-b border-slate-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 bg-purple-100 rounded-lg">
+                <Users size={16} className="text-purple-600" />
               </div>
-              <div className="relative">
-                <span className="absolute -top-4 -left-2 text-4xl text-orange-500 font-serif opacity-50">“</span>
-                <p className="text-amber-800 text-xs leading-relaxed font-bold italic relative z-10 px-2">{randomTip || "Loading your daily wisdom..."}</p>
-              </div>
+              <h2 className="text-sm font-black text-slate-800">Today's Approaches</h2>
+              <span className="text-xs font-black text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
+                {filteredApproaches.length}
+              </span>
+            </div>
+            <div className="relative">
+              <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search by name, company..."
+                value={approachTableSearch}
+                onChange={(e) => setApproachTableSearch(e.target.value)}
+                className="w-40 pl-8 pr-3 py-1 text-xs rounded-lg border border-slate-200 outline-none focus:border-blue-400 transition-colors bg-slate-50"
+              />
             </div>
           </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-slate-50/80 border-b border-slate-100">
+                <tr>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Prospect</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Company</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Method</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Step</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Status</th>
+                  <th className="text-left px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Description</th>
+                  <th className="text-right px-4 py-2 text-[8px] font-black uppercase tracking-wider text-slate-500">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {currentApproaches.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="px-4 py-6 text-center text-slate-400 text-xs">
+                      No approaches scheduled for today 🎯
+                    </td>
+                  </tr>
+                ) : (
+                  currentApproaches.map((lead) => {
+                    const latestApproach = lead.approaches?.[lead.approaches?.length - 1] || {};
+                    const isOverdue = latestApproach.scheduledDate && new Date(latestApproach.scheduledDate) < new Date();
+                    
+                    return (
+                      <tr key={lead._id} className={`hover:bg-slate-50/60 transition-all cursor-pointer ${isOverdue ? 'bg-red-50/30' : ''}`} onClick={() => navigate('/prospects', { state: { openApproachFor: lead } })}>
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-[8px] font-bold">
+                              {lead.pocName?.charAt(0) || '?'}
+                            </div>
+                            <div>
+                              <p className="text-xs font-bold text-slate-800">{lead.pocName}</p>
+                              {lead.pocEmail && (
+                                <span className="text-[7px] text-slate-400 flex items-center gap-0.5">
+                                  <Mail size={7} />
+                                  {lead.pocEmail}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-[10px] font-medium text-slate-600">
+                            {lead.companyName || 'N/A'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-black uppercase bg-slate-100 text-slate-600">
+                            {latestApproach.method || 'Pending'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-[10px] font-medium text-slate-600">
+                            Step {lead.currentFollowUpStep || 0} of 5
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[7px] font-black ${getApproachStatusStyle(latestApproach.status || 'Pending')}`}>
+                            {latestApproach.status || 'Pending'}
+                          </span>
+                          {isOverdue && (
+                            <span className="ml-1 text-[7px] font-black text-red-600 bg-red-100 px-1 py-0.5 rounded-full">Overdue</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span className="text-[9px] text-slate-500 truncate max-w-[150px] block">
+                            {latestApproach.summary || '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); navigate('/prospects', { state: { openApproachFor: lead } }); }}
+                            className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-[8px] font-black transition-all"
+                          >
+                            Approach Now
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {totalApproachPages > 1 && (
+            <div className="px-4 py-2 border-t border-slate-100 flex items-center justify-between">
+              <span className="text-[8px] font-black text-slate-400">
+                Page {approachPage} of {totalApproachPages}
+              </span>
+              <div className="flex gap-1">
+                <button 
+                  onClick={() => setApproachPage(p => Math.max(1, p - 1))} 
+                  disabled={approachPage === 1}
+                  className="p-1 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"
+                >
+                  <ChevronLeft size={12} />
+                </button>
+                <button 
+                  onClick={() => setApproachPage(p => Math.min(totalApproachPages, p + 1))} 
+                  disabled={approachPage === totalApproachPages}
+                  className="p-1 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-30 hover:bg-slate-50 transition-all"
+                >
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1152,13 +1442,9 @@ const handleProjectSubmit = async (e) => {
                     <div className="flex items-center gap-4 text-slate-700 font-black group-hover:text-purple-600"><TrendingUp size={20} className="text-purple-500" /> Send to Feasibility</div>
                     <ChevronRight size={18} className="text-slate-300" />
                   </button>
-                  <button onClick={() => setActionStep(3)} className="w-full flex items-center justify-between p-5 rounded-3xl bg-rose-50 hover:bg-rose-100 group border border-rose-100 transition-all">
-                    <div className="flex items-center gap-4 text-rose-600 font-black"><X size={20} /> Close Lead</div>
+                  <button onClick={openCloseLeadModal} className="w-full flex items-center justify-between p-5 rounded-3xl bg-rose-50 hover:bg-rose-100 group border border-rose-100 transition-all">
+                    <div className="flex items-center gap-4 text-rose-600 font-black"><Ban size={20} /> Close Lead</div>
                     <ChevronRight size={18} />
-                  </button>
-                  <button onClick={() => setActionStep(4)} className="group relative w-full flex flex-col items-center gap-2 p-3 rounded-[1.5rem] bg-emerald-50 hover:bg-emerald-600 transition-all duration-500 border border-emerald-100 hover:border-emerald-400 hover:shadow-xl hover:shadow-emerald-200 text-left">
-                    <div className="p-1.5 bg-white rounded-xl text-emerald-600 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500 shadow-sm"><CheckCircle size={16} /></div>
-                    <div className="text-center"><span className="block text-[10px] font-black text-emerald-900 group-hover:text-white uppercase tracking-wider">Production Ready</span></div>
                   </button>
                 </div>
               </div>
@@ -1174,13 +1460,99 @@ const handleProjectSubmit = async (e) => {
                 </div>
               </div>
             )}
-          {actionStep === 3 && (
-            <div className="animate-in slide-in-from-right-4 duration-300">
-              <h2 className="text-2xl font-black text-slate-900 mb-2">Conclusion</h2>
-              <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select outcome and provide details</p>
-              
-              <div className="space-y-6">
-                {/* Outcome Selection */}
+            {actionStep === 4 && (
+              <div className="animate-in slide-in-from-right-4 duration-300">
+                <h2 className="text-2xl font-black text-slate-900 mb-2">Assign Project</h2>
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select a Project Manager to proceed</p>
+                
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager *</label>
+                  <select 
+                    required 
+                    className="w-full p-5 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700 appearance-none cursor-pointer focus:border-blue-400 transition-all" 
+                    value={projectForm.projectManager} 
+                    onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
+                  >
+                    <option value="">— Select a Manager —</option>
+                    {projectManagers.map(pm => (
+                      <option key={pm._id} value={pm._id}>{pm.name}</option>
+                    ))}
+                  </select>
+                  
+                  {/* Show warning if no PM selected */}
+                  {!projectForm.projectManager && (
+                    <p className="text-[8px] text-red-500 mt-1 flex items-center gap-1">
+                      <AlertCircle size={10} />
+                      Please select a Project Manager to continue
+                    </p>
+                  )}
+                  
+                  {/* Show success if PM selected */}
+                  {projectForm.projectManager && (
+                    <p className="text-[8px] text-green-600 mt-1 flex items-center gap-1">
+                      <CheckCircle size={10} />
+                      PM selected: {projectManagers.find(p => p._id === projectForm.projectManager)?.name}
+                    </p>
+                  )}
+                </div>
+                
+                <div className="flex gap-3 pt-4">
+                  <button 
+                    onClick={() => setActionStep(1)} 
+                    className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  >
+                    Back
+                  </button>
+                  <button 
+                    onClick={() => {
+                      // Validate before showing Project Modal
+                      if (!projectForm.projectManager) {
+                        toast.error("⚠️ Please select a Project Manager first");
+                        return;
+                      }
+                      setShowProjectModal(true);
+                    }} 
+                    className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200 hover:bg-emerald-700 transition-all"
+                  >
+                    Launch Project
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* CLOSE LEAD MODAL WITH PRODUCTION FORM */}
+      {showCloseModal && selectedLead && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 max-h-[95vh] overflow-y-auto">
+            <button 
+              onClick={() => {
+                setShowCloseModal(false);
+                setShowProductionForm(false);
+                setSelectedLead(null);
+                setClosingData({ reason: 'won', description: '' });
+              }} 
+              className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors"
+            >
+              <X size={24}/>
+            </button>
+            
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 border-2 border-red-200">
+                <Ban size={32} />
+              </div>
+              <h2 className="text-2xl font-black text-slate-900">
+                {showProductionForm ? 'Production Ready Setup' : 'Close Lead'}
+              </h2>
+              <p className="text-slate-500 text-sm mt-1">
+                For: <span className="font-bold text-slate-800">{selectedLead?.pocName}</span>
+              </p>
+            </div>
+
+            {!showProductionForm ? (
+              <form onSubmit={(e) => { e.preventDefault(); handleCloseLead(); }} className="space-y-5">
                 <div className="space-y-3">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
                     Select Outcome *
@@ -1214,10 +1586,9 @@ const handleProjectSubmit = async (e) => {
                   </div>
                 </div>
 
-                {/* Description */}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
-                    {closingData.reason === 'won' ? 'Success Notes' : 'Reason for Loss'} *
+                    {closingData.reason === 'won' ? 'Success Notes' : 'Reason for Loss'} {closingData.reason === 'lost' && '*'}
                   </label>
                   <textarea 
                     placeholder={
@@ -1225,8 +1596,8 @@ const handleProjectSubmit = async (e) => {
                         ? "Describe what made this lead successful..." 
                         : "Please explain why this lead was lost..."
                     }
-                    required
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-28 resize-none font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
+                    required={closingData.reason === 'lost'}
+                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
                     value={closingData.description} 
                     onChange={(e) => setClosingData({...closingData, description: e.target.value})} 
                   />
@@ -1238,16 +1609,20 @@ const handleProjectSubmit = async (e) => {
                   )}
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex gap-3 pt-4 border-t border-slate-100">
                   <button 
-                    onClick={() => setActionStep(1)} 
+                    type="button"
+                    onClick={() => {
+                      setShowCloseModal(false);
+                      setSelectedLead(null);
+                      setClosingData({ reason: 'won', description: '' });
+                    }}
                     className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
                   >
-                    Back
+                    Cancel
                   </button>
                   <button 
-                    onClick={handleCloseLead} 
+                    type="submit"
                     disabled={!closingData.reason || (closingData.reason === 'lost' && !closingData.description.trim())}
                     className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
                       closingData.reason === 'won' 
@@ -1257,37 +1632,119 @@ const handleProjectSubmit = async (e) => {
                         : 'bg-slate-300 cursor-not-allowed'
                     } ${(!closingData.reason || (closingData.reason === 'lost' && !closingData.description.trim())) ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    {closingData.reason === 'won' ? <CheckCircle size={16} /> : <X size={16} />}
-                    {closingData.reason === 'won' ? 'Confirm Win' : 'Confirm Loss'}
+                    <ArrowRight size={16} />
+                    {closingData.reason === 'won' ? 'Continue to Setup' : 'Confirm Loss'}
                   </button>
                 </div>
-
-                {/* Validation Message */}
-                {!closingData.reason && (
-                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-center gap-2">
-                    <AlertCircle size={14} className="text-amber-600" />
-                    <p className="text-[10px] font-bold text-amber-700">Please select an outcome (Won or Lost) to continue</p>
+              </form>
+            ) : (
+              <form onSubmit={handleProductionSubmit} className="space-y-4">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-2">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-emerald-600" />
+                    <span className="text-xs font-bold text-emerald-700">Setup Production Project</span>
                   </div>
-                )}
-                
-                {closingData.reason === 'lost' && !closingData.description.trim() && (
-                  <div className="bg-rose-50 border border-rose-200 rounded-xl p-3 flex items-center gap-2">
-                    <AlertCircle size={14} className="text-rose-600" />
-                    <p className="text-[10px] font-bold text-rose-700">Please provide a reason for losing the lead</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-            {actionStep === 4 && (
-              <div className="animate-in slide-in-from-right-4 duration-300">
-                <h2 className="text-2xl font-black text-slate-900 mb-2">Assign Project</h2>
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-6">Select a Project Manager or leave blank to keep Unassigned</p>
-                <div className="space-y-4">
-                  <div><label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager</label><select required className="w-full p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}><option value="">Select a Manager...</option>{projectManagers.map(pm => (<option key={pm._id} value={pm._id}>{pm.name}</option>))}</select></div>
-                  <div className="flex gap-3 pt-4"><button onClick={() => setActionStep(1)} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button onClick={() => setShowProjectModal(true)} className="flex-[2] py-4 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-200">Launch Project</button></div>
+                  <p className="text-[9px] text-emerald-600 mt-1">Assign a Project Manager to launch this project</p>
                 </div>
-              </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    Project Name *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm"
+                    value={projectForm.name}
+                    onChange={(e) => setProjectForm({...projectForm, name: e.target.value})}
+                    placeholder="Enter project name"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                      Industry *
+                    </label>
+                    <CreatableSelect 
+                      isClearable 
+                      options={INDUSTRY_OPTIONS} 
+                      value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} 
+                      onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} 
+                      styles={customSelectStyles} 
+                      placeholder="Select industry..." 
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                      Country *
+                    </label>
+                    <CreatableSelect 
+                      isClearable 
+                      options={POPULAR_COUNTRIES} 
+                      value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || { label: projectForm.country, value: projectForm.country }} 
+                      onChange={(v) => setProjectForm({ ...projectForm, country: v?.label || '' })} 
+                      styles={customSelectStyles} 
+                      placeholder="Select country..." 
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block flex items-center gap-2">
+                    <Briefcase size={14} className="text-emerald-600" />
+                    Assign Project Manager *
+                  </label>
+                  <select
+                    required
+                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm text-slate-700 cursor-pointer"
+                    value={projectForm.projectManager}
+                    onChange={(e) => setProjectForm({...projectForm, projectManager: e.target.value})}
+                  >
+                    <option value="">Select Project Manager...</option>
+                    {projectManagers.map(pm => (
+                      <option key={pm._id} value={pm._id}>{pm.name}</option>
+                    ))}
+                  </select>
+                  
+                  {/* Show warning if no PM selected */}
+                  {!projectForm.projectManager && (
+                    <p className="text-[10px] text-red-500 text-center flex items-center justify-center gap-1 mt-2">
+                      <AlertCircle size={14} />
+                      Please select a Project Manager to launch this project
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    Description
+                  </label>
+                  <textarea
+                    rows={2}
+                    className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-medium text-sm resize-none"
+                    value={projectForm.description}
+                    onChange={(e) => setProjectForm({...projectForm, description: e.target.value})}
+                    placeholder="Brief project description..."
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isClosing || !projectForm.projectManager}
+                  className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
+                    isClosing || !projectForm.projectManager
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200'
+                  }`}
+                >
+                  {isClosing ? (
+                    <><Loader2 size={16} className="animate-spin" /> Processing...</>
+                  ) : (
+                    <><ArrowRight size={16} /> Launch Production Project</>
+                  )}
+                </button>
+              </form>
             )}
           </div>
         </div>
@@ -1296,20 +1753,169 @@ const handleProjectSubmit = async (e) => {
       {/* FEASIBILITY MODAL */}
       {showFeasibilityModal && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 overflow-hidden">
+          <div className="bg-white w-full max-w-2xl rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 overflow-hidden">
             {showSuccess && (<div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center animate-in fade-in"><div className="p-6 bg-green-100 text-green-600 rounded-full mb-6"><CheckCircle size={60} /></div><h2 className="text-2xl font-black text-slate-900 uppercase">Feasibility Sent</h2></div>)}
             <button onClick={closeModal} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900"><X size={24}/></button>
-            <h2 className="text-3xl font-black text-slate-900 mb-2">Feasibility Request</h2>
-            <p className="text-slate-400 mb-8 font-medium italic underline">Client: <span className="text-purple-600 font-bold">{selectedLead?.pocName}</span></p>
-            <form onSubmit={handleFeasibilitySubmit} className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility ID</label><input type="text" readOnly className="w-full p-4 bg-purple-50 border border-purple-100 rounded-2xl font-black text-purple-700 outline-none" value={feasibilityData.feasibilityId} /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility Date</label><input type="date" readOnly className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" value={feasibilityData.feasibilityDate} /></div>
-                <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Next Follow-up Date</label><input type="date" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" value={feasibilityData.nextFollowUpDate || ''} min={new Date().toISOString().split('T')[0]} onChange={(e) => setFeasibilityData({...feasibilityData, nextFollowUpDate: e.target.value})} /><p className="text-[9px] text-slate-400 mt-2 italic">* This task will reappear in your dashboard on this date.</p></div>
+            
+            <div className="mb-6">
+              <h2 className="text-3xl font-black text-slate-900">Feasibility Request</h2>
+              <p className="text-slate-400 font-medium italic">Client: <span className="text-purple-600 font-bold">{selectedLead?.pocName}</span></p>
+            </div>
+            
+            <form onSubmit={handleFeasibilitySubmit} className="space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility ID</label>
+                  <input type="text" readOnly className="w-full p-4 bg-purple-50 border border-purple-100 rounded-2xl font-black text-purple-700 outline-none" value={feasibilityData.feasibilityId} />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Feasibility Date</label>
+                  <input type="date" readOnly className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" value={feasibilityData.feasibilityDate} />
+                </div>
               </div>
-              <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Task Details</label><textarea required placeholder="Requirement details..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-medium outline-none h-14 md:h-22 resize-none" value={feasibilityData.taskDetails} onChange={(e) => setFeasibilityData({...feasibilityData, taskDetails: e.target.value})} /></div>
-              <div><label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Attachment (PDF/Word)</label><div className="relative group"><input type="file" accept=".pdf,.doc,.docx" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onChange={(e) => setFeasibilityData({...feasibilityData, attachment: e.target.files[0]})} /><div className="w-full p-6 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-2 group-hover:border-purple-400 transition-colors bg-slate-50"><Upload size={24} className="text-slate-400" /><span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">{feasibilityData.attachment ? feasibilityData.attachment.name : "Click to upload files"}</span></div></div></div>
-              <div className="flex gap-4 pt-4"><button type="button" onClick={() => { setShowFeasibilityModal(false); setShowActionModal(true); }} className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest">Back</button><button type="submit" disabled={isUploading} className="flex-[2] py-4 bg-purple-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-purple-700 shadow-lg shadow-purple-200 flex items-center justify-center gap-2">{isUploading ? <><Loader2 size={18} className="animate-spin" /> Uploading...</> : "Submit"}</button></div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Next Follow-up Date</label>
+                  <input type="date" required className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" value={feasibilityData.nextFollowUpDate || ''} min={new Date().toISOString().split('T')[0]} onChange={(e) => setFeasibilityData({...feasibilityData, nextFollowUpDate: e.target.value})} />
+                  <p className="text-[8px] text-slate-400 mt-1 italic">* Task will reappear on this date</p>
+                </div>
+                
+                <div>
+                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block flex items-center gap-2">
+                    <Briefcase size={14} className="text-purple-600" />
+                    Assign Project Manager <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors cursor-pointer"
+                    value={feasibilityPM}
+                    onChange={(e) => setFeasibilityPM(e.target.value)}
+                  >
+                    <option value="">— Select Project Manager —</option>
+                    {projectManagersList.length === 0 ? (
+                      <option value="" disabled>No PMs available</option>
+                    ) : (
+                      projectManagersList.map(pm => (
+                        <option key={pm._id} value={pm._id}>{pm.name}</option>
+                      ))
+                    )}
+                  </select>
+                  
+                  {/* ✅ Show warning if no PM selected */}
+                  {!feasibilityPM && (
+                    <p className="text-[9px] text-red-500 mt-1.5 flex items-center gap-1.5">
+                      <AlertCircle size={12} />
+                      Please select a Project Manager to submit this feasibility request
+                    </p>
+                  )}
+                  
+                  {/* ✅ Show success if PM selected */}
+                  {feasibilityPM && (
+                    <p className="text-[9px] text-emerald-600 mt-1.5 flex items-center gap-1.5">
+                      <CheckCircle size={12} />
+                      PM selected: {projectManagersList.find(pm => pm._id === feasibilityPM)?.name}
+                    </p>
+                  )}
+                  
+                  <p className="text-[8px] text-slate-400 mt-1">The feasibility task will be assigned to this PM</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Task Details</label>
+                <textarea required placeholder="Requirement details..." className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-medium outline-none h-20 md:h-24 resize-none focus:border-purple-400 transition-colors" value={feasibilityData.taskDetails} onChange={(e) => setFeasibilityData({...feasibilityData, taskDetails: e.target.value})} />
+              </div>
+
+              <div>
+                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                  Attachment (PDF, Word, Excel, Images, JSON, ZIP, etc.)
+                </label>
+                <div className="relative group">
+                  <input 
+                    type="file" 
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif,.webp,.bmp,.svg,.txt,.csv,.tsv,.json,.xml,.yaml,.yml,.zip,.rar,.7z,.tar,.gz,.ppt,.pptx,.odp,.mp4,.avi,.mkv,.mov,.mp3,.wav,.aac,.flac,.js,.jsx,.ts,.tsx,.py,.java,.cpp,.c,.h,.php,.rb,.go,.rs,.sh,.bash,.bat,.ps1,.cmd" 
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
+                    onChange={(e) => {
+                      const file = e.target.files[0];
+                      if (file) {
+                        // Validate file size (50MB max)
+                        if (file.size > 50 * 1024 * 1024) {
+                          toast.error('File size must be less than 50MB');
+                          e.target.value = '';
+                          return;
+                        }
+                        setFeasibilityData({
+                          ...feasibilityData, 
+                          attachment: file,
+                          attachmentName: file.name
+                        });
+                      }
+                    }} 
+                  />
+                  <div className={`w-full p-4 border-2 border-dashed rounded-3xl flex flex-col items-center justify-center gap-2 transition-colors ${
+                    feasibilityData.attachment 
+                      ? 'border-emerald-400 bg-emerald-50' 
+                      : 'border-slate-200 hover:border-purple-400 bg-slate-50'
+                  }`}>
+                    <Upload size={24} className={feasibilityData.attachment ? 'text-emerald-500' : 'text-slate-400'} />
+                    <span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">
+                      {feasibilityData.attachment 
+                        ? feasibilityData.attachmentName || feasibilityData.attachment.name 
+                        : "Click to upload files (Max 50MB)"}
+                    </span>
+                    {feasibilityData.attachment && (
+                      <span className="text-[8px] text-emerald-600">
+                        {(feasibilityData.attachment.size / 1024 / 1024).toFixed(2)} MB
+                      </span>
+                    )}
+                    <span className="text-[7px] text-slate-400">
+                      Supported: PDF, Word, Excel, Images, JSON, ZIP, Code files, and more
+                    </span>
+                  </div>
+                </div>
+                {feasibilityData.attachment && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFeasibilityData({...feasibilityData, attachment: null, attachmentName: ''});
+                      // Reset the file input
+                      const fileInput = document.querySelector('input[type="file"]');
+                      if (fileInput) fileInput.value = '';
+                    }}
+                    className="mt-1 text-[8px] font-bold text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    Remove file
+                  </button>
+                )}
+              </div>
+              
+              {/* Feasibility Modal - Submit Button */}
+              <div className="flex gap-4 pt-4">
+                <button 
+                  type="button" 
+                  onClick={() => { setShowFeasibilityModal(false); setShowActionModal(true); }} 
+                  className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                >
+                  Back
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isUploading || !feasibilityPM}
+                  className={`flex-[2] py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                    isUploading || !feasibilityPM
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200'
+                  }`}
+                >
+                  {isUploading ? (
+                    <><Loader2 size={18} className="animate-spin" /> Uploading...</>
+                  ) : !feasibilityPM ? (
+                    <>⚠️ Select PM First</>
+                  ) : (
+                    "Submit Feasibility"
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -1335,7 +1941,6 @@ const handleProjectSubmit = async (e) => {
             </div>
             
             <form onSubmit={handleProjectSubmit} className="space-y-6">
-              {/* Project Brief Title */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title *</label>
                 <input 
@@ -1348,7 +1953,6 @@ const handleProjectSubmit = async (e) => {
                 />
               </div>
 
-              {/* Client/Organization Selection */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-2">
                   <Building2 size={12} />
@@ -1467,7 +2071,6 @@ const handleProjectSubmit = async (e) => {
                 )}
               </div>
 
-              {/* Industry and Country */}
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Industry</label>
@@ -1493,7 +2096,6 @@ const handleProjectSubmit = async (e) => {
                 </div>
               </div>
 
-              {/* Project Manager Assignment */}
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Assign Project Manager *</label>
                 <select 
@@ -1509,7 +2111,6 @@ const handleProjectSubmit = async (e) => {
                 </select>
               </div>
 
-              {/* Submit Button */}
               <button 
                 type="submit" 
                 disabled={isSubmittingProject || (!projectForm.organizationId && !showNewOrgForm)} 

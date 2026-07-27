@@ -954,8 +954,8 @@ const ProjectManagement = () => {
                             {isFromSales ? <ShoppingBag size={isMobile ? 16 : 22} /> : <Activity size={isMobile ? 16 : 22} />}
                           </div>
                           <div>
-                            <p className="text-xs sm:text-sm font-black text-[#1B2559] leading-tight truncate max-w-[80px] sm:max-w-none">
-                              {project.projectCustomId?.substring(0, 15) || 'NO_ID'}
+                            <p className="text-xs sm:text-sm font-black text-[#1B2559] leading-tight break-words">
+                              {project.projectCustomId || 'NO_ID'}
                             </p>
                           </div>
                         </div>

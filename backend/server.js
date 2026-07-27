@@ -8,12 +8,24 @@ const fs = require('fs');
 
 require('dotenv').config();
 
-// Safely load the cron worker using path resolution to avoid directory boundary issues
+// =========================================================
+// SAFELY LOAD ALL CRON WORKERS
+// =========================================================
+
+// Drip Campaign Worker
 try {
   require(path.join(__dirname, 'cron', 'dripCampaignWorker'));
   console.log('⏰ Drip Campaign Worker initialized successfully');
 } catch (err) {
-  console.log('⚠️ Notice: Cron worker file bypass or path adjusted:', err.message);
+  console.log('⚠️ Notice: Drip Campaign Worker not loaded:', err.message);
+}
+
+// Leave Balance Updater
+try {
+  require(path.join(__dirname, 'cron', 'leaveBalanceUpdater'));
+  console.log('⏰ Leave Balance Updater initialized successfully');
+} catch (err) {
+  console.log('⚠️ Notice: Leave Balance Updater not loaded:', err.message);
 }
 
 // =========================================================
@@ -65,6 +77,7 @@ const clientRoutes = require('./routes/clientRoutes');
 const knowledgeBaseRoutes = require('./routes/knowledgeBaseRoutes');
 const hrRoutes = require('./routes/hrRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
+const leaveRoutes = require('./routes/leaveRoutes');
 
 const app = express();
 const server = http.createServer(app);
@@ -78,8 +91,6 @@ const io = new Server(server, {
     origin: [
       'http://localhost:5173',
       'http://127.0.0.1:5173',
-      'http://192.168.1.3:5173', 
-      'http://192.168.1.105:5173',
       'https://kuiperapp.co.in',
       'https://www.kuiperapp.co.in',
       /^http:\/\/192\.168\.\d+\.\d+(:\d+)?$/,
@@ -121,6 +132,22 @@ io.on('connection', (socket) => {
   socket.on('join-ticket-room', (ticketId) => {
     socket.join(`ticket_${ticketId}`);
     console.log(`🎫 Joined ticket room: ${ticketId}`);
+  });
+
+  // Leave notifications
+  socket.on('join-leave-room', (userId) => {
+    socket.join(`leave_${userId}`);
+    console.log(`📋 User joined leave room: ${userId}`);
+  });
+
+  socket.on('leave_approved', (data) => {
+    io.to(`leave_${data.userId}`).emit('leave_approved', data);
+    console.log(`✅ Leave approved notification sent to user: ${data.userId}`);
+  });
+
+  socket.on('leave_rejected', (data) => {
+    io.to(`leave_${data.userId}`).emit('leave_rejected', data);
+    console.log(`❌ Leave rejected notification sent to user: ${data.userId}`);
   });
 
   socket.on('disconnect', () => {
@@ -229,6 +256,8 @@ app.use('/api/client', protect, clientRoutes);
 app.use('/api/knowledge', protect, knowledgeBaseRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
+app.use('/api/leaves', leaveRoutes);  // ✅ Leave routes added
+
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
 ========================================================= */

@@ -9,6 +9,7 @@ const leaveApplicationSchema = new mongoose.Schema({
     },
     leaveType: { 
         type: String, 
+        enum: ['Paid Leave', 'Sick Leave', 'Casual Leave', 'Unpaid Leave'],
         required: true 
     },
     startDate: { 
@@ -48,7 +49,12 @@ const leaveApplicationSchema = new mongoose.Schema({
     approvedAt: { 
         type: Date, 
         default: null 
-    }
+    },
+    // Notify these people
+    notifiedEmails: [{
+        type: String,
+        default: []
+    }]
 }, {
     timestamps: true
 });

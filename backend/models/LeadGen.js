@@ -1,49 +1,63 @@
+// backend/models/LeadGen.js - FULL UPDATED FILE
+
 const mongoose = require('mongoose');
 
 const leadGenSchema = new mongoose.Schema({
   leadNumber: { type: Number, unique: true },
 
-  // Expanded enum to support the 6 sources from the frontend
   leadType: { 
     type: String, 
     enum: ['Inbound', 'Outbound', 'Email Marketing', 'LinkedIn', 'Reference', 'Cold Call'], 
     required: true 
   },
   
-  // New field for references
   referredBy: { type: String },
 
-  organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
+  organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: false },
   pocName: { 
-      type: String, 
-      required: true, 
-      unique: true, // Prevents duplicate names at DB level
-      trim: true ,
-      index: true 
-    },
+    type: String, 
+    required: true, 
+    unique: true,
+    trim: true,
+    index: true 
+  },
   pocPhone: { type: String },
-  pocEmail: { type: String, },
+  pocEmail: { type: String },
   linkedin: { type: String },
   salesRepId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
   status: { 
     type: String, 
-    enum: ['New', 'Follow-up Scheduled', 'Feasibility', 'Closed','Production Ready'], 
+    enum: ['New', 'Follow-up Scheduled', 'Feasibility', 'Feasibility Completed', 'Closed', 'Production Ready'], 
     default: 'New' 
   },
   lastActionDate: { type: Date, default: Date.now },
 
   followUpDate: { type: Date },
-  followUpType: { type: String,
-  enum: ['call', 'email', 'message','meeting' ,'custom'] },
+  followUpType: { type: String, enum: ['call', 'email', 'message', 'meeting', 'custom'] },
   lastInteractionDesc: { type: String },
 
   feasibilityId: { type: String },
   feasibilityDate: { type: Date },
   taskDetails: { type: String },
-  attachmentPath: { type: String }, 
-  driveFileId: { type: String } 
   
+  // ============================================
+  // ✅ ATTACHMENT FIELDS - Added for file storage
+  // ============================================
+  attachmentPath: { type: String, default: null },
+  attachmentFilename: { type: String, default: null },
+  // ============================================
+  
+  driveFileId: { type: String },
+  
+  projectManagerId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'User',
+    default: null 
+  },
+  
+  feasibilityCompletedAt: { type: Date, default: null }
+
 }, { timestamps: true });
 
 // AUTO-INCREMENT LOGIC

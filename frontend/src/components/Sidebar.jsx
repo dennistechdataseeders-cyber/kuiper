@@ -36,7 +36,9 @@ import {
   Clock,
   BarChart3,
   Camera,
-  X
+  X,
+  UsersRound,
+  UserCog
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -44,7 +46,7 @@ import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
 import API_BASE_URL from '../config';
-import companyLogoVideo from '../assets/Company_Logo_mp4.mp4'; // Import the video
+import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -56,7 +58,7 @@ const Sidebar = () => {
   // LOCAL STATES
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [openTicketCount, setOpenTicketCount] = useState(0);
+  const [ticketCount, setTicketCount] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   // PROFILE IMAGE STATES
@@ -93,7 +95,6 @@ const Sidebar = () => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      // Auto-collapse on mobile
       if (mobile && !isCollapsed) {
         toggleSidebar();
       }
@@ -126,27 +127,29 @@ const Sidebar = () => {
     fetchProfileImage();
   }, [userId]);
 
-  // FETCH OPEN TICKET COUNT
+  // FETCH TICKET COUNT (non-closed tickets)
   useEffect(() => {
-    const fetchOpenTicketCount = async () => {
+    const fetchTicketCount = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
         
-        const res = await axios.get(`${API_BASE_URL}/api/notifications/count`, {
+        const res = await axios.get(`${API_BASE_URL}/api/tickets`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        setOpenTicketCount(res.data.openTicketCount || 0);
+        // Count tickets that are NOT closed
+        const nonClosedTickets = res.data.filter(ticket => ticket.status !== 'Closed');
+        setTicketCount(nonClosedTickets.length);
       } catch (error) {
-        console.error('Error fetching open ticket count:', error);
+        console.error('Error fetching ticket count:', error);
       }
     };
     
-    fetchOpenTicketCount();
+    fetchTicketCount();
     
     // Refresh count every 30 seconds
-    const interval = setInterval(fetchOpenTicketCount, 30000);
+    const interval = setInterval(fetchTicketCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -178,14 +181,12 @@ const Sidebar = () => {
     const file = e.target.files[0];
     if (!file) return;
     
-    // Validate file type
     const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.type)) {
       toast.error('Please select a valid image file (JPEG, PNG, GIF, WEBP)');
       return;
     }
     
-    // Validate file size (5MB max)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('Image size must be less than 5MB');
       return;
@@ -223,7 +224,6 @@ const Sidebar = () => {
         setSelectedFile(null);
         setImagePreview(null);
         toast.success('Profile image updated successfully!');
-        // Refresh to update the image in all components
         setTimeout(() => window.location.reload(), 500);
       } else {
         toast.error(res.data.message || 'Failed to upload profile image');
@@ -307,7 +307,7 @@ const Sidebar = () => {
     }
   };
 
-  // MENU ITEMS - UPDATED WITH HRMS ROUTES
+  // MENU ITEMS - Updated with PM Feasibility
   const menuItems = {
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -320,7 +320,9 @@ const Sidebar = () => {
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
-      { path: '/hr', icon: <Users size={18} />, label: 'HR Dashboard' },
+      // People Ops Section - Just the main dashboard, no separate leave item
+      { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
@@ -338,6 +340,7 @@ const Sidebar = () => {
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
+      { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
@@ -347,7 +350,10 @@ const Sidebar = () => {
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
+      // PM FEASIBILITY - NEW MENU ITEM
+      { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
+      // People Ops - Employee Dashboard (contains both Leave and Attendance)
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
@@ -357,7 +363,8 @@ const Sidebar = () => {
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
+      // People Ops - Employee Dashboard
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
@@ -370,7 +377,8 @@ const Sidebar = () => {
       { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
+      // People Ops - Employee Dashboard
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
@@ -378,22 +386,23 @@ const Sidebar = () => {
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-      // { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
+      // { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
     ],
 
     HR: [
-      { path: '/hr', icon: <Users size={18} />, label: 'HR Dashboard' },
+      { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
+      { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
     ],
-      
+          
     Finance: [
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
-      { path: '/employee', icon: <User size={18} />, label: 'My Dashboard' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
     ],
   };
 
@@ -409,12 +418,13 @@ const Sidebar = () => {
     if (path === '/knowledge') return location.pathname === '/knowledge';
     if (path === '/hr') return location.pathname === '/hr';
     if (path === '/employee') return location.pathname === '/employee';
+    if (path === '/pm/feasibility') return location.pathname === '/pm/feasibility';
     return location.pathname.startsWith(path);
   };
 
   // Helper to check if a menu item should show a badge
   const shouldShowBadge = (item) => {
-    return item.label === 'Tickets' && openTicketCount > 0;
+    return item.label === 'Tickets' && ticketCount > 0;
   };
 
   // Determine sidebar classes based on mobile state
@@ -440,7 +450,7 @@ const Sidebar = () => {
 
       {/* SIDEBAR */}
       <aside className={getSidebarClasses()}>
-        {/* HEADER - Reduced padding on mobile */}
+        {/* HEADER */}
         <div
           className={`border-b border-slate-800 transition-all duration-300 ${
             isMobile ? 'p-3' : isCollapsed && !isMobile ? 'p-6 px-3' : 'p-6'
@@ -463,7 +473,7 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* NAVIGATION - Reduced padding on mobile */}
+        {/* NAVIGATION */}
         <nav
           className={`p-2 space-y-1 overflow-y-auto overflow-x-visible no-scrollbar ${
             isCollapsed && !isMobile
@@ -501,14 +511,14 @@ const Sidebar = () => {
                     </span>
                     {showBadge && (
                       <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
-                        {openTicketCount > 99 ? '99+' : openTicketCount}
+                        {ticketCount > 99 ? '99+' : ticketCount}
                       </span>
                     )}
                   </>
                 )}
                 {isCollapsed && !isMobile && showBadge && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
-                    {openTicketCount > 99 ? '99+' : openTicketCount}
+                    {ticketCount > 99 ? '99+' : ticketCount}
                   </span>
                 )}
               </NavLink>
@@ -516,22 +526,21 @@ const Sidebar = () => {
           })}
         </nav>
 
-        {/* ACCOUNT SECTION - WITH VIDEO LOGO ABOVE */}
+        {/* ACCOUNT SECTION */}
         <div
           className={`absolute bottom-0 left-0 right-0 p-2 border-t border-slate-800 ${
             isCollapsed && !isMobile ? 'px-2' : ''
           }`}
           ref={menuRef}
         >
-          {/* VIDEO LOGO - Clickable - Above Account Section */}
+          {/* VIDEO LOGO */}
           {(!isCollapsed || isMobile) && (
             <div 
-              className="flex items-center justify-center gap-2 mb-2 px-2 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={handleVideoLogoClick}
+              className="flex items-center justify-center gap-2 mb-2 px-2 cursor-pointer "
               title="Visit TechDataSeeders"
             >
-              <div className="flex items-center gap-2">
-                <div className="w-20 h-20 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
+              <div className="flex items-center gap-2" onClick={handleVideoLogoClick}>
+                <div className="w-15 h-15 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
                   <video
                     src={companyLogoVideo}
                     autoPlay
@@ -545,7 +554,7 @@ const Sidebar = () => {
             </div>
           )}
 
-          {/* Collapsed version - smaller video icon only - Clickable */}
+          {/* Collapsed version - smaller video icon only */}
           {isCollapsed && !isMobile && (
             <div 
               className="flex justify-center mb-2 cursor-pointer hover:opacity-80 transition-opacity"
@@ -581,7 +590,6 @@ const Sidebar = () => {
                 isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
               }`}
             >
-              {/* Update Profile Picture Option */}
               <button
                 onClick={() => {
                   setShowImageUploadModal(true);
@@ -638,7 +646,7 @@ const Sidebar = () => {
             </div>
           )}
 
-          {/* ACCOUNT BUTTON - ENLARGED VERSION WITH PROFILE IMAGE */}
+          {/* ACCOUNT BUTTON */}
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${
@@ -647,7 +655,6 @@ const Sidebar = () => {
                 : 'hover:bg-slate-800'
             } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
           >
-            {/* User Avatar - Enlarged with Profile Image */}
             <div className="relative flex-shrink-0 group">
               {profileImage ? (
                 <img
@@ -660,7 +667,6 @@ const Sidebar = () => {
                   {userName.charAt(0).toUpperCase()}
                 </div>
               )}
-              {/* Camera overlay on hover */}
               <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                 <Camera size={14} className="text-white" />
               </div>
@@ -669,7 +675,6 @@ const Sidebar = () => {
               )}
             </div>
 
-            {/* Name and Role - Only when expanded - Enlarged text */}
             {(!isCollapsed || isMobile) && (
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-bold text-white truncate">
@@ -681,7 +686,6 @@ const Sidebar = () => {
               </div>
             )}
 
-            {/* Chevron - Only when expanded - Enlarged */}
             {(!isCollapsed || isMobile) && (
               <ChevronUp
                 size={14}
@@ -694,7 +698,7 @@ const Sidebar = () => {
         </div>
       </aside>
 
-      {/* TOGGLE BUTTON - Hide on mobile */}
+      {/* TOGGLE BUTTON */}
       {!isMobile && (
         <button
           onClick={toggleSidebar}
@@ -706,7 +710,7 @@ const Sidebar = () => {
         </button>
       )}
 
-      {/* Mobile toggle button - smaller and more compact */}
+      {/* Mobile toggle button */}
       {isMobile && (
         <button
           onClick={toggleSidebar}

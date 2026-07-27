@@ -270,6 +270,8 @@ router.get('/feeds/status/:feedName', async (req, res) => {
 // ============================================================
 // POST /api/client/feeds/update - UPDATED with File Integrity Count Tracking
 // ============================================================
+// backend/routes/clientRoutes.js - Updated POST /api/client/feeds/update
+
 router.post('/feeds/update', async (req, res) => {
   try {
     const {
@@ -280,9 +282,12 @@ router.post('/feeds/update', async (req, res) => {
       timestamp,
       project,
       client,
-      path,   
-      paths,  
-      count,
+      path,       // existing
+      paths,      // existing
+      count,      // existing
+      file_path,  // NEW: single file path
+      file_size,  // NEW: single file size
+      file_details // NEW: multiple files details
     } = req.body;
 
     if (!project_id || !feed_name || !stage) {
@@ -328,15 +333,43 @@ router.post('/feeds/update', async (req, res) => {
       completed_at: timestamp || new Date().toISOString()
     };
 
+    // Handle record count for file_integrity
     if (stage === 'file_integrity' && count !== undefined) {
       feed.record_count = Number(count);
     }
 
+    // Handle process_complete with file information
     if (stage === 'process_complete') {
-      if (Array.isArray(paths) && paths.length > 0) {
+      // Handle existing path/paths
+      if (paths && Array.isArray(paths) && paths.length > 0) {
         feed.output_path = paths;
       } else if (path) {
         feed.output_path = path;
+      }
+      
+      // ============================================
+      // NEW: Handle file_info data
+      // ============================================
+      
+      // Case 1: Single file with file_path and file_size
+      if (file_path) {
+        const fileData = {
+          path: file_path,
+          size: file_size || null
+        };
+        // Store as single file in output_path (as object)
+        feed.output_path = fileData;
+        console.log(`📂 Single file stored: ${file_path} (${file_size || 'size not specified'})`);
+      }
+      
+      // Case 2: Multiple files from file_details
+      if (file_details && file_details.files && Array.isArray(file_details.files)) {
+        const files = file_details.files.map(f => ({
+          path: f.path,
+          size: f.size || null
+        }));
+        feed.output_path = files;
+        console.log(`📂 Multiple files stored: ${files.length} files`);
       }
     }
 

@@ -1,4 +1,5 @@
 // frontend/src/App.jsx
+
 import { useEffect, useMemo } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -41,14 +42,23 @@ import ProjectFeedStatus from './pages/ProjectFeedStatus';
 import ClientFeedDetails from './pages/ClientFeedDetails';
 import AttendanceSync from './pages/AttendanceSync';
 import KnowledgeBase from './pages/KnowledgeBase';
+import FeasibilityDashboard from './pages/FeasibilityDashboard';
+import PmFeasibilityDashboard from './pages/PmFeasibilityDashboard'; // <-- NEW IMPORT
 
 // ============================================
-// HRMS IMPORTS - Phase 0
+// HRMS IMPORTS
 // ============================================
 import HrDashboard from './pages/HrDashboard';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 
-// Import the new Notification component
+// ============================================
+// LEAVE MANAGEMENT IMPORTS - KEPT FOR HR
+// ============================================
+// Note: EmployeeLeaveDashboard is now integrated into EmployeeDashboard
+// But we keep the import for potential future use
+import HrLeaveDashboard from './pages/HrLeaveDashboard';
+
+// Import the Notification component
 import NotificationBell from './components/NotificationBell';
 
 import { AnimatePresence } from 'framer-motion';
@@ -152,8 +162,8 @@ function AppContent() {
             <ProtectedRoute>
               <div className="flex bg-[#f8fafc] min-h-screen">
                 <Sidebar />
-              <main className={`flex-1 w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
-        isCollapsed ? 'pl-[84px]' : 'pl-[28px]'
+                <main className={`flex-1 w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
+                  isCollapsed ? 'pl-[84px]' : 'pl-[28px]'
                 }`}>
                   <Routes>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
@@ -222,6 +232,13 @@ function AppContent() {
                     <Route path="/pm/projects/:projectId/feeds" element={
                       <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
                         <ProjectFeedStatus />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* PM FEASIBILITY ROUTE - NEW */}
+                    <Route path="/pm/feasibility" element={
+                      <ProtectedRoute allowedRoles={['Project Manager']}>
+                        <PmFeasibilityDashboard />
                       </ProtectedRoute>
                     } />
 
@@ -309,7 +326,7 @@ function AppContent() {
                     } />
 
                     {/* ============================================
-                        HRMS ROUTES - Phase 0
+                        HRMS ROUTES - People Ops
                         ============================================ */}
                     
                     {/* HR Dashboard - HR and Admin only */}
@@ -319,7 +336,17 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
                     
-                    {/* Employee Dashboard - All non-HR employees */}
+                    {/* HR Leave Management - HR and Admin only */}
+                    <Route path="/hr/leaves" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'HR']}>
+                        <HrLeaveDashboard />
+                      </ProtectedRoute>
+                    } />
+                    
+                    {/* ============================================
+                        PEOPLE OPS - Employee Dashboard
+                        ============================================ */}
+                    {/* This page contains both Leave and Attendance management */}
                     <Route path="/employee" element={
                       <ProtectedRoute allowedRoles={['Admin', 'Developer', 'Team Lead', 'Sales', 'Project Manager', 'Client', 'Finance']}>
                         <EmployeeDashboard />
@@ -344,6 +371,11 @@ function AppContent() {
                     <Route path="/hr/attendance-sync" element={
                         <ProtectedRoute allowedRoles={['Admin', 'HR']}>
                           <AttendanceSync />
+                        </ProtectedRoute>
+                      } />
+                    <Route path="/feasibility" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales']}>
+                          <FeasibilityDashboard />
                         </ProtectedRoute>
                       } />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />

@@ -59,7 +59,14 @@ const ProjectSchema = new mongoose.Schema({
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     userName: { type: String, required: true },
     createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now }
+    updatedAt: { type: Date, default: Date.now },
+     files: [{
+    url: { type: String },
+    filename: { type: String },
+    originalName: { type: String },
+    size: { type: Number },
+    type: { type: String }
+  }]
   }]
 }, { timestamps: true });
 
