@@ -28,6 +28,16 @@ try {
   console.log('⚠️ Notice: Leave Balance Updater not loaded:', err.message);
 }
 
+// ============================================
+// ✅ DAILY PRODUCTIVITY REPORT
+// ============================================
+try {
+  require(path.join(__dirname, 'cron', 'dailyProductivityReport'));
+  console.log('⏰ Daily Productivity Report initialized successfully');
+} catch (err) {
+  console.log('⚠️ Notice: Daily Productivity Report not loaded:', err.message);
+}
+
 // =========================================================
 // CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
 // =========================================================
@@ -37,7 +47,9 @@ const createUploadsDirectory = () => {
     path.join(__dirname, 'uploads'),
     path.join(__dirname, 'uploads/tickets'),
     path.join(__dirname, 'uploads/profiles'),
-    path.join(__dirname, 'uploads/temp')
+    path.join(__dirname, 'uploads/temp'),
+    path.join(__dirname, 'uploads/leads'),
+    path.join(__dirname, 'uploads/knowledge')
   ];
   
   uploadDirs.forEach(dir => {
