@@ -171,7 +171,8 @@ router.post('/users', authorize('Admin', 'Project Manager', 'Sales Manager'), as
       githubLinked: false,
       organizationId: organizationId || null,
       department: department || 'Other',
-      isPrimaryPOC: isPrimaryPOC || false
+      isPrimaryPOC: isPrimaryPOC || false,
+      employeeCode: null
     });
 
     // If role is Developer, try to link GitHub account automatically

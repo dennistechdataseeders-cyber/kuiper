@@ -72,8 +72,6 @@ const UserSchema = new mongoose.Schema({
   // Employee Code
   employeeCode: {
     type: String,
-    unique: true,
-    sparse: true,
     default: null
   },
   
