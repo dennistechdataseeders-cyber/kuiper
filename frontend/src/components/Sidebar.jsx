@@ -345,6 +345,7 @@ const Sidebar = () => {
     ],
 
     'Project Manager': [
+      { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },

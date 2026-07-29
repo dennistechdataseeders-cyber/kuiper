@@ -43,8 +43,8 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
           <!-- Greeting -->
           <tr>
             <td style="padding:32px 36px 20px 36px;">
-              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px;">Hello ${data.name} 👋</h2>
-              <p style="font-size:14px; color:#64748b; line-height:1.6;">Here's your daily productivity summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
+              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px;">Hello ${data.name}</h2>
+              <p style="font-size:14px; color:#64748b; line-height:1.6;">Here is your daily productivity summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
             </td>
           </tr>
 
@@ -74,7 +74,7 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
           ${data.openTickets.length > 0 ? `
           <tr>
             <td style="padding:0 36px 16px 36px;">
-              <div style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">🔴 Open Tickets (${data.openTicketsCount})</div>
+              <div style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Open Tickets (${data.openTicketsCount})</div>
               ${data.openTickets.map(ticket => `
               <div style="background:#f8fafc; border-left:4px solid #3b82f6; padding:12px 16px; border-radius:8px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -92,7 +92,7 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
           <tr>
             <td style="padding:0 36px 16px 36px;">
               <div style="background:#dcfce7; padding:12px 16px; border-radius:10px; border-left:4px solid #22c55e;">
-                <span style="color:#15803d; font-size:13px; font-weight:600;">✅ No open tickets! Great job!</span>
+                <span style="color:#15803d; font-size:13px; font-weight:600;">No open tickets. Great job!</span>
               </div>
             </td>
           </tr>
@@ -102,7 +102,7 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
           ${data.feasibilityTickets.length > 0 ? `
           <tr>
             <td style="padding:0 36px 16px 36px;">
-              <div style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">🟣 Feasibility Tickets (${data.feasibilityTicketsCount})</div>
+              <div style="font-size:12px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:12px;">Feasibility Tickets (${data.feasibilityTicketsCount})</div>
               ${data.feasibilityTickets.map(ticket => `
               <div style="background:#f8fafc; border-left:4px solid #8b5cf6; padding:12px 16px; border-radius:8px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -120,7 +120,7 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
           <tr>
             <td style="padding:0 36px 16px 36px;">
               <div style="background:#f3e8ff; padding:12px 16px; border-radius:10px; border-left:4px solid #8b5cf6;">
-                <span style="color:#6d28d9; font-size:13px; font-weight:600;">✅ No pending feasibility tickets!</span>
+                <span style="color:#6d28d9; font-size:13px; font-weight:600;">No pending feasibility tickets!</span>
               </div>
             </td>
           </tr>
@@ -139,7 +139,6 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
           <tr>
             <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
               <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Daily Productivity Report</div>
-              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">Generated at ${new Date().toLocaleTimeString()}</div>
             </td>
           </tr>
         </table>
@@ -154,8 +153,6 @@ const getDeveloperEmailTemplate = (data, frontendUrl) => {
 // ============================================
 // SALES PERSON EMAIL TEMPLATE
 // ============================================
-// backend/templates/productivityEmailTemplates.js - Updated Sales Person Template
-
 const getSalesPersonEmailTemplate = (data, frontendUrl) => {
   return `
 <!DOCTYPE html>
@@ -165,7 +162,6 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Daily Sales Report</title>
   <style>
-    /* Fallback styles - most email clients will use inline styles instead */
     .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 24px; }
     .header { background: #f8fafc; padding: 32px 36px; border-bottom: 1px solid #e2e8f0; }
     .badge { background: #059669; color: #ffffff; padding: 4px 12px; border-radius: 12px; font-size: 10px; font-weight: 700; }
@@ -183,9 +179,7 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
       <td align="center">
         <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px; width:100%; background:#ffffff; border-radius:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05);">
           
-          <!-- ============================================================
-          HEADER
-          ============================================================ -->
+          <!-- Header -->
           <tr>
             <td style="padding:32px 36px; border-bottom:1px solid #e2e8f0;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0">
@@ -205,21 +199,17 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
             </td>
           </tr>
 
-          <!-- ============================================================
-          GREETING
-          ============================================================ -->
+          <!-- Greeting -->
           <tr>
             <td style="padding:32px 36px 20px 36px;">
-              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin:0 0 8px 0;">Hello ${data.name} 👋</h2>
+              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin:0 0 8px 0;">Hello ${data.name}</h2>
               <p style="font-size:14px; color:#64748b; line-height:1.6; margin:0;">
-                Here's your daily sales summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>
+                Here is your daily sales summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong>
               </p>
             </td>
           </tr>
 
-          <!-- ============================================================
-          STATS CARDS
-          ============================================================ -->
+          <!-- Stats Cards -->
           <tr>
             <td style="padding:0 36px 24px 36px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;">
@@ -249,9 +239,7 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
             </td>
           </tr>
 
-          <!-- ============================================================
-          FOLLOW-UP DETAILS
-          ============================================================ -->
+          <!-- Follow-up Details -->
           <tr>
             <td style="padding:0 36px 16px 36px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#fffbeb; border-radius:12px; border:1px solid #fde68a;">
@@ -260,7 +248,7 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td>
-                          <div style="font-size:12px; font-weight:700; color:#92400e; letter-spacing:0.03em;">📞 Follow-ups Pending</div>
+                          <div style="font-size:12px; font-weight:700; color:#92400e; letter-spacing:0.03em;">Follow-ups Pending</div>
                           <div style="font-size:32px; font-weight:800; color:#d97706; margin-top:4px;">${data.totalFollowUps}</div>
                         </td>
                         <td align="right" style="vertical-align:middle;">
@@ -275,9 +263,7 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
             </td>
           </tr>
 
-          <!-- ============================================================
-          FEASIBILITY DETAILS
-          ============================================================ -->
+          <!-- Feasibility Details -->
           <tr>
             <td style="padding:0 36px 24px 36px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f5f3ff; border-radius:12px; border:1px solid #ddd6fe;">
@@ -286,7 +272,7 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
                     <table width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td>
-                          <div style="font-size:12px; font-weight:700; color:#5b21b6; letter-spacing:0.03em;">🔬 Feasibility Requests</div>
+                          <div style="font-size:12px; font-weight:700; color:#5b21b6; letter-spacing:0.03em;">Feasibility Requests</div>
                           <div style="font-size:32px; font-weight:800; color:#7c3aed; margin-top:4px;">${data.pendingFeasibility}</div>
                         </td>
                         <td align="right" style="vertical-align:middle;">
@@ -300,16 +286,14 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
             </td>
           </tr>
 
-          <!-- ============================================================
-          TIPS / ENCOURAGEMENT
-          ============================================================ -->
+          <!-- Tips / Encouragement -->
           <tr>
             <td style="padding:0 36px 20px 36px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0fdf4; border-radius:12px; border:1px solid #bbf7d0;">
                 <tr>
                   <td style="padding:14px 18px;">
                     <p style="font-size:12px; color:#166534; margin:0; font-weight:600;">
-                      💡 Tip: ${data.totalFollowUps > 0 ? 'You have ' + data.totalFollowUps + ' follow-ups pending. Prioritize the most urgent ones first!' : 'Great job! All follow-ups are complete. Focus on generating new leads today.'}
+                      Tip: ${data.totalFollowUps > 0 ? 'You have ' + data.totalFollowUps + ' follow-ups pending. Prioritize the most urgent ones first.' : 'Great job. All follow-ups are complete. Focus on generating new leads today.'}
                     </p>
                   </td>
                 </tr>
@@ -317,9 +301,7 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
             </td>
           </tr>
 
-          <!-- ============================================================
-          ACTION BUTTON
-          ============================================================ -->
+          <!-- Action Button -->
           <tr>
             <td style="padding:0 36px 32px 36px;">
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#059669; border-radius:12px;">
@@ -334,13 +316,10 @@ const getSalesPersonEmailTemplate = (data, frontendUrl) => {
             </td>
           </tr>
 
-          <!-- ============================================================
-          FOOTER
-          ============================================================ -->
+          <!-- Footer -->
           <tr>
             <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
               <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Daily Productivity Report</div>
-              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">Generated at ${new Date().toLocaleTimeString()}</div>
               <div style="font-size:8px; color:#e2e8f0; margin-top:6px;">This is an automated report. Please do not reply to this email.</div>
             </td>
           </tr>
@@ -400,8 +379,8 @@ const getPMEmailTemplate = (data, frontendUrl) => {
           <!-- Greeting -->
           <tr>
             <td style="padding:32px 36px 20px 36px;">
-              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px;">Hello ${data.name} 👋</h2>
-              <p style="font-size:14px; color:#64748b; line-height:1.6;">Here's your project summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
+              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px;">Hello ${data.name}</h2>
+              <p style="font-size:14px; color:#64748b; line-height:1.6;">Here is your project summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
             </td>
           </tr>
 
@@ -436,12 +415,12 @@ const getPMEmailTemplate = (data, frontendUrl) => {
           <!-- Tickets by Developer -->
           <tr>
             <td style="padding:0 36px 24px 36px;">
-              <div style="font-size:13px; font-weight:700; color:#0f172a; margin-bottom:12px;">📋 Unresolved Tickets by Developer</div>
+              <div style="font-size:13px; font-weight:700; color:#0f172a; margin-bottom:12px;">Unresolved Tickets by Developer</div>
               
               ${hasTickets ? Object.entries(data.ticketsByDeveloper).map(([developer, tickets]) => `
               <div style="background:#f8fafc; border-radius:12px; padding:16px; margin-bottom:12px; border:1px solid #e2e8f0;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                  <span style="font-weight:700; color:#0f172a; font-size:14px;">👤 ${developer}</span>
+                  <span style="font-weight:700; color:#0f172a; font-size:14px;">${developer}</span>
                   <span style="background:#e2e8f0; padding:2px 10px; border-radius:10px; font-size:10px; font-weight:700; color:#475569;">${tickets.length} tickets</span>
                 </div>
                 ${tickets.map(ticket => `
@@ -456,7 +435,7 @@ const getPMEmailTemplate = (data, frontendUrl) => {
               </div>
               `).join('') : `
               <div style="background:#dcfce7; padding:16px; border-radius:12px; border-left:4px solid #22c55e;">
-                <span style="color:#15803d; font-size:13px; font-weight:600;">✅ All tickets resolved! Great job team!</span>
+                <span style="color:#15803d; font-size:13px; font-weight:600;">All tickets resolved. Great job team!</span>
               </div>
               `}
             </td>
@@ -475,7 +454,6 @@ const getPMEmailTemplate = (data, frontendUrl) => {
           <tr>
             <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
               <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Daily Productivity Report</div>
-              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">Generated at ${new Date().toLocaleTimeString()}</div>
             </td>
           </tr>
         </table>
@@ -530,8 +508,8 @@ const getSalesManagerEmailTemplate = (data, frontendUrl) => {
           <!-- Greeting -->
           <tr>
             <td style="padding:32px 36px 20px 36px;">
-              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px;">Hello ${data.name} 👋</h2>
-              <p style="font-size:14px; color:#64748b; line-height:1.6;">Here's your team's sales summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
+              <h2 style="font-size:22px; font-weight:800; color:#0f172a; margin-bottom:8px;">Hello ${data.name}</h2>
+              <p style="font-size:14px; color:#64748b; line-height:1.6;">Here is your team's sales summary for <strong>${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</strong></p>
             </td>
           </tr>
 
@@ -549,7 +527,7 @@ const getSalesManagerEmailTemplate = (data, frontendUrl) => {
           <!-- Employee Breakdown -->
           <tr>
             <td style="padding:0 36px 24px 36px;">
-              <div style="font-size:13px; font-weight:700; color:#0f172a; margin-bottom:12px;">👥 Employee Breakdown</div>
+              <div style="font-size:13px; font-weight:700; color:#0f172a; margin-bottom:12px;">Employee Breakdown</div>
               
               ${data.employeeBreakdown.map(emp => `
               <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 16px; background:#f8fafc; border-radius:10px; margin-bottom:6px; border:1px solid #e2e8f0;">
@@ -571,10 +549,10 @@ const getSalesManagerEmailTemplate = (data, frontendUrl) => {
           <tr>
             <td style="padding:0 36px 20px 36px;">
               <div style="background:#f5f3ff; border-radius:12px; padding:16px; border:1px solid #ddd6fe;">
-                <div style="font-size:11px; font-weight:700; color:#5b21b6; text-transform:uppercase; letter-spacing:0.06em;">📊 Insights</div>
+                <div style="font-size:11px; font-weight:700; color:#5b21b6; text-transform:uppercase; letter-spacing:0.06em;">Insights</div>
                 <ul style="margin-top:8px; font-size:12px; color:#4c1d95; list-style:none; padding:0;">
                   <li style="padding:4px 0;">• ${data.employeeBreakdown.filter(e => e.followUpsToday > 0).length}/${data.employeeBreakdown.length} team members active today</li>
-                  ${data.employeeBreakdown.filter(e => e.followUpsToday === 0).length > 0 ? `<li style="padding:4px 0;">⚠️ ${data.employeeBreakdown.filter(e => e.followUpsToday === 0).map(e => e.name).join(', ')} - No follow-ups recorded today</li>` : ''}
+                  ${data.employeeBreakdown.filter(e => e.followUpsToday === 0).length > 0 ? `<li style="padding:4px 0;">${data.employeeBreakdown.filter(e => e.followUpsToday === 0).map(e => e.name).join(', ')} - No follow-ups recorded today</li>` : ''}
                 </ul>
               </div>
             </td>
@@ -593,7 +571,6 @@ const getSalesManagerEmailTemplate = (data, frontendUrl) => {
           <tr>
             <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
               <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Daily Productivity Report</div>
-              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">Generated at ${new Date().toLocaleTimeString()}</div>
             </td>
           </tr>
         </table>

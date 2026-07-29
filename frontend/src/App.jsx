@@ -44,6 +44,7 @@ import AttendanceSync from './pages/AttendanceSync';
 import KnowledgeBase from './pages/KnowledgeBase';
 import FeasibilityDashboard from './pages/FeasibilityDashboard';
 import PmFeasibilityDashboard from './pages/PmFeasibilityDashboard'; // <-- NEW IMPORT
+import PmDashboard from './pages/PmDashboard';
 
 // ============================================
 // HRMS IMPORTS
@@ -204,6 +205,12 @@ function AppContent() {
                     {/* ============================================
                         PROJECT MANAGEMENT
                         ============================================ */}
+                    
+                    <Route path="/pm/dashboard" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'Project Manager']}>
+                        <PmDashboard />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
                     <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
                     

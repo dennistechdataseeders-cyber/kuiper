@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search } from 'lucide-react';
+import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search, GitFork } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
@@ -225,7 +225,10 @@ const TicketDashboard = () => {
       const projectIdMatch = t.projectId?.projectCustomId?.toLowerCase().includes(query) || false;
       const projectNameMatch = t.projectId?.name?.toLowerCase().includes(query) || false;
       
-      if (!ticketNumberMatch && !titleMatch && !assignedToMatch && !createdByMatch && !projectIdMatch && !projectNameMatch) {
+      // Search by feed name
+      const feedNameMatch = t.feedId?.name?.toLowerCase().includes(query) || false;
+      
+      if (!ticketNumberMatch && !titleMatch && !assignedToMatch && !createdByMatch && !projectIdMatch && !projectNameMatch && !feedNameMatch) {
         return false;
       }
     }
@@ -267,6 +270,31 @@ const TicketDashboard = () => {
 
   const isFeasibilityTicket = (ticket) => {
     return ticket.category === 'Production' && ticket.subcategory === 'Feasibility';
+  };
+
+  // Get display name for project/feed column
+  const getProjectFeedDisplay = (ticket) => {
+    // If it's a Production ticket with a feed, show feed name
+    if (ticket.category === 'Production' && ticket.feedId) {
+      return {
+        type: 'feed',
+        name: ticket.feedId.name || 'Unknown Feed',
+        icon: <GitFork size={14} className="text-blue-500" />
+      };
+    }
+    // Otherwise show project
+    if (ticket.projectId) {
+      return {
+        type: 'project',
+        name: ticket.projectId.projectCustomId || ticket.projectId.name || 'Unknown Project',
+        icon: <Tag size={14} className="text-gray-400" />
+      };
+    }
+    return {
+      type: 'none',
+      name: ticket.isInternal ? 'Internal Task' : 'General',
+      icon: null
+    };
   };
 
   // Clear search handler
@@ -434,7 +462,7 @@ const TicketDashboard = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={isMobile ? "Search tickets..." : "Search by Ticket Number (e.g., 0016), Title, Name, or Project..."}
+              placeholder={isMobile ? "Search tickets..." : "Search by Ticket Number (e.g., 0016), Title, Name, Project, or Feed..."}
               className="w-full pl-9 sm:pl-10 pr-10 py-2 sm:py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all text-sm bg-gray-50 hover:bg-white"
             />
             {searchQuery && (
@@ -554,6 +582,7 @@ const TicketDashboard = () => {
                 filteredTickets.map(ticket => {
                   const formattedNumber = formatTicketNumber(ticket.ticketNumber);
                   const isFeasibility = isFeasibilityTicket(ticket);
+                  const projectFeed = getProjectFeedDisplay(ticket);
                   
                   return (
                     <div 
@@ -588,9 +617,12 @@ const TicketDashboard = () => {
                             <span className={`inline-flex px-1.5 py-0.5 text-[8px] font-semibold rounded ${getPriorityColor(ticket.priority)}`}>
                               {ticket.priority}
                             </span>
-                            <span className="text-[9px] text-gray-500 truncate max-w-[100px]">
-                              {ticket.projectId?.projectCustomId || 'General'}
-                            </span>
+                            {projectFeed.type !== 'none' && (
+                              <span className="flex items-center gap-0.5 text-[9px] text-gray-500 truncate max-w-[80px]">
+                                {projectFeed.icon}
+                                {projectFeed.name}
+                              </span>
+                            )}
                           </div>
                           <div className="flex items-center gap-2 mt-1.5 text-[9px] text-gray-400">
                             <span>{new Date(ticket.createdAt).toLocaleDateString()}</span>
@@ -630,7 +662,7 @@ const TicketDashboard = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feed</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
@@ -661,6 +693,7 @@ const TicketDashboard = () => {
                     const categoryDisplay = getCategoryDisplay(ticket);
                     const isFeasibility = isFeasibilityTicket(ticket);
                     const formattedNumber = formatTicketNumber(ticket.ticketNumber);
+                    const projectFeed = getProjectFeedDisplay(ticket);
                     
                     return (
                       <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
@@ -728,9 +761,16 @@ const TicketDashboard = () => {
                           )}
                         </td>
                         <td className="px-6 py-4">
-                          <span className="text-sm text-gray-600">
-                            {ticket.projectId?.projectCustomId || 'General'}
-                          </span>
+                          {projectFeed.type !== 'none' ? (
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm text-gray-700 truncate max-w-[150px]" title={projectFeed.name}>
+                                {projectFeed.name}
+                              </span>
+                              
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400 italic">General</span>
+                          )}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-500">
                           {new Date(ticket.createdAt).toLocaleDateString()}

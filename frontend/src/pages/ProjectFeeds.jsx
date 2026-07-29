@@ -1,3 +1,4 @@
+// frontend/src/pages/ProjectFeeds.jsx
 import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
@@ -33,7 +34,8 @@ import {
   PauseCircle,
   CheckCircle2,
   GitFork,
-  ExternalLink
+  ExternalLink,
+  GitBranch
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
@@ -78,7 +80,7 @@ const ProjectFeeds = () => {
 
   // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // EDIT MODAL
   const [showEditModal, setShowEditModal] = useState(false);
@@ -86,6 +88,10 @@ const ProjectFeeds = () => {
 
   // State for expanded feed row (for detailed view)
   const [expandedFeedId, setExpandedFeedId] = useState(null);
+
+  // State for Git last updated dates
+  const [gitLastUpdated, setGitLastUpdated] = useState({});
+  const [loadingGitDates, setLoadingGitDates] = useState(false);
 
   const [feedForm, setFeedForm] = useState({
     name: '',
@@ -101,13 +107,6 @@ const ProjectFeeds = () => {
   const [developers, setDevelopers] = useState([]);
   const [feedStatuses, setFeedStatuses] = useState([]);
   const [updatingStatus, setUpdatingStatus] = useState({});
-  const [todayFeedStats, setTodayFeedStats] = useState({
-    total: 0,
-    completed: 0,
-    pending: 0,
-    percentage: 0,
-    completedFeedsDetails: []
-  });
 
   // State for comment modal
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -140,7 +139,7 @@ const ProjectFeeds = () => {
       Authorization: `Bearer ${token}`
     }
   };
-  
+
   // Get today's day name
   const getTodayDayName = () => {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -171,53 +170,6 @@ const ProjectFeeds = () => {
       return feed.completionHistory.some(h => h && h.date === today);
     }
     return false;
-  };
-
-  // Check if feed is completed for today and get completion details
-  const getTodayCompletionDetails = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
-      const todayCompletion = feed.completionHistory.find(h => h && h.date === today);
-      if (todayCompletion) {
-        return {
-          isCompleted: true,
-          description: todayCompletion.description || 'No description provided',
-          completedBy: todayCompletion.completedBy,
-          completedAt: todayCompletion.completedAt
-        };
-      }
-    }
-    return { isCompleted: false, description: null, completedBy: null, completedAt: null };
-  };
-
-  // Calculate today's feed stats with completion details
-  const calculateTodayFeedStats = (allFeeds) => {
-    const todayFeeds = allFeeds.filter(feed => isFeedForToday(feed));
-    const completedFeedsDetails = [];
-    let completedCount = 0;
-    
-    todayFeeds.forEach(feed => {
-      const completion = getTodayCompletionDetails(feed);
-      if (completion.isCompleted) {
-        completedCount++;
-        completedFeedsDetails.push({
-          feedId: feed._id,
-          feedName: feed.name,
-          projectName: feed.projectName,
-          projectCustomId: feed.projectCustomId,
-          description: completion.description,
-          completedBy: completion.completedBy,
-          completedAt: completion.completedAt
-        });
-      }
-    });
-    
-    const total = todayFeeds.length;
-    const completed = completedCount;
-    const pending = total - completed;
-    const percentage = total > 0 ? (completed / total) * 100 : 0;
-    
-    return { total, completed, pending, percentage, completedFeedsDetails };
   };
 
   // Get developer names by IDs
@@ -325,13 +277,6 @@ const ProjectFeeds = () => {
     }
   };
 
-  const getProgressColor = (percentage) => {
-    if (percentage >= 75) return 'from-emerald-500 to-emerald-600';
-    if (percentage >= 50) return 'from-blue-500 to-blue-600';
-    if (percentage >= 25) return 'from-amber-500 to-amber-600';
-    return 'from-rose-500 to-rose-600';
-  };
-
   // Update feed status
   const updateFeedStatus = async (feedId, newStatus) => {
     setUpdatingStatus(prev => ({ ...prev, [feedId]: true }));
@@ -360,17 +305,116 @@ const ProjectFeeds = () => {
     }
   };
 
+  // Fetch Git last updated date for a feed folder
+  const fetchGitLastUpdated = async (feed) => {
+    if (!feed.gitRepoName || !feed.gitRepoUrl) return null;
+    
+    try {
+      const token = localStorage.getItem('token');
+      const feedFolderName = feed.name
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+      
+      // Use GitHub API to get the last commit date for the feed folder
+      const response = await axios.get(
+        `${API_BASE_URL}/api/admin/projects/${feed.projectId}/repo-folder-last-updated`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { folderPath: feedFolderName }
+        }
+      );
+      
+      if (response.data.success && response.data.lastUpdated) {
+        return response.data.lastUpdated;
+      }
+      return null;
+    } catch (error) {
+      console.error(`Error fetching Git last updated for feed ${feed.name}:`, error);
+      return null;
+    }
+  };
+
+  // Fetch Git last updated dates for all feeds
+  const fetchAllGitLastUpdated = async (feedsList) => {
+    if (!feedsList || feedsList.length === 0) return;
+    
+    setLoadingGitDates(true);
+    const updates = {};
+    
+    // Process feeds in batches to avoid rate limiting
+    const batchSize = 5;
+    for (let i = 0; i < feedsList.length; i += batchSize) {
+      const batch = feedsList.slice(i, i + batchSize);
+      await Promise.all(
+        batch.map(async (feed) => {
+          if (feed.gitRepoName && feed.gitRepoUrl) {
+            const date = await fetchGitLastUpdated(feed);
+            if (date) {
+              updates[feed._id] = date;
+            }
+          }
+        })
+      );
+      // Small delay between batches
+      if (i + batchSize < feedsList.length) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+    
+    setGitLastUpdated(prev => ({ ...prev, ...updates }));
+    setLoadingGitDates(false);
+  };
+
+  // Get human-readable time difference
+  const getTimeAgo = (dateString) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    const diffWeeks = Math.floor(diffDays / 7);
+    const diffMonths = Math.floor(diffDays / 30);
+    
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    if (diffWeeks < 4) return `${diffWeeks}w ago`;
+    if (diffMonths < 12) return `${diffMonths}mo ago`;
+    return `${Math.floor(diffMonths / 12)}y ago`;
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const openCommentModal = (feed) => {
-    const completion = getTodayCompletionDetails(feed);
-    if (completion.isCompleted) {
-      setSelectedCommentFeed({
-        name: feed.name,
-        projectName: feed.projectName,
-        projectCustomId: feed.projectCustomId,
-        description: completion.description,
-        completedAt: completion.completedAt
-      });
-      setShowCommentModal(true);
+    const today = new Date().toISOString().split('T')[0];
+    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
+      const todayCompletion = feed.completionHistory.find(h => h && h.date === today);
+      if (todayCompletion) {
+        setSelectedCommentFeed({
+          name: feed.name,
+          projectName: feed.projectName,
+          projectCustomId: feed.projectCustomId,
+          description: todayCompletion.description || 'No description provided',
+          completedAt: todayCompletion.completedAt
+        });
+        setShowCommentModal(true);
+      }
     }
   };
 
@@ -462,16 +506,17 @@ const ProjectFeeds = () => {
     }
   }, [projects, location.state]);
 
-  // Update stats when feeds change
+  // Fetch Git last updated dates when feeds change
   useEffect(() => {
-    const stats = calculateTodayFeedStats(feeds);
-    setTodayFeedStats(stats);
+    if (feeds.length > 0) {
+      fetchAllGitLastUpdated(feeds);
+    }
   }, [feeds]);
 
   // RESET PAGE
   useEffect(() => {
     setCurrentPage(1);
-  }, [selectedProject, searchTerm, feedTypeFilter, showPendingOnly, itemsPerPage]);
+  }, [selectedProject, searchTerm, feedTypeFilter, itemsPerPage]);
   
   const fetchData = async () => {
     try {
@@ -526,13 +571,6 @@ const ProjectFeeds = () => {
       );
     }
 
-    // Filter to show only pending feeds (not completed today)
-    if (showPendingOnly) {
-      result = result.filter(feed => {
-        return isFeedForToday(feed) && !isCompletedToday(feed);
-      });
-    }
-
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
       result = result.filter(feed =>
@@ -551,7 +589,7 @@ const ProjectFeeds = () => {
     );
 
     return result;
-  }, [feeds, selectedProject, searchTerm, feedTypeFilter, showPendingOnly]);
+  }, [feeds, selectedProject, searchTerm, feedTypeFilter]);
 
   // PAGINATION
   const indexOfLastFeed = currentPage * itemsPerPage;
@@ -620,19 +658,9 @@ const ProjectFeeds = () => {
     }
   };
 
-  // Toggle pending filter
-  const togglePendingFilter = () => {
-    setShowPendingOnly(!showPendingOnly);
-    setCurrentPage(1);
-  };
-
   return (
-    <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 transition-all duration-300 ${
-        isCollapsed ? 'ml-10 md:ml-16 lg:ml-20' : 'ml-0 sm:ml-16 md:ml-48 lg:ml-64'
-      }`}
-    >
-      <div className="p-3 sm:p-4 md:p-6 max-w-7xl mx-auto">
+    <div className={`min-h-screen bg-slate-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10 sm:ml-20' : 'ml-64'}`}>
+      <div className="w-full max-w-full">
         {/* HEADER SECTION */}
         <div className="mb-4 sm:mb-6">
           <div className="flex flex-col space-y-3">
@@ -694,144 +722,6 @@ const ProjectFeeds = () => {
             </div>
           </div>
         </div>
-        
-        {/* STATS CARD */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-4 sm:mb-6 overflow-hidden">
-          <div className="p-3 sm:p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-gradient-to-br from-purple-500 to-purple-600 text-white flex items-center justify-center shadow-md shadow-purple-200">
-                  <Calendar size={isMobile ? 14 : 16} />
-                </div>
-                <div>
-                  <h3 className="text-xs sm:text-sm font-black text-slate-800">Today's Progress</h3>
-                  <p className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider">
-                    {getTodayDayName()}, {new Date().toLocaleDateString()}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-1">
-                  <div className="w-5 sm:w-6 h-5 sm:h-6 rounded-md bg-blue-100 text-blue-600 flex items-center justify-center">
-                    <Briefcase size={isMobile ? 10 : 12} />
-                  </div>
-                  <div>
-                    <p className="text-[6px] sm:text-[7px] font-black text-slate-400 uppercase">Projects</p>
-                    <p className="text-xs sm:text-sm font-black text-slate-800">{projects.length}</p>
-                  </div>
-                </div>
-                <div className="w-px h-5 sm:h-6 bg-slate-200"></div>
-                <div className="flex items-center gap-1">
-                  <div className="w-5 sm:w-6 h-5 sm:h-6 rounded-md bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                    <Activity size={isMobile ? 10 : 12} />
-                  </div>
-                  <div>
-                    <p className="text-[6px] sm:text-[7px] font-black text-slate-400 uppercase">Feeds</p>
-                    <p className="text-xs sm:text-sm font-black text-slate-800">{filteredFeeds.length}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Progress Bar */}
-            <div className="mb-3">
-              <div className="flex justify-between text-[8px] sm:text-[9px] font-bold text-slate-500 mb-1">
-                <span>Completion Rate</span>
-                <span>{todayFeedStats.percentage.toFixed(0)}%</span>
-              </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className={`h-full bg-gradient-to-r ${getProgressColor(todayFeedStats.percentage)} rounded-full transition-all duration-500 ease-out`}
-                  style={{ width: `${todayFeedStats.percentage}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Stats Grid */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-purple-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <Calendar size={isMobile ? 10 : 12} className="text-purple-600" />
-                  <p className="text-[7px] sm:text-[8px] font-black text-purple-600 uppercase">Today</p>
-                </div>
-                <p className="text-lg sm:text-xl font-black text-purple-700">{todayFeedStats.total}</p>
-              </div>
-              
-              <div className="bg-emerald-50 rounded-lg p-2 text-center">
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <CheckCircle size={isMobile ? 10 : 12} className="text-emerald-600" />
-                  <p className="text-[7px] sm:text-[8px] font-black text-emerald-600 uppercase">Done</p>
-                </div>
-                <p className="text-lg sm:text-xl font-black text-emerald-700">{todayFeedStats.completed}</p>
-              </div>
-              
-              <div 
-                onClick={togglePendingFilter}
-                className={`rounded-lg p-2 text-center cursor-pointer transition-all duration-200 ${
-                  showPendingOnly 
-                    ? 'bg-amber-600 ring-2 ring-amber-400 ring-offset-1' 
-                    : 'bg-amber-50 hover:bg-amber-100'
-                }`}
-              >
-                <div className="flex items-center justify-center gap-1 mb-0.5">
-                  <AlertCircle size={isMobile ? 10 : 12} className={showPendingOnly ? 'text-white' : 'text-amber-600'} />
-                  <p className={`text-[7px] sm:text-[8px] font-black uppercase ${showPendingOnly ? 'text-white' : 'text-amber-600'}`}>
-                    Pending
-                  </p>
-                  {showPendingOnly && (
-                    <X 
-                      size={isMobile ? 10 : 12} 
-                      className="text-white ml-0.5 hover:text-amber-200" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowPendingOnly(false);
-                      }}
-                    />
-                  )}
-                </div>
-                <p className={`text-lg sm:text-xl font-black ${showPendingOnly ? 'text-white' : 'text-amber-700'}`}>
-                  {todayFeedStats.pending}
-                </p>
-              </div>
-            </div>
-
-            {/* Status Messages */}
-            {todayFeedStats.pending > 0 && !showPendingOnly && (
-              <div 
-                onClick={togglePendingFilter}
-                className="mt-2 p-1.5 bg-amber-50 rounded-lg border border-amber-100 cursor-pointer hover:bg-amber-100 transition-all"
-              >
-                <p className="text-[8px] sm:text-[9px] font-bold text-amber-700 text-center">
-                  {todayFeedStats.pending} feed(s) remaining — Click to view
-                </p>
-              </div>
-            )}
-
-            {showPendingOnly && todayFeedStats.pending > 0 && (
-              <div className="mt-2 p-1.5 bg-amber-600 rounded-lg border border-amber-500">
-                <p className="text-[8px] sm:text-[9px] font-bold text-white text-center">
-                  Showing {todayFeedStats.pending} pending feed(s)
-                </p>
-              </div>
-            )}
-
-            {todayFeedStats.total === 0 && (
-              <div className="mt-2 p-1.5 bg-slate-50 rounded-lg border border-slate-100">
-                <p className="text-[8px] sm:text-[9px] font-bold text-slate-500 text-center">
-                  No feeds scheduled for today
-                </p>
-              </div>
-            )}
-
-            {todayFeedStats.total > 0 && todayFeedStats.percentage === 100 && (
-              <div className="mt-2 p-1.5 bg-emerald-50 rounded-lg border border-emerald-100">
-                <p className="text-[8px] sm:text-[9px] font-bold text-emerald-700 text-center">
-                  All done! 🎉
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Items Per Page Selector */}
         <div className="flex justify-end mb-3 sm:mb-4">
@@ -845,7 +735,6 @@ const ProjectFeeds = () => {
               }}
               className="text-xs sm:text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
             >
-              <option value={10}>10</option>
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
@@ -861,13 +750,11 @@ const ProjectFeeds = () => {
             <div className="divide-y divide-slate-100">
               {currentFeeds.length > 0 ? (
                 currentFeeds.map((feed) => {
-                  const isTodayFeed = isFeedForToday(feed);
-                  const completion = getTodayCompletionDetails(feed);
-                  const isCompleted = completion.isCompleted;
                   const isExpanded = expandedFeedId === feed._id;
                   const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
                   const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                   const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
+                  const lastUpdated = gitLastUpdated[feed._id];
                   
                   return (
                     <div key={feed._id} className="p-3 hover:bg-slate-50/60 transition-all">
@@ -878,23 +765,17 @@ const ProjectFeeds = () => {
                       >
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0 ${
-                              isTodayFeed && !isCompleted 
-                                ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
-                                : isCompleted
-                                ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
-                                : 'bg-gradient-to-br from-slate-800 to-slate-900 text-white'
-                            }`}>
-                              {isCompleted ? <CheckCircle size={12} /> : <Hash size={12} />}
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center shadow-sm flex-shrink-0">
+                              <Hash size={12} />
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1 flex-wrap">
                                 <p className="text-sm font-bold text-slate-800 truncate">{feed.name}</p>
-                                {isTodayFeed && !isCompleted && (
-                                  <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Today</span>
-                                )}
-                                {isCompleted && (
-                                  <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded-full">Done</span>
+                                {lastUpdated && (
+                                  <span className="text-[8px] text-slate-400 flex items-center gap-0.5" title={formatDate(lastUpdated)}>
+                                    <GitBranch size={10} className="text-blue-400" />
+                                    {getTimeAgo(lastUpdated)}
+                                  </span>
                                 )}
                               </div>
                             </div>
@@ -959,15 +840,6 @@ const ProjectFeeds = () => {
                         >
                           <MessageSquare size={14} />
                         </button>
-                        {isCompleted && (
-                          <button
-                            onClick={() => openCommentModal(feed)}
-                            className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all"
-                            title="Completion Comment"
-                          >
-                            <CheckCircle size={14} />
-                          </button>
-                        )}
                         <button
                           onClick={() => handleEditClick(feed)}
                           className="p-1.5 rounded-lg bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
@@ -1020,6 +892,15 @@ const ProjectFeeds = () => {
                             <span className="text-[8px] font-medium text-slate-700">{getScheduleDisplay(feed)}</span>
                           </div>
 
+                          {/* Git Last Updated Info */}
+                          {lastUpdated && (
+                            <div className="flex items-center gap-2">
+                              <GitBranch size={12} className="text-blue-500" />
+                              <span className="text-[8px] font-bold text-slate-500">Last Git Update:</span>
+                              <span className="text-[8px] text-slate-600">{formatDate(lastUpdated)}</span>
+                            </div>
+                          )}
+
                           {/* Comments */}
                           <div className="mt-1">
                             <CommentSection
@@ -1040,25 +921,22 @@ const ProjectFeeds = () => {
               ) : (
                 <div className="p-8 text-center">
                   <Activity size={32} className="text-slate-300 mx-auto mb-2" />
-                  <p className="text-sm font-bold uppercase text-slate-400">
-                    {showPendingOnly ? 'No pending feeds!' : 'No feeds found'}
-                  </p>
-                  <p className="text-[10px] text-slate-300 mt-0.5">
-                    {showPendingOnly ? 'All completed or none scheduled' : 'Try adjusting filters'}
-                  </p>
+                  <p className="text-sm font-bold uppercase text-slate-400">No feeds found</p>
+                  <p className="text-[10px] text-slate-300 mt-0.5">Try adjusting your filters</p>
                 </div>
               )}
             </div>
           ) : (
             // Desktop Table View - Only this is horizontally scrollable
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1100px]">
+              <table className="w-full min-w-[1200px]">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Feed Details</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Project</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Type</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
+                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Git Last Updated</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Developers</th>
                     <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Git Repository</th>
                     <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Actions</th>
@@ -1067,45 +945,29 @@ const ProjectFeeds = () => {
                 <tbody>
                   {currentFeeds.length > 0 ? (
                     currentFeeds.map((feed, idx) => {
-                      const isTodayFeed = isFeedForToday(feed);
-                      const completion = getTodayCompletionDetails(feed);
-                      const isCompleted = completion.isCompleted;
                       const isExpanded = expandedFeedId === feed._id;
                       const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
                       const displayDevelopers = developerNames.slice(0, 2);
                       const hasMoreDevelopers = developerNames.length > 2;
                       const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                       const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
+                      const lastUpdated = gitLastUpdated[feed._id];
                       
                       return (
                         <React.Fragment key={feed._id}>
                           <tr
                             className={`border-b border-slate-100 hover:bg-slate-50/80 transition-all duration-200 cursor-pointer ${
                               idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/30'
-                            } ${isTodayFeed && !isCompleted ? 'bg-amber-50/20' : ''} ${isExpanded ? 'bg-blue-50/40' : ''}`}
+                            } ${isExpanded ? 'bg-blue-50/40' : ''}`}
                             onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
                           >
                             <td className="px-4 py-3">
                               <div className="flex items-center gap-2">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm flex-shrink-0 ${
-                                  isTodayFeed && !isCompleted 
-                                    ? 'bg-gradient-to-br from-amber-500 to-amber-600 text-white' 
-                                    : isCompleted
-                                    ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
-                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 text-white'
-                                }`}>
-                                  {isCompleted ? <CheckCircle size={12} /> : <Hash size={12} />}
+                                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center shadow-sm flex-shrink-0">
+                                  <Hash size={12} />
                                 </div>
                                 <div>
-                                  <div className="flex items-center gap-1.5">
-                                    <p className="text-xs font-bold text-slate-800 whitespace-nowrap">{feed.name}</p>
-                                    {isTodayFeed && !isCompleted && (
-                                      <span className="text-[7px] font-black bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full whitespace-nowrap">Today</span>
-                                    )}
-                                    {isCompleted && (
-                                      <span className="text-[7px] font-black bg-emerald-100 text-emerald-700 px-1 py-0.5 rounded-full whitespace-nowrap">Done</span>
-                                    )}
-                                  </div>
+                                  <p className="text-xs font-bold text-slate-800 whitespace-nowrap">{feed.name}</p>
                                 </div>
                               </div>
                             </td>
@@ -1143,6 +1005,21 @@ const ProjectFeeds = () => {
                                   </div>
                                 )}
                               </div>
+                            </td>
+
+                            <td className="px-4 py-3">
+                              {loadingGitDates ? (
+                                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                              ) : lastUpdated ? (
+                                <div className="flex items-center gap-1.5">
+                                  <GitBranch size={12} className="text-blue-500" />
+                                  <span className="text-[9px] font-medium text-slate-600" title={formatDate(lastUpdated)}>
+                                    {getTimeAgo(lastUpdated)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-[8px] text-slate-400 italic whitespace-nowrap">Never</span>
+                              )}
                             </td>
 
                             <td className="px-4 py-3">
@@ -1202,15 +1079,6 @@ const ProjectFeeds = () => {
                                 >
                                   <MessageSquare size={12} />
                                 </button>
-                                {isCompleted && (
-                                  <button
-                                    onClick={() => openCommentModal(feed)}
-                                    className="group w-7 h-7 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all flex-shrink-0"
-                                    title="View Completion Comment"
-                                  >
-                                    <CheckCircle size={12} />
-                                  </button>
-                                )}
                                 <button
                                   onClick={() => handleEditClick(feed)}
                                   className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all flex-shrink-0"
@@ -1231,7 +1099,7 @@ const ProjectFeeds = () => {
 
                           {isExpanded && (
                             <tr className="bg-blue-50/30">
-                              <td colSpan={7} className="px-6 py-4">
+                              <td colSpan={8} className="px-6 py-4">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                   <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
                                     <div className="flex items-center gap-2 mb-2">
@@ -1283,7 +1151,21 @@ const ProjectFeeds = () => {
                                   </div>
                                 </div>
 
-                                <div className="mt-4 bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                {/* Git Last Updated Details */}
+                                {lastUpdated && (
+                                  <div className="mt-3 bg-white rounded-lg p-3 shadow-sm border border-slate-200">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                                        <GitBranch size={12} />
+                                      </div>
+                                      <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Git Last Updated</h4>
+                                    </div>
+                                    <p className="text-xs font-medium text-slate-700">{formatDate(lastUpdated)}</p>
+                                    <p className="text-[8px] text-slate-400 mt-0.5">{getTimeAgo(lastUpdated)}</p>
+                                  </div>
+                                )}
+
+                                <div className="mt-3 bg-white rounded-lg p-3 shadow-sm border border-slate-200">
                                   <div className="flex items-center gap-2 mb-2">
                                     <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
                                       <MessageSquare size={12} />
@@ -1308,17 +1190,13 @@ const ProjectFeeds = () => {
                     })
                   ) : (
                     <tr>
-                      <td colSpan={7} className="py-12 text-center">
+                      <td colSpan={8} className="py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
                             <Activity size={20} className="text-slate-300" />
                           </div>
-                          <p className="text-xs font-bold uppercase text-slate-400">
-                            {showPendingOnly ? 'No pending feeds for today!' : 'No feeds found'}
-                          </p>
-                          <p className="text-[9px] text-slate-300 mt-0.5">
-                            {showPendingOnly ? 'All feeds completed or none scheduled' : 'Try adjusting your filters'}
-                          </p>
+                          <p className="text-xs font-bold uppercase text-slate-400">No feeds found</p>
+                          <p className="text-[9px] text-slate-300 mt-0.5">Try adjusting your filters</p>
                         </div>
                       </td>
                     </tr>

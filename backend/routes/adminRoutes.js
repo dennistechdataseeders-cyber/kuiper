@@ -1642,6 +1642,66 @@ router.delete('/remove-profile-image', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to remove profile image' });
   }
 });
+// backend/routes/adminRoutes.js - Add this endpoint
+
+// GET /projects/:id/repo-folder-last-updated - Get last updated date for a folder in GitHub repo
+router.get('/projects/:id/repo-folder-last-updated', authorize('Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.id);
+    
+    if (!project || !project.gitRepoName) {
+      return res.json({ success: false, error: 'No Git repository found for this project' });
+    }
+    
+    const { folderPath } = req.query;
+    
+    if (!folderPath) {
+      return res.json({ success: false, error: 'Folder path is required' });
+    }
+    
+    // Use GitHub API to get the last commit date for the folder
+    const { Octokit } = require('@octokit/rest');
+    const octokit = new Octokit({ 
+      auth: process.env.GITHUB_TOKEN,
+      userAgent: 'KUIPER-CRM-v1.0'
+    });
+    
+    try {
+      // Get commits for the specific folder
+      const commits = await octokit.repos.listCommits({
+        owner: process.env.GITHUB_OWNER,
+        repo: project.gitRepoName,
+        path: folderPath,
+        per_page: 1
+      });
+      
+      if (commits.data && commits.data.length > 0) {
+        const lastCommit = commits.data[0];
+        return res.json({
+          success: true,
+          lastUpdated: lastCommit.commit.committer.date,
+          commitSha: lastCommit.sha,
+          message: lastCommit.commit.message
+        });
+      } else {
+        return res.json({
+          success: true,
+          lastUpdated: null,
+          message: 'No commits found for this folder'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching folder commits:', error);
+      return res.json({
+        success: false,
+        error: error.message
+      });
+    }
+  } catch (err) {
+    console.error('Error fetching repo folder last updated:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ============================================
 // COUNTRY MAP
 // ============================================
