@@ -1,4 +1,5 @@
-// backend/routes/notificationRoutes.js
+// backend/routes/notificationRoutes.js - COMPLETE FIX
+
 const express = require('express');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
@@ -12,34 +13,42 @@ router.get('/count', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
     
-    // Count unread notifications
+    // Count unread notifications from database
     const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
     
-    // Count open tickets (for non-admin users)
+    // Count open tickets that haven't been viewed yet
     let openTicketCount = 0;
+    
+    // Get viewed open ticket IDs
+    const viewedTicketIds = new Set(user.viewedOpenTickets || []);
+    
+    // Build query based on role
+    let ticketQuery = {};
     if (req.user.role === 'Admin') {
-      openTicketCount = await Ticket.countDocuments({ 
-        status: { $in: ['Open', 'In Progress'] } 
-      });
+      ticketQuery = { status: { $in: ['Open', 'In Progress'] } };
     } else if (req.user.role === 'Client') {
-      openTicketCount = await Ticket.countDocuments({
+      ticketQuery = {
         createdBy: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
-      });
+      };
     } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
-      openTicketCount = await Ticket.countDocuments({
+      ticketQuery = {
         assignedTo: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
-      });
+      };
     } else {
-      openTicketCount = await Ticket.countDocuments({
+      ticketQuery = {
         $or: [
           { createdBy: req.user._id },
           { assignedTo: req.user._id }
         ],
         status: { $in: ['Open', 'In Progress'] }
-      });
+      };
     }
+    
+    // Count open tickets that haven't been viewed
+    const openTickets = await Ticket.find(ticketQuery).select('_id');
+    openTicketCount = openTickets.filter(t => !viewedTicketIds.has(t._id.toString())).length;
     
     res.json({
       success: true,
@@ -69,62 +78,51 @@ router.get('/', protect, async (req, res) => {
         }
       });
     
-    // ============================================
-    // FIX 1: Only get UNREAD notifications
-    // ============================================
+    // Get unread notifications from database
     const unreadNotifications = (user.unreadNotifications || [])
       .filter(n => n.read === false);
     
-    // Get open tickets as notifications
-    let openTickets = [];
+    // Get open tickets that haven't been viewed yet
+    const viewedTicketIds = new Set(user.viewedOpenTickets || []);
+    
+    // Build query based on role
+    let ticketQuery = {};
     if (req.user.role === 'Admin') {
-      openTickets = await Ticket.find({ 
-        status: { $in: ['Open', 'In Progress'] } 
-      })
-      .populate('createdBy', 'name')
-      .populate({
-        path: 'comments',
-        select: 'text userName userId createdAt',
-        options: { sort: { createdAt: -1 }, limit: 1 }
-      });
+      ticketQuery = { status: { $in: ['Open', 'In Progress'] } };
     } else if (req.user.role === 'Client') {
-      openTickets = await Ticket.find({
+      ticketQuery = {
         createdBy: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
-      })
-      .populate('createdBy', 'name')
-      .populate({
-        path: 'comments',
-        select: 'text userName userId createdAt',
-        options: { sort: { createdAt: -1 }, limit: 1 }
-      });
+      };
     } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
-      openTickets = await Ticket.find({
+      ticketQuery = {
         assignedTo: req.user._id,
         status: { $in: ['Open', 'In Progress'] }
-      })
-      .populate('createdBy', 'name')
-      .populate({
-        path: 'comments',
-        select: 'text userName userId createdAt',
-        options: { sort: { createdAt: -1 }, limit: 1 }
-      });
+      };
     } else {
-      openTickets = await Ticket.find({
+      ticketQuery = {
         $or: [
           { createdBy: req.user._id },
           { assignedTo: req.user._id }
         ],
         status: { $in: ['Open', 'In Progress'] }
-      })
+      };
+    }
+    
+    const rawOpenTickets = await Ticket.find(ticketQuery)
       .populate('createdBy', 'name')
       .populate({
         path: 'comments',
         select: 'text userName userId createdAt',
         options: { sort: { createdAt: -1 }, limit: 1 }
       });
-    }
     
+    // Filter out tickets that have already been viewed
+    const openTickets = rawOpenTickets.filter(ticket => 
+      !viewedTicketIds.has(ticket._id.toString())
+    );
+    
+    // Create open ticket notifications
     const openTicketNotifications = openTickets.map(ticket => {
       const lastComment = ticket.comments && ticket.comments.length > 0 
         ? ticket.comments[ticket.comments.length - 1] 
@@ -149,9 +147,7 @@ router.get('/', protect, async (req, res) => {
       };
     });
     
-    // ============================================
-    // Process UNREAD notifications only
-    // ============================================
+    // Process unread notifications from database
     const processedNotifications = unreadNotifications.map(notification => {
       const notif = notification.toObject ? notification.toObject() : notification;
       const ticketData = notif.ticketId;
@@ -215,42 +211,74 @@ router.get('/', protect, async (req, res) => {
 });
 
 // ============================================
-// Mark notification as read - REMOVE from array
+// Mark notification as read
 // ============================================
 router.patch('/:notificationId/read', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
+    const notificationId = req.params.notificationId;
     
     // Check if it's an open ticket notification (starts with 'open_')
-    if (req.params.notificationId && req.params.notificationId.toString().startsWith('open_')) {
-      return res.json({ success: true, message: 'Open ticket notification marked as read' });
-    }
-    
-    // ============================================
-    // FIX 2: REMOVE the notification from the array
-    // ============================================
-    const notificationIndex = user.unreadNotifications?.findIndex(
-      n => n._id.toString() === req.params.notificationId
-    );
-    
-    if (notificationIndex !== undefined && notificationIndex !== -1) {
-      // Remove the notification from the array
-      user.unreadNotifications.splice(notificationIndex, 1);
-      user.notificationCount = Math.max(0, (user.notificationCount || 0) - 1);
-      await user.save();
+    if (notificationId && notificationId.toString().startsWith('open_')) {
+      // Extract ticket ID from the notification ID
+      const ticketId = notificationId.toString().replace('open_', '');
       
-      console.log(`✅ Notification ${req.params.notificationId} removed from user's notifications`);
+      console.log(`📌 Marking open_ticket as viewed for ticket: ${ticketId}`);
+      
+      // Initialize viewedOpenTickets array if it doesn't exist
+      if (!user.viewedOpenTickets) {
+        user.viewedOpenTickets = [];
+      }
+      
+      // Add the ticket ID to viewed list if not already there
+      if (!user.viewedOpenTickets.includes(ticketId)) {
+        user.viewedOpenTickets.push(ticketId);
+        await user.save();
+        console.log(`✅ Open ticket ${ticketId} marked as viewed for user ${user._id}`);
+      }
+      
+      // Also remove any existing open_ticket notifications for this ticket from unreadNotifications
+      user.unreadNotifications = user.unreadNotifications.filter(
+        n => !(n.type === 'open_ticket' && n.ticketId && n.ticketId.toString() === ticketId)
+      );
+      await user.save();
       
       // Emit socket update
       const io = global.io;
       if (io) {
+        const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
         io.to(req.user._id.toString()).emit('notification_count_update', {
           type: 'notification_read',
-          count: user.notificationCount
+          count: unreadCount
+        });
+      }
+      
+      return res.json({ success: true, message: 'Open ticket notification marked as read' });
+    }
+    
+    // Regular notification handling
+    const notificationIndex = user.unreadNotifications?.findIndex(
+      n => n._id.toString() === notificationId
+    );
+    
+    if (notificationIndex !== undefined && notificationIndex !== -1) {
+      user.unreadNotifications.splice(notificationIndex, 1);
+      user.notificationCount = Math.max(0, (user.notificationCount || 0) - 1);
+      await user.save();
+      
+      console.log(`✅ Notification ${notificationId} removed from user's notifications`);
+      
+      // Emit socket update
+      const io = global.io;
+      if (io) {
+        const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
+        io.to(req.user._id.toString()).emit('notification_count_update', {
+          type: 'notification_read',
+          count: unreadCount
         });
       }
     } else {
-      console.log(`⚠️ Notification ${req.params.notificationId} not found in user's notifications`);
+      console.log(`⚠️ Notification ${notificationId} not found in user's notifications`);
     }
     
     res.json({ success: true });
@@ -276,18 +304,17 @@ router.patch('/mark-all-read', protect, async (req, res) => {
     
     console.log(`📊 Before: ${user.unreadNotifications?.length || 0} notifications, count: ${user.notificationCount}`);
     
-    // ============================================
-    // FIX 3: CLEAR the entire array
-    // ============================================
+    // Clear all notifications
     if (user.unreadNotifications && user.unreadNotifications.length > 0) {
-      // Clear all notifications
       user.unreadNotifications = [];
       user.notificationCount = 0;
       
+      // Also clear viewed open tickets
+      user.viewedOpenTickets = [];
+      
       await user.save();
       
-      console.log(`✅ Cleared all notifications`);
-      console.log(`📊 After: count: ${user.notificationCount}`);
+      console.log(`✅ Cleared all notifications and viewed tickets`);
       
       // Emit socket update
       const io = global.io;
@@ -323,9 +350,37 @@ router.get('/unread-count', protect, async (req, res) => {
     const user = await User.findById(req.user._id);
     const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
     
+    // Also count open tickets not viewed
+    const viewedTicketIds = new Set(user.viewedOpenTickets || []);
+    let ticketQuery = {};
+    if (req.user.role === 'Admin') {
+      ticketQuery = { status: { $in: ['Open', 'In Progress'] } };
+    } else if (req.user.role === 'Client') {
+      ticketQuery = {
+        createdBy: req.user._id,
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
+      ticketQuery = {
+        assignedTo: req.user._id,
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    } else {
+      ticketQuery = {
+        $or: [
+          { createdBy: req.user._id },
+          { assignedTo: req.user._id }
+        ],
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    }
+    
+    const openTickets = await Ticket.find(ticketQuery).select('_id');
+    const openTicketCount = openTickets.filter(t => !viewedTicketIds.has(t._id.toString())).length;
+    
     res.json({
       success: true,
-      count: unreadCount
+      count: unreadCount + openTicketCount
     });
   } catch (error) {
     console.error('Error fetching unread count:', error);

@@ -1,47 +1,147 @@
 // backend/services/attendanceSyncService.js
+
 const axios = require('axios');
 const EmployeePunchLog = require('../models/EmployeePunchLog');
 const User = require('../models/User');
 const mongoose = require('mongoose');
+const fs = require('fs');
+const path = require('path');
 
 class AttendanceSyncService {
   constructor() {
-    // Use the correct API URL with the proper API key
-    this.apiBaseUrl = process.env.ATTENDANCE_API_URL || 'http://103.170.149.84:82/api/v2/WebAPI';
-    // The API key from the URL: 2609
-    this.apiKey = process.env.ATTENDANCE_API_KEY || '2609';
+    this.baseUrl = process.env.BIOMETRIC_API_URL || 'http://103.170.149.84:2000';
+    this.loginUrl = `${this.baseUrl}/api/Auth/Login`;
+    this.deviceKey = process.env.BIOMETRIC_DEVICE_KEY || 'C2642CA867382C34';
+    this.username = process.env.BIOMETRIC_USERNAME || 'biomax';
+    this.password = process.env.BIOMETRIC_PASSWORD || 'biomax';
+    this.token = null;
+    this.tokenExpiry = null;
   }
 
   /**
-   * Fetch attendance logs from the third-party API
-   * @param {string} fromDate - YYYY-MM-DD format
-   * @param {string} toDate - YYYY-MM-DD format
-   * @returns {Promise<Array>} - Array of attendance logs
+   * Get authentication token from biometric API
+   */
+  async getAuthToken() {
+    try {
+      // Check if token is still valid (10 min buffer)
+      if (this.token && this.tokenExpiry && Date.now() < this.tokenExpiry - 10 * 60 * 1000) {
+        console.log('✅ Using cached token');
+        return this.token;
+      }
+
+      console.log('🔑 Getting new auth token...');
+      
+      const payload = {
+        Username: this.username,
+        Password: this.password
+      };
+
+      console.log(`📡 POST ${this.loginUrl}`);
+      console.log(`📋 Payload:`, { Username: this.username, Password: '******' });
+
+      const response = await axios.post(this.loginUrl, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        timeout: 10000
+      });
+
+      console.log(`📥 Response status: ${response.status}`);
+      
+      const loginData = response.data;
+      console.log('📥 Login response keys:', Object.keys(loginData));
+
+      // Try multiple possible token field names
+      const token = 
+        loginData.token ||
+        loginData.Token ||
+        loginData.accessToken ||
+        loginData.AccessToken ||
+        loginData.jwt ||
+        loginData.JWT ||
+        loginData.data?.token ||
+        loginData.data?.Token;
+
+      if (token && typeof token === 'string' && token.length > 10) {
+        this.token = token;
+        this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+        console.log('✅ Auth token obtained successfully');
+        console.log(`📝 Token: ${token.substring(0, 20)}...`);
+        return token;
+      } else {
+        console.error('❌ No valid token in response:', loginData);
+        throw new Error('No valid token in response');
+      }
+    } catch (error) {
+      console.error('❌ Failed to get auth token:', error.message);
+      if (error.response) {
+        console.error('   Status:', error.response.status);
+        console.error('   Data:', JSON.stringify(error.response.data));
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Fetch attendance logs from the device API
+   * Matches the Python script exactly
    */
   async fetchAttendanceLogs(fromDate, toDate) {
     try {
-      const url = `${this.apiBaseUrl}/GetDeviceLogs`;
+      // First, get the auth token
+      const token = await this.getAuthToken();
+      
+      if (!token) {
+        throw new Error('Failed to authenticate with biometric API');
+      }
+
+      const url = `${this.baseUrl}/api/DeviceLog/GetAllLogsByDate`;
       const params = {
-        APIKey: this.apiKey,
         FromDate: fromDate,
-        ToDate: toDate
+        ToDate: toDate,
+        DeviceKey: this.deviceKey
       };
 
       console.log(`📡 Fetching attendance logs from ${fromDate} to ${toDate}...`);
       console.log(`🔗 URL: ${url}`);
       console.log(`📋 Params:`, params);
 
-      const response = await axios.get(url, { 
-        params,
-        timeout: 30000,
+      const response = await axios.get(url, {
+        params: params,
         headers: {
-          'Accept': 'application/json'
-        }
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        timeout: 30000
       });
+
+      console.log(`📥 Response status: ${response.status}`);
       
       // Check if response is valid
       if (response.data && Array.isArray(response.data)) {
         console.log(`✅ Fetched ${response.data.length} attendance records`);
+        
+        // Log sample of what we received
+        if (response.data.length > 0) {
+          console.log('📋 Sample log keys:', Object.keys(response.data[0]));
+          console.log('📋 Sample log:', JSON.stringify(response.data[0], null, 2));
+        }
+        
+        // Save logs to file for debugging
+        try {
+          const logsDir = path.join(__dirname, '../logs');
+          if (!fs.existsSync(logsDir)) {
+            fs.mkdirSync(logsDir, { recursive: true });
+          }
+          const logFile = path.join(logsDir, `attendance_logs_${fromDate}_${toDate}.json`);
+          fs.writeFileSync(logFile, JSON.stringify(response.data, null, 2));
+          console.log(`💾 Saved logs to ${logFile}`);
+        } catch (fileError) {
+          console.log('⚠️ Could not save logs to file:', fileError.message);
+        }
+        
         return response.data;
       } else {
         console.warn('⚠️ Unexpected response format:', typeof response.data);
@@ -53,22 +153,47 @@ class AttendanceSyncService {
         console.error('   Status:', error.response.status);
         console.error('   Data:', JSON.stringify(error.response.data));
       }
-      if (error.code === 'ECONNABORTED') {
-        console.error('   Request timed out after 30 seconds');
+      return [];
+    }
+  }
+
+  /**
+   * Get all employee codes from the biometric device
+   */
+  async getDeviceEmployeeCodes(fromDate, toDate) {
+    try {
+      const logs = await this.fetchAttendanceLogs(fromDate, toDate);
+      
+      if (!logs || !Array.isArray(logs)) {
+        return [];
       }
-      // Return empty array instead of throwing to handle gracefully
+      
+      // Use EmpCode field (matches the Python script)
+      const codes = new Set();
+      logs.forEach(log => {
+        const code = log.EmpCode || log.employeeCode;
+        if (code !== undefined && code !== null && code !== '') {
+          codes.add(String(code));
+        }
+      });
+      
+      console.log(`📋 Found ${codes.size} unique employee codes from device`);
+      console.log('📋 Codes:', Array.from(codes));
+      
+      return Array.from(codes);
+    } catch (error) {
+      console.error('❌ Error getting device employee codes:', error.message);
       return [];
     }
   }
 
   /**
    * Process and sync attendance logs to the database
-   * @param {string} fromDate - YYYY-MM-DD format
-   * @param {string} toDate - YYYY-MM-DD format
-   * @returns {Promise<Object>} - Sync results
    */
   async syncAttendanceLogs(fromDate, toDate) {
     try {
+      console.log(`🔄 Starting attendance sync from ${fromDate} to ${toDate}...`);
+      
       // 1. Fetch logs from API
       const logs = await this.fetchAttendanceLogs(fromDate, toDate);
       
@@ -83,67 +208,105 @@ class AttendanceSyncService {
         };
       }
 
-      // 2. Group logs by employee code
-      const logsByEmployee = this.groupLogsByEmployee(logs);
+      console.log(`📊 Processing ${logs.length} logs...`);
+
+      // 2. Get all users with employee codes for faster lookup
+      const allUsers = await User.find({ 
+        employeeCode: { $ne: null, $ne: '' } 
+      }).select('_id employeeCode name');
       
-      // 3. Process each employee's logs
+      const userMap = {};
+      allUsers.forEach(u => {
+        userMap[String(u.employeeCode)] = u;
+      });
+      
+      console.log(`👥 Found ${Object.keys(userMap).length} users with employee codes in system`);
+
+      // 3. Group logs by employee code (using EmpCode field)
+      const logsByEmployee = {};
+      let unmatchedLogs = 0;
+      
+      logs.forEach(log => {
+        const employeeCode = log.EmpCode || log.employeeCode;
+        if (!employeeCode) {
+          unmatchedLogs++;
+          return;
+        }
+        
+        const codeStr = String(employeeCode);
+        if (!logsByEmployee[codeStr]) {
+          logsByEmployee[codeStr] = [];
+        }
+        logsByEmployee[codeStr].push(log);
+      });
+      
+      console.log(`📊 Logs by employee: ${Object.keys(logsByEmployee).length} employees`);
+      console.log(`⚠️ Logs without employee code: ${unmatchedLogs}`);
+      
+      // Log the employee codes found
+      const foundCodes = Object.keys(logsByEmployee);
+      console.log('📋 Employee codes found in logs:', foundCodes);
+      
+      // Check which codes exist in the system
+      const matchedCodes = [];
+      const unmatchedCodes = [];
+      foundCodes.forEach(code => {
+        if (userMap[code]) {
+          matchedCodes.push(code);
+        } else {
+          unmatchedCodes.push(code);
+        }
+      });
+      console.log(`✅ Matched codes: ${matchedCodes.length}`, matchedCodes);
+      console.log(`❌ Unmatched codes: ${unmatchedCodes.length}`, unmatchedCodes);
+
       const results = {
         processed: 0,
         created: 0,
         updated: 0,
-        errors: []
+        errors: [],
+        matchedCodes: matchedCodes,
+        unmatchedCodes: unmatchedCodes,
+        unmatchedLogs: unmatchedLogs
       };
 
+      // 4. Process each employee's logs
+      // NOTE: logs must be processed in chronological order per employee so that
+      // the first "in" wins and the last "out" wins deterministically.
       for (const [employeeCode, employeeLogs] of Object.entries(logsByEmployee)) {
-        try {
-          // Find the user by employee code
-          const user = await User.findOne({ employeeCode });
-          
-          if (!user) {
-            console.warn(`⚠️ User not found for employee code: ${employeeCode}`);
+        const user = userMap[employeeCode];
+        if (!user) {
+          // Skip logs for users that don't exist in the system
+          continue;
+        }
+
+        // Sort this employee's logs chronologically before processing
+        const sortedLogs = [...employeeLogs].sort((a, b) => {
+          const aTime = new Date(a.IOTime || a.LogDate).getTime();
+          const bTime = new Date(b.IOTime || b.LogDate).getTime();
+          return aTime - bTime;
+        });
+
+        console.log(`👤 Processing ${sortedLogs.length} logs for ${user.name} (${employeeCode})`);
+
+        for (const log of sortedLogs) {
+          try {
+            const result = await this.processLogEntry(user._id, log);
+            results.processed++;
+            if (result.created) results.created++;
+            if (result.updated) results.updated++;
+          } catch (logError) {
+            console.error(`Error processing log for ${employeeCode}:`, logError.message);
             results.errors.push({
               employeeCode,
-              error: 'User not found',
-              logs: employeeLogs.length
+              logDate: log.IOTime || log.LogDate,
+              error: logError.message
             });
-            continue;
           }
-
-          // Validate user._id is a valid ObjectId
-          if (!mongoose.Types.ObjectId.isValid(user._id)) {
-            console.error(`❌ Invalid user ID for employee: ${employeeCode}`, user._id);
-            results.errors.push({
-              employeeCode,
-              error: 'Invalid user ID',
-              logs: employeeLogs.length
-            });
-            continue;
-          }
-
-          // Process each log for this employee
-          for (const log of employeeLogs) {
-            try {
-              const result = await this.processLogEntry(user._id, log);
-              results.processed++;
-              if (result.created) results.created++;
-              if (result.updated) results.updated++;
-            } catch (logError) {
-              console.error(`Error processing log for ${employeeCode}:`, logError.message);
-              results.errors.push({
-                employeeCode,
-                logDate: log.LogDate,
-                error: logError.message
-              });
-            }
-          }
-        } catch (err) {
-          console.error(`Error processing employee ${employeeCode}:`, err.message);
-          results.errors.push({
-            employeeCode,
-            error: err.message
-          });
         }
       }
+
+      console.log(`✅ Sync complete: ${results.processed} processed, ${results.created} created, ${results.updated} updated`);
 
       return {
         success: true,
@@ -157,67 +320,52 @@ class AttendanceSyncService {
   }
 
   /**
-   * Group logs by employee code
-   * @param {Array} logs - Array of attendance logs
-   * @returns {Object} - Grouped logs by employee code
-   */
-  groupLogsByEmployee(logs) {
-    const grouped = {};
-    
-    logs.forEach(log => {
-      const code = log.EmployeeCode || log.employeeCode;
-      if (!code) return;
-      
-      if (!grouped[code]) {
-        grouped[code] = [];
-      }
-      grouped[code].push(log);
-    });
-    
-    return grouped;
-  }
-
-  /**
    * Process a single log entry
-   * @param {string} userId - User ID
-   * @param {Object} log - Attendance log entry
-   * @returns {Promise<Object>} - Process result
    */
   async processLogEntry(userId, log) {
-    // Validate userId is a valid ObjectId
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       throw new Error(`Invalid userId: ${userId}`);
     }
 
-    // Parse the log date
-    const logDate = new Date(log.LogDate);
+    // Parse the log date - using IOTime field (matches Python script)
+    const logDateStr = log.IOTime || log.LogDate;
+    if (!logDateStr) {
+      throw new Error('No date found in log entry');
+    }
+    
+    const logDate = new Date(logDateStr);
+    if (isNaN(logDate.getTime())) {
+      throw new Error(`Invalid date format: ${logDateStr}`);
+    }
+    
     const dateStr = logDate.toISOString().split('T')[0];
     
     // Normalize date to start of day
     const date = new Date(dateStr);
     date.setHours(0, 0, 0, 0);
     
-    // Determine if it's a punch in or out
-    const isPunchIn = log.PunchDirection?.toLowerCase() === 'in';
-    const isPunchOut = log.PunchDirection?.toLowerCase() === 'out';
+    // Determine if it's a punch in or out - using IOMode field
+    const punchDirection = (log.IOMode || log.PunchDirection || '').toString().trim().toLowerCase();
+    const isPunchIn = punchDirection === 'in' || punchDirection === '1' || punchDirection === '';
+    const isPunchOut = punchDirection === 'out' || punchDirection === '2';
     
     let result = { created: false, updated: false };
 
     try {
       if (isPunchIn) {
         // Check if we already have a punch-in for this day
-        const existingLog = await EmployeePunchLog.findOne({
+        let existingLog = await EmployeePunchLog.findOne({
           employeeId: userId,
-          date: date,
-          punchIn: { $ne: null }
+          date: date
         });
 
         if (existingLog) {
-          // Update the existing punch-in time (if later)
-          if (logDate > existingLog.punchIn) {
+          // Keep the EARLIEST in-punch of the day as the official "punch-in"
+          if (!existingLog.punchIn || logDate < existingLog.punchIn) {
             existingLog.punchIn = logDate;
             await existingLog.save();
             result.updated = true;
+            console.log(`🔄 Updated punch-in for user ${userId} on ${dateStr}`);
           }
         } else {
           // Check if there's a log with just punch-out for this day
@@ -233,60 +381,50 @@ class AttendanceSyncService {
             punchOutOnly.punchIn = logDate;
             await punchOutOnly.save();
             result.updated = true;
+            console.log(`🔄 Updated punch-in for user ${userId} on ${dateStr}`);
           } else {
-            // Create new punch log
+            // Create new log with punch-in only
             await EmployeePunchLog.create({
               employeeId: userId,
               punchIn: logDate,
               punchOut: null,
               date: date,
               isManualCorrection: false,
-              correctionNote: `Auto-synced from device: ${log.SerialNumber || 'Unknown device'}`,
+              correctionNote: `Auto-synced from device: ${log.DeviceName || log.SerialNumber || 'Unknown device'}`,
               createdBy: null
             });
             result.created = true;
+            console.log(`✅ Created punch-in for user ${userId} on ${dateStr}`);
           }
         }
       } else if (isPunchOut) {
-        // Find the punch-in for this day
-        const existingLog = await EmployeePunchLog.findOne({
+        // Find existing log for this day
+        let existingLog = await EmployeePunchLog.findOne({
           employeeId: userId,
-          date: date,
-          punchOut: null
+          date: date
         });
 
         if (existingLog) {
-          // Update the existing log with punch-out time
-          existingLog.punchOut = logDate;
-          await existingLog.save();
-          result.updated = true;
-        } else {
-          // Check if there's a log with just punch-in for this day
-          const punchInOnly = await EmployeePunchLog.findOne({
-            employeeId: userId,
-            date: date,
-            punchIn: { $ne: null },
-            punchOut: null
-          });
-
-          if (punchInOnly) {
-            // Update the existing log with punch-out
-            punchInOnly.punchOut = logDate;
-            await punchInOnly.save();
+          // Keep the LATEST out-punch of the day as the official "punch-out"
+          if (!existingLog.punchOut || logDate > existingLog.punchOut) {
+            existingLog.punchOut = logDate;
+            await existingLog.save();
             result.updated = true;
-          } else {
-            // Create a new log with just punch-out
-            await EmployeePunchLog.create({
-              employeeId: userId,
-              punchIn: null,
-              punchOut: logDate,
-              date: date,
-              isManualCorrection: false,
-              correctionNote: `Auto-synced from device: ${log.SerialNumber || 'Unknown device'}`,
-              createdBy: null
-            });
-            result.created = true;
+            console.log(`🔄 Updated punch-out for user ${userId} on ${dateStr}`);
           }
+        } else {
+          // Create new log with punch-out only
+          await EmployeePunchLog.create({
+            employeeId: userId,
+            punchIn: null,
+            punchOut: logDate,
+            date: date,
+            isManualCorrection: false,
+            correctionNote: `Auto-synced from device: ${log.DeviceName || log.SerialNumber || 'Unknown device'}`,
+            createdBy: null
+          });
+          result.created = true;
+          console.log(`✅ Created punch-out for user ${userId} on ${dateStr}`);
         }
       }
     } catch (error) {
@@ -298,170 +436,35 @@ class AttendanceSyncService {
   }
 
   /**
-   * Get attendance summary for an employee
-   * @param {string} userId - User ID (must be a valid ObjectId)
-   * @param {string} startDate - YYYY-MM-DD format
-   * @param {string} endDate - YYYY-MM-DD format
-   * @returns {Promise<Object>} - Attendance summary
-   */
-  async getEmployeeAttendanceSummary(userId, startDate, endDate) {
-    try {
-      // Validate userId
-      if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
-        throw new Error(`Invalid userId: ${userId}`);
-      }
-
-      const logs = await EmployeePunchLog.find({
-        employeeId: userId,
-        date: {
-          $gte: new Date(startDate),
-          $lte: new Date(endDate)
-        }
-      }).sort({ date: 1 });
-
-      const summary = {
-        totalDays: 0,
-        present: 0,
-        absent: 0,
-        late: 0,
-        onLeave: 0,
-        totalHours: 0,
-        averageHours: 0,
-        days: []
-      };
-
-      // Calculate working days (weekdays only)
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      let workingDays = 0;
-      const current = new Date(start);
-
-      while (current <= end) {
-        const dayOfWeek = current.getDay();
-        if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-          workingDays++;
-        }
-        current.setDate(current.getDate() + 1);
-      }
-
-      summary.totalDays = workingDays;
-
-      // Process logs by date
-      const logsByDate = {};
-      logs.forEach(log => {
-        const dateStr = log.date.toISOString().split('T')[0];
-        if (!logsByDate[dateStr]) {
-          logsByDate[dateStr] = [];
-        }
-        logsByDate[dateStr].push(log);
-      });
-
-      // Calculate daily stats
-      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      const currentDate = new Date(start);
-
-      while (currentDate <= end) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        const dayOfWeek = currentDate.getDay();
-        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-        if (!isWeekend) {
-          const dayLogs = logsByDate[dateStr] || [];
-          const punchIn = dayLogs.find(l => l.punchIn);
-          const punchOut = dayLogs.find(l => l.punchOut);
-          
-          let status = 'absent';
-          let hoursWorked = 0;
-          
-          if (punchIn && punchOut) {
-            status = 'present';
-            hoursWorked = (punchOut.punchOut - punchIn.punchIn) / (1000 * 60 * 60);
-            summary.totalHours += hoursWorked;
-            summary.present++;
-            
-            // Check for late arrival (after 10:00 AM)
-            const punchInHour = new Date(punchIn.punchIn).getHours();
-            if (punchInHour >= 10) {
-              summary.late++;
-            }
-          } else if (punchIn) {
-            status = 'partial';
-          }
-          
-          summary.days.push({
-            date: dateStr,
-            dayName: dayNames[dayOfWeek],
-            status,
-            hoursWorked: Math.round(hoursWorked * 100) / 100,
-            punchIn: punchIn?.punchIn || null,
-            punchOut: punchOut?.punchOut || null
-          });
-        }
-
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-
-      summary.absent = workingDays - summary.present;
-      summary.averageHours = summary.present > 0 
-        ? Math.round((summary.totalHours / summary.present) * 100) / 100 
-        : 0;
-
-      return summary;
-    } catch (error) {
-      console.error('Error getting attendance summary:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Get employee by employee code
-   * @param {string} employeeCode - Employee code
-   * @returns {Promise<Object>} - User object
-   */
-  async getEmployeeByCode(employeeCode) {
-    return await User.findOne({ employeeCode });
-  }
-
-  /**
-   * Map employee codes to user IDs
-   * @param {Array} employeeCodes - Array of employee codes
-   * @returns {Promise<Object>} - Mapping of employee code to user ID
-   */
-  async mapEmployeeCodesToUserIds(employeeCodes) {
-    const users = await User.find({
-      employeeCode: { $in: employeeCodes }
-    });
-    
-    const mapping = {};
-    users.forEach(u => {
-      mapping[u.employeeCode] = u._id;
-    });
-    
-    return mapping;
-  }
-
-  /**
-   * Test connection to the API
-   * @param {string} fromDate - YYYY-MM-DD format
-   * @param {string} toDate - YYYY-MM-DD format
-   * @returns {Promise<Object>} - Test results
+   * Test connection to biometric API
    */
   async testConnection(fromDate, toDate) {
     try {
+      console.log('🔍 Testing connection to biometric API...');
+      
       const logs = await this.fetchAttendanceLogs(fromDate, toDate);
       
       if (logs && logs.length > 0) {
         // Get unique employee codes
-        const employeeCodes = [...new Set(logs.map(l => l.EmployeeCode || l.employeeCode).filter(Boolean))];
+        const employeeCodes = [...new Set(logs.map(l => String(l.EmpCode || l.employeeCode)).filter(Boolean))];
         
         // Check which employees exist in the system
         const existingEmployees = await User.find({
           employeeCode: { $in: employeeCodes }
         }).select('employeeCode name email');
         
-        const existingCodes = new Set(existingEmployees.map(e => e.employeeCode));
+        const existingCodes = new Set(existingEmployees.map(e => String(e.employeeCode)));
         const missingCodes = employeeCodes.filter(code => !existingCodes.has(code));
-        
+
+        // Get sample logs with details
+        const sampleLogs = logs.slice(0, 5).map(log => ({
+          EmpCode: log.EmpCode || log.employeeCode,
+          UserName: log.UserName || log.userName,
+          IOTime: log.IOTime || log.LogDate,
+          IOMode: log.IOMode || log.PunchDirection,
+          DeviceName: log.DeviceName || log.SerialNumber
+        }));
+
         return {
           success: true,
           message: 'Connection test successful',
@@ -470,7 +473,8 @@ class AttendanceSyncService {
             uniqueEmployees: employeeCodes.length,
             existingEmployees: existingEmployees.length,
             missingEmployees: missingCodes,
-            sampleLogs: logs.slice(0, 5)
+            sampleLogs: sampleLogs,
+            employeeCodes: employeeCodes
           }
         };
       } else {
@@ -485,6 +489,114 @@ class AttendanceSyncService {
       return {
         success: false,
         message: error.message || 'Connection test failed',
+        data: null
+      };
+    }
+  }
+
+  /**
+   * Get employee attendance summary
+   */
+  async getEmployeeAttendance(employeeCode, fromDate, toDate) {
+    try {
+      const user = await User.findOne({ employeeCode });
+      
+      if (!user) {
+        return {
+          success: false,
+          message: 'Employee not found',
+          data: null
+        };
+      }
+
+      const punchLogs = await EmployeePunchLog.find({
+        employeeId: user._id,
+        date: {
+          $gte: new Date(fromDate),
+          $lte: new Date(toDate)
+        }
+      }).sort({ date: 1 });
+
+      // Build attendance summary
+      const start = new Date(fromDate);
+      const end = new Date(toDate);
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const days = [];
+      let workingDays = 0;
+      let presentDays = 0;
+      let lateDays = 0;
+      let totalHours = 0;
+
+      const current = new Date(start);
+      while (current <= end) {
+        const dayOfWeek = current.getDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const dateStr = current.toISOString().split('T')[0];
+        
+        if (!isWeekend) {
+          workingDays++;
+          const dayLogs = punchLogs.filter(p => {
+            const pDate = p.date.toISOString().split('T')[0];
+            return pDate === dateStr;
+          });
+          
+          const punchIn = dayLogs.find(p => p.punchIn);
+          const punchOut = dayLogs.find(p => p.punchOut);
+          
+          let status = 'absent';
+          let hoursWorked = 0;
+          
+          if (punchIn && punchOut) {
+            status = 'present';
+            presentDays++;
+            hoursWorked = (punchOut.punchOut - punchIn.punchIn) / (1000 * 60 * 60);
+            totalHours += hoursWorked;
+            
+            if (new Date(punchIn.punchIn).getHours() >= 10) {
+              lateDays++;
+            }
+          } else if (punchIn) {
+            status = 'partial';
+          }
+          
+          days.push({
+            date: dateStr,
+            dayName: dayNames[dayOfWeek],
+            status,
+            hoursWorked: Math.round(hoursWorked * 100) / 100,
+            punchIn: punchIn?.punchIn || null,
+            punchOut: punchOut?.punchOut || null
+          });
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      return {
+        success: true,
+        data: {
+          employee: {
+            name: user.name,
+            employeeCode: user.employeeCode,
+            email: user.email,
+            designation: user.designation || 'N/A',
+            department: user.department || 'N/A'
+          },
+          summary: {
+            workingDays: workingDays,
+            present: presentDays,
+            absent: workingDays - presentDays,
+            late: lateDays,
+            totalHours: Math.round(totalHours * 100) / 100,
+            averageHours: presentDays > 0 ? Math.round((totalHours / presentDays) * 100) / 100 : 0
+          },
+          days: days
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error getting employee attendance:', error);
+      return {
+        success: false,
+        message: error.message,
         data: null
       };
     }

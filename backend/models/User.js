@@ -121,8 +121,7 @@ const UserSchema = new mongoose.Schema({
   unreadNotifications: [{
     type: {
       type: String,
-      enum: ['ticket_created', 'ticket_assigned', 'ticket_commented', 'ticket_status_updated', 'open_ticket', 'leave_request', 'leave_approved', 'leave_rejected']
-    },
+    enum: ['ticket_created', 'ticket_assigned', 'ticket_commented', 'ticket_status_updated', 'open_ticket', 'ticket_closed', 'leave_request', 'leave_approved', 'leave_rejected']    },
     ticketId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Ticket'
@@ -144,6 +143,10 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  viewedOpenTickets: {
+  type: [String],
+  default: []
+},
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
