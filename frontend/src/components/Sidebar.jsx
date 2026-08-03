@@ -1,4 +1,4 @@
-// frontend/src/components/Sidebar.jsx - FULL UPDATED CODE WITH FIXED ACTIVE ROUTE LOGIC
+// frontend/src/components/Sidebar.jsx - UPDATED WITH SINGLE PEOPLE OPS ENTRY
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
@@ -308,7 +308,9 @@ const Sidebar = () => {
     }
   };
 
-  // MENU ITEMS - Updated with PM Feasibility
+  // ============================================
+  // MENU ITEMS - PEOPLE OPS ONLY ONCE PER ROLE
+  // ============================================
   const menuItems = {
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -322,7 +324,7 @@ const Sidebar = () => {
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync/Employee Detail' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
@@ -346,7 +348,6 @@ const Sidebar = () => {
 
     'Project Manager': [
       { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
@@ -360,7 +361,6 @@ const Sidebar = () => {
 
     'Team Lead': [
       { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
@@ -372,7 +372,6 @@ const Sidebar = () => {
 
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
       { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
@@ -388,15 +387,13 @@ const Sidebar = () => {
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
     ],
 
-    // ============================================
-    // HR MENU - FIXED ACTIVE ROUTE ISSUE
-    // ============================================
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync/Detail' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },

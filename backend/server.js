@@ -28,14 +28,22 @@ try {
   console.log('⚠️ Notice: Leave Balance Updater not loaded:', err.message);
 }
 
-// ============================================
-// ✅ DAILY PRODUCTIVITY REPORT
-// ============================================
+// Daily Productivity Report
 try {
   require(path.join(__dirname, 'cron', 'dailyProductivityReport'));
   console.log('⏰ Daily Productivity Report initialized successfully');
 } catch (err) {
   console.log('⚠️ Notice: Daily Productivity Report not loaded:', err.message);
+}
+
+// =========================================================
+// ✅ BIOMETRIC SYNC (Every 15 minutes)
+// =========================================================
+try {
+  require(path.join(__dirname, 'cron', 'biometricSync'));
+  console.log('⏰ Biometric Sync initialized (every 15 minutes)');
+} catch (err) {
+  console.log('⚠️ Notice: Biometric Sync not loaded:', err.message);
 }
 
 // =========================================================
@@ -162,6 +170,24 @@ io.on('connection', (socket) => {
     console.log(`❌ Leave rejected notification sent to user: ${data.userId}`);
   });
 
+  // Biometric sync notifications
+  socket.on('join-attendance-room', (userId) => {
+    socket.join(`attendance_${userId}`);
+    console.log(`👤 User joined attendance room: ${userId}`);
+  });
+
+  // Emit attendance update to specific user
+  socket.on('attendance_updated', (data) => {
+    io.to(`attendance_${data.employeeId}`).emit('attendance_updated', data);
+    console.log(`📊 Attendance update sent to user: ${data.employeeId}`);
+  });
+
+  // Emit sync complete to all users
+  socket.on('attendance_sync_complete', (data) => {
+    io.emit('attendance_sync_complete', data);
+    console.log('📊 Attendance sync complete notification sent to all users');
+  });
+
   socket.on('disconnect', () => {
     console.log('🔴 Socket Disconnected:', socket.id);
   });
@@ -268,7 +294,7 @@ app.use('/api/client', protect, clientRoutes);
 app.use('/api/knowledge', protect, knowledgeBaseRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
-app.use('/api/leaves', leaveRoutes);  // ✅ Leave routes added
+app.use('/api/leaves', leaveRoutes);
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
@@ -301,6 +327,16 @@ mongoose.connect(MONGO_URI)
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 API System running in production mode listening on port ${PORT}`);
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      
+      // Log all loaded services
+      console.log('\n📋 Loaded Services:');
+      console.log('  ✅ Drip Campaign Worker');
+      console.log('  ✅ Leave Balance Updater');
+      console.log('  ✅ Daily Productivity Report');
+      console.log('  ✅ Biometric Sync (every 15 minutes)');
+      console.log('  ✅ Socket.IO Server');
+      console.log('  ✅ REST API Routes');
+      console.log('  ✅ File Upload Service');
     });
   })
   .catch((err) => {

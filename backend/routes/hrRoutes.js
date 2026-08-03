@@ -1,7 +1,7 @@
 // backend/routes/hrRoutes.js
 const express = require('express');
 const router = express.Router();
-const axios = require('axios'); // ✅ ADD THIS - Required for device API calls
+const axios = require('axios');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
 
@@ -339,10 +339,10 @@ router.post('/attendance/manual-punch', async (req, res) => {
 });
 
 // ============================================
-// ATTENDANCE SYNC ROUTES (FROM DEVICE API)
+// BIOMETRIC ATTENDANCE SYNC ROUTES (WORKING VERSION)
 // ============================================
 
-// POST /api/hr/attendance/sync - Sync attendance logs from device
+// POST /api/hr/attendance/sync - Sync attendance logs from biometric device
 router.post('/attendance/sync', async (req, res) => {
   try {
     const { fromDate, toDate } = req.body;
@@ -400,15 +400,13 @@ router.post('/attendance/sync-progress', async (req, res) => {
   }
 });
 
-// GET /api/hr/attendance/employee/:employeeCode - Get attendance from device API
-// GET /api/hr/attendance/employee/:employeeCode - Get attendance from device API
+// GET /api/hr/attendance/employee/:employeeCode - Get attendance for a specific employee
 router.get('/attendance/employee/:employeeCode', async (req, res) => {
   try {
     const { employeeCode } = req.params;
     const { fromDate, toDate } = req.query;
     
     console.log(`🔍 Fetching attendance for employee code: ${employeeCode}`);
-    console.log(`   Date range: ${fromDate} to ${toDate}`);
     
     if (!employeeCode) {
       return res.status(400).json({ 
@@ -417,82 +415,52 @@ router.get('/attendance/employee/:employeeCode', async (req, res) => {
       });
     }
     
-    // Find the user by employee code to get their name
-    const user = await User.findOne({ employeeCode }).select('name email designation department');
+    const user = await User.findOne({ employeeCode }).select('name email designation department employeeCode');
     
-    // Set default date range
     const today = new Date().toISOString().split('T')[0];
     const from = fromDate || today;
     const to = toDate || today;
     
-    // Fetch logs from the device API
-    const deviceUrl = 'http://103.170.149.84:82/api/v2/WebAPI/GetDeviceLogs';
-    const params = {
-      APIKey: '384410062609',
-      FromDate: from,
-      ToDate: to
-    };
+    // Get punch logs from database
+    const punchLogs = await EmployeePunchLog.find({
+      employeeId: user?._id,
+      date: {
+        $gte: new Date(from),
+        $lte: new Date(to)
+      }
+    }).sort({ date: 1 });
     
-    console.log(`📡 Fetching from device API: ${deviceUrl}`);
-    console.log(`📋 Params:`, params);
-    
-    const response = await axios.get(deviceUrl, { 
-      params,
-      timeout: 30000
-    });
-    
-    const allLogs = response.data || [];
-    console.log(`📊 Received ${allLogs.length} total logs from device`);
-    
-    // Filter logs by employee code
-    const employeeLogs = allLogs.filter(log => 
-      log.EmployeeCode === employeeCode || 
-      log.employeeCode === employeeCode
+    // Also fetch from device API for complete data
+    const deviceLogs = await attendanceSyncService.fetchAttendanceLogs(from, to);
+    const employeeDeviceLogs = deviceLogs.filter(log => 
+      String(log.EmployeeCode || log.employeeCode) === String(employeeCode)
     );
     
-    console.log(`📊 Found ${employeeLogs.length} logs for employee ${employeeCode}`);
-    
-    if (employeeLogs.length === 0) {
-      return res.json({
-        success: true,
-        data: {
-          employee: {
-            name: user?.name || 'Unknown',
-            employeeCode: employeeCode,
-            email: user?.email || 'N/A',
-            designation: user?.designation || 'N/A',
-            department: user?.department || 'N/A'
-          },
-          summary: {
-            totalLogs: 0,
-            workingDays: 0,
-            present: 0,
-            absent: 0,
-            late: 0,
-            totalHours: 0,
-            averageHours: 0
-          },
-          days: [],
-          logs: []
-        },
-        message: 'No logs found for this employee'
-      });
-    }
-    
-    // Process the logs - group by date
+    // Process and combine data
     const logsByDate = {};
-    employeeLogs.forEach(log => {
-      const dateStr = log.LogDate.split(' ')[0]; // Get YYYY-MM-DD
+    
+    // Process device logs
+    employeeDeviceLogs.forEach(log => {
+      const dateStr = new Date(log.LogDate || log.IOTime).toISOString().split('T')[0];
       if (!logsByDate[dateStr]) {
-        logsByDate[dateStr] = [];
+        logsByDate[dateStr] = { device: [], db: [] };
       }
-      logsByDate[dateStr].push(log);
+      logsByDate[dateStr].device.push(log);
+    });
+    
+    // Process DB logs
+    punchLogs.forEach(log => {
+      const dateStr = log.date.toISOString().split('T')[0];
+      if (!logsByDate[dateStr]) {
+        logsByDate[dateStr] = { device: [], db: [] };
+      }
+      logsByDate[dateStr].db.push(log);
     });
     
     // Calculate stats
-    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const start = new Date(from);
     const end = new Date(to);
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     let workingDays = 0;
     let presentDays = 0;
     let lateDays = 0;
@@ -507,84 +475,40 @@ router.get('/attendance/employee/:employeeCode', async (req, res) => {
       
       if (!isWeekend) {
         workingDays++;
-        const dayLogs = logsByDate[dateStr] || [];
+        const dayData = logsByDate[dateStr] || { device: [], db: [] };
         
-        // Find punch in and punch out - handle various formats
-        // Check for "in", "In", "IN", or any non-empty string that might indicate a punch
-        const punchIn = dayLogs.find(l => {
-          const dir = (l.PunchDirection || '').trim().toLowerCase();
+        // Check device logs for punch in/out
+        const devicePunchIn = dayData.device.find(l => {
+          const dir = (l.PunchDirection || l.IOMode || '').toString().trim().toLowerCase();
           return dir === 'in' || dir === '1' || (dir !== '' && dir !== 'out' && dir !== '2');
         });
-        
-        const punchOut = dayLogs.find(l => {
-          const dir = (l.PunchDirection || '').trim().toLowerCase();
+        const devicePunchOut = dayData.device.find(l => {
+          const dir = (l.PunchDirection || l.IOMode || '').toString().trim().toLowerCase();
           return dir === 'out' || dir === '2';
         });
         
+        const dbPunchIn = dayData.db.find(l => l.punchIn);
+        const dbPunchOut = dayData.db.find(l => l.punchOut);
+        
+        const punchIn = dbPunchIn?.punchIn || devicePunchIn?.LogDate || devicePunchIn?.IOTime;
+        const punchOut = dbPunchOut?.punchOut || devicePunchOut?.LogDate || devicePunchOut?.IOTime;
+        
         let status = 'absent';
         let hoursWorked = 0;
-        let punchInTime = null;
-        let punchOutTime = null;
         
-        if (punchIn) {
-          punchInTime = punchIn.LogDate;
-          status = 'partial';
-          
-          // Try to find a matching punch out
-          if (punchOut) {
-            punchOutTime = punchOut.LogDate;
-            const inTime = new Date(punchIn.LogDate);
-            const outTime = new Date(punchOut.LogDate);
-            hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
-            status = 'present';
-            presentDays++;
-            totalHours += hoursWorked;
-            
-            // Check for late (after 10:00 AM)
-            if (inTime.getHours() >= 10) {
-              lateDays++;
-            }
-          } else {
-            // Look for any other log that could be a punch out (same day, different time)
-            const possibleOut = dayLogs.find(l => 
-              l.LogDate !== punchIn.LogDate && 
-              (l.PunchDirection || '').trim() === ''
-            );
-            if (possibleOut) {
-              punchOutTime = possibleOut.LogDate;
-              const inTime = new Date(punchIn.LogDate);
-              const outTime = new Date(possibleOut.LogDate);
-              hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
-              if (hoursWorked > 0 && hoursWorked < 24) {
-                status = 'present';
-                presentDays++;
-                totalHours += hoursWorked;
-                
-                if (inTime.getHours() >= 10) {
-                  lateDays++;
-                }
-              }
-            }
-          }
-        }
-        
-        // If we have multiple logs, try to determine presence
-        if (status === 'absent' && dayLogs.length > 0) {
-          // If there are any logs for this day, consider it present
+        if (punchIn && punchOut) {
           status = 'present';
           presentDays++;
+          const inTime = new Date(punchIn);
+          const outTime = new Date(punchOut);
+          hoursWorked = (outTime - inTime) / (1000 * 60 * 60);
+          totalHours += hoursWorked;
           
-          // Try to calculate hours from first and last log
-          const sortedLogs = [...dayLogs].sort((a, b) => {
-            return new Date(a.LogDate) - new Date(b.LogDate);
-          });
-          
-          if (sortedLogs.length >= 2) {
-            const first = new Date(sortedLogs[0].LogDate);
-            const last = new Date(sortedLogs[sortedLogs.length - 1].LogDate);
-            hoursWorked = (last - first) / (1000 * 60 * 60);
-            totalHours += hoursWorked;
+          if (inTime.getHours() >= 10) {
+            lateDays++;
           }
+        } else if (punchIn) {
+          status = 'partial';
         }
         
         days.push({
@@ -592,27 +516,33 @@ router.get('/attendance/employee/:employeeCode', async (req, res) => {
           dayName: dayNames[dayOfWeek],
           status,
           hoursWorked: Math.round(hoursWorked * 100) / 100,
-          punchIn: punchInTime,
-          punchOut: punchOutTime,
-          logCount: dayLogs.length,
-          logs: dayLogs
+          punchIn: punchIn ? new Date(punchIn).toISOString() : null,
+          punchOut: punchOut ? new Date(punchOut).toISOString() : null,
+          deviceLogs: dayData.device.length,
+          dbLogs: dayData.db.length
         });
       }
       current.setDate(current.getDate() + 1);
     }
     
-    const responseData = {
+    res.json({
       success: true,
       data: {
-        employee: {
-          name: user?.name || 'Unknown',
+        employee: user ? {
+          name: user.name,
+          employeeCode: user.employeeCode,
+          email: user.email,
+          designation: user.designation || 'N/A',
+          department: user.department || 'N/A'
+        } : {
+          name: 'Unknown',
           employeeCode: employeeCode,
-          email: user?.email || 'N/A',
-          designation: user?.designation || 'N/A',
-          department: user?.department || 'N/A'
+          email: 'N/A',
+          designation: 'N/A',
+          department: 'N/A'
         },
         summary: {
-          totalLogs: employeeLogs.length,
+          totalLogs: employeeDeviceLogs.length + punchLogs.length,
           workingDays: workingDays,
           present: presentDays,
           absent: workingDays - presentDays,
@@ -621,13 +551,10 @@ router.get('/attendance/employee/:employeeCode', async (req, res) => {
           averageHours: presentDays > 0 ? Math.round((totalHours / presentDays) * 100) / 100 : 0
         },
         days: days,
-        logs: employeeLogs
+        deviceLogs: employeeDeviceLogs,
+        dbLogs: punchLogs
       }
-    };
-    
-    console.log(`✅ Attendance summary: ${presentDays} present, ${workingDays - presentDays} absent, ${lateDays} late`);
-    
-    res.json(responseData);
+    });
     
   } catch (error) {
     console.error('❌ Error fetching employee attendance:', error);
@@ -673,51 +600,43 @@ router.post('/attendance/test-connection', async (req, res) => {
     const from = fromDate || today;
     const to = toDate || today;
     
-    const deviceUrl = 'http://103.170.149.84:82/api/v2/WebAPI/GetDeviceLogs';
-    const params = {
-      APIKey: '384410062609',
-      FromDate: from,
-      ToDate: to
-    };
+    console.log(`📡 Testing connection to biometric API...`);
+    console.log(`📋 Date range: ${from} to ${to}`);
     
-    console.log(`📡 Testing connection to device API...`);
-    console.log(`🔗 URL: ${deviceUrl}`);
-    console.log(`📋 Params:`, params);
+    const result = await attendanceSyncService.testConnection(from, to);
     
-    const response = await axios.get(deviceUrl, { 
-      params,
-      timeout: 30000
-    });
-    
-    const logs = response.data || [];
-    
-    const employeeCodes = [...new Set(logs.map(l => l.EmployeeCode || l.employeeCode).filter(Boolean))];
-    
-    const existingEmployees = await User.find({
-      employeeCode: { $in: employeeCodes }
-    }).select('employeeCode name email');
-    
-    const existingCodes = new Set(existingEmployees.map(e => e.employeeCode));
-    const missingCodes = employeeCodes.filter(code => !existingCodes.has(code));
-    
-    res.json({
-      success: true,
-      message: 'Connection test successful',
-      data: {
-        totalLogs: logs.length,
-        uniqueEmployees: employeeCodes.length,
-        existingEmployees: existingEmployees.length,
-        missingEmployees: missingCodes,
-        sampleLogs: logs.slice(0, 5),
-        employeeCodes: employeeCodes
-      }
-    });
+    res.json(result);
     
   } catch (error) {
     console.error('❌ Connection test failed:', error);
     res.status(500).json({ 
       success: false,
       error: 'Connection test failed',
+      details: error.message 
+    });
+  }
+});
+
+// GET /api/hr/attendance/device-codes - Get all employee codes from the device
+router.get('/attendance/device-codes', async (req, res) => {
+  try {
+    const { fromDate, toDate } = req.query;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const from = fromDate || '2026-07-01';
+    const to = toDate || today;
+    
+    const codes = await attendanceSyncService.getDeviceEmployeeCodes(from, to);
+    
+    res.json({
+      success: true,
+      data: codes
+    });
+  } catch (error) {
+    console.error('❌ Error fetching device codes:', error);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch device codes',
       details: error.message 
     });
   }
@@ -952,5 +871,518 @@ router.get('/employee/:id/leave-balance', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch leave balance' });
     }
 });
+// backend/routes/hrRoutes.js - Add this endpoint
+
+// POST /api/hr/biometric/manual-sync - Manual trigger
+router.post('/biometric/manual-sync', authorize('Admin', 'HR'), async (req, res) => {
+  try {
+    const syncService = require('../cron/biometricSync');
+    await syncService.syncAttendance();
+    res.json({ success: true, message: 'Manual sync completed' });
+  } catch (error) {
+    console.error('Manual sync error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+// backend/routes/hrRoutes.js - Add this endpoint
+
+// ============================================
+// GET /api/hr/attendance/employee-timeline/:userId
+// Get attendance timeline for a specific employee (HR/Admin only)
+// ============================================
+router.get('/attendance/employee-timeline/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { months = 3 } = req.query;
+    
+    // Verify user exists
+    const employee = await User.findById(userId).select('name email role employeeCode');
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employee not found' });
+    }
+    
+    // Get IST date helpers
+    const getISTDateString = (date) => {
+      if (!date) return null;
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return null;
+      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    };
+    
+    const now = new Date();
+    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    
+    const endDate = new Date(Date.UTC(
+      istNow.getFullYear(),
+      istNow.getMonth(),
+      istNow.getDate(),
+      23, 59, 59, 999
+    ));
+    
+    const startDate = new Date(endDate);
+    startDate.setUTCMonth(startDate.getUTCMonth() - parseInt(months));
+    startDate.setUTCHours(0, 0, 0, 0);
+    
+    // Get punch logs
+    const punchLogs = await EmployeePunchLog.find({
+      employeeId: userId,
+      date: { $gte: startDate, $lte: endDate }
+    }).sort({ date: 1 });
+    
+    // Get approved leaves
+    const leaves = await LeaveApplication.find({
+      employeeId: userId,
+      status: 'approved',
+      $or: [
+        { startDate: { $gte: startDate, $lte: endDate } },
+        { endDate: { $gte: startDate, $lte: endDate } },
+        { startDate: { $lte: startDate }, endDate: { $gte: endDate } }
+      ]
+    });
+    
+    const punchMap = {};
+    punchLogs.forEach(log => {
+      const dateStr = getISTDateString(log.date);
+      if (dateStr) {
+        punchMap[dateStr] = log;
+      }
+    });
+    
+    const leaveMap = {};
+    leaves.forEach(leave => {
+      const start = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      const current = new Date(start);
+      while (current <= end) {
+        const dateStr = getISTDateString(current);
+        if (dateStr && !leaveMap[dateStr]) {
+          leaveMap[dateStr] = leave;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+    
+    const days = [];
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    const current = new Date(startDate);
+    while (current <= endDate) {
+      const dateStr = getISTDateString(current);
+      if (!dateStr) {
+        current.setUTCDate(current.getUTCDate() + 1);
+        continue;
+      }
+      
+      const dayOfWeek = current.getUTCDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      
+      const dayLog = punchMap[dateStr] || null;
+      const onLeave = leaveMap[dateStr] || null;
+      
+      let status = 'absent';
+      let punchInUTC = null;
+      let punchOutUTC = null;
+      let sessions = [];
+      
+      if (isWeekend) {
+        status = 'weekend';
+      } else if (onLeave) {
+        status = 'leave';
+      } else if (dayLog) {
+        if (dayLog.sessions && dayLog.sessions.length > 0) {
+          sessions = dayLog.sessions.map(session => ({
+            punchInUTC: session.punchIn ? session.punchIn.toISOString() : null,
+            punchOutUTC: session.punchOut ? session.punchOut.toISOString() : null
+          }));
+          
+          const firstSession = dayLog.sessions[0];
+          const lastSession = dayLog.sessions[dayLog.sessions.length - 1];
+          
+          if (firstSession && firstSession.punchIn) {
+            punchInUTC = firstSession.punchIn.toISOString();
+          }
+          if (lastSession && lastSession.punchOut) {
+            punchOutUTC = lastSession.punchOut.toISOString();
+          }
+        } else {
+          if (dayLog.punchIn) {
+            punchInUTC = dayLog.punchIn.toISOString();
+            sessions = [{ punchInUTC, punchOutUTC: dayLog.punchOut ? dayLog.punchOut.toISOString() : null }];
+          }
+        }
+        
+        if (punchInUTC) {
+          const punchDate = new Date(punchInUTC);
+          const hour = punchDate.getUTCHours();
+          const minute = punchDate.getUTCMinutes();
+          if (hour > 10 || (hour === 10 && minute > 45)) {
+            status = 'late';
+          } else if (punchOutUTC) {
+            status = 'present';
+          } else {
+            status = 'partial';
+          }
+        }
+      }
+      
+      days.push({
+        date: dateStr,
+        dayName: dayNames[dayOfWeek],
+        status: status,
+        isWeekend: isWeekend,
+        punchInUTC: punchInUTC,
+        punchOutUTC: punchOutUTC,
+        sessions: sessions,
+        leaveType: onLeave?.leaveType || null
+      });
+      
+      current.setUTCDate(current.getUTCDate() + 1);
+    }
+    
+    // Calculate summary stats
+    const workingDays = days.filter(d => !d.isWeekend);
+    const presentDays = workingDays.filter(d => d.status === 'present' || d.status === 'late');
+    const absentDays = workingDays.filter(d => d.status === 'absent');
+    const leaveDays = workingDays.filter(d => d.status === 'leave');
+    const lateDays = workingDays.filter(d => d.status === 'late');
+    
+    let totalEffectiveHours = 0;
+    let totalGrossHours = 0;
+    
+    presentDays.forEach(day => {
+      if (day.sessions && day.sessions.length > 0) {
+        let effectiveHours = 0;
+        let firstIn = null;
+        let lastOut = null;
+        
+        day.sessions.forEach(session => {
+          if (session.punchInUTC) {
+            const inTime = new Date(session.punchInUTC);
+            if (!firstIn || inTime < firstIn) firstIn = inTime;
+            
+            if (session.punchOutUTC) {
+              const outTime = new Date(session.punchOutUTC);
+              effectiveHours += (outTime - inTime) / (1000 * 60 * 60);
+              if (!lastOut || outTime > lastOut) lastOut = outTime;
+            }
+          }
+        });
+        
+        if (firstIn && lastOut) {
+          totalGrossHours += (lastOut - firstIn) / (1000 * 60 * 60);
+        }
+        totalEffectiveHours += effectiveHours;
+      } else if (day.punchInUTC && day.punchOutUTC) {
+        const inTime = new Date(day.punchInUTC);
+        const outTime = new Date(day.punchOutUTC);
+        totalEffectiveHours += (outTime - inTime) / (1000 * 60 * 60);
+        totalGrossHours += (outTime - inTime) / (1000 * 60 * 60);
+      }
+    });
+    
+    const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
+    const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
+    const latePercentage = presentDays.length > 0 ? (lateDays.length / presentDays.length) * 100 : 0;
+    const attendanceRate = workingDays.length > 0 ? (presentDays.length / workingDays.length) * 100 : 0;
+    
+    res.json({
+      success: true,
+      data: {
+        employee: {
+          id: employee._id,
+          name: employee.name,
+          email: employee.email,
+          role: employee.role,
+          employeeCode: employee.employeeCode
+        },
+        days: days,
+        summary: {
+          totalDays: days.length,
+          workingDays: workingDays.length,
+          present: presentDays.length,
+          absent: absentDays.length,
+          onLeave: leaveDays.length,
+          weekends: days.filter(d => d.isWeekend).length,
+          late: lateDays.length,
+          totalEffectiveHours: totalEffectiveHours,
+          totalGrossHours: totalGrossHours,
+          averageEffectiveHours: avgEffectiveHours,
+          averageGrossHours: avgGrossHours,
+          latePercentage: latePercentage,
+          attendanceRate: attendanceRate
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching employee attendance timeline:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch employee attendance timeline' });
+  }
+});
+
+
+
+
+// ============================================
+// GET /api/hr/attendance/employee-report
+// Get attendance report for all employees or a specific employee
+// EXCLUDES Clients
+// ============================================
+router.get('/attendance/employee-report', async (req, res) => {
+  try {
+    const { employeeId, month, year } = req.query;
+    
+    // Build date range
+    const monthNum = parseInt(month) - 1;
+    const yearNum = parseInt(year);
+    const startDate = new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0));
+    const endDate = new Date(Date.UTC(yearNum, monthNum + 1, 0, 23, 59, 59, 999));
+    
+    // Get IST date helper
+    const getISTDateString = (date) => {
+      if (!date) return null;
+      const d = new Date(date);
+      if (isNaN(d.getTime())) return null;
+      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+    };
+    
+    // Build employee filter - EXCLUDE Clients
+    let employeeFilter = { 
+      role: { $nin: ['Admin', 'HR', 'Client'] }, // EXCLUDE Client role
+      isActive: true 
+    };
+    
+    // If a specific employee is selected, add that to the filter
+    if (employeeId && employeeId !== 'all') {
+      employeeFilter._id = employeeId;
+    }
+    
+    // Get employees (excluding Admin, HR, and Client)
+    const employees = await User.find(employeeFilter)
+      .select('_id name email employeeCode role')
+      .sort({ name: 1 });
+    
+    if (employees.length === 0) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'No employees found'
+      });
+    }
+    
+    const employeeIds = employees.map(e => e._id);
+    
+    // Get punch logs for all employees
+    const punchLogs = await EmployeePunchLog.find({
+      employeeId: { $in: employeeIds },
+      date: { $gte: startDate, $lte: endDate }
+    }).sort({ employeeId: 1, date: 1 });
+    
+    // Get approved leaves
+    const leaves = await LeaveApplication.find({
+      employeeId: { $in: employeeIds },
+      status: 'approved',
+      $or: [
+        { startDate: { $gte: startDate, $lte: endDate } },
+        { endDate: { $gte: startDate, $lte: endDate } },
+        { startDate: { $lte: startDate }, endDate: { $gte: endDate } }
+      ]
+    });
+    
+    // Build maps
+    const punchMap = {};
+    punchLogs.forEach(log => {
+      const empId = log.employeeId.toString();
+      const dateStr = getISTDateString(log.date);
+      if (!dateStr) return;
+      if (!punchMap[empId]) punchMap[empId] = {};
+      punchMap[empId][dateStr] = log;
+    });
+    
+    const leaveMap = {};
+    leaves.forEach(leave => {
+      const empId = leave.employeeId.toString();
+      const start = new Date(leave.startDate);
+      const end = new Date(leave.endDate);
+      const current = new Date(start);
+      while (current <= end) {
+        const dateStr = getISTDateString(current);
+        if (dateStr) {
+          if (!leaveMap[empId]) leaveMap[empId] = {};
+          leaveMap[empId][dateStr] = leave;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+    });
+    
+    // Generate report data
+    const reportData = [];
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    
+    // For each employee
+    for (const employee of employees) {
+      const empId = employee._id.toString();
+      const empPunchMap = punchMap[empId] || {};
+      const empLeaveMap = leaveMap[empId] || {};
+      
+      // Iterate through each day of the month
+      const current = new Date(startDate);
+      while (current <= endDate) {
+        const dateStr = getISTDateString(current);
+        if (!dateStr) {
+          current.setUTCDate(current.getUTCDate() + 1);
+          continue;
+        }
+        
+        const dayOfWeek = current.getUTCDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const dayLog = empPunchMap[dateStr] || null;
+        const onLeave = empLeaveMap[dateStr] || null;
+        
+        let status = 'absent';
+        let punchIn = null;
+        let punchOut = null;
+        let effectiveHours = 0;
+        let grossHours = 0;
+        let arrivalStatus = '—';
+        let sessions = [];
+        
+        if (isWeekend) {
+          status = 'weekend';
+        } else if (onLeave) {
+          status = 'leave';
+        } else if (dayLog) {
+          if (dayLog.sessions && dayLog.sessions.length > 0) {
+            sessions = dayLog.sessions;
+            let firstIn = null;
+            let lastOut = null;
+            
+            sessions.forEach(session => {
+              if (session.punchIn) {
+                if (!firstIn || session.punchIn < firstIn) firstIn = session.punchIn;
+                if (session.punchOut) {
+                  effectiveHours += (session.punchOut - session.punchIn) / (1000 * 60 * 60);
+                  if (!lastOut || session.punchOut > lastOut) lastOut = session.punchOut;
+                }
+              }
+            });
+            
+            if (firstIn && lastOut) {
+              grossHours = (lastOut - firstIn) / (1000 * 60 * 60);
+            } else if (sessions.length === 1 && sessions[0].punchIn) {
+              grossHours = effectiveHours;
+            }
+            
+            if (sessions.length > 0 && sessions[0].punchIn) {
+              punchIn = sessions[0].punchIn;
+              if (sessions[sessions.length - 1].punchOut) {
+                punchOut = sessions[sessions.length - 1].punchOut;
+              }
+            }
+          } else {
+            punchIn = dayLog.punchIn;
+            punchOut = dayLog.punchOut;
+            if (punchIn && punchOut) {
+              effectiveHours = (punchOut - punchIn) / (1000 * 60 * 60);
+              grossHours = effectiveHours;
+            }
+          }
+          
+          if (punchIn) {
+            const punchDate = new Date(punchIn);
+            const hour = punchDate.getUTCHours();
+            const minute = punchDate.getUTCMinutes();
+            if (hour > 10 || (hour === 10 && minute > 45)) {
+              status = 'late';
+              const totalMinutes = hour * 60 + minute;
+              const officeMinutes = 10 * 60 + 45;
+              const diff = totalMinutes - officeMinutes;
+              arrivalStatus = `${diff}m late`;
+            } else if (punchOut) {
+              status = 'present';
+              arrivalStatus = 'On Time';
+            } else {
+              status = 'partial';
+              arrivalStatus = 'No Out';
+            }
+          }
+        }
+        
+        // Format times for display
+        const formatTime = (date) => {
+          if (!date) return '—';
+          const d = new Date(date);
+          if (isNaN(d.getTime())) return '—';
+          let hours = d.getUTCHours();
+          const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+          const ampm = hours >= 12 ? 'PM' : 'AM';
+          hours = hours % 12 || 12;
+          return `${hours}:${minutes} ${ampm}`;
+        };
+        
+        reportData.push({
+          employeeName: employee.name,
+          employeeCode: employee.employeeCode || 'N/A',
+          employeeEmail: employee.email,
+          employeeRole: employee.role,
+          employeeId: employee._id,
+          date: dateStr,
+          day: dayNames[dayOfWeek],
+          status: status === 'weekend' ? 'Weekend' : 
+                  status === 'leave' ? 'Leave' :
+                  status === 'present' ? 'Present' :
+                  status === 'late' ? 'Late' :
+                  status === 'partial' ? 'Partial' : 'Absent',
+          punchIn: formatTime(punchIn),
+          punchOut: formatTime(punchOut),
+          effectiveHours: effectiveHours > 0 ? effectiveHours.toFixed(1) : '0',
+          grossHours: grossHours > 0 ? grossHours.toFixed(1) : '0',
+          arrival: arrivalStatus,
+          isWeekend: isWeekend
+        });
+        
+        current.setUTCDate(current.getUTCDate() + 1);
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: reportData,
+      summary: {
+        totalEmployees: employees.length,
+        totalRecords: reportData.length,
+        month: `${monthNames[monthNum]} ${yearNum}`
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error generating employee report:', error);
+    res.status(500).json({ success: false, error: 'Failed to generate report' });
+  }
+});
+
+// Helper: month names
+const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                     'July', 'August', 'September', 'October', 'November', 'December'];
+
+// ============================================
+// GET /api/hr/employees - Updated to exclude Clients
+// ============================================
+router.get('/employees', async (req, res) => {
+  try {
+    // EXCLUDE Clients from the employee list
+    const employees = await User.find({
+      role: { $nin: ['Admin', 'HR', 'Client'] }, // EXCLUDE Client role
+      isActive: true
+    }).select('name email employeeCode role _id')
+    .sort({ name: 1 });
+    
+    res.json({ success: true, employees });
+  } catch (error) {
+    console.error('Error fetching employees:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch employees' });
+  }
+});
+
 
 module.exports = router;

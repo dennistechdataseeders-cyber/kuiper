@@ -1,4 +1,4 @@
-// backend/controllers/ticketController.js
+// backend/controllers/ticketController.js - COMPLETE UPDATED FILE
 
 const Ticket = require('../models/Ticket');
 const Project = require('../models/Project');
@@ -39,6 +39,11 @@ async function createNotification(userId, notificationData) {
       }
     }
     
+    // Add ticket_closed type support
+    if (notificationData.type === 'ticket_closed') {
+      message = `Ticket ${notificationData.ticketNumber || ''} has been closed`;
+    }
+    
     user.unreadNotifications.push({
       type: notificationData.type || 'ticket_created',
       ticketId: notificationData.ticketId,
@@ -65,6 +70,205 @@ async function createNotification(userId, notificationData) {
   } catch (error) {
     console.error('Error creating notification:', error);
     return false;
+  }
+}
+
+// ============================================
+// SEND TICKET CLOSED NOTIFICATIONS
+// ============================================
+async function sendTicketClosedNotifications(ticket, closedByUser) {
+  try {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
+    const currentDate = new Date().toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric'
+    });
+    
+    // Get all stakeholders
+    const stakeholders = await getTicketStakeholders(ticket, closedByUser);
+    
+    // Also get feed developers
+    let feedDevelopers = [];
+    if (ticket.feedId) {
+      const feed = await Feed.findById(ticket.feedId).populate('assignedDevelopers', 'name email');
+      if (feed && feed.assignedDevelopers) {
+        feedDevelopers = feed.assignedDevelopers;
+      }
+    }
+    
+    // Add feed developers to stakeholders if not already included
+    for (const dev of feedDevelopers) {
+      if (!stakeholders.some(s => s.email === dev.email)) {
+        stakeholders.push({
+          _id: dev._id,
+          name: dev.name,
+          email: dev.email,
+          role: 'Developer',
+          type: 'developer'
+        });
+      }
+    }
+    
+    // Email template for ticket closed
+    const getTicketClosedTemplate = (recipientName, recipientRole) => {
+      return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#f0f4f8; color:#1e293b;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="560" cellpadding="0" cellspacing="0" border="0" style="max-width:560px; width:100%; background:#ffffff; border-radius:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05); overflow:hidden;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 36px; border-bottom:1px solid #e2e8f0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#2563eb;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Engineered for Operations</div>
+                  </td>
+                  <td align="right" style="vertical-align: middle;">
+                    <span style="background:#64748b; color:white; padding:4px 12px; border-radius:12px; font-size:9px; font-weight:700;">Closed</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Banner -->
+          <tr>
+            <td style="background:#64748b; padding:28px 36px;">
+              <div style="font-size:22px; font-weight:800; color:white; margin-bottom:4px;">✅ Ticket Closed</div>
+              <div style="font-size:13px; color:#cbd5e1; font-weight:500;">${ticket.ticketNumber} • ${ticket.title}</div>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 36px;">
+              <p style="font-size:15px; margin:0 0 8px 0; line-height:1.6; color:#1e293b;">Dear <strong>${recipientName}</strong>,</p>
+              <p style="font-size:14px; color:#475569; margin-bottom:24px; line-height:1.7;">
+                Ticket <strong>${ticket.ticketNumber}</strong> has been <strong style="color:#64748b;">closed</strong> by <strong>${closedByUser?.name || 'System'}</strong>.
+              </p>
+              
+              <!-- Ticket Details -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; border-collapse: separate; margin-bottom:24px;">
+                <tr>
+                  <td width="50%" style="padding:14px 18px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Ticket</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">${ticket.ticketNumber}</div>
+                  </td>
+                  <td width="50%" style="padding:14px 18px; border-bottom:1px solid #e2e8f0;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Priority</div>
+                    <div style="font-size:14px; font-weight:700; color:${ticket.priority === 'Urgent' ? '#dc2626' : ticket.priority === 'High' ? '#ea580c' : ticket.priority === 'Medium' ? '#ca8a04' : '#16a34a'}; margin-top:2px;">${ticket.priority}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="50%" style="padding:14px 18px; border-right:1px solid #e2e8f0;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Category</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">${ticket.category || 'General'}</div>
+                  </td>
+                  <td width="50%" style="padding:14px 18px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Closed By</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">${closedByUser?.name || 'System'}</div>
+                  </td>
+                </tr>
+                ${ticket.resolvedAt ? `
+                <tr>
+                  <td colspan="2" style="padding:14px 18px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Resolved At</div>
+                    <div style="font-size:14px; font-weight:700; color:#16a34a; margin-top:2px;">${new Date(ticket.resolvedAt).toLocaleString()}</div>
+                  </td>
+                </tr>
+                ` : ''}
+                <tr>
+                  <td colspan="2" style="padding:14px 18px; background:#f1f5f9; border-radius:0 0 16px 16px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Title</div>
+                    <div style="font-size:14px; font-weight:600; color:#1e293b; margin-top:2px;">${ticket.title}</div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Description -->
+              <div style="background:#f8fafc; padding:16px 20px; border-radius:12px; margin-bottom:24px; border-left:4px solid #94a3b8;">
+                <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Description</div>
+                <p style="margin:0; font-size:13px; line-height:1.6; color:#334155;">${ticket.description}</p>
+              </div>
+
+              <!-- Actions -->
+              <a href="${ticketUrl}" style="display:block; text-align:center; background:#2563eb; color:white; text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:14px;">
+                View Ticket →
+              </a>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
+              <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Automated Ticket Notification</div>
+              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">${currentDate}</div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+      `;
+    };
+
+    // Send email to all stakeholders
+    const emailPromises = stakeholders.map(async (stakeholder) => {
+      try {
+        // Skip if the stakeholder is the one who closed it (they already know)
+        if (stakeholder.email === closedByUser?.email) return;
+        
+        const emailHtml = getTicketClosedTemplate(stakeholder.name, stakeholder.role);
+        
+        await sendEmail({
+          to: stakeholder.email,
+          subject: `✅ Ticket Closed: ${ticket.ticketNumber} - ${ticket.title}`,
+          html: emailHtml
+        });
+        
+        console.log(`📧 Ticket closed email sent to: ${stakeholder.email} (${stakeholder.role})`);
+        
+        // Create notification for the stakeholder in the database
+        if (stakeholder._id) {
+          await createNotification(stakeholder._id, {
+            type: 'ticket_closed',
+            ticketId: ticket._id,
+            ticketNumber: ticket.ticketNumber,
+            message: `Ticket ${ticket.ticketNumber} has been closed by ${closedByUser?.name || 'System'}`
+          });
+        }
+      } catch (err) {
+        console.error(`Failed to send ticket closed email to ${stakeholder.email}:`, err.message);
+      }
+    });
+    
+    await Promise.all(emailPromises);
+    
+    console.log(`✅ Ticket closed notifications sent to ${stakeholders.length} stakeholders`);
+    
+  } catch (error) {
+    console.error('Error sending ticket closed notifications:', error);
   }
 }
 
@@ -633,8 +837,6 @@ function isInternalTicket(creatorRole) {
 // CREATE TICKET
 // ============================================
 
-// backend/controllers/ticketController.js
-
 exports.createTicket = async (req, res) => {
   try {
     const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType, assignedTo, files } = req.body;
@@ -979,8 +1181,6 @@ exports.getTickets = async (req, res) => {
     const userRole = req.user.role;
     const userId = req.user.id;
 
-    console.log(`🔍 Fetching tickets for role: ${userRole}, userId: ${userId}`);
-
     if (userRole === 'Client') {
       filter = {
         $or: [
@@ -1025,19 +1225,16 @@ exports.getTickets = async (req, res) => {
         ]
       };
     } else if (userRole === 'HR') {
-      console.log(`🔍 HR user fetching tickets`);
-      
       // Get the current HR user's ID
       const hrUserId = req.user.id;
       
       // Get ALL HR user IDs
       const hrUsers = await User.find({ role: 'HR' }).distinct('_id');
-      console.log(`👥 HR Users found: ${hrUsers.length}`, hrUsers);
       
       // Build comprehensive filter for HR
       filter = {
         $or: [
-          // Category matches HR-related categories - THIS IS THE KEY FIX
+          // Category matches HR-related categories
           { category: { $in: ['HR', 'Admin', 'Payroll'] } },
           // Subcategory matches HR-related subcategories
           { subcategory: { $in: ['Employee Documents', 'Attendance & Leave', 'Employee Management'] } },
@@ -1052,16 +1249,11 @@ exports.getTickets = async (req, res) => {
         ]
       };
       
-      console.log(`🔍 HR filter:`, JSON.stringify(filter, null, 2));
-      
     } else if (userRole === 'Finance') {
-      console.log(`🔍 Finance user fetching tickets`);
-      
       // Get the current Finance user's ID
       const financeUserId = req.user.id;
       
       const financeUsers = await User.find({ role: 'Finance' }).distinct('_id');
-      console.log(`👥 Finance Users found: ${financeUsers.length}`, financeUsers);
       
       filter = {
         $or: [
@@ -1080,8 +1272,6 @@ exports.getTickets = async (req, res) => {
         ]
       };
       
-      console.log(`🔍 Finance filter:`, JSON.stringify(filter, null, 2));
-      
     } else if (userRole === 'Admin') {
       filter = {};
     }
@@ -1092,34 +1282,6 @@ exports.getTickets = async (req, res) => {
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name')
       .sort({ createdAt: -1 });
-
-    console.log(`🔍 Found ${tickets.length} tickets for ${userRole}`);
-    
-    if (tickets.length > 0) {
-      console.log(`🔍 Ticket details:`, tickets.map(t => ({ 
-        ticketNumber: t.ticketNumber,
-        category: t.category, 
-        subcategory: t.subcategory,
-        title: t.title
-      })));
-    } else {
-      console.log(`🔍 No tickets found for ${userRole}. Filter used:`, JSON.stringify(filter, null, 2));
-      
-      // DEBUG: Check total tickets and HR tickets
-      const totalTickets = await Ticket.countDocuments();
-      console.log(`📊 Total tickets in database: ${totalTickets}`);
-      
-      const hrTickets = await Ticket.find({ category: 'HR' });
-      console.log(`📊 HR tickets found: ${hrTickets.length}`);
-      if (hrTickets.length > 0) {
-        console.log(`📊 HR tickets:`, hrTickets.map(t => ({ 
-          ticketNumber: t.ticketNumber,
-          title: t.title, 
-          category: t.category, 
-          subcategory: t.subcategory 
-        })));
-      }
-    }
 
     res.json(tickets);
   } catch (error) {
@@ -1153,7 +1315,7 @@ exports.getTicketById = async (req, res) => {
 };
 
 // ============================================
-// UPDATE TICKET STATUS
+// UPDATE TICKET STATUS - UPDATED WITH CLOSE NOTIFICATIONS
 // ============================================
 
 exports.updateStatus = async (req, res) => {
@@ -1184,6 +1346,10 @@ exports.updateStatus = async (req, res) => {
     }
     if (status === 'Closed') {
       ticket.closedAt = new Date();
+      // If ticket is being closed and wasn't resolved, set resolvedAt too
+      if (!ticket.resolvedAt) {
+        ticket.resolvedAt = new Date();
+      }
     }
     
     await ticket.save();
@@ -1193,6 +1359,14 @@ exports.updateStatus = async (req, res) => {
       .populate('assignedTo', 'name email')
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name');
+    
+    // ============================================
+    // IF TICKET IS CLOSED - SEND NOTIFICATIONS TO ALL STAKEHOLDERS
+    // ============================================
+    if (status === 'Closed') {
+      // Send email notifications to all stakeholders
+      await sendTicketClosedNotifications(updatedTicket, req.user);
+    }
     
     const io = req.app.get('io');
     if (io) {
