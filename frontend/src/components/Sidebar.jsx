@@ -1,4 +1,4 @@
-// frontend/src/components/Sidebar.jsx
+// frontend/src/components/Sidebar.jsx - FULL UPDATED CODE WITH FIXED ACTIVE ROUTE LOGIC
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
@@ -38,7 +38,8 @@ import {
   Camera,
   X,
   UsersRound,
-  UserCog
+  UserCog,
+  UserCheck
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -265,7 +266,7 @@ const Sidebar = () => {
 
   // HANDLE VIDEO LOGO CLICK
   const handleVideoLogoClick = () => {
-    window.open('https://techdataseeders.in/', '_blank');
+    window.open('https://techdataseeders.com/', '_blank');
   };
 
   // ROLE BADGE COLORS
@@ -320,9 +321,8 @@ const Sidebar = () => {
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
-      // People Ops Section - Just the main dashboard, no separate leave item
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync/Employee Detail' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
@@ -346,14 +346,13 @@ const Sidebar = () => {
 
     'Project Manager': [
       { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      // PM FEASIBILITY - NEW MENU ITEM
       { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
-      // People Ops - Employee Dashboard (contains both Leave and Attendance)
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
@@ -361,10 +360,10 @@ const Sidebar = () => {
 
     'Team Lead': [
       { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      // People Ops - Employee Dashboard
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
@@ -373,12 +372,12 @@ const Sidebar = () => {
 
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
       { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      // People Ops - Employee Dashboard
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
@@ -387,13 +386,17 @@ const Sidebar = () => {
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-      // { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
     ],
 
+    // ============================================
+    // HR MENU - FIXED ACTIVE ROUTE ISSUE
+    // ============================================
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
+      { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
+      { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync/Detail' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
@@ -409,17 +412,63 @@ const Sidebar = () => {
 
   const links = menuItems[userRole] || [];
 
-  // FIXED ACTIVE ROUTE LOGIC
+  // ============================================
+  // FIXED ACTIVE ROUTE LOGIC - Prevents nested route conflicts
+  // ============================================
   const isRouteActive = (path) => {
-    if (path === '/sales') return location.pathname === '/sales';
-    if (path === '/sales-manager') return location.pathname === '/sales-manager';
-    if (path === '/developer') return location.pathname === '/developer';
-    if (path === '/admin') return location.pathname === '/admin';
-    if (path === '/teamlead') return location.pathname === '/teamlead';
-    if (path === '/knowledge') return location.pathname === '/knowledge';
-    if (path === '/hr') return location.pathname === '/hr';
-    if (path === '/employee') return location.pathname === '/employee';
-    if (path === '/pm/feasibility') return location.pathname === '/pm/feasibility';
+    // Exact match for specific routes (prevents nested highlighting)
+    const exactMatchPaths = [
+      '/sales',
+      '/sales-manager',
+      '/developer',
+      '/admin',
+      '/teamlead',
+      '/knowledge',
+      '/hr',
+      '/employee',
+      '/pm/feasibility',
+      '/pm/dashboard',
+      '/pm/feeds',
+      '/pm/git-manager',
+      '/pm/resource-analytics',
+      '/pm/feed-status',
+      '/client',
+      '/tickets',
+      '/profile',
+      '/hr/leaves',
+      '/hr/employee-attendance',
+      '/hr/employee-attendance-report',
+      '/hr/attendance-sync',
+      '/admin/projects',
+      '/admin/users',
+      '/admin/project-clients',
+      '/admin/ticket-rules',
+      '/view_analytics',
+      '/sales/add_org',
+      '/sales/lead_generation',
+      '/sales/prospects',
+      '/sales/email-trigger',
+      '/developer/projects',
+      '/developer/feeds',
+      '/developer/git-feeds',
+      '/developer/feed-status',
+      '/developer/worklog',
+      '/developer/bucket',
+      '/teamlead/projects',
+      '/teamlead/developers',
+      '/teamlead/feeds',
+      '/teamlead/feed-status',
+      '/client/projects',
+      '/client/feeds',
+      '/feasibility'
+    ];
+    
+    // Check if the path is in the exact match list
+    if (exactMatchPaths.includes(path)) {
+      return location.pathname === path;
+    }
+    
+    // For all other routes, use startsWith (fallback)
     return location.pathname.startsWith(path);
   };
 

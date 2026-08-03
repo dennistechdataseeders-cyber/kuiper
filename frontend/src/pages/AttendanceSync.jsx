@@ -1,4 +1,5 @@
-// frontend/src/pages/AttendanceSync.jsx
+// frontend/src/pages/AttendanceSync.jsx - REMOVED VIEW ATTENDANCE PART
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
@@ -39,8 +40,6 @@ const AttendanceSync = () => {
   const [toDate, setToDate] = useState(new Date().toISOString().split('T')[0]);
   const [syncResult, setSyncResult] = useState(null);
   const [employeeCodes, setEmployeeCodes] = useState([]);
-  const [selectedEmployee, setSelectedEmployee] = useState(null);
-  const [employeeAttendance, setEmployeeAttendance] = useState(null);
   const [testResult, setTestResult] = useState(null);
   const [showTest, setShowTest] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -116,48 +115,6 @@ const AttendanceSync = () => {
     }
   };
 
-  const fetchEmployeeAttendance = async (employeeCode) => {
-    setLoading(true);
-    setEmployeeAttendance(null);
-    try {
-      console.log(`🔍 Fetching attendance for employee: ${employeeCode}`);
-      const res = await axios.get(
-        `${API_BASE_URL}/api/hr/attendance/employee/${employeeCode}`,
-        {
-          ...authHeader,
-          params: { fromDate, toDate }
-        }
-      );
-      console.log('📊 Attendance response:', res.data);
-      setEmployeeAttendance(res.data.data);
-      setSelectedEmployee(employeeCode);
-    } catch (error) {
-      console.error('Error fetching employee attendance:', error);
-      toast.error(error.response?.data?.error || 'Failed to fetch employee attendance');
-      setEmployeeAttendance(null);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const getStatusBadge = (status) => {
-    switch(status) {
-      case 'present': return 'bg-emerald-100 text-emerald-700 border-emerald-200';
-      case 'partial': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'absent': return 'bg-red-100 text-red-700 border-red-200';
-      default: return 'bg-slate-100 text-slate-700 border-slate-200';
-    }
-  };
-
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'present': return <CheckCircle size={14} className="text-emerald-600" />;
-      case 'partial': return <AlertCircle size={14} className="text-amber-600" />;
-      case 'absent': return <XCircle size={14} className="text-red-600" />;
-      default: return <Activity size={14} className="text-slate-400" />;
-    }
-  };
-
   // Filter employee codes by search term
   const filteredEmployees = employeeCodes.filter(emp =>
     emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -171,10 +128,6 @@ const AttendanceSync = () => {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
-
-  // Get employee attendance days
-  const attendanceDays = employeeAttendance?.summary?.days || [];
-  const displayDays = attendanceDays.slice(0, 10);
 
   return (
     <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -343,7 +296,7 @@ const AttendanceSync = () => {
         </div>
       )}
 
-      {/* Employee List */}
+      {/* Employee List - Removed View Attendance button */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-4 border-b border-slate-100 flex items-center justify-between">
           <h3 className="text-sm font-black text-slate-700 flex items-center gap-2">
@@ -371,97 +324,21 @@ const AttendanceSync = () => {
           ) : (
             currentEmployees.map((emp) => (
               <div key={emp._id || emp.employeeCode} className="p-4 hover:bg-slate-50/50 transition-all">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
-                      {emp.name?.charAt(0) || emp.employeeCode?.charAt(0) || '?'}
-                    </div>
-                    <div>
-                      <p className="font-bold text-slate-800">{emp.name || 'Unknown'}</p>
-                      <div className="flex items-center gap-3 text-xs text-slate-500">
-                        <span>Code: {emp.employeeCode}</span>
-                        <span>•</span>
-                        <span>{emp.designation || 'No Designation'}</span>
-                        <span>•</span>
-                        <span>{emp.email}</span>
-                      </div>
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                    {emp.name?.charAt(0) || emp.employeeCode?.charAt(0) || '?'}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-800">{emp.name || 'Unknown'}</p>
+                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                      <span>Code: {emp.employeeCode}</span>
+                      <span>•</span>
+                      <span>{emp.designation || 'No Designation'}</span>
+                      <span>•</span>
+                      <span>{emp.email}</span>
                     </div>
                   </div>
-                  <button
-                    onClick={() => fetchEmployeeAttendance(emp.employeeCode)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-1"
-                  >
-                    <Eye size={12} />
-                    View Attendance
-                  </button>
                 </div>
-
-                {/* Employee Attendance Details */}
-                {selectedEmployee === emp.employeeCode && employeeAttendance && (
-                  <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-                      <div className="p-2 bg-slate-50 rounded-lg">
-                        <p className="text-[7px] font-black text-slate-400 uppercase">Present</p>
-                        <p className="text-base font-black text-emerald-600">{employeeAttendance.summary?.present || 0}</p>
-                      </div>
-                      <div className="p-2 bg-red-50 rounded-lg">
-                        <p className="text-[7px] font-black text-red-400 uppercase">Absent</p>
-                        <p className="text-base font-black text-red-600">{employeeAttendance.summary?.absent || 0}</p>
-                      </div>
-                      <div className="p-2 bg-amber-50 rounded-lg">
-                        <p className="text-[7px] font-black text-amber-400 uppercase">Late</p>
-                        <p className="text-base font-black text-amber-600">{employeeAttendance.summary?.late || 0}</p>
-                      </div>
-                      <div className="p-2 bg-blue-50 rounded-lg">
-                        <p className="text-[7px] font-black text-blue-400 uppercase">Avg Hours</p>
-                        <p className="text-base font-black text-blue-600">{employeeAttendance.summary?.averageHours || 0}h</p>
-                      </div>
-                    </div>
-
-                    {/* Daily Logs */}
-                    {displayDays.length > 0 ? (
-                      <div className="max-h-48 overflow-y-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-slate-50">
-                              <th className="px-3 py-2 text-left text-[8px] font-black text-slate-400 uppercase">Date</th>
-                              <th className="px-3 py-2 text-left text-[8px] font-black text-slate-400 uppercase">Day</th>
-                              <th className="px-3 py-2 text-left text-[8px] font-black text-slate-400 uppercase">Status</th>
-                              <th className="px-3 py-2 text-left text-[8px] font-black text-slate-400 uppercase">Hours</th>
-                              <th className="px-3 py-2 text-left text-[8px] font-black text-slate-400 uppercase">Punch In</th>
-                              <th className="px-3 py-2 text-left text-[8px] font-black text-slate-400 uppercase">Punch Out</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {displayDays.map((day, idx) => (
-                              <tr key={idx} className="border-b border-slate-50">
-                                <td className="px-3 py-2 text-xs font-medium text-slate-700">{day.date}</td>
-                                <td className="px-3 py-2 text-xs text-slate-500">{day.dayName}</td>
-                                <td className="px-3 py-2">
-                                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black ${getStatusBadge(day.status)}`}>
-                                    {getStatusIcon(day.status)}
-                                    {day.status?.charAt(0).toUpperCase() + day.status?.slice(1) || 'Unknown'}
-                                  </span>
-                                </td>
-                                <td className="px-3 py-2 text-xs font-bold text-slate-700">{day.hoursWorked || '-'}</td>
-                                <td className="px-3 py-2 text-xs text-slate-500">
-                                  {day.punchIn ? new Date(day.punchIn).toLocaleTimeString() : '-'}
-                                </td>
-                                <td className="px-3 py-2 text-xs text-slate-500">
-                                  {day.punchOut ? new Date(day.punchOut).toLocaleTimeString() : '-'}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <div className="text-center py-4 text-slate-400 text-sm">
-                        No attendance records found for this period
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             ))
           )}

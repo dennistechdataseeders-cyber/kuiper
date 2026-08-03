@@ -1,4 +1,4 @@
-// frontend/src/pages/TicketDetails.jsx
+// frontend/src/pages/TicketDetails.jsx - UPDATED
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -373,6 +373,9 @@ const TicketDetails = () => {
     }
   };
 
+  // ============================================
+  // CLOSE TICKET - Admin can close ANY ticket
+  // ============================================
   const closeTicket = async () => {
     if (!window.confirm('Are you sure you want to close this ticket? This action cannot be undone.')) {
       return;
@@ -784,6 +787,15 @@ const TicketDetails = () => {
   if (!ticket) return null;
 
   const hasTicketAttachments = ticket.files && ticket.files.length > 0;
+  
+  // ============================================
+  // CHECK IF USER CAN CLOSE THE TICKET
+  // Admin can close ANY ticket
+  // Others can only close if they are the creator
+  // ============================================
+  const canCloseTicket = 
+    userRole === 'Admin' || 
+    (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId));
 
   return (
     <div className={`min-h-screen bg-gray-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10' : 'ml-64'}`}>
@@ -827,11 +839,19 @@ const TicketDetails = () => {
           </div>
 
           <div className="flex gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto">
-            {isTicketCreator && ticket.status !== 'Closed' && (
-              <button onClick={closeTicket} disabled={updating} className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-2 shadow-sm">
+            {/* ============================================
+                CLOSE BUTTON - Admin can close ANY ticket
+                ============================================ */}
+            {canCloseTicket && ticket.status !== 'Closed' && (
+              <button 
+                onClick={closeTicket} 
+                disabled={updating} 
+                className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-[10px] sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-2 shadow-sm"
+              >
                 <XCircle size={isMobile ? 14 : 16} /> Close
               </button>
             )}
+            
             {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
             ticket.status !== 'Closed' && (
               <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto">
@@ -1404,7 +1424,7 @@ const TicketDetails = () => {
               )}
               {ticket.closedAt && (
                 <div>
-                  <p className="text-[10px] sm:text-xs font-semibold text-red-600 uppercase tracking-wider">Closed At</p>
+                  <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Closed At</p>
                   <p className="text-xs sm:text-sm text-gray-800 font-medium mt-1">{new Date(ticket.closedAt).toLocaleString()}</p>
                 </div>
               )}

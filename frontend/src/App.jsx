@@ -45,6 +45,9 @@ import KnowledgeBase from './pages/KnowledgeBase';
 import FeasibilityDashboard from './pages/FeasibilityDashboard';
 import PmFeasibilityDashboard from './pages/PmFeasibilityDashboard'; // <-- NEW IMPORT
 import PmDashboard from './pages/PmDashboard';
+import BiometricSync from './pages/BiometricSync';
+import EmployeeAttendanceDetail from './pages/EmployeeAttendanceDetail';
+import EmployeeAttendanceReport from './pages/EmployeeAttendanceReport';
 
 // ============================================
 // HRMS IMPORTS
@@ -349,7 +352,11 @@ function AppContent() {
                         <HrLeaveDashboard />
                       </ProtectedRoute>
                     } />
-                    
+                    <Route path="/hr/biometric-sync" element={
+                      <ProtectedRoute allowedRoles={['Admin', 'HR']}>
+                        <BiometricSync />
+                      </ProtectedRoute>
+                    } />
                     {/* ============================================
                         PEOPLE OPS - Employee Dashboard
                         ============================================ */}
@@ -383,6 +390,16 @@ function AppContent() {
                     <Route path="/feasibility" element={
                         <ProtectedRoute allowedRoles={['Admin', 'Project Manager', 'Sales']}>
                           <FeasibilityDashboard />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/hr/employee-attendance" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'HR']}>
+                          <EmployeeAttendanceDetail />
+                        </ProtectedRoute>
+                      } />
+                      <Route path="/hr/employee-attendance-report" element={
+                        <ProtectedRoute allowedRoles={['Admin', 'HR']}>
+                          <EmployeeAttendanceReport />
                         </ProtectedRoute>
                       } />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />

@@ -1,6 +1,7 @@
 // frontend/src/pages/HrDashboard.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../context/SidebarContext';
 import {
   Users,
@@ -27,13 +28,15 @@ import {
   Settings,
   Bell,
   Activity,
-  BarChart3
+  BarChart3,
+  Fingerprint
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const HrDashboard = () => {
   const { isCollapsed } = useSidebar();
+  const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
   // State
@@ -421,6 +424,19 @@ const HrDashboard = () => {
                   </div>
                   <span className="text-sm font-black text-amber-600">{stats.pendingLeaves}</span>
                 </button>
+
+                {/* Biometric Sync Button */}
+                <button
+                  onClick={() => navigate('/hr/biometric-sync')}
+                  className="w-full p-4 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-all flex items-center justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    <Fingerprint size={18} className="text-indigo-600" />
+                    <span className="font-bold text-indigo-700">Sync Biometric Attendance</span>
+                  </div>
+                  <span className="text-sm font-black text-indigo-600">📋</span>
+                </button>
+
                 <button
                   onClick={() => setSelectedTab('corrections')}
                   className="w-full p-4 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200 transition-all flex items-center justify-between"
@@ -431,6 +447,7 @@ const HrDashboard = () => {
                   </div>
                   <span className="text-sm font-black text-purple-600">{stats.pendingCorrections}</span>
                 </button>
+
                 <button
                   onClick={() => setSelectedTab('settings')}
                   className="w-full p-4 bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition-all flex items-center justify-between"
