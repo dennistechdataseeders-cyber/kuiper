@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 // backend/routes/employeeRoutes.js - FIXED VERSION
-=======
-// backend/routes/employeeRoutes.js - FULL FIXED VERSION WITH IST TIMEZONE SUPPORT
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
 
 const express = require('express');
 const router = express.Router();
@@ -16,11 +12,7 @@ const User = require('../models/User');
 const LeaveType = require('../models/LeaveType');
 
 // ============================================
-<<<<<<< HEAD
 // HELPER: Get IST date string from any date
-=======
-// HELPER: Get IST date string
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
 // ============================================
 const getISTDateString = (date) => {
   if (!date) return null;
@@ -30,11 +22,7 @@ const getISTDateString = (date) => {
 };
 
 // ============================================
-<<<<<<< HEAD
 // HELPER: Get IST date at midnight (returns UTC date)
-=======
-// HELPER: Get IST date at midnight
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
 // ============================================
 const getISTMidnight = (dateStr) => {
   if (!dateStr) return null;
@@ -45,11 +33,7 @@ const getISTMidnight = (dateStr) => {
 };
 
 // ============================================
-<<<<<<< HEAD
 // HELPER: Get start and end of day in IST (UTC boundaries)
-=======
-// HELPER: Get start and end of day in IST
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
 // ============================================
 const getISTDayRange = (dateStr) => {
   if (!dateStr) return null;
@@ -60,7 +44,6 @@ const getISTDayRange = (dateStr) => {
 };
 
 // ============================================
-<<<<<<< HEAD
 // HELPER: Get the current date in IST
 // ============================================
 const getTodayIST = () => {
@@ -69,8 +52,6 @@ const getTodayIST = () => {
 };
 
 // ============================================
-=======
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
 // ALL EMPLOYEE ROUTES REQUIRE AUTHENTICATION
 // ============================================
 router.use(protect);
@@ -85,12 +66,7 @@ router.get('/attendance/today', async (req, res) => {
     const userId = req.user._id;
     
     // Get today's date in IST
-<<<<<<< HEAD
     const todayStr = getTodayIST();
-=======
-    const now = new Date();
-    const todayStr = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
     const { start, end } = getISTDayRange(todayStr);
     
     const punchLogs = await EmployeePunchLog.find({
@@ -120,16 +96,11 @@ router.get('/attendance/today', async (req, res) => {
       punchOutTime = punchLog.punchOut;
       
       if (punchLog.punchIn) {
-<<<<<<< HEAD
         // Convert to IST for time comparison (office hours are in IST)
         const istPunchIn = new Date(punchLog.punchIn).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
         const punchDate = new Date(istPunchIn);
         const punchHour = punchDate.getHours();
         const punchMinute = punchDate.getMinutes();
-=======
-        const punchHour = new Date(punchLog.punchIn).getUTCHours();
-        const punchMinute = new Date(punchLog.punchIn).getUTCMinutes();
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
         if (punchHour < 10 || (punchHour === 10 && punchMinute <= 45)) {
           status = 'on_time';
           statusMessage = 'Punched In (On Time)';
@@ -178,19 +149,10 @@ router.get('/attendance/monthly-stats', async (req, res) => {
       startOfMonth = new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0));
       endOfMonth = new Date(Date.UTC(yearNum, monthNum + 1, 0, 23, 59, 59, 999));
     } else {
-<<<<<<< HEAD
       const todayStr = getTodayIST();
       const [yearNum, monthNum] = todayStr.split('-').map(Number);
       startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0));
       endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
-=======
-      const now = new Date();
-      const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-      const yearNum = istNow.getFullYear();
-      const monthNum = istNow.getMonth();
-      startOfMonth = new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0));
-      endOfMonth = new Date(Date.UTC(yearNum, monthNum + 1, 0, 23, 59, 59, 999));
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
     }
     
     // Get all punch logs for the month
@@ -239,19 +201,12 @@ router.get('/attendance/monthly-stats', async (req, res) => {
     const days = [];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     
-<<<<<<< HEAD
     const todayStr = getTodayIST();
-=======
-    const now = new Date();
-    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    const todayStr = getISTDateString(istNow);
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
     
     const current = new Date(startOfMonth);
     while (current <= endOfMonth) {
       const dateStr = getISTDateString(current);
       if (!dateStr) {
-<<<<<<< HEAD
         current.setUTCDate(current.getUTCDate() + 1);
         continue;
       }
@@ -263,20 +218,6 @@ router.get('/attendance/monthly-stats', async (req, res) => {
       }
       
       const dayOfWeek = current.getUTCDay();
-=======
-        current.setDate(current.getDate() + 1);
-        continue;
-      }
-      
-      // Skip future dates
-      if (dateStr > todayStr) {
-        current.setDate(current.getDate() + 1);
-        continue;
-      }
-      
-      const currentDate = new Date(current);
-      const dayOfWeek = currentDate.getUTCDay();
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
       const isWorkingDay = dayOfWeek >= 1 && dayOfWeek <= 5;
       
       // Get punch log for this day
@@ -307,19 +248,12 @@ router.get('/attendance/monthly-stats', async (req, res) => {
           punchOut = punchLog.punchOut;
         }
         
-<<<<<<< HEAD
         // Determine if late (using IST time)
         if (punchIn) {
           const istPunchIn = new Date(punchIn).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
           const punchDate = new Date(istPunchIn);
           const punchHour = punchDate.getHours();
           const punchMinute = punchDate.getMinutes();
-=======
-        // Determine if late
-        if (punchIn) {
-          const punchHour = new Date(punchIn).getUTCHours();
-          const punchMinute = new Date(punchIn).getUTCMinutes();
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
           const isLate = punchHour > 10 || (punchHour === 10 && punchMinute > 45);
           
           if (isLate) {
@@ -386,23 +320,10 @@ router.get('/attendance/timeline', async (req, res) => {
     const userId = req.user._id;
     const { months = 3 } = req.query;
     
-<<<<<<< HEAD
     const todayStr = getTodayIST();
     const [year, month, day] = todayStr.split('-').map(Number);
     
     const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
-=======
-    const now = new Date();
-    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
-    
-    const endDate = new Date(Date.UTC(
-      istNow.getFullYear(),
-      istNow.getMonth(),
-      istNow.getDate(),
-      23, 59, 59, 999
-    ));
-    
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
     const startDate = new Date(endDate);
     startDate.setUTCMonth(startDate.getUTCMonth() - parseInt(months));
     startDate.setUTCHours(0, 0, 0, 0);
@@ -499,16 +420,10 @@ router.get('/attendance/timeline', async (req, res) => {
         }
         
         if (punchInUTC) {
-<<<<<<< HEAD
           const istPunchIn = new Date(punchInUTC).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
           const punchDate = new Date(istPunchIn);
           const hour = punchDate.getHours();
           const minute = punchDate.getMinutes();
-=======
-          const punchDate = new Date(punchInUTC);
-          const hour = punchDate.getUTCHours();
-          const minute = punchDate.getUTCMinutes();
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
           if (hour > 10 || (hour === 10 && minute > 45)) {
             status = 'late';
           } else if (punchOutUTC) {
@@ -557,11 +472,7 @@ router.get('/attendance/timeline', async (req, res) => {
               const outTime = new Date(session.punchOutUTC);
               effectiveHours += (outTime - inTime) / (1000 * 60 * 60);
               if (!lastOut || outTime > lastOut) lastOut = outTime;
-<<<<<<< HEAD
             } else if (day.date === getTodayIST()) {
-=======
-            } else if (day.date === getISTDateString(new Date())) {
->>>>>>> a9a17b5d5b12b614b8795e8ea991a562fde0544b
               const now = new Date();
               effectiveHours += (now - inTime) / (1000 * 60 * 60);
               lastOut = now;
