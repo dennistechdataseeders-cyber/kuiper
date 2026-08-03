@@ -58,6 +58,8 @@ repomix-output.xml
 # To-do list / notes
 to_do_next_push
 
+** Test-files**
+backend/test_biometric.py
 # Any other temporary or local files
 *.tmp
 *.temp
