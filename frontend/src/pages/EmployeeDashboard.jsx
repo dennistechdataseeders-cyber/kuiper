@@ -110,7 +110,6 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     if (!token || !userId) return;
 
-    console.log('🔌 Setting up WebSocket for attendance updates...');
     
     socketRef.current = io(API_BASE_URL, {
       transports: ['websocket'],
@@ -121,14 +120,12 @@ const EmployeeDashboard = () => {
     });
 
     socketRef.current.on('connect', () => {
-      console.log('🟢 Socket connected for attendance');
       setIsSocketConnected(true);
       socketRef.current.emit('join-attendance-room', userId);
       socketRef.current.emit('join-user-room', userId);
     });
 
     socketRef.current.on('disconnect', () => {
-      console.log('🔴 Socket disconnected');
       setIsSocketConnected(false);
     });
 
@@ -138,7 +135,6 @@ const EmployeeDashboard = () => {
     });
 
     socketRef.current.on('attendance_updated', (data) => {
-      console.log('📊 Attendance updated for user:', data);
       if (data.employeeId === userId || data.userId === userId) {
         fetchDashboardData();
         toast.success(`Attendance updated for ${data.name || 'you'}`, { 
@@ -150,7 +146,6 @@ const EmployeeDashboard = () => {
     });
 
     socketRef.current.on('attendance_sync_complete', (data) => {
-      console.log('✅ Attendance sync complete:', data);
       setLastSyncTime(new Date());
       if (data.updatedUsers && data.updatedUsers > 0) {
         toast.success(`Attendance sync complete! ${data.updatedUsers} users updated`, {
@@ -177,8 +172,7 @@ const EmployeeDashboard = () => {
         axios.get(`${API_BASE_URL}/api/employee/attendance/monthly-stats?month=${attendanceMonth + 1}&year=${attendanceYear}`, authHeader)
       ]);
 
-      console.log('📊 Today Attendance:', attendanceRes.data);
-      console.log('📊 Monthly Stats:', statsRes.data);
+    
 
       setProfile(profileRes.data.data);
       setTodayAttendance(attendanceRes.data.data);
@@ -193,7 +187,7 @@ const EmployeeDashboard = () => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData();   
   }, [attendanceMonth, attendanceYear]);
 
   // Calculate attendance rate

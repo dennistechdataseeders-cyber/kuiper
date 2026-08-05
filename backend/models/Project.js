@@ -54,19 +54,19 @@ const ProjectSchema = new mongoose.Schema({
   default: null 
 },
   // ✅ FIX: Comments field at the top level (NOT inside projectStatus)
-  comments: [{
+comments: [{
     text: { type: String, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     userName: { type: String, required: true },
+    files: [{  // ✅ ADDED: File attachments array
+      url: { type: String },
+      filename: { type: String },
+      originalName: { type: String },
+      size: { type: Number },
+      type: { type: String, enum: ['image', 'document'] }
+    }],
     createdAt: { type: Date, default: Date.now },
-    updatedAt: { type: Date, default: Date.now },
-     files: [{
-    url: { type: String },
-    filename: { type: String },
-    originalName: { type: String },
-    size: { type: Number },
-    type: { type: String }
-  }]
+    updatedAt: { type: Date, default: Date.now }
   }]
 }, { timestamps: true });
 

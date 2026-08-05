@@ -1,4 +1,5 @@
-// backend/models/Feed.js - UPDATED
+// backend/models/Feed.js - UPDATED with files support in comments
+
 const mongoose = require('mongoose');
 
 const FeedSchema = new mongoose.Schema({
@@ -135,20 +136,28 @@ const FeedSchema = new mongoose.Schema({
     default: 'New'
   },
 
-  // ✅ FIX: Comments field at the top level (NOT inside feedStatus)
+  // ✅ UPDATED: Comments field with file attachments support
   comments: [{
     text: { type: String, required: true },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     userName: { type: String, required: true },
+    files: [{  // ✅ ADDED: File attachments array
+      url: { type: String },
+      filename: { type: String },
+      originalName: { type: String },
+      size: { type: Number },
+      type: { type: String, enum: ['image', 'document'] }
+    }],
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
   }]
+}, {
+  timestamps: true
 });
 
 // Pre-save middleware to update the updatedAt timestamp
 FeedSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
-  
 });
 
 module.exports = mongoose.model('Feed', FeedSchema);

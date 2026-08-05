@@ -1,4 +1,5 @@
-// frontend/src/components/CommentSection.jsx
+// frontend/src/components/CommentSection.jsx - UPDATED with file download fix
+
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { 
@@ -29,6 +30,7 @@ const CommentSection = ({
   const [filePreviews, setFilePreviews] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [downloading, setDownloading] = useState(null);
   const commentsEndRef = useRef(null);
   const fileInputRef = useRef(null);
   
@@ -41,7 +43,7 @@ const CommentSection = ({
   // Allowed file types (using extensions for better compatibility)
   const ALLOWED_EXTENSIONS = [
     '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.rtf', '.odt', '.ods',
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.tsv', '.rtf', '.odt', '.ods',
     '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
     '.ppt', '.pptx', '.odp',
     '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
@@ -98,17 +100,30 @@ const CommentSection = ({
       return <Image size={16} className="text-blue-500" />;
     }
     if (['pdf'].includes(ext)) return <FileText size={16} className="text-red-500" />;
-    if (['doc', 'docx'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
-    if (['xls', 'xlsx', 'csv'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
-    if (['zip', 'rar', '7z'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
-    if (['txt'].includes(ext)) return <FileText size={16} className="text-slate-600" />;
-    if (['mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a'].includes(ext)) {
+    if (['doc', 'docx', 'odt'].includes(ext)) return <FileText size={16} className="text-blue-600" />;
+    if (['xls', 'xlsx', 'csv', 'tsv', 'ods'].includes(ext)) return <FileSpreadsheet size={16} className="text-green-600" />;
+    if (['zip', 'rar', '7z', 'tar', 'gz', 'bz2'].includes(ext)) return <FileArchive size={16} className="text-amber-600" />;
+    if (['txt', 'json', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf'].includes(ext)) {
+      return <FileCode size={16} className="text-slate-600" />;
+    }
+    if (['js', 'jsx', 'ts', 'tsx', 'html', 'css', 'scss', 'sass'].includes(ext)) {
+      return <FileCode size={16} className="text-purple-500" />;
+    }
+    if (['py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs'].includes(ext)) {
+      return <FileCode size={16} className="text-orange-500" />;
+    }
+    if (['sh', 'bash', 'bat', 'ps1', 'cmd'].includes(ext)) {
+      return <FileCode size={16} className="text-green-700" />;
+    }
+    if (['mp3', 'wav', 'aac', 'ogg', 'flac', 'm4a', 'wma'].includes(ext)) {
       return <FileAudio size={16} className="text-pink-500" />;
     }
-    if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm'].includes(ext)) {
+    if (['mp4', 'avi', 'mkv', 'mov', 'wmv', 'flv', 'webm', 'm4v', 'mpg', 'mpeg'].includes(ext)) {
       return <FileVideo size={16} className="text-indigo-500" />;
     }
-    if (['ppt', 'pptx'].includes(ext)) return <FileText size={16} className="text-orange-500" />;
+    if (['ppt', 'pptx', 'odp'].includes(ext)) {
+      return <FileText size={16} className="text-orange-600" />;
+    }
     return <File size={16} className="text-slate-400" />;
   };
 
@@ -118,36 +133,25 @@ const CommentSection = ({
     
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     const typeMap = {
-      'pdf': 'PDF',
-      'doc': 'Word',
-      'docx': 'Word',
-      'xls': 'Excel',
-      'xlsx': 'Excel',
-      'csv': 'CSV',
-      'txt': 'Text',
-      'zip': 'ZIP',
-      'rar': 'RAR',
-      '7z': '7Z',
-      'jpg': 'Image',
-      'jpeg': 'Image',
-      'png': 'Image',
-      'gif': 'Image',
-      'webp': 'Image',
-      'mp4': 'Video',
-      'avi': 'Video',
-      'mkv': 'Video',
-      'mov': 'Video',
-      'mp3': 'Audio',
-      'wav': 'Audio',
-      'ppt': 'PowerPoint',
-      'pptx': 'PowerPoint',
-      'aac': 'Audio',
-      'ogg': 'Audio',
-      'flac': 'Audio',
-      'm4a': 'Audio',
-      'wmv': 'Video',
-      'flv': 'Video',
-      'webm': 'Video'
+      'jpg': 'Image', 'jpeg': 'Image', 'png': 'Image', 'gif': 'Image', 
+      'webp': 'Image', 'bmp': 'Image', 'svg': 'Image', 'ico': 'Icon',
+      'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word', 'odt': 'Word',
+      'xls': 'Excel', 'xlsx': 'Excel', 'csv': 'CSV', 'tsv': 'TSV', 'ods': 'Excel',
+      'txt': 'Text', 'rtf': 'Rich Text',
+      'zip': 'ZIP', 'rar': 'RAR', '7z': '7Z', 'tar': 'TAR', 'gz': 'GZ', 'bz2': 'BZ2',
+      'json': 'JSON', 'xml': 'XML', 'yaml': 'YAML', 'yml': 'YAML',
+      'ini': 'Config', 'cfg': 'Config', 'conf': 'Config',
+      'js': 'JavaScript', 'jsx': 'React', 'ts': 'TypeScript', 'tsx': 'React TS',
+      'html': 'HTML', 'css': 'CSS', 'scss': 'SCSS', 'sass': 'SASS',
+      'py': 'Python', 'java': 'Java', 'cpp': 'C++', 'c': 'C', 'h': 'C Header',
+      'php': 'PHP', 'rb': 'Ruby', 'go': 'Go', 'rs': 'Rust',
+      'sh': 'Shell', 'bash': 'Bash', 'bat': 'Batch', 'ps1': 'PowerShell', 'cmd': 'Command',
+      'mp4': 'Video', 'avi': 'Video', 'mkv': 'Video', 'mov': 'Video',
+      'wmv': 'Video', 'flv': 'Video', 'webm': 'Video', 'm4v': 'Video',
+      'mpg': 'Video', 'mpeg': 'Video',
+      'mp3': 'Audio', 'wav': 'Audio', 'aac': 'Audio', 'ogg': 'Audio',
+      'flac': 'Audio', 'm4a': 'Audio', 'wma': 'Audio',
+      'ppt': 'PowerPoint', 'pptx': 'PowerPoint', 'odp': 'Presentation'
     };
     return typeMap[ext] || 'File';
   };
@@ -157,6 +161,73 @@ const CommentSection = ({
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+  };
+
+  // ============================================
+  // FILE DOWNLOAD FUNCTION - FIXED
+  // ============================================
+  const handleFileDownload = async (file) => {
+    if (!file || !file.url) {
+      toast.error('File URL not available');
+      return;
+    }
+
+    setDownloading(file.url);
+    
+    try {
+      // If the file URL is a full URL, use it directly
+      if (file.url.startsWith('http://') || file.url.startsWith('https://')) {
+        // Open in new tab for view/download
+        window.open(file.url, '_blank');
+        toast.success('File opened in new tab');
+        setDownloading(null);
+        return;
+      }
+
+      // For relative URLs, construct the full URL
+      const baseUrl = API_BASE_URL || window.location.origin;
+      const fileUrl = file.url.startsWith('/') ? `${baseUrl}${file.url}` : `${baseUrl}/${file.url}`;
+      
+      // For images, open in new tab
+      if (file.type === 'image' || isImageFile(file.originalName || file.filename || '')) {
+        window.open(fileUrl, '_blank');
+        toast.success('Image opened in new tab');
+        setDownloading(null);
+        return;
+      }
+
+      // For other files, download using fetch
+      const response = await fetch(fileUrl, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      
+      // Use the original filename or generate one from the URL
+      const filename = file.originalName || file.filename || file.url.split('/').pop() || 'download';
+      a.download = filename;
+      
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      
+      toast.success('File downloaded successfully!');
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download file. Please try again.');
+    } finally {
+      setDownloading(null);
+    }
   };
 
   // Determine the API endpoint based on type
@@ -381,6 +452,7 @@ const CommentSection = ({
   const canDeleteComment = (comment) => {
     if (userRole === 'Admin') return true;
     if (userRole === 'Project Manager') return true;
+    if (userRole === 'Team Lead') return true;
     return comment.userId?._id === userId || comment.userId === userId;
   };
 
@@ -411,10 +483,9 @@ const CommentSection = ({
   };
 
   // ============================================
-  // RENDER FILE ATTACHMENTS FOR A COMMENT
+  // RENDER FILE ATTACHMENTS WITH DOWNLOAD FIX
   // ============================================
   const renderFileAttachments = (comment) => {
-    // Check if comment has files
     const hasFiles = comment.files && comment.files.length > 0;
     
     if (!hasFiles) return null;
@@ -424,7 +495,7 @@ const CommentSection = ({
     return (
       <div className="mt-3 space-y-2">
         {comment.files.map((file, idx) => {
-          // Determine if it's an image - check multiple sources
+          // Determine if it's an image
           const isImage = file.type === 'image' || 
                           (file.originalName && isImageFile(file.originalName)) ||
                           (file.filename && isImageFile(file.filename));
@@ -437,6 +508,15 @@ const CommentSection = ({
             console.warn(`⚠️ File ${idx} has no URL:`, file);
             return null;
           }
+
+          const isDownloading = downloading === fileUrl;
+
+          // Construct full URL if needed
+          let fullUrl = fileUrl;
+          if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
+            const baseUrl = API_BASE_URL || window.location.origin;
+            fullUrl = fileUrl.startsWith('/') ? `${baseUrl}${fileUrl}` : `${baseUrl}/${fileUrl}`;
+          }
           
           return (
             <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group">
@@ -444,7 +524,7 @@ const CommentSection = ({
               <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden">
                 {isImage ? (
                   <img 
-                    src={fileUrl} 
+                    src={fullUrl} 
                     alt={displayName}
                     className="w-full h-full object-cover rounded-lg"
                     onError={(e) => {
@@ -466,45 +546,41 @@ const CommentSection = ({
                 <p className="text-xs font-semibold text-slate-700 truncate" title={displayName}>
                   {displayName}
                 </p>
-                <p className="text-[9px] text-slate-400 flex items-center gap-2">
+                <div className="flex items-center gap-2 text-[9px] text-slate-400">
                   {file.size && <span>{formatFileSize(file.size)}</span>}
                   {file.size && <span>•</span>}
                   <span>{getFileTypeLabel(file)}</span>
-                </p>
+                </div>
               </div>
               
-              {/* Actions */}
+              {/* Actions - Download for everyone */}
               <div className="flex items-center gap-1">
                 {isImage && (
                   <button
-                    onClick={() => window.open(fileUrl, '_blank')}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
+                    onClick={() => handleFileDownload(file)}
+                    disabled={isDownloading}
+                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all disabled:opacity-50"
                     title="View image"
                   >
-                    <Eye size={14} />
+                    {isDownloading ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <Eye size={14} />
+                    )}
                   </button>
                 )}
-                <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
+                <button
+                  onClick={() => handleFileDownload(file)}
+                  disabled={isDownloading}
+                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all disabled:opacity-50"
                   title="Download file"
-                  onClick={(e) => {
-                    // For non-images, trigger download
-                    if (!isImage) {
-                      e.preventDefault();
-                      const link = document.createElement('a');
-                      link.href = fileUrl;
-                      link.download = displayName;
-                      document.body.appendChild(link);
-                      link.click();
-                      document.body.removeChild(link);
-                    }
-                  }}
                 >
-                  <Download size={14} />
-                </a>
+                  {isDownloading ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Download size={14} />
+                  )}
+                </button>
               </div>
             </div>
           );
@@ -573,7 +649,7 @@ const CommentSection = ({
                     )}
                     
                     {/* ============================================
-                        RENDER FILE ATTACHMENTS
+                        RENDER FILE ATTACHMENTS WITH DOWNLOAD
                         ============================================ */}
                     {hasFiles && renderFileAttachments(comment)}
                   </div>

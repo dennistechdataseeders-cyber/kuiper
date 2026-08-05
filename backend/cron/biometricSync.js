@@ -7,10 +7,10 @@ const User = require('../models/User');
 
 class BiometricSyncService {
   constructor() {
-    this.baseUrl = process.env.BIOMETRIC_API_URL || 'http://103.170.149.84:2000';
-    this.username = process.env.BIOMETRIC_USERNAME || 'biomax';
-    this.password = process.env.BIOMETRIC_PASSWORD || 'biomax';
-    this.deviceKey = process.env.BIOMETRIC_DEVICE_KEY || 'C2642CA867382C34';
+    this.baseUrl = process.env.BIOMETRIC_API_URL ;
+    this.username = process.env.BIOMETRIC_USERNAME ;
+    this.password = process.env.BIOMETRIC_PASSWORD ;
+    this.deviceKey = process.env.BIOMETRIC_DEVICE_KEY ;
     this.token = null;
     this.tokenExpiry = null;
     this.isRunning = false;
@@ -231,13 +231,10 @@ class BiometricSyncService {
         userMap[String(u.employeeCode)] = u;
       });
 
-      // Get logs for the last 30 days
       const today = new Date();
-      const fromDate = new Date(today);
-      fromDate.setDate(fromDate.getDate() - 30);
-
-      const fromStr = fromDate.toISOString().split('T')[0];
+      const fromDate = new Date('2026-06-11');
       const toStr = today.toISOString().split('T')[0];
+      const fromStr = fromDate.toISOString().split('T')[0];
 
       console.log(`📡 Fetching logs from ${fromStr} to ${toStr}...`);
       const logs = await this.fetchAttendanceLogs(fromStr, toStr);
@@ -388,7 +385,7 @@ class BiometricSyncService {
 const syncService = new BiometricSyncService();
 
 // Schedule sync every 15 minutes
-cron.schedule('*/15 * * * *', async () => {
+cron.schedule('*/5 * * * *', async () => {
   console.log('⏰ Running scheduled biometric sync...');
   await syncService.syncAttendance();
 }, {
@@ -401,6 +398,6 @@ console.log('⏰ Biometric sync scheduled every 15 minutes');
 setTimeout(() => {
   console.log('🚀 Running initial biometric sync...');
   syncService.syncAttendance();
-}, 30000);
+}, 5000);
 
 module.exports = syncService;

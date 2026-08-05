@@ -68,10 +68,6 @@ const DeveloperDashboard = () => {
         setServerDate(serverDateObj.toISOString().split('T')[0]);
         setServerDayName(getDayName(serverDateObj));
         setServerDayOfMonth(serverDateObj.getDate());
-        
-        // console.log('🕐 Server time fetched:', serverDateObj.toLocaleString());
-        // console.log('📅 Server date:', serverDateObj.toISOString().split('T')[0]);
-        // console.log('⏱️ Time offset:', offset, 'ms');
       }
     } catch (err) {
       console.error('Failed to fetch server time:', err);
@@ -103,8 +99,16 @@ const DeveloperDashboard = () => {
     return new Date().getDate();
   };
 
+  // ✅ Check if feed is CLOSED
+  const isFeedClosed = (feed) => {
+    return feed.feedStatus === 'Closed';
+  };
+
   // Check if feed is scheduled for today using SERVER date
   const isFeedForToday = (feed) => {
+    // ✅ Skip if feed is closed
+    if (isFeedClosed(feed)) return false;
+    
     const today = getServerToday();
     const currentDayOfMonth = getServerDayOfMonth();
     const currentDayName = getServerDayName();
@@ -155,10 +159,13 @@ const DeveloperDashboard = () => {
         axios.get(`${API_BASE_URL}/api/dev/my-feeds`, { headers })
       ]);
       setProjects(projRes.data);
-      setFeeds(feedRes.data);
+      
+      // ✅ Filter out closed feeds from the main feeds list
+      const activeFeeds = feedRes.data.filter(feed => !isFeedClosed(feed));
+      setFeeds(activeFeeds);
       
       // After feeds are loaded, filter based on server date
-      const today = feedRes.data.filter(feed => isFeedForToday(feed));
+      const today = activeFeeds.filter(feed => isFeedForToday(feed));
       setTodayFeeds(today);
       
     } catch (err) { 
@@ -347,6 +354,11 @@ const DeveloperDashboard = () => {
     return feed.feedType;
   };
 
+  // ✅ Check if feed is closed (for display purposes)
+  const isClosedFeed = (feed) => {
+    return feed.feedStatus === 'Closed';
+  };
+
   if (loading) return (
     <div className={`p-8 flex items-center justify-center min-h-screen transition-all duration-300 bg-gradient-to-br from-slate-50 to-slate-100 ${
       isCollapsed ? 'ml-20' : 'ml-64'
@@ -383,7 +395,7 @@ const DeveloperDashboard = () => {
         </div>
       </div>
 
-      {/* STATS CARDS */}
+      {/* STATS CARDS - Updated with active feeds count */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
           <div className="flex items-center justify-between">
@@ -400,7 +412,7 @@ const DeveloperDashboard = () => {
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 p-4 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 hover:scale-105">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total Feeds</p>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Active Feeds</p>
               <p className="text-2xl font-black text-white">{feeds.length}</p>
             </div>
             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
@@ -462,7 +474,7 @@ const DeveloperDashboard = () => {
         </div>
       </div>
 
-      {/* TODAY'S FEEDS SECTION */}
+      {/* TODAY'S FEEDS SECTION - Closed feeds are excluded */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -519,6 +531,13 @@ const DeveloperDashboard = () => {
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider ${platformInfo.color}`}>
                               {platformInfo.icon}
                               {platformInfo.text}
+                            </span>
+                          )}
+                          {/* ✅ Show if feed is in progress */}
+                          {feed.feedStatus && feed.feedStatus !== 'New' && feed.feedStatus !== 'Closed' && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase bg-amber-100 text-amber-700 border border-amber-200">
+                              <Clock size={8} />
+                              {feed.feedStatus}
                             </span>
                           )}
                         </div>

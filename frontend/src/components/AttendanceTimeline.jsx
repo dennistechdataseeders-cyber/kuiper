@@ -874,10 +874,6 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
             <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
             <p className="text-base font-black text-slate-700">{stats.averageGrossHours.toFixed(1)}h</p>
           </div>
-          <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late %</p>
-            <p className="text-base font-black text-amber-700">{stats.latePercentage.toFixed(0)}%</p>
-          </div>
         </div>
 
         {/* Timeline Table - Compact rows */}
