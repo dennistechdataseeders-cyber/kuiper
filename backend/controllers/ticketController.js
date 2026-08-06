@@ -837,6 +837,8 @@ function isInternalTicket(creatorRole) {
 // CREATE TICKET
 // ============================================
 
+// backend/controllers/ticketController.js - FULL UPDATED createTicket function
+
 exports.createTicket = async (req, res) => {
   try {
     const { title, description, priority, projectId, feedId, isInternal, category, subcategory, subItem, ticketType, assignedTo, files } = req.body;
@@ -863,7 +865,29 @@ exports.createTicket = async (req, res) => {
     }
     
     const finalProjectId = projectId || null;
-    const finalFeedId = feedId || null;
+    
+    // ============================================
+    // ✅ FIX: Handle "general" feed option
+    // ============================================
+    let finalFeedId = null;
+    let feedName = null;
+    let isGeneralTicket = false;
+    
+    if (feedId === 'general') {
+      // This is a general ticket for the whole project
+      finalFeedId = null;
+      feedName = 'General';
+      isGeneralTicket = true;
+      console.log(`📌 Creating GENERAL ticket for project ${projectId}`);
+    } else if (feedId) {
+      // Specific feed
+      finalFeedId = feedId;
+      const feed = await Feed.findById(feedId).select('name');
+      feedName = feed?.name || null;
+      console.log(`📌 Creating ticket for feed: ${feedName}`);
+    } else {
+      console.log(`📌 Creating ticket with no specific feed`);
+    }
     
     // ============================================
     // FIX: Prioritize manually selected assignee
@@ -881,8 +905,8 @@ exports.createTicket = async (req, res) => {
       }
     }
     
-    // If no manual assignment, try feed assignment
-    if (!finalAssignedTo && feedId) {
+    // If no manual assignment and it's NOT a general ticket, try feed assignment
+    if (!finalAssignedTo && feedId && feedId !== 'general') {
       const feed = await Feed.findById(feedId).populate('assignedDevelopers', '_id');
       if (feed && feed.assignedDevelopers && feed.assignedDevelopers.length > 0) {
         finalAssignedTo = feed.assignedDevelopers[0]._id;
@@ -947,8 +971,8 @@ exports.createTicket = async (req, res) => {
       }
     }
     
-    let feedName = null;
-    if (finalFeedId) {
+    // If feedName is null but we have a feedId, fetch it
+    if (!feedName && finalFeedId) {
       const feed = await Feed.findById(finalFeedId).select('name');
       feedName = feed?.name || null;
     }
@@ -967,6 +991,9 @@ exports.createTicket = async (req, res) => {
     }
     
     console.log(`📧 Ticket ${ticket.ticketNumber} assigned to: ${finalAssignedTo ? 'Manual assignee' : assigneeInfo?.email || 'Unassigned'}`);
+    if (isGeneralTicket) {
+      console.log(`📌 This is a GENERAL ticket for project: ${projectName}`);
+    }
     
     const notificationMessage = `New ticket created: ${ticket.title} (${ticket.ticketNumber})`;
     
@@ -1004,7 +1031,7 @@ exports.createTicket = async (req, res) => {
             stakeholder.name,
             projectName,
             frontendUrl,
-            feedName
+            feedName || 'General'
           );
           subject = `📋 Support Ticket: ${ticket.ticketNumber} - ${ticket.title}`;
         } else if (ticket.isInternal) {
@@ -1013,7 +1040,7 @@ exports.createTicket = async (req, res) => {
             creatorUser?.name || 'System',
             stakeholders,
             frontendUrl,
-            feedName,
+            feedName || 'General',
             projectName
           );
           subject = `🔒 Internal Ticket: ${ticket.ticketNumber} - ${ticket.title}`;
@@ -1023,7 +1050,7 @@ exports.createTicket = async (req, res) => {
             creatorUser?.name || 'System',
             stakeholders,
             frontendUrl,
-            feedName,
+            feedName || 'General',
             projectName
           );
           subject = `📋 New Ticket: ${ticket.ticketNumber} - ${ticket.title}`;
@@ -1079,7 +1106,8 @@ exports.createTicket = async (req, res) => {
       success: true,
       message: 'Ticket created successfully',
       ticket: ticket,
-      emailsSent: stakeholders.length
+      emailsSent: stakeholders.length,
+      isGeneral: isGeneralTicket
     });
     
   } catch (error) {

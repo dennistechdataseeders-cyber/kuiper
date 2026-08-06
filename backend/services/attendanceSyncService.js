@@ -1,4 +1,5 @@
 // backend/services/attendanceSyncService.js
+// UPDATED: Added IST timezone support for consistent "late" detection
 
 const axios = require('axios');
 const EmployeePunchLog = require('../models/EmployeePunchLog');
@@ -6,6 +7,93 @@ const User = require('../models/User');
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
+
+// ============================================
+// IST HELPER FUNCTIONS
+// ============================================
+
+/**
+ * Convert a date to IST time string
+ * @param {Date|string} date - The date to convert
+ * @returns {Date|null} - Date object representing IST time
+ */
+const toISTDate = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return null;
+  const istStr = d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+  return new Date(istStr);
+};
+
+/**
+ * Check if a punch time is late (after 10:45 AM IST)
+ * @param {Date|string} punchTime - The punch time to check
+ * @returns {boolean} - True if late, false otherwise
+ */
+const isLatePunch = (punchTime) => {
+  if (!punchTime) return false;
+  
+  const istDate = toISTDate(punchTime);
+  if (!istDate) return false;
+  
+  const hours = istDate.getHours();
+  const minutes = istDate.getMinutes();
+  
+  // Office starts at 10:45 AM IST
+  return hours > 10 || (hours === 10 && minutes > 45);
+};
+
+/**
+ * Get late minutes for a punch
+ * @param {Date|string} punchTime - The punch time to check
+ * @returns {number} - Number of minutes late (0 if on time)
+ */
+const getLateMinutes = (punchTime) => {
+  if (!punchTime) return 0;
+  
+  const istDate = toISTDate(punchTime);
+  if (!istDate) return 0;
+  
+  const hours = istDate.getHours();
+  const minutes = istDate.getMinutes();
+  const totalMinutes = hours * 60 + minutes;
+  const officeMinutes = 10 * 60 + 45; // 10:45 AM IST
+  
+  return Math.max(0, totalMinutes - officeMinutes);
+};
+
+/**
+ * Get IST date string (YYYY-MM-DD) from a Date object
+ * @param {Date|string} date - The date to convert
+ * @returns {string|null} - IST date string or null
+ */
+const getISTDateString = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+};
+
+/**
+ * Get today's date in IST as string (YYYY-MM-DD)
+ * @returns {string} - Today's date in IST
+ */
+const getTodayISTString = () => {
+  const now = new Date();
+  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+};
+
+/**
+ * Check if a date is today in IST
+ * @param {Date|string} date - The date to check
+ * @returns {boolean} - True if today, false otherwise
+ */
+const isTodayIST = (date) => {
+  if (!date) return false;
+  const dateStr = getISTDateString(date);
+  const todayStr = getTodayISTString();
+  return dateStr === todayStr;
+};
 
 class AttendanceSyncService {
   constructor() {
@@ -271,8 +359,6 @@ class AttendanceSyncService {
       };
 
       // 4. Process each employee's logs
-      // NOTE: logs must be processed in chronological order per employee so that
-      // the first "in" wins and the last "out" wins deterministically.
       for (const [employeeCode, employeeLogs] of Object.entries(logsByEmployee)) {
         const user = userMap[employeeCode];
         if (!user) {
@@ -321,6 +407,7 @@ class AttendanceSyncService {
 
   /**
    * Process a single log entry
+   * UPDATED: Now stores session data with IST-corrected timestamps
    */
   async processLogEntry(userId, log) {
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
@@ -338,11 +425,15 @@ class AttendanceSyncService {
       throw new Error(`Invalid date format: ${logDateStr}`);
     }
     
-    const dateStr = logDate.toISOString().split('T')[0];
+    // Get date in IST for consistent date grouping
+    const istDateStr = getISTDateString(logDate);
+    if (!istDateStr) {
+      throw new Error(`Failed to convert date to IST: ${logDateStr}`);
+    }
     
-    // Normalize date to start of day
-    const date = new Date(dateStr);
-    date.setHours(0, 0, 0, 0);
+    // Parse IST date string to UTC midnight for database storage
+    const [year, month, day] = istDateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
     
     // Determine if it's a punch in or out - using IOMode field
     const punchDirection = (log.IOMode || log.PunchDirection || '').toString().trim().toLowerCase();
@@ -365,7 +456,7 @@ class AttendanceSyncService {
             existingLog.punchIn = logDate;
             await existingLog.save();
             result.updated = true;
-            console.log(`🔄 Updated punch-in for user ${userId} on ${dateStr}`);
+            console.log(`🔄 Updated punch-in for user ${userId} on ${istDateStr}`);
           }
         } else {
           // Check if there's a log with just punch-out for this day
@@ -381,7 +472,7 @@ class AttendanceSyncService {
             punchOutOnly.punchIn = logDate;
             await punchOutOnly.save();
             result.updated = true;
-            console.log(`🔄 Updated punch-in for user ${userId} on ${dateStr}`);
+            console.log(`🔄 Updated punch-in for user ${userId} on ${istDateStr}`);
           } else {
             // Create new log with punch-in only
             await EmployeePunchLog.create({
@@ -394,7 +485,7 @@ class AttendanceSyncService {
               createdBy: null
             });
             result.created = true;
-            console.log(`✅ Created punch-in for user ${userId} on ${dateStr}`);
+            console.log(`✅ Created punch-in for user ${userId} on ${istDateStr}`);
           }
         }
       } else if (isPunchOut) {
@@ -410,7 +501,7 @@ class AttendanceSyncService {
             existingLog.punchOut = logDate;
             await existingLog.save();
             result.updated = true;
-            console.log(`🔄 Updated punch-out for user ${userId} on ${dateStr}`);
+            console.log(`🔄 Updated punch-out for user ${userId} on ${istDateStr}`);
           }
         } else {
           // Create new log with punch-out only
@@ -424,7 +515,7 @@ class AttendanceSyncService {
             createdBy: null
           });
           result.created = true;
-          console.log(`✅ Created punch-out for user ${userId} on ${dateStr}`);
+          console.log(`✅ Created punch-out for user ${userId} on ${istDateStr}`);
         }
       }
     } catch (error) {
@@ -437,6 +528,7 @@ class AttendanceSyncService {
 
   /**
    * Test connection to biometric API
+   * UPDATED: Returns IST-corrected sample logs
    */
   async testConnection(fromDate, toDate) {
     try {
@@ -456,14 +548,23 @@ class AttendanceSyncService {
         const existingCodes = new Set(existingEmployees.map(e => String(e.employeeCode)));
         const missingCodes = employeeCodes.filter(code => !existingCodes.has(code));
 
-        // Get sample logs with details
-        const sampleLogs = logs.slice(0, 5).map(log => ({
-          EmpCode: log.EmpCode || log.employeeCode,
-          UserName: log.UserName || log.userName,
-          IOTime: log.IOTime || log.LogDate,
-          IOMode: log.IOMode || log.PunchDirection,
-          DeviceName: log.DeviceName || log.SerialNumber
-        }));
+        // Get sample logs with IST-corrected times
+        const sampleLogs = logs.slice(0, 5).map(log => {
+          const logTime = log.IOTime || log.LogDate;
+          const istTime = logTime ? toISTDate(logTime) : null;
+          const isLate = istTime ? isLatePunch(logTime) : false;
+          
+          return {
+            EmpCode: log.EmpCode || log.employeeCode,
+            UserName: log.UserName || log.userName,
+            IOTime: log.IOTime || log.LogDate,
+            IOTimeIST: istTime ? istTime.toISOString() : null,
+            IOMode: log.IOMode || log.PunchDirection,
+            DeviceName: log.DeviceName || log.SerialNumber,
+            isLate: isLate,
+            lateMinutes: isLate ? getLateMinutes(logTime) : 0
+          };
+        });
 
         return {
           success: true,
@@ -496,6 +597,7 @@ class AttendanceSyncService {
 
   /**
    * Get employee attendance summary
+   * UPDATED: Uses IST for date calculations and late detection
    */
   async getEmployeeAttendance(employeeCode, fromDate, toDate) {
     try {
@@ -509,15 +611,19 @@ class AttendanceSyncService {
         };
       }
 
+      // Convert dates to UTC for database query
+      const fromDateObj = new Date(fromDate);
+      const toDateObj = new Date(toDate);
+      
       const punchLogs = await EmployeePunchLog.find({
         employeeId: user._id,
         date: {
-          $gte: new Date(fromDate),
-          $lte: new Date(toDate)
+          $gte: fromDateObj,
+          $lte: toDateObj
         }
       }).sort({ date: 1 });
 
-      // Build attendance summary
+      // Build attendance summary using IST dates
       const start = new Date(fromDate);
       const end = new Date(toDate);
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -531,12 +637,12 @@ class AttendanceSyncService {
       while (current <= end) {
         const dayOfWeek = current.getDay();
         const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-        const dateStr = current.toISOString().split('T')[0];
+        const dateStr = getISTDateString(current);
         
-        if (!isWeekend) {
+        if (!isWeekend && dateStr) {
           workingDays++;
           const dayLogs = punchLogs.filter(p => {
-            const pDate = p.date.toISOString().split('T')[0];
+            const pDate = getISTDateString(p.date);
             return pDate === dateStr;
           });
           
@@ -545,6 +651,8 @@ class AttendanceSyncService {
           
           let status = 'absent';
           let hoursWorked = 0;
+          let isLate = false;
+          let lateMinutes = 0;
           
           if (punchIn && punchOut) {
             status = 'present';
@@ -552,11 +660,20 @@ class AttendanceSyncService {
             hoursWorked = (punchOut.punchOut - punchIn.punchIn) / (1000 * 60 * 60);
             totalHours += hoursWorked;
             
-            if (new Date(punchIn.punchIn).getHours() >= 10) {
+            // ✅ FIX: Use IST for late detection
+            isLate = isLatePunch(punchIn.punchIn);
+            lateMinutes = getLateMinutes(punchIn.punchIn);
+            if (isLate) {
               lateDays++;
             }
           } else if (punchIn) {
             status = 'partial';
+            // Check if partial punch is late
+            isLate = isLatePunch(punchIn.punchIn);
+            lateMinutes = getLateMinutes(punchIn.punchIn);
+            if (isLate) {
+              lateDays++;
+            }
           }
           
           days.push({
@@ -565,7 +682,9 @@ class AttendanceSyncService {
             status,
             hoursWorked: Math.round(hoursWorked * 100) / 100,
             punchIn: punchIn?.punchIn || null,
-            punchOut: punchOut?.punchOut || null
+            punchOut: punchOut?.punchOut || null,
+            isLate: isLate,
+            lateMinutes: lateMinutes
           });
         }
         current.setDate(current.getDate() + 1);
@@ -594,6 +713,92 @@ class AttendanceSyncService {
       };
     } catch (error) {
       console.error('❌ Error getting employee attendance:', error);
+      return {
+        success: false,
+        message: error.message,
+        data: null
+      };
+    }
+  }
+
+  /**
+   * Get today's attendance for an employee
+   * UPDATED: Uses IST for date and late detection
+   */
+  async getEmployeeTodayAttendance(employeeCode) {
+    try {
+      const user = await User.findOne({ employeeCode });
+      
+      if (!user) {
+        return {
+          success: false,
+          message: 'Employee not found',
+          data: null
+        };
+      }
+
+      const todayStr = getTodayISTString();
+      const [year, month, day] = todayStr.split('-').map(Number);
+      const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+      const end = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+      const punchLog = await EmployeePunchLog.findOne({
+        employeeId: user._id,
+        date: { $gte: start, $lte: end }
+      });
+
+      let status = 'absent';
+      let statusMessage = 'Not Punched In';
+      let punchInTime = null;
+      let punchOutTime = null;
+      let isLate = false;
+      let lateMinutes = 0;
+
+      if (punchLog) {
+        punchInTime = punchLog.punchIn;
+        punchOutTime = punchLog.punchOut;
+        
+        if (punchLog.punchIn) {
+          // ✅ FIX: Use IST for late check
+          isLate = isLatePunch(punchLog.punchIn);
+          lateMinutes = getLateMinutes(punchLog.punchIn);
+          
+          if (isLate) {
+            status = 'late';
+            statusMessage = 'Punched In (Late)';
+          } else {
+            status = 'on_time';
+            statusMessage = 'Punched In (On Time)';
+          }
+        }
+        
+        if (punchLog.punchOut) {
+          status = 'completed';
+          statusMessage = 'Shift Completed';
+        } else if (punchLog.punchIn) {
+          statusMessage = 'Working (Punched In)';
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          employee: {
+            name: user.name,
+            employeeCode: user.employeeCode,
+            email: user.email
+          },
+          date: todayStr,
+          status,
+          statusMessage,
+          punchInTime,
+          punchOutTime,
+          isLate,
+          lateMinutes
+        }
+      };
+    } catch (error) {
+      console.error('❌ Error getting today attendance:', error);
       return {
         success: false,
         message: error.message,

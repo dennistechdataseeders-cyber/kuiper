@@ -6,6 +6,7 @@ const ticketController = require('../controllers/ticketController');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const Feed = require('../models/Feed');  
 
 // All routes require authentication
 router.use(protect);
@@ -378,7 +379,10 @@ router.get('/download/:filename', protect, async (req, res) => {
     }
   }
 });
-// Add to ticketRoutes.js - GET /department-users/:role
+
+// ============================================
+// DEPARTMENT USERS ENDPOINT
+// ============================================
 router.get('/department-users/:role', protect, async (req, res) => {
   try {
     const { role } = req.params;
@@ -391,6 +395,7 @@ router.get('/department-users/:role', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch department users' });
   }
 });
+
 // ============================================
 // TICKET CRUD ROUTES
 // ============================================
@@ -424,9 +429,24 @@ router.post('/:id/comments', ticketController.addComment);
 // Get projects for dropdown (role-based)
 router.get('/projects/list', ticketController.getProjects);
 
-// Get feeds for a specific project
-router.get('/feeds/:projectId', ticketController.getFeeds);
-
+router.get('/feeds/:projectId', protect, async (req, res) => {
+  try {
+    const feeds = await Feed.find({ projectId: req.params.projectId })
+      .select('name _id')
+      .limit(50);
+    
+    // Add a "General" option at the beginning for tickets that apply to the whole project
+    const response = [
+      { _id: 'general', name: '📁 General (Whole Project)' },
+      ...feeds
+    ];
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching feeds:', error);
+    res.status(500).json({ error: 'Failed to fetch feeds' });
+  }
+});
 // Get developers for assignment dropdown (PM, Admin, Team Lead only)
 router.get('/developers/list', authorize('Project Manager', 'Admin', 'Team Lead'), ticketController.getDevelopers);
 

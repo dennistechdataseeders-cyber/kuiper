@@ -883,7 +883,6 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
               <tr className="bg-slate-50/80 border-b border-slate-200">
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Date</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Day</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Status</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Timeline</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">In</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Out</th>
@@ -926,12 +925,7 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
                         <td className="px-2 py-1.5">
                           <span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span>
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${styles.chip}`}>
-                            {getStatusIcon(day.status)}
-                            {getStatusLabel(day.status)}
-                          </span>
-                        </td>
+                      
                         <td className="px-2 py-1.5 min-w-[180px]">
                           {hasIn ? (
                             <DayTimelineBar day={day} />

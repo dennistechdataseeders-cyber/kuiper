@@ -68,6 +68,60 @@ const Attendance = ({ userId, token }) => {
     return `${hour12}:${String(minutes).padStart(2, '0')} ${ampm}`;
   };
 
+  // Get arrival status based on punch time
+  const getArrivalStatus = (day) => {
+    // Check both punchInUTC and punchIn
+    const punchTime = day.punchInUTC || day.punchIn;
+    if (!punchTime) return '—';
+    try {
+      const punchIn = new Date(punchTime);
+      if (isNaN(punchIn.getTime())) return '—';
+      const hour = punchIn.getUTCHours();
+      const minute = punchIn.getUTCMinutes();
+      if (hour < 10 || (hour === 10 && minute <= 45)) {
+        return 'On Time';
+      }
+      const totalMinutes = hour * 60 + minute;
+      const officeMinutes = 10 * 60 + 45;
+      const diff = totalMinutes - officeMinutes;
+      return `${diff}m late`;
+    } catch (e) {
+      return '—';
+    }
+  };
+
+  // Get status based on punch time and day status
+  const getDisplayStatus = (day) => {
+    // If weekend or leave, use the original status
+    if (day.status === 'weekend' || day.status === 'leave') {
+      return day.status;
+    }
+    
+    // Check both punchInUTC and punchIn
+    const punchTime = day.punchInUTC || day.punchIn;
+    
+    // If no punch in, it's absent
+    if (!punchTime) {
+      return 'absent';
+    }
+    
+    // Check if late based on punch time
+    try {
+      const punchIn = new Date(punchTime);
+      if (isNaN(punchIn.getTime())) return day.status;
+      const hour = punchIn.getUTCHours();
+      const minute = punchIn.getUTCMinutes();
+      // If after 10:45 AM, it's late
+      if (hour > 10 || (hour === 10 && minute > 45)) {
+        return 'late';
+      }
+      // Otherwise present
+      return 'present';
+    } catch (e) {
+      return day.status;
+    }
+  };
+
   const getStatusConfig = (status) => {
     const configs = {
       present: {
@@ -502,7 +556,7 @@ const Attendance = ({ userId, token }) => {
                         : 'text-slate-500 hover:bg-slate-50'
                     }`}
                   >
-                    Calender
+                    Calendar
                   </button>
                 </div>
               </div>
@@ -527,9 +581,9 @@ const Attendance = ({ userId, token }) => {
                       [...displayDays]
                         .sort((a, b) => new Date(b.date) - new Date(a.date))
                         .map((day, idx) => {
-                          const isLateDay = isLate(day.punchIn);
-                          const lateMinutes = getLateMinutes(day.punchIn);
-                          const statusConfig = getStatusConfig(day.status);
+                          const displayStatus = getDisplayStatus(day);
+                          const arrivalStatus = getArrivalStatus(day);
+                          const statusConfig = getStatusConfig(displayStatus);
                           const StatusIcon = statusConfig.icon;
                           
                           return (
@@ -553,23 +607,31 @@ const Attendance = ({ userId, token }) => {
                                 {day.punchOut ? formatTimeShortUTC(day.punchOut) : '-'}
                               </td>
                               <td className="px-4 py-3">
-                                {isLateDay && (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                                    <ClockAlert size={10} className="text-amber-500" />
-                                    {lateMinutes}m late
+                                {arrivalStatus !== '—' && arrivalStatus !== 'On Time' && (
+                                  <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold ${
+                                    arrivalStatus.includes('late') 
+                                      ? 'bg-amber-50 text-amber-700 border border-amber-200' 
+                                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  }`}>
+                                    {arrivalStatus.includes('late') ? (
+                                      <ClockAlert size={10} className="text-amber-500" />
+                                    ) : (
+                                      <CheckCircle size={10} className="text-emerald-500" />
+                                    )}
+                                    {arrivalStatus}
                                   </span>
                                 )}
-                                {day.status === 'partial' && (
+                                {displayStatus === 'partial' && (
                                   <span className="text-[10px] text-blue-600 font-medium">Partial Day</span>
                                 )}
-                                {day.status === 'present' && !isLateDay && (
-                                  <span className="text-[10px] text-emerald-600 font-medium">✓ On Time</span>
-                                )}
-                                {day.status === 'weekend' && (
+                                {displayStatus === 'weekend' && (
                                   <span className="text-[10px] text-slate-400 font-medium">—</span>
                                 )}
-                                {day.status === 'absent' && (
+                                {displayStatus === 'absent' && (
                                   <span className="text-[10px] text-rose-600 font-medium">✕ No Punch</span>
+                                )}
+                                {displayStatus === 'present' && arrivalStatus === 'On Time' && (
+                                  <span className="text-[10px] text-emerald-600 font-medium">✓ On Time</span>
                                 )}
                               </td>
                             </tr>
@@ -600,9 +662,9 @@ const Attendance = ({ userId, token }) => {
                     {[...displayDays]
                       .sort((a, b) => new Date(b.date) - new Date(a.date))
                       .map((day, idx) => {
-                        const isLateDay = isLate(day.punchIn);
-                        const lateMinutes = getLateMinutes(day.punchIn);
-                        const statusConfig = getStatusConfig(day.status);
+                        const displayStatus = getDisplayStatus(day);
+                        const arrivalStatus = getArrivalStatus(day);
+                        const statusConfig = getStatusConfig(displayStatus);
                         const StatusIcon = statusConfig.icon;
                         
                         return (
@@ -625,13 +687,22 @@ const Attendance = ({ userId, token }) => {
                             <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-500">
                               {day.punchIn && <span>In: {formatTimeShortUTC(day.punchIn)}</span>}
                               {day.punchOut && <span>Out: {formatTimeShortUTC(day.punchOut)}</span>}
-                              {!day.punchIn && !day.punchOut && day.status !== 'weekend' && (
+                              {!day.punchIn && !day.punchOut && displayStatus !== 'weekend' && (
                                 <span className="text-rose-500 font-medium">No punch</span>
                               )}
                             </div>
-                            {isLateDay && (
-                              <div className="mt-1.5 text-[9px] font-semibold text-amber-700 bg-amber-100/50 px-2 py-0.5 rounded-full inline-block">
-                                {lateMinutes}m late
+                            {arrivalStatus !== '—' && arrivalStatus !== 'On Time' && (
+                              <div className={`mt-1.5 text-[9px] font-semibold ${
+                                arrivalStatus.includes('late') 
+                                  ? 'text-amber-700 bg-amber-100/50' 
+                                  : 'text-emerald-700 bg-emerald-100/50'
+                              } px-2 py-0.5 rounded-full inline-block`}>
+                                {arrivalStatus}
+                              </div>
+                            )}
+                            {arrivalStatus === 'On Time' && displayStatus === 'present' && (
+                              <div className="mt-1.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100/50 px-2 py-0.5 rounded-full inline-block">
+                                On Time
                               </div>
                             )}
                           </div>

@@ -697,22 +697,26 @@ const CreateTicket = () => {
     }
   };
 
-  const fetchFeeds = async (projectId) => {
-    if (!projectId) {
-      setFeeds([]);
-      return;
-    }
-    
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/tickets/feeds/${projectId}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setFeeds(res.data);
-    } catch (error) {
-      console.error('Error fetching feeds:', error);
-    }
-  };
+const fetchFeeds = async (projectId) => {
+  if (!projectId) {
+    setFeeds([]);
+    return;
+  }
+  
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(`${API_BASE_URL}/api/tickets/feeds/${projectId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    // The backend now returns [{ _id: 'general', name: '📁 General (Whole Project)' }, ...feeds]
+    console.log('📋 Feeds received:', res.data);
+    setFeeds(res.data);
+  } catch (error) {
+    console.error('Error fetching feeds:', error);
+    // Set default feeds with general option if API fails
+    setFeeds([{ _id: 'general', name: '📁 General (Whole Project)' }]);
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1217,32 +1221,50 @@ const CreateTicket = () => {
                       </p>
                     )}
                   </div>
-
-                  <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Hash size={18} className="text-blue-600" />
-                      <label className="text-sm font-semibold text-slate-700">
-                        Related Feed <span className="font-normal text-slate-400">(Optional)</span>
-                      </label>
-                    </div>
-                    
-                    <select
-                      value={formData.feedId}
-                      onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
-                      disabled={!formData.projectId}
-                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <option value="">Select a feed (optional)</option>
-                      {feeds.map(feed => (
-                        <option key={feed._id} value={feed._id}>
-                          {feed.name}
-                        </option>
-                      ))}
-                    </select>
-                    {!formData.projectId && (
-                      <p className="text-xs text-amber-600 mt-2">Select a project first to see available feeds</p>
-                    )}
-                  </div>
+<div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+  <div className="flex items-center gap-2 mb-3">
+    <Hash size={18} className="text-blue-600" />
+    <label className="text-sm font-semibold text-slate-700">
+      Related Feed <span className="font-normal text-slate-400">(Optional)</span>
+    </label>
+    {formData.projectId && (
+      <span className="text-[8px] text-slate-400 ml-auto">
+        {feeds.length > 0 ? `${feeds.length} option(s)` : 'No feeds available'}
+      </span>
+    )}
+  </div>
+  
+  <select
+    value={formData.feedId}
+    onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
+    disabled={!formData.projectId}
+    className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    <option value="">Select a feed (optional)</option>
+    {feeds.length === 0 ? (
+      <option value="" disabled>No feeds available</option>
+    ) : (
+      feeds.map(feed => (
+        <option key={feed._id} value={feed._id}>
+          {feed._id === 'general' ? '📁 General (Whole Project)' : feed.name}
+        </option>
+      ))
+    )}
+  </select>
+  
+  {!formData.projectId && (
+    <p className="text-xs text-amber-600 mt-2">Select a project first to see available feeds</p>
+  )}
+  
+  {formData.feedId === 'general' && (
+    <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200 animate-in fade-in duration-200">
+      <p className="text-[10px] text-blue-700 flex items-center gap-1.5">
+        <Info size={12} className="text-blue-500" />
+        This ticket will apply to the <strong>entire project</strong>, not a specific feed.
+      </p>
+    </div>
+  )}
+</div>
                 </div>
               )}
 
