@@ -131,6 +131,26 @@ const formatDuration = (hours) => {
   return `${mins}m`;
 };
 
+// ─────────────────────────────────────────────────────────────
+// Format hours to "X hr Y min" format
+// ─────────────────────────────────────────────────────────────
+const formatHoursToHrMin = (hours) => {
+  if (!hours || hours <= 0) return '0 hr 0 min';
+  const hrs = Math.floor(hours);
+  const mins = Math.round((hours - hrs) * 60);
+  if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
+  if (hrs > 0) return `${hrs} hr 0 min`;
+  return `0 hr ${mins} min`;
+};
+
+// ─────────────────────────────────────────────────────────────
+// Format hours to decimal for bar chart width
+// ─────────────────────────────────────────────────────────────
+const hoursToDecimal = (hours) => {
+  if (!hours || hours <= 0) return 0;
+  return Math.round((hours) * 10) / 10;
+};
+
 const formatBreakMinutes = (minutes) => {
   if (!minutes || minutes <= 0) return '0 min';
   if (minutes < 60) return `${Math.round(minutes)} min`;
@@ -191,6 +211,90 @@ const getArrivalStatus = (day) => {
 };
 
 // ─────────────────────────────────────────────────────────────
+// Average Bar Chart Component
+// ─────────────────────────────────────────────────────────────
+const AverageBarChart = ({ weeklyAverages }) => {
+  if (!weeklyAverages || weeklyAverages.length === 0) {
+    return null;
+  }
+
+  // Filter out weeks with fewer than 2 days of data
+  const filteredWeeks = weeklyAverages.filter(w => w.dayCount >= 2);
+
+  if (filteredWeeks.length === 0) {
+    return (
+      <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
+        <span className="text-[8px] font-medium text-slate-400">No weeks with sufficient data</span>
+      </div>
+    );
+  }
+
+  // Find max value for scaling
+  const maxAvg = Math.max(
+    ...filteredWeeks.map(w => Math.max(w.avgEff || 0, w.avgGross || 0)),
+    1 // Ensure at least 1 for scaling
+  );
+  const maxDisplay = Math.ceil(maxAvg / 2) * 2 + 2; // Round up to nearest even number + 2
+
+  return (
+    <div className="mt-2 p-2 bg-white rounded-lg border border-slate-200">
+      <div className="flex items-center gap-4 mb-2">
+        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Avg Hours by Week</span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-2 rounded-sm bg-emerald-500"></div>
+            <span className="text-[7px] font-bold text-slate-500">Eff</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-2 rounded-sm bg-slate-600"></div>
+            <span className="text-[7px] font-bold text-slate-500">Gross</span>
+          </div>
+        </div>
+        <span className="text-[6px] text-slate-400 ml-auto">{maxDisplay}h max</span>
+      </div>
+      
+      <div className="space-y-1.5">
+        {filteredWeeks.map((week) => {
+          const effPercent = Math.min((week.avgEff / maxDisplay) * 100, 100);
+          const grossPercent = Math.min((week.avgGross / maxDisplay) * 100, 100);
+          
+          return (
+            <div key={week.weekNumber} className="flex items-center gap-2">
+              <span className="text-[7px] font-bold text-slate-500 w-12 flex-shrink-0">
+                {week.weekDisplay}
+              </span>
+              <div className="flex-1">
+                {/* Gross bar (background) */}
+                <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
+                  {/* Gross bar (full width) */}
+                  <div 
+                    className="absolute inset-y-0 left-0 bg-slate-600 rounded-full transition-all duration-500"
+                    style={{ width: `${grossPercent}%` }}
+                  />
+                  {/* Effective bar (on top, narrower) */}
+                  <div 
+                    className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full transition-all duration-500"
+                    style={{ width: `${effPercent}%` }}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0 min-w-[100px]">
+                <span className="text-[8px] font-bold text-emerald-700 w-[45px] text-right">
+                  {week.avgEffFormatted}
+                </span>
+                <span className="text-[8px] font-bold text-slate-600 w-[45px] text-right">
+                  {week.avgGrossFormatted}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────────────────────────
 // REDUCED HEIGHT Day Timeline Bar Component
 // ─────────────────────────────────────────────────────────────
 const DayTimelineBar = ({ day }) => {
@@ -217,16 +321,16 @@ const DayTimelineBar = ({ day }) => {
     
     const duration = session.punchOutUTC 
       ? calculateHours(session.punchInUTC, session.punchOutUTC)
-      : (isToday(day.date) ? calculateHours(session.punchInUTC, new Date().toISOString()) : 0);
+      : 0;
     
     setLocalHoveredSession({
       sessionIndex,
       totalSessions,
       punchIn: session.punchInUTC,
-      punchOut: session.punchOutUTC || (isToday(day.date) ? 'In progress' : '—'),
+      punchOut: session.punchOutUTC || 'No Out Punch',
       duration: duration,
       durationFormatted: formatDurationDetailed(duration),
-      isOpen: !session.punchOutUTC && isToday(day.date)
+      isOpen: false
     });
     setLocalHoveredBreak(null);
     setLocalTooltipPosition({ x: tooltipX, y: tooltipY });
@@ -258,24 +362,18 @@ const DayTimelineBar = ({ day }) => {
     );
   }
   
-  const isOpenSession = day.sessions && day.sessions.some(s => 
-    s.punchInUTC && !s.punchOutUTC && isToday(day.date)
-  );
-  
   const renderSegments = () => {
     if (!day.sessions || day.sessions.length === 0) {
       const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
       const endMin = clampToTrack(
-        minutesOfDayUTC(day.punchOutUTC) || 
-        (isToday(day.date) ? minutesOfDayUTC(new Date().toISOString()) : startMin + 5)
+        minutesOfDayUTC(day.punchOutUTC) || startMin + 5
       );
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      const isOpen = !day.punchOutUTC && isToday(day.date);
       
       return (
         <div 
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} ${isOpen ? 'animate-pulse' : ''}`}
+          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
         />
       );
@@ -293,20 +391,17 @@ const DayTimelineBar = ({ day }) => {
       let endMin;
       if (session.punchOutUTC) {
         endMin = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
-      } else if (isLast && isToday(day.date)) {
-        endMin = clampToTrack(minutesOfDayUTC(new Date().toISOString()));
       } else {
         endMin = clampToTrack(startMin + 2);
       }
       
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      const isOpen = !session.punchOutUTC && isLast && isToday(day.date);
       
       elements.push(
         <div
           key={`sess-${idx}`}
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} ${isOpen ? 'animate-pulse' : ''} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
+          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
           onMouseEnter={(e) => handleSessionHover(e, session, idx, totalSegments)}
         />
@@ -321,16 +416,25 @@ const DayTimelineBar = ({ day }) => {
       }
       
       if (isLast) {
-        const label = isOpen ? 'In progress' : formatTimeDisplay(session.punchOutUTC);
+        let label;
+        if (!session.punchOutUTC) {
+          label = '';
+        } else {
+          label = formatTimeDisplay(session.punchOutUTC);
+        }
+        
         elements.push(
           <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${isOpen ? 'text-blue-500' : 'text-slate-500'} whitespace-nowrap`}>
+            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>
               {label}
             </span>
           </div>
         );
       }
       
+      // ─────────────────────────────────────────────────────────────
+      // Break rendering - variables defined inside the condition
+      // ─────────────────────────────────────────────────────────────
       if (!isLast && session.punchOutUTC && day.sessions[idx + 1] && day.sessions[idx + 1].punchInUTC) {
         const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
         const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
@@ -340,7 +444,7 @@ const DayTimelineBar = ({ day }) => {
           const gLeft = ((gapStart - trackStart) / TRACK_TOTAL_MIN) * 100;
           const gWidth = Math.max(0, ((gapEnd - gapStart) / TRACK_TOTAL_MIN) * 100);
           
-          const breakGap = day.breakGaps.find(b => 
+          const breakGap = day.breakGaps && day.breakGaps.find(b => 
             Math.abs(b.minutes - gapMinutes) < 0.1
           );
           
@@ -383,11 +487,6 @@ const DayTimelineBar = ({ day }) => {
               <span className="text-[11px] font-bold">
                 Session {localHoveredSession.sessionIndex + 1} of {localHoveredSession.totalSessions}
               </span>
-              {localHoveredSession.isOpen && (
-                <span className="text-[7px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full animate-pulse">
-                  LIVE
-                </span>
-              )}
             </div>
             <div className="space-y-1 text-[11px]">
               <div className="flex justify-between">
@@ -396,8 +495,8 @@ const DayTimelineBar = ({ day }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Out:</span>
-                <span className={`font-mono font-medium ${localHoveredSession.isOpen ? 'text-blue-400' : ''}`}>
-                  {localHoveredSession.isOpen ? 'In progress' : formatTimeDisplay(localHoveredSession.punchOut)}
+                <span className="font-mono font-medium text-rose-400">
+                  {localHoveredSession.punchOut || 'No Out Punch'}
                 </span>
               </div>
               <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
@@ -479,8 +578,7 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
     totalGrossHours: 0,
     averageEffectiveHours: 0,
     averageGrossHours: 0,
-    latePercentage: 0,
-    attendanceRate: 0
+    weeklyAverages: [] // Store weekly averages
   });
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
@@ -500,6 +598,9 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
     fetchAttendanceData();
   }, [selectedMonth, selectedYear]);
 
+  // ─────────────────────────────────────────────────────────────
+  // FETCH ATTENDANCE DATA - FIXED to show last out punch
+  // ─────────────────────────────────────────────────────────────
   const fetchAttendanceData = async () => {
     setLoading(true);
     try {
@@ -529,24 +630,39 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
           let breakMinutes = 0;
           let firstIn = null;
           let lastOut = null;
+          let lastOutUTC = null; // Track the last out punch
           
-          sessions.forEach((session, index) => {
+          // 🔥 FIX: Find the last out punch from all sessions
+          sessions.forEach((session) => {
             if (session.punchInUTC) {
               const inTime = new Date(session.punchInUTC);
               if (!firstIn || inTime < firstIn) firstIn = inTime;
-              let outTime = null;
+              
               if (session.punchOutUTC) {
-                outTime = new Date(session.punchOutUTC);
-              } else if (isToday(day.date)) {
-                outTime = new Date();
-              }
-              if (outTime) {
+                const outTime = new Date(session.punchOutUTC);
+                // Keep track of the latest out time
+                if (!lastOutUTC || outTime > new Date(lastOutUTC)) {
+                  lastOutUTC = session.punchOutUTC;
+                }
                 const hours = calculateHours(session.punchInUTC, outTime.toISOString());
                 effectiveHours += hours;
                 if (!lastOut || outTime > lastOut) lastOut = outTime;
               }
             }
           });
+          
+          // If we have no lastOutUTC but we have sessions, use the last session's punchOutUTC
+          if (!lastOutUTC && sessions.length > 0) {
+            const lastSession = sessions[sessions.length - 1];
+            if (lastSession.punchOutUTC) {
+              lastOutUTC = lastSession.punchOutUTC;
+            }
+          }
+          
+          // If still no lastOutUTC, use the day's punchOutUTC as fallback
+          if (!lastOutUTC) {
+            lastOutUTC = day.punchOutUTC || null;
+          }
           
           if (firstIn && lastOut) {
             grossHours = (lastOut - firstIn) / (1000 * 60 * 60);
@@ -576,7 +692,9 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
             ...day,
             sessions: sessions,
             punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-            punchOutDisplay: day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : null,
+            // 🔥 FIX: Use lastOutUTC for the out display
+            punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
+            punchOutUTC: lastOutUTC, // Store the corrected punch out
             effectiveHours: effectiveHours,
             grossHours: grossHours,
             breakMinutes: breakMinutes,
@@ -596,43 +714,124 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
     }
   };
 
-  const calculateStatsForMonth = (days) => {
-    const monthDays = days.filter(day => {
-      if (!day.date) return false;
-      const date = new Date(day.date);
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
-    });
+ // ─────────────────────────────────────────────────────────────
+// Calculate stats with weekly averages (excluding current day)
+// ─────────────────────────────────────────────────────────────
+const calculateStatsForMonth = (days) => {
+  // Get today's date string
+  const todayStr = new Date().toISOString().split('T')[0];
+  
+  // Filter days for the selected month
+  const monthDays = days.filter(day => {
+    if (!day.date) return false;
+    const date = new Date(day.date);
+    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+  });
 
-    const workingDays = monthDays.filter(d => !d.isWeekend);
-    const presentDays = monthDays.filter(d => d.status === 'present' || d.status === 'late');
-    const absentDays = workingDays.filter(d => d.status === 'absent');
-    const leaveDays = workingDays.filter(d => d.status === 'leave');
-    const lateCount = monthDays.filter(d => d.status === 'late').length;
-    const weekends = monthDays.filter(d => d.isWeekend).length;
+  // Sort by date (oldest first for week grouping)
+  const sortedDays = [...monthDays].sort((a, b) => new Date(a.date) - new Date(b.date));
+  
+  // ─────────────────────────────────────────────────────────────
+  // Group days by week (Mon-Sun)
+  // ─────────────────────────────────────────────────────────────
+  const weeks = [];
+  let currentWeek = [];
+  let weekStartDate = null;
+  let weekNumber = 1;
+  
+  for (const day of sortedDays) {
+    const date = new Date(day.date);
+    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+    const dateStr = day.date;
     
-    const totalEffectiveHours = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
-    const totalGrossHours = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
+    // If this is a Monday or the first day, start a new week
+    if (dayOfWeek === 1 || weekStartDate === null) {
+      if (currentWeek.length > 0) {
+        weeks.push({
+          weekNumber: weekNumber,
+          days: [...currentWeek]
+        });
+        weekNumber++;
+      }
+      currentWeek = [];
+      weekStartDate = dateStr;
+    }
     
-    const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
-    const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
-    const latePercentage = presentDays.length > 0 ? (lateCount / presentDays.length) * 100 : 0;
-    const attendanceRate = workingDays.length > 0 ? (presentDays.length / workingDays.length) * 100 : 0;
-
-    setStats({
-      totalDays: workingDays.length,
-      present: presentDays.length,
-      absent: absentDays.length,
-      late: lateCount,
-      onLeave: leaveDays.length,
-      weekends: weekends,
-      totalEffectiveHours: totalEffectiveHours,
-      totalGrossHours: totalGrossHours,
-      averageEffectiveHours: avgEffectiveHours,
-      averageGrossHours: avgGrossHours,
-      latePercentage: latePercentage,
-      attendanceRate: attendanceRate
+    currentWeek.push(day);
+  }
+  
+  // Push the last week if it has any days
+  if (currentWeek.length > 0) {
+    weeks.push({
+      weekNumber: weekNumber,
+      days: [...currentWeek]
     });
-  };
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Calculate weekly averages (excluding current day)
+  // ─────────────────────────────────────────────────────────────
+  const weeklyAverages = weeks.map((week) => {
+    // Filter out current day from calculations
+    const daysWithoutToday = week.days.filter(day => day.date !== todayStr);
+    // Count days where user was actually present (present OR late)
+    const presentDays = daysWithoutToday.filter(d => d.status === 'present' || d.status === 'late');
+    // Count days where user was actually late (ONLY status === 'late')
+    const lateDays = daysWithoutToday.filter(d => d.status === 'late');
+    
+    const totalEff = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
+    const totalGross = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
+    
+    const avgEff = presentDays.length > 0 ? totalEff / presentDays.length : 0;
+    const avgGross = presentDays.length > 0 ? totalGross / presentDays.length : 0;
+    
+    return {
+      weekNumber: week.weekNumber,
+      weekDisplay: `Week ${week.weekNumber}`,
+      avgEff,
+      avgGross,
+      avgEffFormatted: formatHoursToHrMin(avgEff),
+      avgGrossFormatted: formatHoursToHrMin(avgGross),
+      dayCount: presentDays.length,
+      lateCount: lateDays.length,
+      totalDays: week.days.length
+    };
+  });
+
+  // ─────────────────────────────────────────────────────────────
+  // Calculate monthly averages (excluding current day)
+  // ─────────────────────────────────────────────────────────────
+  const workingDays = monthDays.filter(d => !d.isWeekend);
+  const daysWithoutToday = workingDays.filter(d => d.date !== todayStr);
+  
+  // Count days where user was actually present (present OR late)
+  const presentDays = daysWithoutToday.filter(d => d.status === 'present' || d.status === 'late');
+  // Count days where user was actually late (ONLY status === 'late')
+  const lateDays = daysWithoutToday.filter(d => d.status === 'late');
+  const absentDays = daysWithoutToday.filter(d => d.status === 'absent');
+  const leaveDays = daysWithoutToday.filter(d => d.status === 'leave');
+  const weekends = monthDays.filter(d => d.isWeekend).length;
+  
+  const totalEffectiveHours = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
+  const totalGrossHours = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
+  
+  const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
+  const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
+
+  setStats({
+    totalDays: workingDays.length,
+    present: presentDays.length,
+    absent: absentDays.length,
+    late: lateDays.length, // Only count days where status is 'late'
+    onLeave: leaveDays.length,
+    weekends: weekends,
+    totalEffectiveHours: totalEffectiveHours,
+    totalGrossHours: totalGrossHours,
+    averageEffectiveHours: avgEffectiveHours,
+    averageGrossHours: avgGrossHours,
+    weeklyAverages: weeklyAverages
+  });
+};
 
   useEffect(() => {
     if (attendanceData.length > 0) {
@@ -833,15 +1032,11 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
               <div className="w-2 h-2 rounded-full bg-amber-400"></div>
               <span>Break</span>
             </span>
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-              <span>Live</span>
-            </span>
           </div>
         </div>
 
         {/* Stats Summary - Compact */}
-        <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-1.5 p-2 bg-slate-50/50 border-b border-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 p-2 bg-slate-50/50 border-b border-slate-100">
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
             <p className="text-[6px] font-bold text-slate-400 uppercase tracking-wider">Working</p>
             <p className="text-base font-black text-slate-800">{stats.totalDays}</p>
@@ -855,26 +1050,56 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
             <p className="text-base font-black text-rose-700">{stats.absent}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late</p>
-            <p className="text-base font-black text-amber-700">{stats.late}</p>
-          </div>
-          <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
             <p className="text-[6px] font-bold text-indigo-600 uppercase tracking-wider">Leave</p>
             <p className="text-base font-black text-indigo-700">{stats.onLeave}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-blue-600 uppercase tracking-wider">Rate</p>
-            <p className="text-base font-black text-blue-700">{stats.attendanceRate.toFixed(0)}%</p>
-          </div>
-          <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
             <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Avg Eff</p>
-            <p className="text-base font-black text-emerald-700">{stats.averageEffectiveHours.toFixed(1)}h</p>
+            <p className="text-base font-black text-emerald-700">{formatHoursToHrMin(stats.averageEffectiveHours)}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
             <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
-            <p className="text-base font-black text-slate-700">{stats.averageGrossHours.toFixed(1)}h</p>
+            <p className="text-base font-black text-slate-700">{formatHoursToHrMin(stats.averageGrossHours)}</p>
           </div>
         </div>
+
+        {/* Weekly Averages Section with Bar Chart */}
+        {stats.weeklyAverages && stats.weeklyAverages.length > 0 && (
+          <div className="p-2 border-b border-slate-100 bg-slate-50/30">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Weekly Averages</span>
+              <span className="text-[7px] text-slate-400">(excluding today)</span>
+            </div>
+            
+            {/* Bar Chart - Only shows weeks with >= 2 days */}
+            <AverageBarChart weeklyAverages={stats.weeklyAverages} />
+            
+            {/* Grid view - Only shows weeks with >= 2 days */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-1.5 mt-2">
+              {stats.weeklyAverages
+                .filter(week => week.dayCount >= 2)
+                .map((week) => (
+                  <div key={week.weekNumber} className="bg-white rounded-lg p-1.5 border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[7px] font-bold text-slate-600">{week.weekDisplay}</span>
+                      <span className="text-[6px] font-bold text-slate-400">({week.dayCount}d)</span>
+                    </div>
+                    <div className="flex items-center justify-between mt-0.5">
+                      <span className="text-[8px] font-bold text-emerald-700">{week.avgEffFormatted}</span>
+                      <span className="text-[8px] font-bold text-slate-600">{week.avgGrossFormatted}</span>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            
+            {/* Show message if no weeks with >= 2 days */}
+            {stats.weeklyAverages.filter(week => week.dayCount >= 2).length === 0 && (
+              <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
+                <span className="text-[8px] font-medium text-slate-400">No weeks with sufficient data (minimum 2 days)</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Timeline Table - Compact rows */}
         <div className="overflow-x-auto p-3">
@@ -885,7 +1110,7 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Day</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Timeline</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">In</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Out</th>
+                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Last Out</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Eff</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Gross</th>
                 <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Arrival</th>
@@ -907,10 +1132,13 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
                   .map((day, idx) => {
                     const styles = STATUS_STYLES[day.status] || STATUS_STYLES.default;
                     const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
-                    const isOpenSession = day.sessions && day.sessions.some(s => 
-                      s.punchInUTC && !s.punchOutUTC && isToday(day.date)
-                    );
                     const today = isToday(day.date);
+                    const isWeekend = day.isWeekend || false;
+                    
+                    let outDisplay = '—';
+                    if (!isWeekend) {
+                      outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
+                    }
                     
                     return (
                       <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${today ? 'bg-blue-50/30' : ''}`}>
@@ -939,23 +1167,26 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-mono font-medium ${isOpenSession ? 'text-blue-600' : 'text-slate-700'}`}>
-                            {isOpenSession ? 'In progress' : (day.punchOutDisplay || '—')}
+                          <span className={`text-[10px] font-mono font-medium ${
+                            isWeekend ? 'text-slate-400' :
+                            outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'
+                          }`}>
+                            {outDisplay}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
                           <span className="text-[10px] font-bold text-emerald-700">
-                            {day.effectiveHours ? day.effectiveHours.toFixed(1) : '0'}h
+                            {day.effectiveHours ? formatHoursToHrMin(day.effectiveHours) : '0 hr 0 min'}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
-                          <span className="text-[10px] font-medium text-slate-700">
-                            {day.grossHours ? day.grossHours.toFixed(1) : '0'}h
+                          <span className="text-[10px] font-bold text-slate-700">
+                            {day.grossHours ? formatHoursToHrMin(day.grossHours) : '0 hr 0 min'}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
                           <span className={`text-[10px] font-medium ${day.status === 'late' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {getArrivalStatus(day)}
+                            {isWeekend ? '—' : getArrivalStatus(day)}
                           </span>
                         </td>
                       </tr>

@@ -1,5 +1,5 @@
 // frontend/src/pages/HrDashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../context/SidebarContext';
@@ -29,7 +29,8 @@ import {
   Bell,
   Activity,
   BarChart3,
-  Fingerprint
+  Fingerprint,
+  X as XIcon
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -52,6 +53,19 @@ const HrDashboard = () => {
     attendanceRate: 0
   });
 
+  // Employee list modal state
+  const [showEmployeeListModal, setShowEmployeeListModal] = useState(false);
+  const [modalType, setModalType] = useState('');
+  const [modalEmployees, setModalEmployees] = useState([]);
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [modalCurrentPage, setModalCurrentPage] = useState(1);
+  const modalItemsPerPage = 10;
+
+  // 🔥 NEW: Store present employees data for display on the card
+  const [presentEmployees, setPresentEmployees] = useState([]);
+  const [presentEmployeesLoaded, setPresentEmployeesLoaded] = useState(false);
+
   const [pendingLeaves, setPendingLeaves] = useState([]);
   const [pendingCorrections, setPendingCorrections] = useState([]);
   const [leaveTypes, setLeaveTypes] = useState([]);
@@ -71,32 +85,221 @@ const HrDashboard = () => {
     headers: { Authorization: `Bearer ${token}` }
   };
 
-  // Fetch all data
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const [statsRes, leavesRes, correctionsRes, typesRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/hr/dashboard/stats`, authHeader),
-        axios.get(`${API_BASE_URL}/api/hr/leave/pending`, authHeader),
-        axios.get(`${API_BASE_URL}/api/hr/attendance/corrections`, authHeader),
-        axios.get(`${API_BASE_URL}/api/hr/leave-types`, authHeader)
-      ]);
+  // frontend/src/pages/HrDashboard.jsx - Updated fetchData
 
-      setStats(statsRes.data.data);
-      setPendingLeaves(leavesRes.data.data || []);
-      setPendingCorrections(correctionsRes.data.data || []);
-      setLeaveTypes(typesRes.data.data || []);
+// Fetch all data
+const fetchData = async () => {
+  setLoading(true);
+  try {
+    const [statsRes, leavesRes, correctionsRes, typesRes] = await Promise.all([
+      axios.get(`${API_BASE_URL}/api/hr/dashboard/stats`, authHeader),
+      axios.get(`${API_BASE_URL}/api/hr/leave/pending`, authHeader),
+      axios.get(`${API_BASE_URL}/api/hr/attendance/corrections`, authHeader),
+      axios.get(`${API_BASE_URL}/api/hr/leave-types`, authHeader)
+    ]);
+
+    const statsData = statsRes.data.data;
+    setStats({
+      present: statsData.present || 0,
+      absent: statsData.absent || 0,
+      late: statsData.late || 0,
+      onLeave: statsData.onLeave || 0,
+      totalEmployees: statsData.totalEmployees || 0,
+      pendingLeaves: statsData.pendingLeaves || 0,
+      pendingCorrections: statsData.pendingCorrections || 0,
+      attendanceRate: statsData.attendanceRate || 0
+    });
+    
+    // 🔥 FIX: Set present employees directly from backend response
+    setPresentEmployees(statsData.presentEmployees || []);
+    setPresentEmployeesLoaded(true);
+    
+    setPendingLeaves(leavesRes.data.data || []);
+    setPendingCorrections(correctionsRes.data.data || []);
+    setLeaveTypes(typesRes.data.data || []);
+    
+  } catch (error) {
+    console.error('Error fetching HR data:', error);
+    toast.error('Failed to load dashboard data');
+  } finally {
+    setLoading(false);
+  }
+};
+
+  // 🔥 NEW: Fetch only present employees for display
+  const fetchPresentEmployees = async () => {
+    try {
+      setPresentEmployeesLoaded(false);
+      const result = await fetchEmployeesByStatusInternal('present');
+      setPresentEmployees(result || []);
+      setPresentEmployeesLoaded(true);
     } catch (error) {
-      console.error('Error fetching HR data:', error);
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
+      console.error('Error fetching present employees:', error);
+      setPresentEmployeesLoaded(true);
+    }
+  };
+
+  // Internal function to fetch employees by status
+  const fetchEmployeesByStatusInternal = async (status) => {
+    try {
+      // Get today's date in IST
+      const now = new Date();
+      const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+      const todayStr = istNow.toISOString().split('T')[0];
+      
+      // Get all employees (excluding Admin, HR, Client)
+      const employeesRes = await axios.get(`${API_BASE_URL}/api/hr/employees`, authHeader);
+      const employees = employeesRes.data.employees || [];
+      
+      if (employees.length === 0) {
+        return [];
+      }
+      
+      // Get approved leaves for today
+      const leavesRes = await axios.get(`${API_BASE_URL}/api/hr/leave/all`, {
+        ...authHeader,
+        params: { status: 'approved' }
+      }).catch(() => ({ data: { data: [] } }));
+      const approvedLeaves = leavesRes.data.data || [];
+      
+      // Create a set of employee IDs on leave today
+      const onLeaveIds = new Set();
+      approvedLeaves.forEach(leave => {
+        const start = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+        const current = new Date(start);
+        while (current <= end) {
+          const dateStr = current.toISOString().split('T')[0];
+          if (dateStr === todayStr) {
+            onLeaveIds.add(leave.employeeId.toString());
+            break;
+          }
+          current.setDate(current.getDate() + 1);
+        }
+      });
+      
+      // Process each employee
+      const employeesWithStatus = await Promise.all(
+        employees.map(async (emp) => {
+          try {
+            // Check if on leave first
+            if (onLeaveIds.has(emp._id.toString())) {
+              return { ...emp, status: 'leave' };
+            }
+            
+            // Get punch logs for this employee (last 1 month)
+            const res = await axios.get(
+              `${API_BASE_URL}/api/hr/attendance/employee-timeline/${emp._id}?months=1`,
+              authHeader
+            );
+            
+            const days = res.data.data?.days || [];
+            
+            // Find today's record
+            const todayRecord = days.find(d => {
+              const dDate = d.date instanceof Date ? d.date.toISOString().split('T')[0] : d.date;
+              return dDate === todayStr;
+            });
+            
+            if (!todayRecord) {
+              return { ...emp, status: 'absent' };
+            }
+            
+            // Check if weekend
+            if (todayRecord.isWeekend) {
+              return { ...emp, status: 'weekend' };
+            }
+            
+            // Get the status from the timeline
+            let empStatus = todayRecord.status || '';
+            
+            // Map status to match HR Dashboard stats logic
+            if (empStatus === 'on_time') {
+              return { ...emp, status: 'present' };
+            } else if (empStatus === 'late') {
+              return { ...emp, status: 'late' };
+            } else if (empStatus === 'leave') {
+              return { ...emp, status: 'leave' };
+            } else if (empStatus === 'absent') {
+              return { ...emp, status: 'absent' };
+            } else if (empStatus === 'partial') {
+              if (todayRecord.isLate) {
+                return { ...emp, status: 'late' };
+              }
+              return { ...emp, status: 'present' };
+            }
+            
+            // Fallback: check punch times directly
+            if (todayRecord.punchInUTC) {
+              const punchDate = new Date(todayRecord.punchInUTC);
+              const istPunchStr = punchDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+              const istPunch = new Date(istPunchStr);
+              const hours = istPunch.getHours();
+              const minutes = istPunch.getMinutes();
+              const isLate = hours > 10 || (hours === 10 && minutes > 45);
+              
+              if (isLate) {
+                return { ...emp, status: 'late' };
+              }
+              return { ...emp, status: 'present' };
+            }
+            
+            return { ...emp, status: 'absent' };
+            
+          } catch (err) {
+            console.error(`Error fetching attendance for ${emp.name}:`, err.message);
+            return { ...emp, status: 'absent' };
+          }
+        })
+      );
+      
+      // Filter employees by the requested status
+      if (status === 'present') {
+        return employeesWithStatus.filter(e => e.status === 'present');
+      } else if (status === 'absent') {
+        return employeesWithStatus.filter(e => e.status === 'absent');
+      } else if (status === 'late') {
+        return employeesWithStatus.filter(e => e.status === 'late');
+      } else if (status === 'onLeave') {
+        return employeesWithStatus.filter(e => e.status === 'leave');
+      }
+      return [];
+      
+    } catch (error) {
+      console.error('Error fetching employees by status:', error);
+      return [];
     }
   };
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  // Open employee list modal
+  const openEmployeeListModal = async (type) => {
+    setModalType(type);
+    setModalSearchTerm('');
+    setModalCurrentPage(1);
+    setShowEmployeeListModal(true);
+    setModalLoading(true);
+    
+    try {
+      const employees = await fetchEmployeesByStatusInternal(type);
+      setModalEmployees(employees || []);
+      
+      // 🔥 FIX: If this is the 'present' modal, also update the presentEmployees state
+      if (type === 'present') {
+        setPresentEmployees(employees || []);
+        setPresentEmployeesLoaded(true);
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      toast.error('Failed to load employee list');
+      setModalEmployees([]);
+    } finally {
+      setModalLoading(false);
+    }
+  };
 
   // Approve leave
   const handleApproveLeave = async (leaveId) => {
@@ -224,6 +427,49 @@ const HrDashboard = () => {
     currentPage * itemsPerPage
   );
 
+  // Modal pagination
+  const modalFilteredEmployees = modalEmployees.filter(emp =>
+    emp.name?.toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
+    emp.email?.toLowerCase().includes(modalSearchTerm.toLowerCase()) ||
+    emp.employeeCode?.toLowerCase().includes(modalSearchTerm.toLowerCase())
+  );
+
+  const modalTotalPages = Math.ceil(modalFilteredEmployees.length / modalItemsPerPage);
+  const modalCurrentEmployees = modalFilteredEmployees.slice(
+    (modalCurrentPage - 1) * modalItemsPerPage,
+    modalCurrentPage * modalItemsPerPage
+  );
+
+  const getModalTitle = () => {
+    switch(modalType) {
+      case 'present': return 'Present Employees';
+      case 'absent': return 'Absent Employees';
+      case 'late': return 'Late Employees';
+      case 'onLeave': return 'Employees on Leave';
+      default: return 'Employees';
+    }
+  };
+
+  const getModalColor = () => {
+    switch(modalType) {
+      case 'present': return 'text-emerald-600 bg-emerald-50 border-emerald-200';
+      case 'absent': return 'text-red-600 bg-red-50 border-red-200';
+      case 'late': return 'text-amber-600 bg-amber-50 border-amber-200';
+      case 'onLeave': return 'text-purple-600 bg-purple-50 border-purple-200';
+      default: return 'text-blue-600 bg-blue-50 border-blue-200';
+    }
+  };
+
+  const getStatusBadge = (type) => {
+    switch(type) {
+      case 'present': return 'bg-emerald-100 text-emerald-700';
+      case 'absent': return 'bg-red-100 text-red-700';
+      case 'late': return 'bg-amber-100 text-amber-700';
+      case 'onLeave': return 'bg-purple-100 text-purple-700';
+      default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -262,24 +508,66 @@ const HrDashboard = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards - Clickable */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm">
+        {/* Total Employees - Navigate to Attendance Sync */}
+        <div
+          onClick={() => navigate('/hr/attendance-sync')}
+          className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total Employees</p>
+              <p className="text-2xl font-black text-white">{stats.totalEmployees}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+              <Users size={18} className="text-white" />
+            </div>
+          </div>
+          <div className="mt-2 text-xs text-white/60">
+            Click to view all employees
+          </div>
+        </div>
+
+        {/* Present - Opens modal */}
+        <div
+          onClick={() => stats.present > 0 && openEmployeeListModal('present')}
+          className={`bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 shadow-sm ${stats.present > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Present Today</p>
               <p className="text-2xl font-black text-white">{stats.present}</p>
+              {/* 🔥 FIX: Show employee names on the card if available */}
+              {presentEmployeesLoaded && presentEmployees.length > 0 && (
+                <div className="mt-1 text-[10px] text-white/80 truncate max-w-[160px]">
+                  {presentEmployees.slice(0, 3).map(e => e.name).join(', ')}
+                  {presentEmployees.length > 3 && ` +${presentEmployees.length - 3} more`}
+                </div>
+              )}
+              {presentEmployeesLoaded && presentEmployees.length === 0 && stats.present > 0 && (
+                <div className="mt-1 text-[10px] text-white/60 italic">Loading names...</div>
+              )}
             </div>
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
               <UserCheck size={18} className="text-white" />
             </div>
           </div>
-          <div className="mt-2 text-xs text-white/60">
+          {stats.present > 0 && (
+            <div className="mt-2 text-xs text-white/60">
+              Click to view {stats.present} present employees
+            </div>
+          )}
+          <div className="mt-1 text-xs text-white/60">
             {stats.attendanceRate}% attendance rate
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-4 shadow-sm">
+        {/* Absent - Opens modal */}
+        <div
+          onClick={() => stats.absent > 0 && openEmployeeListModal('absent')}
+          className={`bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-4 shadow-sm ${stats.absent > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
+        >
           <div className="flex items-center justify-between">
             <div>
               <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Absent</p>
@@ -289,30 +577,53 @@ const HrDashboard = () => {
               <UserX size={18} className="text-white" />
             </div>
           </div>
+          {stats.absent > 0 && (
+            <div className="mt-2 text-xs text-white/60">
+              Click to view absent employees
+            </div>
+          )}
         </div>
 
-        <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 shadow-sm">
+        {/* Late - Opens modal */}
+        <div
+          onClick={() => stats.late > 0 && openEmployeeListModal('late')}
+          className={`bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 shadow-sm ${stats.late > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
+        >
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Pending Leaves</p>
-              <p className="text-2xl font-black text-white">{stats.pendingLeaves}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <FileText size={18} className="text-white" />
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Corrections</p>
-              <p className="text-2xl font-black text-white">{stats.pendingCorrections}</p>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Late</p>
+              <p className="text-2xl font-black text-white">{stats.late}</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
               <Clock size={18} className="text-white" />
             </div>
           </div>
+          {stats.late > 0 && (
+            <div className="mt-2 text-xs text-white/60">
+              Click to view late employees
+            </div>
+          )}
+        </div>
+
+        {/* On Leave - Opens modal */}
+        <div
+          onClick={() => stats.onLeave > 0 && openEmployeeListModal('onLeave')}
+          className={`bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-sm ${stats.onLeave > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">On Leave</p>
+              <p className="text-2xl font-black text-white">{stats.onLeave}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+              <Calendar size={18} className="text-white" />
+            </div>
+          </div>
+          {stats.onLeave > 0 && (
+            <div className="mt-2 text-xs text-white/60">
+              Click to view employees on leave
+            </div>
+          )}
         </div>
       </div>
 
@@ -384,25 +695,37 @@ const HrDashboard = () => {
                 Today's Overview
               </h3>
               <div className="space-y-3">
-                <div className="flex justify-between items-center p-3 bg-slate-50 rounded-lg">
+                <div
+                  onClick={() => navigate('/hr/attendance-sync')}
+                  className="flex justify-between items-center p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-all"
+                >
                   <span className="text-sm font-medium text-slate-600">Total Employees</span>
                   <span className="text-lg font-black text-slate-800">{stats.totalEmployees}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                  <span className="text-sm font-medium text-green-700">Present</span>
-                  <span className="text-lg font-black text-green-700">{stats.present}</span>
+                <div
+                  onClick={() => stats.present > 0 && openEmployeeListModal('present')}
+                  className={`flex justify-between items-center p-3 bg-emerald-50 rounded-lg ${stats.present > 0 ? 'cursor-pointer hover:bg-emerald-100 transition-all' : ''}`}
+                >
+                  <span className="text-sm font-medium text-emerald-700">Present (On time)</span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                <div
+                  onClick={() => stats.absent > 0 && openEmployeeListModal('absent')}
+                  className={`flex justify-between items-center p-3 bg-red-50 rounded-lg ${stats.absent > 0 ? 'cursor-pointer hover:bg-red-100 transition-all' : ''}`}
+                >
                   <span className="text-sm font-medium text-red-700">Absent</span>
                   <span className="text-lg font-black text-red-700">{stats.absent}</span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-amber-50 rounded-lg">
-                  <span className="text-sm font-medium text-amber-700">Late</span>
-                  <span className="text-lg font-black text-amber-700">{stats.late}</span>
+                <div
+                  onClick={() => stats.late > 0 && openEmployeeListModal('late')}
+                  className={`flex justify-between items-center p-3 bg-amber-50 rounded-lg ${stats.late > 0 ? 'cursor-pointer hover:bg-amber-100 transition-all' : ''}`}
+                >
+                  <span className="text-sm font-medium text-amber-700">Present (Late)</span>
                 </div>
-                <div className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                <div
+                  onClick={() => stats.onLeave > 0 && openEmployeeListModal('onLeave')}
+                  className={`flex justify-between items-center p-3 bg-purple-50 rounded-lg ${stats.onLeave > 0 ? 'cursor-pointer hover:bg-purple-100 transition-all' : ''}`}
+                >
                   <span className="text-sm font-medium text-purple-700">On Leave</span>
-                  <span className="text-lg font-black text-purple-700">{stats.onLeave}</span>
                 </div>
               </div>
             </div>
@@ -427,7 +750,7 @@ const HrDashboard = () => {
 
                 {/* Biometric Sync Button */}
                 <button
-                  onClick={() => navigate('/hr/biometric-sync')}
+                  onClick={() => navigate('/hr/attendance-sync')}
                   className="w-full p-4 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-all flex items-center justify-between"
                 >
                   <div className="flex items-center gap-3">
@@ -861,6 +1184,133 @@ const HrDashboard = () => {
                   Approve
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Employee List Modal - Present/Absent/Late/On Leave */}
+      {showEmployeeListModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-xl ${getModalColor()}`}>
+                  {modalType === 'present' && <UserCheck size={20} />}
+                  {modalType === 'absent' && <UserX size={20} />}
+                  {modalType === 'late' && <Clock size={20} />}
+                  {modalType === 'onLeave' && <Calendar size={20} />}
+                </div>
+                <div>
+                  <h2 className="text-xl font-black text-slate-800">{getModalTitle()}</h2>
+                  <p className="text-xs text-slate-500">
+                    {modalEmployees.length} employee{modalEmployees.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowEmployeeListModal(false)}
+                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Search */}
+              <div className="relative mb-4">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name, email, or employee code..."
+                  value={modalSearchTerm}
+                  onChange={(e) => {
+                    setModalSearchTerm(e.target.value);
+                    setModalCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none text-sm focus:border-blue-400 bg-slate-50"
+                />
+              </div>
+
+              {modalLoading ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 size={32} className="text-blue-600 animate-spin" />
+                </div>
+              ) : modalEmployees.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                    <Users size={28} className="text-slate-300" />
+                  </div>
+                  <p className="text-sm font-bold text-slate-500">No employees found</p>
+                  <p className="text-xs text-slate-400 mt-1">No employees match this status</p>
+                </div>
+              ) : (
+                <>
+                  <div className="divide-y divide-slate-100 max-h-[400px] overflow-y-auto">
+                    {modalCurrentEmployees.map((emp) => (
+                      <div key={emp._id} className="p-4 hover:bg-slate-50/60 transition-all flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                            {emp.name?.charAt(0) || '?'}
+                          </div>
+                          <div>
+                            <p className="font-bold text-slate-800">{emp.name}</p>
+                            <p className="text-xs text-slate-500">{emp.email}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {emp.employeeCode && (
+                                <span className="text-[8px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                                  {emp.employeeCode}
+                                </span>
+                              )}
+                              <span className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${getStatusBadge(modalType)}`}>
+                                {modalType === 'present' ? 'Present' :
+                                 modalType === 'absent' ? 'Absent' :
+                                 modalType === 'late' ? 'Late' :
+                                 modalType === 'onLeave' ? 'On Leave' : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setShowEmployeeListModal(false);
+                            // Navigate to employee attendance detail
+                            navigate(`/hr/employee-attendance`, { state: { userId: emp._id } });
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all"
+                        >
+                          View Details
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Pagination */}
+                  {modalTotalPages > 1 && (
+                    <div className="mt-4 flex justify-between items-center">
+                      <span className="text-[10px] text-slate-500">
+                        Page {modalCurrentPage} of {modalTotalPages}
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => setModalCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={modalCurrentPage === 1}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                        >
+                          <ChevronLeft size={14} />
+                        </button>
+                        <button
+                          onClick={() => setModalCurrentPage(p => Math.min(modalTotalPages, p + 1))}
+                          disabled={modalCurrentPage === modalTotalPages}
+                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                        >
+                          <ChevronRight size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -165,6 +165,8 @@ const getStatusLabel = (status) => {
 };
 
 const getArrivalStatus = (day) => {
+  // Weekends don't have arrival status
+  if (day.isWeekend) return '—';
   if (!day.punchInUTC) return '—';
   try {
     const punchIn = new Date(day.punchInUTC);
@@ -184,12 +186,22 @@ const getArrivalStatus = (day) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Day Timeline Bar Component - FIXED
+// Day Timeline Bar Component - FIXED for weekends
 // ─────────────────────────────────────────────────────────────
 const DayTimelineBar = ({ day }) => {
   const styles = STATUS_STYLES[day.status] || STATUS_STYLES.default;
   const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
   const trackStart = TRACK_START_HOUR * 60;
+  
+  // ✅ FIX: If it's a weekend, don't show the bar
+  if (day.isWeekend) {
+    return (
+      <div className="flex items-center gap-2 h-5">
+        <div className="flex-1 h-1 rounded-full bg-slate-100" />
+        <span className="text-[8px] font-medium text-slate-300 whitespace-nowrap">Weekend</span>
+      </div>
+    );
+  }
   
   const [localHoveredSession, setLocalHoveredSession] = useState(null);
   const [localHoveredBreak, setLocalHoveredBreak] = useState(null);
@@ -208,16 +220,16 @@ const DayTimelineBar = ({ day }) => {
     
     const duration = session.punchOutUTC 
       ? calculateHours(session.punchInUTC, session.punchOutUTC)
-      : (isToday(day.date) ? calculateHours(session.punchInUTC, new Date().toISOString()) : 0);
+      : 0;
     
     setLocalHoveredSession({
       sessionIndex,
       totalSessions,
       punchIn: session.punchInUTC,
-      punchOut: session.punchOutUTC || (isToday(day.date) ? 'In progress' : '—'),
+      punchOut: session.punchOutUTC || 'No Out Punch',
       duration: duration,
       durationFormatted: formatDurationDetailed(duration),
-      isOpen: !session.punchOutUTC && isToday(day.date)
+      isOpen: false
     });
     setLocalHoveredBreak(null);
     setLocalTooltipPosition({ x: tooltipX, y: tooltipY });
@@ -253,16 +265,14 @@ const DayTimelineBar = ({ day }) => {
     if (!day.sessions || day.sessions.length === 0) {
       const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
       const endMin = clampToTrack(
-        minutesOfDayUTC(day.punchOutUTC) || 
-        (isToday(day.date) ? minutesOfDayUTC(new Date().toISOString()) : startMin + 5)
+        minutesOfDayUTC(day.punchOutUTC) || startMin + 5
       );
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      const isOpen = !day.punchOutUTC && isToday(day.date);
       
       return (
         <div 
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} ${isOpen ? 'animate-pulse' : ''}`}
+          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
         />
       );
@@ -280,20 +290,17 @@ const DayTimelineBar = ({ day }) => {
       let endMin;
       if (session.punchOutUTC) {
         endMin = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
-      } else if (isLast && isToday(day.date)) {
-        endMin = clampToTrack(minutesOfDayUTC(new Date().toISOString()));
       } else {
         endMin = clampToTrack(startMin + 2);
       }
       
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      const isOpen = !session.punchOutUTC && isLast && isToday(day.date);
       
       elements.push(
         <div
           key={`sess-${idx}`}
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} ${isOpen ? 'animate-pulse' : ''} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
+          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
           onMouseEnter={(e) => handleSessionHover(e, session, idx, totalSegments)}
         />
@@ -308,26 +315,29 @@ const DayTimelineBar = ({ day }) => {
       }
       
       if (isLast) {
-        const label = isOpen ? 'In progress' : formatTimeDisplay(session.punchOutUTC);
+        let label;
+        if (!session.punchOutUTC) {
+          label = '';
+        } else {
+          label = formatTimeDisplay(session.punchOutUTC);
+        }
+        
         elements.push(
           <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${isOpen ? 'text-blue-500' : 'text-slate-500'} whitespace-nowrap`}>
+            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>
               {label}
             </span>
           </div>
         );
       }
       
-      // ─────────────────────────────────────────────────────────────
-      // FIXED: Break rendering - variables defined inside the condition
-      // ─────────────────────────────────────────────────────────────
+      // Break rendering
       if (!isLast && session.punchOutUTC && day.sessions[idx + 1] && day.sessions[idx + 1].punchInUTC) {
         const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
         const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
         const gapMinutes = (gapEnd - gapStart);
         
         if (gapMinutes >= 5) {
-          // Calculate gLeft and gWidth here, inside the condition
           const gLeft = ((gapStart - trackStart) / TRACK_TOTAL_MIN) * 100;
           const gWidth = Math.max(0, ((gapEnd - gapStart) / TRACK_TOTAL_MIN) * 100);
           
@@ -373,11 +383,6 @@ const DayTimelineBar = ({ day }) => {
               <span className="text-[11px] font-bold">
                 Session {localHoveredSession.sessionIndex + 1} of {localHoveredSession.totalSessions}
               </span>
-              {localHoveredSession.isOpen && (
-                <span className="text-[7px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full animate-pulse">
-                  LIVE
-                </span>
-              )}
             </div>
             <div className="space-y-1 text-[11px]">
               <div className="flex justify-between">
@@ -386,8 +391,8 @@ const DayTimelineBar = ({ day }) => {
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Out:</span>
-                <span className={`font-mono font-medium ${localHoveredSession.isOpen ? 'text-blue-400' : ''}`}>
-                  {localHoveredSession.isOpen ? 'In progress' : formatTimeDisplay(localHoveredSession.punchOut)}
+                <span className="font-mono font-medium text-rose-400">
+                  {localHoveredSession.punchOut || 'No Out Punch'}
                 </span>
               </div>
               <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
@@ -535,22 +540,51 @@ const EmployeeAttendanceDetail = () => {
           let breakMinutes = 0;
           let firstIn = null;
           let lastOut = null;
+          let lastOutTime = null;
+          let lastOutUTC = null;
+          
+          // Get the last session's punchOutUTC
+          if (sessions.length > 0) {
+            const lastSession = sessions[sessions.length - 1];
+            if (lastSession.punchOutUTC) {
+              lastOutUTC = lastSession.punchOutUTC;
+              lastOutTime = new Date(lastSession.punchOutUTC);
+            }
+            
+            // Also check if any other session has a later out time
+            sessions.forEach((session) => {
+              if (session.punchOutUTC) {
+                const outTime = new Date(session.punchOutUTC);
+                if (!lastOutTime || outTime > lastOutTime) {
+                  lastOutTime = outTime;
+                  lastOutUTC = session.punchOutUTC;
+                }
+              }
+            });
+          }
           
           sessions.forEach((session) => {
             if (session.punchInUTC) {
               const inTime = new Date(session.punchInUTC);
               if (!firstIn || inTime < firstIn) firstIn = inTime;
-              let outTime = null;
+              
               if (session.punchOutUTC) {
-                outTime = new Date(session.punchOutUTC);
-              }
-              if (outTime) {
+                const outTime = new Date(session.punchOutUTC);
                 const hours = calculateHours(session.punchInUTC, outTime.toISOString());
                 effectiveHours += hours;
                 if (!lastOut || outTime > lastOut) lastOut = outTime;
               }
             }
           });
+          
+          // If we have no lastOutUTC but we have sessions, try to get it from the last session
+          if (!lastOutUTC && sessions.length > 0) {
+            const lastSession = sessions[sessions.length - 1];
+            if (lastSession.punchOutUTC) {
+              lastOutUTC = lastSession.punchOutUTC;
+              lastOutTime = new Date(lastSession.punchOutUTC);
+            }
+          }
           
           if (firstIn && lastOut) {
             grossHours = (lastOut - firstIn) / (1000 * 60 * 60);
@@ -576,11 +610,14 @@ const EmployeeAttendanceDetail = () => {
             }
           }
           
+          let punchOutUTC = lastOutUTC || day.punchOutUTC || null;
+          
           return {
             ...day,
             sessions: sessions,
             punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-            punchOutDisplay: day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : null,
+            punchOutDisplay: punchOutUTC ? formatTimeDisplay(punchOutUTC) : null,
+            punchOutUTC: punchOutUTC,
             effectiveHours: effectiveHours,
             grossHours: grossHours,
             breakMinutes: breakMinutes,
@@ -938,10 +975,6 @@ const EmployeeAttendanceDetail = () => {
                     <div className="w-2 h-2 rounded-full bg-amber-400"></div>
                     <span>Break</span>
                   </span>
-                  <span className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></div>
-                    <span>Live</span>
-                  </span>
                 </div>
               </div>
 
@@ -995,7 +1028,7 @@ const EmployeeAttendanceDetail = () => {
                       <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Status</th>
                       <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Timeline</th>
                       <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">In</th>
-                      <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Out</th>
+                      <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Last Out</th>
                       <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Eff</th>
                       <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Gross</th>
                       <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Arrival</th>
@@ -1017,10 +1050,21 @@ const EmployeeAttendanceDetail = () => {
                         .map((day, idx) => {
                           const styles = STATUS_STYLES[day.status] || STATUS_STYLES.default;
                           const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
-                          const isOpenSession = day.sessions && day.sessions.some(s => 
-                            s.punchInUTC && !s.punchOutUTC && isToday(day.date)
-                          );
                           const today = isToday(day.date);
+                          const isWeekend = day.isWeekend || false;
+
+                          // ✅ FIX: For weekends, set outDisplay to '—' instead of 'No Out Punch'
+                          let outDisplay = day.punchOutDisplay || '—';
+                          if (!isWeekend) {
+                            if (day.sessions && day.sessions.length > 0) {
+                              const lastSession = day.sessions[day.sessions.length - 1];
+                              if (!lastSession.punchOutUTC) {
+                                outDisplay = 'No Out Punch';
+                              } else if (lastSession.punchOutUTC) {
+                                outDisplay = formatTimeDisplay(lastSession.punchOutUTC);
+                              }
+                            }
+                          }
                           
                           return (
                             <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${today ? 'bg-blue-50/30' : ''}`}>
@@ -1042,7 +1086,9 @@ const EmployeeAttendanceDetail = () => {
                                 </span>
                               </td>
                               <td className="px-2 py-1.5 min-w-[180px]">
-                                {hasIn ? (
+                                {isWeekend ? (
+                                  <span className="text-[9px] text-slate-400 italic">—</span>
+                                ) : hasIn ? (
                                   <DayTimelineBar day={day} />
                                 ) : (
                                   <span className="text-[9px] text-slate-400 italic">—</span>
@@ -1050,27 +1096,30 @@ const EmployeeAttendanceDetail = () => {
                               </td>
                               <td className="px-2 py-1.5">
                                 <span className="text-[10px] font-mono font-medium text-slate-700">
-                                  {day.punchInDisplay || '—'}
+                                  {isWeekend ? '—' : (day.punchInDisplay || '—')}
                                 </span>
                               </td>
                               <td className="px-2 py-1.5">
-                                <span className={`text-[10px] font-mono font-medium ${isOpenSession ? 'text-blue-600' : 'text-slate-700'}`}>
-                                  {isOpenSession ? 'In progress' : (day.punchOutDisplay || '—')}
+                                <span className={`text-[10px] font-mono font-medium ${
+                                  isWeekend ? 'text-slate-400' :
+                                  !day.punchOutUTC ? 'text-rose-500 font-bold' : 'text-slate-700'
+                                }`}>
+                                  {isWeekend ? '—' : outDisplay}
                                 </span>
                               </td>
                               <td className="px-2 py-1.5">
                                 <span className="text-[10px] font-bold text-emerald-700">
-                                  {day.effectiveHours ? day.effectiveHours.toFixed(1) : '0'}h
+                                  {isWeekend ? '—' : (day.effectiveHours ? day.effectiveHours.toFixed(1) : '0')}h
                                 </span>
                               </td>
                               <td className="px-2 py-1.5">
                                 <span className="text-[10px] font-medium text-slate-700">
-                                  {day.grossHours ? day.grossHours.toFixed(1) : '0'}h
+                                  {isWeekend ? '—' : (day.grossHours ? day.grossHours.toFixed(1) : '0')}h
                                 </span>
                               </td>
                               <td className="px-2 py-1.5">
                                 <span className={`text-[10px] font-medium ${day.status === 'late' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                                  {getArrivalStatus(day)}
+                                  {isWeekend ? '—' : getArrivalStatus(day)}
                                 </span>
                               </td>
                             </tr>

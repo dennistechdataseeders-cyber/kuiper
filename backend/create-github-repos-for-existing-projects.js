@@ -1,300 +1,217 @@
-// backend/scripts/create-github-repos-for-existing-projects.js
-const mongoose = require('mongoose');
+// backend/create-github-repo-for-tds0018.js
+// Run this script to create GitHub repo for TDS0018 project
+
+require('dotenv').config({ 
+    path: require('path').join(__dirname, '.env') 
+});
+
 const { Octokit } = require('@octokit/rest');
+const mongoose = require('mongoose');
 const Project = require('./models/Project');
 const Feed = require('./models/Feed');
-const gitService = require('./services/gitService');
-require('dotenv').config();
 
-// ============================================
-// PROJECT CONFIGURATION - Match your KUIPER projects
-// ============================================
-const PROJECTS_CONFIG = [
-    {
-        projectId: 'TDS0018-ECOM | MU | Backend Response Catalog',
-        feeds: ['Shopee Multiple Region', 'TikTok Multiple Region', 'Lazada Coupon']
-    },
-    {
-        projectId: 'TDS0019-AUTO | AE | PRH Portal Automation',
-        feeds: ['PRH Automation Script']
-    }
-];
+// Project data from your MongoDB document
+const PROJECT_DATA = {
+    projectId: '6a6c7abb7a0f492c160f1401',
+    projectCustomId: 'TDS0018-ECOM | MU | Backend Response catalog',
+    feeds: [
+        { id: '6a6c7d177a0f492c160f4f2b', name: 'Shopee Multiple Region' },
+        { id: '6a6c7d437a0f492c160f5612', name: 'TikTok Multiple Region' },
+        { id: '6a6c7dac7a0f492c160f6190', name: 'Lazada Coupon' }
+    ]
+};
 
-// ============================================
-// MAIN SCRIPT
-// ============================================
+const REPO_NAME = 'tds0018-ecom-mu-backend-response-catalog';
+const GITHUB_OWNER = 'techdataseeders';
 
-async function createGitHubReposForExistingProjects() {
-    console.log('🚀 CREATING GITHUB REPOS FOR EXISTING KUIPER PROJECTS');
+async function createRepoAndUpdateDB() {
+    console.log('🚀 CREATING GITHUB REPO FOR TDS0018');
     console.log('═'.repeat(70));
 
     // 1. Check GitHub configuration
-    console.log('\n📋 1. CHECKING GITHUB CONFIGURATION...');
     const token = process.env.GITHUB_TOKEN;
-    const owner = process.env.GITHUB_OWNER;
-
-    if (!token || !owner) {
-        console.error('❌ GitHub not configured. Please set GITHUB_TOKEN and GITHUB_OWNER in .env');
+    if (!token) {
+        console.error('❌ GITHUB_TOKEN not found in .env');
         process.exit(1);
     }
 
-    console.log(`   ✅ GitHub configured for: ${owner}`);
-    console.log(`   📊 Token: ${token.substring(0, 4)}...${token.substring(token.length - 4)}`);
+    console.log(`✅ GitHub token found`);
 
-    // 2. Connect to MongoDB
-    console.log('\n📊 2. CONNECTING TO MONGODB...');
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log('   ✅ Connected to MongoDB');
-
-    // 3. Initialize Octokit
-    console.log('\n🔑 3. INITIALIZING GITHUB API...');
+    // 2. Initialize Octokit
     const octokit = new Octokit({ auth: token });
 
     try {
         const user = await octokit.users.getAuthenticated();
-        console.log(`   ✅ Authenticated as: ${user.data.login}`);
+        console.log(`✅ Authenticated as: ${user.data.login}`);
     } catch (error) {
-        console.error(`   ❌ GitHub authentication failed: ${error.message}`);
+        console.error(`❌ GitHub authentication failed: ${error.message}`);
         process.exit(1);
     }
 
-    // 4. Process each project
-    console.log('\n📁 4. PROCESSING PROJECTS...');
-    console.log('═'.repeat(70));
+    // 3. Create the repository
+    console.log(`\n📡 Creating GitHub repository: ${REPO_NAME}`);
+    
+    try {
+        const response = await octokit.repos.createForAuthenticatedUser({
+            name: REPO_NAME,
+            description: 'TDS0018-ECOM | MU | Backend Response Catalog - Data extraction from Shopee, TikTok, and Lazada',
+            private: true,
+            auto_init: true,
+            has_issues: true,
+            has_projects: true,
+            has_wiki: true
+        });
 
-    const results = {
-        created: [],
-        skipped: [],
-        errors: []
-    };
+        console.log(`✅ Repository created successfully`);
+        console.log(`   URL: ${response.data.html_url}`);
+        console.log(`   Clone URL: ${response.data.clone_url}`);
 
-    for (const config of PROJECTS_CONFIG) {
-        try {
-            console.log(`\n📦 PROCESSING: ${config.projectId}`);
-            console.log('─'.repeat(50));
+        // 4. Create feed folders
+        console.log(`\n📂 Creating feed folders...`);
+        
+        for (const feed of PROJECT_DATA.feeds) {
+            console.log(`   📁 Creating folder for: ${feed.name}`);
+            
+            const folderName = feed.name
+                .toLowerCase()
+                .replace(/[^a-z0-9-]/g, '-')
+                .replace(/-+/g, '-')
+                .replace(/^-|-$/g, '');
 
-            // 4a. Find the project in KUIPER
-            const project = await Project.findOne({ 
-                projectCustomId: config.projectId 
-            });
+            // Create README content
+            const readmeContent = `# ${feed.name}
 
-            if (!project) {
-                console.log(`   ❌ Project not found in KUIPER: ${config.projectId}`);
-                results.errors.push({
-                    project: config.projectId,
-                    error: 'Project not found in KUIPER'
-                });
-                continue;
-            }
+## Feed ID: ${feed.id}
 
-            console.log(`   ✅ Found project in KUIPER:`);
-            console.log(`      ID: ${project._id}`);
-            console.log(`      Name: ${project.name}`);
+## Purpose
+This feed folder contains code and data extraction scripts for ${feed.name}.
 
-            // 4b. Check if project already has a GitHub repo
-            if (project.gitRepoName && project.gitRepoUrl) {
-                console.log(`   ⏭️  Project already has GitHub repo:`);
-                console.log(`      Repo: ${project.gitRepoName}`);
-                console.log(`      URL: ${project.gitRepoUrl}`);
-                
-                // Still create feed folders if missing
-                await createFeedFolders(project, config.feeds, octokit);
-                
-                results.skipped.push({
-                    project: config.projectId,
-                    reason: 'GitHub repo already exists',
-                    repoUrl: project.gitRepoUrl
-                });
-                continue;
-            }
+## Structure
+- \`/docs\` - Documentation
+- \`/src\` - Source code
+- \`/tests\` - Test files
+- \`/config\` - Configuration files
 
-            // 4c. Generate repository name
-            const repoName = generateRepoName(config.projectId);
-            console.log(`   📡 Creating GitHub repository: ${repoName}`);
+## Project
+${PROJECT_DATA.projectCustomId}
 
-            // 4d. Create GitHub repository
-            let gitRepo = null;
-            try {
-                gitRepo = await gitService.createRepository(
-                    config.projectId,
-                    project.description || `Project: ${config.projectId}`,
-                    [] // No developers assigned initially
-                );
+## Data Storage Rules
+1. Keep page saves for every region in separate folder:
+   \`${folderName}/yyyymmdd/VT/YourPageSave1.json\`
+   \`${folderName}/yyyymmdd/VT/YourPageSave2.html\`
 
-                if (gitRepo && gitRepo.success) {
-                    console.log(`   ✅ Repository created successfully`);
-                    console.log(`      URL: ${gitRepo.repoUrl}`);
-                    console.log(`      Clone URL: ${gitRepo.cloneUrl}`);
-                    console.log(`      Invite Link: ${gitRepo.inviteLink}`);
+2. Zip the data folder:
+   \`${feed.name.split(' ')[0]}_yyyymmdd.zip\`
 
-                    // 4e. Update project with GitHub info
-                    project.gitRepoUrl = gitRepo.repoUrl;
-                    project.gitRepoName = gitRepo.repoName;
-                    await project.save();
-                    console.log(`   💾 Updated project with GitHub info`);
+3. Final zip file should be available at:
+   \\\\192.168.1.100\\E\\Dakshesh\\Peter\\TDS0018 - Backend Response Catalog
 
-                    // 4f. Create feed folders
-                    await createFeedFolders(project, config.feeds, octokit);
+## Created
+${new Date().toISOString().split('T')[0]}
 
-                    results.created.push({
-                        project: config.projectId,
-                        repoUrl: gitRepo.repoUrl,
-                        repoName: gitRepo.repoName,
-                        feeds: config.feeds
-                    });
+## Auto-generated by KUIPER CRM
+`;
 
-                } else {
-                    console.log(`   ❌ Repository creation failed`);
-                    console.log(`      Error: ${gitRepo?.error || 'Unknown error'}`);
-                    results.errors.push({
-                        project: config.projectId,
-                        error: gitRepo?.error || 'Repository creation failed'
-                    });
+            // Create README.md
+            const readmePath = `${folderName}/README.md`;
+            const readmeBase64 = Buffer.from(readmeContent).toString('base64');
+
+            await octokit.repos.createOrUpdateFileContents({
+                owner: GITHUB_OWNER,
+                repo: REPO_NAME,
+                path: readmePath,
+                message: `feat: Add feed folder for ${feed.name}`,
+                content: readmeBase64,
+                committer: {
+                    name: 'KUIPER CRM',
+                    email: 'noreply@kuiperapp.co.in'
                 }
+            });
 
-            } catch (error) {
-                console.log(`   ❌ Repository creation failed: ${error.message}`);
-                results.errors.push({
-                    project: config.projectId,
-                    error: error.message
-                });
+            // Create subfolders
+            const subfolders = ['docs', 'src', 'tests', 'config'];
+            for (const sub of subfolders) {
+                const subPath = `${folderName}/${sub}/.gitkeep`;
+                const emptyBase64 = Buffer.from('').toString('base64');
+                
+                try {
+                    await octokit.repos.createOrUpdateFileContents({
+                        owner: GITHUB_OWNER,
+                        repo: REPO_NAME,
+                        path: subPath,
+                        message: `chore: Initialize ${sub} folder for ${feed.name}`,
+                        content: emptyBase64,
+                        committer: {
+                            name: 'KUIPER CRM',
+                            email: 'noreply@kuiperapp.co.in'
+                        }
+                    });
+                } catch (err) {
+                    // Subfolder might already exist
+                }
             }
 
-        } catch (error) {
-            console.error(`   ❌ Failed to process ${config.projectId}:`, error.message);
-            results.errors.push({
-                project: config.projectId,
-                error: error.message
-            });
+            console.log(`      ✅ Folder created: ${folderName}`);
         }
-    }
 
-    // 5. Summary
-    printSummary(results);
+        console.log(`\n✅ All feed folders created!`);
 
-    await mongoose.disconnect();
-    console.log('\n🔌 Disconnected from MongoDB');
-    console.log('✅ Script completed!');
-}
-
-// ============================================
-// HELPER FUNCTIONS
-// ============================================
-
-function generateRepoName(projectId) {
-    return projectId
-        .toLowerCase()
-        .replace(/\s*\|\s*/g, '-')
-        .replace(/[^a-z0-9-]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-}
-
-async function createFeedFolders(project, feedNames, octokit) {
-    console.log(`   📂 Creating feed folders in GitHub...`);
-
-    if (!project.gitRepoName) {
-        console.log(`      ⚠️ No Git repo linked, skipping feed folders`);
-        return;
-    }
-
-    const repoName = project.gitRepoName;
-    let createdCount = 0;
-
-    for (const feedName of feedNames) {
+        // 5. Try to update MongoDB (if connection works)
+        console.log(`\n📊 Attempting to update MongoDB...`);
         try {
-            // Find the feed in KUIPER
-            const feed = await Feed.findOne({
-                name: feedName,
-                projectId: project._id
+            await mongoose.connect(process.env.MONGO_URI, {
+                serverSelectionTimeoutMS: 10000,
+                socketTimeoutMS: 15000,
             });
+            console.log(`✅ Connected to MongoDB`);
 
-            if (!feed) {
-                console.log(`      ⚠️ Feed not found in KUIPER: ${feedName}`);
-                continue;
-            }
-
-            console.log(`      📁 Creating folder for feed: ${feedName}`);
-
-            // Create feed folder on GitHub
-            const folderResult = await gitService.createFeedFolder(
-                repoName,
-                feed.name,
-                feed._id,
-                feed.assignedDevelopers || []
-            );
-
-            if (folderResult && folderResult.success) {
-                console.log(`         ✅ Folder created: ${folderResult.feedPath}`);
-                createdCount++;
+            const project = await Project.findById(PROJECT_DATA.projectId);
+            if (project) {
+                project.gitRepoName = REPO_NAME;
+                project.gitRepoUrl = `https://github.com/${GITHUB_OWNER}/${REPO_NAME}`;
+                await project.save();
+                console.log(`✅ Updated project with GitHub info`);
             } else {
-                console.log(`         ⚠️ Failed to create folder: ${folderResult?.error || 'Unknown error'}`);
+                console.log(`⚠️ Project not found in database`);
             }
 
-        } catch (error) {
-            console.log(`      ❌ Failed to create folder for ${feedName}: ${error.message}`);
+            await mongoose.disconnect();
+            console.log(`🔌 Disconnected from MongoDB`);
+        } catch (dbError) {
+            console.log(`⚠️ Could not update MongoDB: ${dbError.message}`);
+            console.log(`   You can manually update the project with:`);
+            console.log(`   gitRepoName: ${REPO_NAME}`);
+            console.log(`   gitRepoUrl: https://github.com/${GITHUB_OWNER}/${REPO_NAME}`);
         }
-    }
 
-    console.log(`   📊 Feed folders created: ${createdCount}/${feedNames.length}`);
+        // 6. Summary
+        console.log('\n' + '═'.repeat(70));
+        console.log('✅ REPOSITORY CREATED SUCCESSFULLY!');
+        console.log('═'.repeat(70));
+        console.log(`\n📁 Repository: ${REPO_NAME}`);
+        console.log(`🔗 URL: https://github.com/${GITHUB_OWNER}/${REPO_NAME}`);
+        console.log(`\n📂 Feeds created:`);
+        PROJECT_DATA.feeds.forEach(f => {
+            const folderName = f.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+            console.log(`   - ${f.name} → ${folderName}/`);
+        });
+        console.log(`\n💡 Next steps:`);
+        console.log(`   1. Visit: https://github.com/${GITHUB_OWNER}/${REPO_NAME}`);
+        console.log(`   2. Share invite link: https://github.com/${GITHUB_OWNER}/${REPO_NAME}/invite`);
+        console.log(`   3. Assign developers to feeds in KUIPER`);
+
+    } catch (error) {
+        console.error(`❌ Failed to create repository:`, error.message);
+        if (error.status === 422) {
+            console.log(`\n💡 A repository with this name may already exist.`);
+            console.log(`   Check: https://github.com/${GITHUB_OWNER}/${REPO_NAME}`);
+        }
+        process.exit(1);
+    }
 }
 
-function printSummary(results) {
-    console.log('\n' + '═'.repeat(70));
-    console.log('📊 SUMMARY');
-    console.log('═'.repeat(70));
-
-    console.log(`\n✅ Repositories Created: ${results.created.length}`);
-    console.log(`⏭️  Skipped (Already exist): ${results.skipped.length}`);
-    console.log(`❌ Errors: ${results.errors.length}`);
-
-    if (results.created.length > 0) {
-        console.log('\n📋 Created Repositories:');
-        results.created.forEach(r => {
-            console.log(`   📁 ${r.project}`);
-            console.log(`      Repo: ${r.repoName}`);
-            console.log(`      URL: ${r.repoUrl}`);
-            console.log(`      Feeds: ${r.feeds.join(', ')}`);
-        });
-    }
-
-    if (results.skipped.length > 0) {
-        console.log('\n⏭️  Skipped (Already exist):');
-        results.skipped.forEach(r => {
-            console.log(`   📁 ${r.project}`);
-            console.log(`      Repo: ${r.repoUrl}`);
-            console.log(`      Reason: ${r.reason}`);
-        });
-    }
-
-    if (results.errors.length > 0) {
-        console.log('\n❌ Errors:');
-        results.errors.forEach((err, idx) => {
-            console.log(`   ${idx + 1}. ${err.project}: ${err.error}`);
-        });
-    }
-
-    console.log('\n💡 NEXT STEPS:');
-    console.log('   1. Check repositories on GitHub:');
-    results.created.forEach(r => {
-        console.log(`      ${r.repoUrl}`);
-    });
-    console.log('   2. Share invite links with developers:');
-    results.created.forEach(r => {
-        console.log(`      ${r.repoUrl}/invite`);
-    });
-    console.log('   3. Verify feed folders in each repository');
-    console.log('   4. Assign developers to feeds in KUIPER');
-}
-
-// ============================================
-// RUN THE SCRIPT
-// ============================================
-
-createGitHubReposForExistingProjects();
-
-module.exports = {
-    createGitHubReposForExistingProjects,
-    generateRepoName,
-    createFeedFolders
-};
+// Run the script
+createRepoAndUpdateDB().catch(err => {
+    console.error('❌ Script failed:', err);
+    process.exit(1);
+});

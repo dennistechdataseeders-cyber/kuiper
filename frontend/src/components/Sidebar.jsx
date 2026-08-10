@@ -394,7 +394,6 @@ const Sidebar = () => {
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },

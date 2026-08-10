@@ -45,7 +45,6 @@ import KnowledgeBase from './pages/KnowledgeBase';
 import FeasibilityDashboard from './pages/FeasibilityDashboard';
 import PmFeasibilityDashboard from './pages/PmFeasibilityDashboard'; // <-- NEW IMPORT
 import PmDashboard from './pages/PmDashboard';
-import BiometricSync from './pages/BiometricSync';
 import EmployeeAttendanceDetail from './pages/EmployeeAttendanceDetail';
 import EmployeeAttendanceReport from './pages/EmployeeAttendanceReport';
 
@@ -352,11 +351,7 @@ function AppContent() {
                         <HrLeaveDashboard />
                       </ProtectedRoute>
                     } />
-                    <Route path="/hr/biometric-sync" element={
-                      <ProtectedRoute allowedRoles={['Admin', 'HR']}>
-                        <BiometricSync />
-                      </ProtectedRoute>
-                    } />
+                   
                     {/* ============================================
                         PEOPLE OPS - Employee Dashboard
                         ============================================ */}

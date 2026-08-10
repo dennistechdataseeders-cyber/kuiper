@@ -566,16 +566,23 @@ router.get('/attendance/employee/:employeeCode', async (req, res) => {
   }
 });
 
+// backend/routes/hrRoutes.js - UPDATED
+
+// ============================================
 // GET /api/hr/attendance/employee-codes - Get all employee codes
+// ✅ FIX: Exclude Client role users
+// ============================================
 router.get('/attendance/employee-codes', async (req, res) => {
   try {
     console.log('📋 Fetching all employee codes...');
     
+    // ✅ FIX: Exclude users with role 'Client'
     const users = await User.find({ 
-      employeeCode: { $ne: null, $ne: '' } 
-    }).select('employeeCode name email designation department');
+      employeeCode: { $ne: null, $ne: '' },
+      role: { $ne: 'Client' } // EXCLUDE Client role
+    }).select('employeeCode name email designation department role');
     
-    console.log(`📊 Found ${users.length} users with employee codes`);
+    console.log(`📊 Found ${users.length} users with employee codes (Clients excluded)`);
     
     res.json({
       success: true,
@@ -641,43 +648,100 @@ router.get('/attendance/device-codes', async (req, res) => {
     });
   }
 });
+// ============================================
+// DASHBOARD STATS (HR) - FIXED with IST timezone and proper status mapping
+// ============================================
 
 // ============================================
-// DASHBOARD STATS (HR)
+// DASHBOARD STATS (HR) - Uses employee-timeline logic
 // ============================================
 
 // GET /api/hr/dashboard/stats - Get dashboard statistics
 router.get('/dashboard/stats', async (req, res) => {
     try {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
+        // Get today's date in IST
+        const now = new Date();
+        const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+        const todayStr = istNow.toISOString().split('T')[0];
         
-        const todayPunches = await EmployeePunchLog.find({
-            date: { $gte: today, $lt: tomorrow }
-        });
+        // Build date range in UTC
+        const [year, month, day] = todayStr.split('-').map(Number);
+        const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+        const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
         
-        const uniquePunchEmployees = new Set(todayPunches.map(p => p.employeeId.toString()));
-        const presentCount = uniquePunchEmployees.size;
-        
+        // Get all active employees (excluding Admin, HR, Client)
         const allEmployees = await User.find({ 
             isActive: true,
-            role: { $nin: ['Admin', 'HR'] }
+            role: { $nin: ['Admin', 'HR', 'Client'] }
         });
         const totalEmployees = allEmployees.length;
-        const absentCount = Math.max(0, totalEmployees - presentCount);
         
-        const lateArrivals = todayPunches.filter(p => {
-            if (!p.punchIn) return false;
-            const punchInHour = new Date(p.punchIn).getHours();
-            return punchInHour >= 10;
-        }).length;
+        // Get today's punch logs
+        const todayPunches = await EmployeePunchLog.find({
+            date: { $gte: startDate, $lte: endDate }
+        });
         
-        const leaveCount = await LeaveApplication.countDocuments({
-            startDate: { $lte: today },
-            endDate: { $gte: today },
-            status: 'approved'
+        // Create a map of employee IDs to punch logs
+        const punchMap = {};
+        todayPunches.forEach(p => {
+            const empId = p.employeeId.toString();
+            if (!punchMap[empId]) {
+                punchMap[empId] = p;
+            }
+        });
+        
+        // Helper to check if punch is late (after 10:45 AM IST)
+        const isLatePunch = (punchTime) => {
+            if (!punchTime) return false;
+            const punchDate = new Date(punchTime);
+            const istPunchStr = punchDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+            const istPunch = new Date(istPunchStr);
+            const hours = istPunch.getHours();
+            const minutes = istPunch.getMinutes();
+            // Late if AFTER 10:45 AM IST (10:46 or later)
+            return hours > 10 || (hours === 10 && minutes > 45);
+        };
+        
+        // Get approved leaves for today
+        const approvedLeaves = await LeaveApplication.find({
+            status: 'approved',
+            $or: [
+                { startDate: { $lte: endDate }, endDate: { $gte: startDate } }
+            ]
+        });
+        
+        // Create a set of employee IDs on leave
+        const onLeaveIds = new Set();
+        approvedLeaves.forEach(leave => {
+            onLeaveIds.add(leave.employeeId.toString());
+        });
+        
+        // Count employees by status
+        let presentCount = 0;
+        let lateCount = 0;
+        let absentCount = 0;
+        let onLeaveCount = onLeaveIds.size;
+        
+        allEmployees.forEach(emp => {
+            const empId = emp._id.toString();
+            
+            // Check if on leave
+            if (onLeaveIds.has(empId)) {
+                onLeaveCount++;
+                return;
+            }
+            
+            // Check if has punch today
+            const punch = punchMap[empId];
+            if (punch) {
+                presentCount++;
+                // Check if late
+                if (punch.punchIn && isLatePunch(punch.punchIn)) {
+                    lateCount++;
+                }
+            } else {
+                absentCount++;
+            }
         });
         
         const pendingLeaves = await LeaveApplication.countDocuments({ status: 'pending' });
@@ -688,8 +752,8 @@ router.get('/dashboard/stats', async (req, res) => {
             data: {
                 present: presentCount,
                 absent: absentCount,
-                late: lateArrivals,
-                onLeave: leaveCount,
+                late: lateCount,
+                onLeave: onLeaveCount,
                 totalEmployees,
                 pendingLeaves,
                 pendingCorrections,
@@ -871,7 +935,6 @@ router.get('/employee/:id/leave-balance', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch leave balance' });
     }
 });
-// backend/routes/hrRoutes.js - Add this endpoint
 
 // POST /api/hr/biometric/manual-sync - Manual trigger
 router.post('/biometric/manual-sync', authorize('Admin', 'HR'), async (req, res) => {
@@ -884,7 +947,6 @@ router.post('/biometric/manual-sync', authorize('Admin', 'HR'), async (req, res)
     res.status(500).json({ error: error.message });
   }
 });
-// backend/routes/hrRoutes.js - Add this endpoint
 
 // ============================================
 // GET /api/hr/attendance/employee-timeline/:userId
@@ -1119,9 +1181,6 @@ router.get('/attendance/employee-timeline/:userId', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch employee attendance timeline' });
   }
 });
-
-
-
 
 // ============================================
 // GET /api/hr/attendance/employee-report
@@ -1365,6 +1424,8 @@ router.get('/attendance/employee-report', async (req, res) => {
 const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                      'July', 'August', 'September', 'October', 'November', 'December'];
 
+// backend/routes/hrRoutes.js - UPDATED
+
 // ============================================
 // GET /api/hr/employees - Updated to exclude Clients
 // ============================================
@@ -1383,6 +1444,5 @@ router.get('/employees', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch employees' });
   }
 });
-
 
 module.exports = router;

@@ -1,5 +1,4 @@
-// frontend/src/pages/AttendanceSync.jsx - REMOVED VIEW ATTENDANCE PART
-
+// frontend/src/pages/AttendanceSync.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
@@ -24,7 +23,10 @@ import {
   Mail,
   Building2,
   Phone,
-  X
+  X,
+  ChevronDown,
+  ChevronUp,
+  Filter
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -42,18 +44,33 @@ const AttendanceSync = () => {
   const [employeeCodes, setEmployeeCodes] = useState([]);
   const [testResult, setTestResult] = useState(null);
   const [showTest, setShowTest] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
-  const itemsPerPage = 10;
+  const [roleFilter, setRoleFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
+  };
+
+  // Get unique roles for filter
+  const getUniqueRoles = () => {
+    const roles = new Set();
+    employeeCodes.forEach(emp => {
+      if (emp.role) roles.add(emp.role);
+    });
+    return ['ALL', ...Array.from(roles)];
   };
 
   // Fetch employee codes on load
   useEffect(() => {
     fetchEmployeeCodes();
   }, []);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, roleFilter]);
 
   const fetchEmployeeCodes = async () => {
     try {
@@ -66,7 +83,14 @@ const AttendanceSync = () => {
       
       // Handle different response structures
       const data = res.data.data || res.data || [];
-      setEmployeeCodes(Array.isArray(data) ? data : []);
+      
+      // ✅ FILTER OUT CLIENT ROLE USERS
+      const filteredEmployees = Array.isArray(data) 
+        ? data.filter(emp => emp.role !== 'Client')
+        : [];
+      
+      console.log(`✅ Filtered out Client roles. ${filteredEmployees.length} employees remaining`);
+      setEmployeeCodes(filteredEmployees);
     } catch (error) {
       console.error('Error fetching employee codes:', error);
       toast.error('Failed to load employee codes');
@@ -115,19 +139,56 @@ const AttendanceSync = () => {
     }
   };
 
-  // Filter employee codes by search term
-  const filteredEmployees = employeeCodes.filter(emp =>
-    emp.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.employeeCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    emp.email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Filter employee codes by search term and role
+  const filteredEmployees = employeeCodes.filter(emp => {
+    // Extra safety filter - exclude Client
+    if (emp.role === 'Client') return false;
+    
+    // Role filter
+    if (roleFilter !== 'ALL' && emp.role !== roleFilter) return false;
+    
+    // Search filter
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
+      return (
+        emp.name?.toLowerCase().includes(search) ||
+        emp.employeeCode?.toLowerCase().includes(search) ||
+        emp.email?.toLowerCase().includes(search) ||
+        emp.designation?.toLowerCase().includes(search) ||
+        emp.department?.toLowerCase().includes(search)
+      );
+    }
+    
+    return true;
+  });
 
   // Paginate employee codes
   const totalPages = Math.ceil(filteredEmployees.length / itemsPerPage);
-  const currentEmployees = filteredEmployees.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentEmployees = filteredEmployees.slice(startIndex, endIndex);
+
+  // Get role badge color
+  const getRoleColor = (role) => {
+    switch(role) {
+      case 'Admin': return 'bg-purple-100 text-purple-700';
+      case 'Developer': return 'bg-blue-100 text-blue-700';
+      case 'Sales': return 'bg-emerald-100 text-emerald-700';
+      case 'Sales Manager': return 'bg-orange-100 text-orange-700';
+      case 'Project Manager': return 'bg-cyan-100 text-cyan-700';
+      case 'HR': return 'bg-pink-100 text-pink-700';
+      case 'Finance': return 'bg-green-100 text-green-700';
+      case 'Team Lead': return 'bg-indigo-100 text-indigo-700';
+      default: return 'bg-slate-100 text-slate-700';
+    }
+  };
+
+  // Clear all filters
+  const clearFilters = () => {
+    setSearchTerm('');
+    setRoleFilter('ALL');
+    setCurrentPage(1);
+  };
 
   return (
     <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -296,48 +357,173 @@ const AttendanceSync = () => {
         </div>
       )}
 
-      {/* Employee List - Removed View Attendance button */}
+      {/* Employee List - Enhanced with Search and Pagination */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between">
-          <h3 className="text-sm font-black text-slate-700 flex items-center gap-2">
-            <Users size={16} className="text-blue-600" />
-            Employee Directory ({employeeCodes.length})
-          </h3>
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              placeholder="Search employees..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="px-3 py-1.5 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400"
-            />
+        {/* Header with Search and Filters */}
+        <div className="p-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Users size={18} className="text-blue-600" />
+              <h3 className="text-sm font-black text-slate-700">
+                Employee Directory
+              </h3>
+              <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                {filteredEmployees.length}
+              </span>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[200px]">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name, code, email..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400 bg-slate-50 transition-all"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* Role Filter */}
+              <div className="relative min-w-[140px]">
+                <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <select
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                  className="w-full pl-9 pr-8 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 outline-none focus:border-blue-400 bg-slate-50 appearance-none cursor-pointer transition-all"
+                >
+                  {getUniqueRoles().map(role => (
+                    <option key={role} value={role}>
+                      {role === 'ALL' ? 'All Roles' : role}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              </div>
+
+              {/* Items Per Page */}
+              <div className="relative min-w-[100px]">
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-medium text-slate-700 outline-none focus:border-blue-400 bg-slate-50 cursor-pointer transition-all"
+                >
+                  <option value={5}>5 per page</option>
+                  <option value={10}>10 per page</option>
+                  <option value={20}>20 per page</option>
+                  <option value={50}>50 per page</option>
+                </select>
+              </div>
+
+              {/* Clear Filters */}
+              {(searchTerm || roleFilter !== 'ALL') && (
+                <button
+                  onClick={clearFilters}
+                  className="px-3 py-2 bg-red-50 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-all whitespace-nowrap"
+                >
+                  Clear Filters
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Active Filters Display */}
+          {(searchTerm || roleFilter !== 'ALL') && (
+            <div className="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-100">
+              <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Active Filters:</span>
+              {roleFilter !== 'ALL' && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[8px] font-bold">
+                  Role: {roleFilter}
+                  <button onClick={() => setRoleFilter('ALL')} className="hover:text-blue-900">
+                    <X size={10} />
+                  </button>
+                </span>
+              )}
+              {searchTerm && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 rounded-full text-[8px] font-bold">
+                  Search: "{searchTerm}"
+                  <button onClick={() => setSearchTerm('')} className="hover:text-slate-900">
+                    <X size={10} />
+                  </button>
+                </span>
+              )}
+              <span className="text-[8px] text-slate-400 ml-auto">
+                {filteredEmployees.length} result{filteredEmployees.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+          )}
         </div>
 
+        {/* Employee List */}
         <div className="divide-y divide-slate-100">
           {currentEmployees.length === 0 ? (
-            <div className="p-8 text-center">
-              <Users size={40} className="text-slate-300 mx-auto mb-4" />
+            <div className="p-12 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                <Users size={28} className="text-slate-300" />
+              </div>
               <p className="text-sm font-bold text-slate-500">No employees found</p>
-              <p className="text-xs text-slate-400 mt-1">Try adjusting your search</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {searchTerm || roleFilter !== 'ALL' 
+                  ? 'Try adjusting your filters' 
+                  : 'No employees with employee codes found'}
+              </p>
+              {(searchTerm || roleFilter !== 'ALL') && (
+                <button
+                  onClick={clearFilters}
+                  className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all"
+                >
+                  Clear Filters
+                </button>
+              )}
             </div>
           ) : (
             currentEmployees.map((emp) => (
-              <div key={emp._id || emp.employeeCode} className="p-4 hover:bg-slate-50/50 transition-all">
+              <div key={emp._id || emp.employeeCode} className="p-4 hover:bg-slate-50/60 transition-all group">
                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
                     {emp.name?.charAt(0) || emp.employeeCode?.charAt(0) || '?'}
                   </div>
-                  <div>
-                    <p className="font-bold text-slate-800">{emp.name || 'Unknown'}</p>
-                    <div className="flex items-center gap-3 text-xs text-slate-500">
-                      <span>Code: {emp.employeeCode}</span>
-                      <span>•</span>
-                      <span>{emp.designation || 'No Designation'}</span>
-                      <span>•</span>
-                      <span>{emp.email}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-bold text-slate-800 truncate">{emp.name || 'Unknown'}</p>
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-black ${getRoleColor(emp.role)}`}>
+                        {emp.role || 'N/A'}
+                      </span>
+                      {emp.designation && (
+                        <span className="text-[9px] text-slate-500 font-medium">{emp.designation}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <span className="font-mono font-bold text-slate-600">Code: {emp.employeeCode || 'N/A'}</span>
+                      </span>
+                      {emp.email && (
+                        <>
+                          <span>•</span>
+                          <span className="truncate max-w-[200px]">{emp.email}</span>
+                        </>
+                      )}
+                      {emp.department && emp.department !== 'Other' && (
+                        <>
+                          <span>•</span>
+                          <span>{emp.department}</span>
+                        </>
+                      )}
                     </div>
                   </div>
+                  
                 </div>
               </div>
             ))
@@ -346,22 +532,64 @@ const AttendanceSync = () => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-100 flex justify-between items-center">
-            <span className="text-xs text-slate-500">
-              Page {currentPage} of {totalPages}
-            </span>
-            <div className="flex gap-1">
+          <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-3">
+            <div className="text-[10px] font-bold text-slate-400">
+              Showing {startIndex + 1} to {Math.min(endIndex, filteredEmployees.length)} of {filteredEmployees.length} employees
+            </div>
+            
+            <div className="flex items-center gap-1">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 <ChevronLeft size={14} />
               </button>
+              
+              <div className="flex gap-0.5 bg-white p-0.5 rounded-lg border border-slate-200 shadow-sm">
+                {[...Array(Math.min(totalPages, 7))].map((_, i) => {
+                  let pageNum;
+                  if (totalPages <= 7) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 4) {
+                    pageNum = i + 1;
+                    if (i === 6) pageNum = totalPages;
+                  } else if (currentPage >= totalPages - 3) {
+                    pageNum = totalPages - 6 + i;
+                  } else {
+                    pageNum = currentPage - 3 + i;
+                    if (i === 0) pageNum = 1;
+                    if (i === 6) pageNum = totalPages;
+                  }
+                  
+                  if (pageNum === 1 && i > 0 && currentPage > 4 && totalPages > 7) {
+                    return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">…</span>;
+                  }
+                  
+                  if (pageNum === totalPages && i < 6 && currentPage < totalPages - 3 && totalPages > 7) {
+                    return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">…</span>;
+                  }
+                  
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                        currentPage === pageNum
+                          ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
+                          : 'text-slate-500 hover:bg-slate-100'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+              </div>
+              
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
               >
                 <ChevronRight size={14} />
               </button>
