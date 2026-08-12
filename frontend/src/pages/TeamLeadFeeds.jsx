@@ -1,4 +1,6 @@
+// frontend/src/pages/TeamLeadFeeds.jsx
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom'; // ✅ ADD THIS IMPORT
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import {
@@ -36,6 +38,7 @@ import toast from 'react-hot-toast';
 
 const TeamLeadFeeds = () => {
   const { isCollapsed } = useSidebar();
+  const location = useLocation(); // ✅ ADD THIS
   const [projects, setProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -487,6 +490,15 @@ const TeamLeadFeeds = () => {
   // ============================================
 
   useEffect(() => {
+    // ✅ CHECK FOR PROJECT FILTER FROM NAVIGATION STATE
+    const projectIdFromState = location.state?.selectedProject;
+    const projectNameFromState = location.state?.selectedProjectName;
+    
+    if (projectIdFromState) {
+      console.log(`🔍 Filtering feeds for project: ${projectNameFromState || projectIdFromState}`);
+      setSelectedProject(projectIdFromState);
+    }
+    
     fetchData();
   }, []);
 
@@ -624,6 +636,24 @@ const TeamLeadFeeds = () => {
             </div>
           </div>
           
+          {/* ✅ Show current filter if project is selected */}
+          {location.state?.selectedProjectName && selectedProject !== 'ALL' && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
+              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+                Filtered: {location.state.selectedProjectName}
+              </span>
+              <button
+                onClick={() => {
+                  setSelectedProject('ALL');
+                  // Clear the state without navigating
+                  window.history.replaceState({}, document.title);
+                }}
+                className="text-indigo-400 hover:text-indigo-600 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -709,7 +739,7 @@ const TeamLeadFeeds = () => {
         </div>
       </div>
 
-      {/* Feeds Table */}
+      {/* Feeds Table - Rest of the component remains the same */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px]">
@@ -825,7 +855,7 @@ const TeamLeadFeeds = () => {
                         </td>
                       </tr>
 
-                      {/* Expanded Row */}
+                      {/* Expanded Row - Same as before */}
                       {isExpanded && (
                         <tr className="bg-slate-50/50">
                           <td colSpan={6} className="px-6 py-4">
@@ -1084,7 +1114,7 @@ const TeamLeadFeeds = () => {
       )}
 
       {/* ============================================
-          FEED COMMENT MODAL
+          FEED COMMENT MODAL - Same as before
           ============================================ */}
       {showCommentModal && selectedFeedForComments && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[210] p-4">

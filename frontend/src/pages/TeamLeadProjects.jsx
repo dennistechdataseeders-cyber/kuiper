@@ -1,6 +1,7 @@
 // frontend/src/pages/TeamLeadProjects.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../context/SidebarContext';
 import { 
   FolderKanban, Briefcase, Users, Activity,
@@ -15,6 +16,7 @@ import toast from 'react-hot-toast';
 
 const TeamLeadProjects = () => {
   const { isCollapsed } = useSidebar();
+  const navigate = useNavigate(); // Make sure navigate is imported
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -57,6 +59,18 @@ const TeamLeadProjects = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // ============================================
+  // ✅ NEW: Navigate to TeamLeadFeeds with project filter
+  // ============================================
+  const navigateToFeedsWithProject = (project) => {
+    navigate('/teamlead/feeds', {
+      state: { 
+        selectedProject: project._id,
+        selectedProjectName: project.projectCustomId || project.name
+      }
+    });
   };
 
   // ============================================
@@ -660,9 +674,17 @@ const TeamLeadProjects = () => {
                     </td>
 
                     <td className="px-6 py-4">
-                      <span className="text-sm font-black text-purple-600">
-                        {project.feeds?.length || 0}
-                      </span>
+                      <div 
+                        className="flex items-center gap-1.5 cursor-pointer group"
+                        onClick={() => navigateToFeedsWithProject(project)}
+                      >
+                        <span className="text-sm font-black text-purple-600 group-hover:text-blue-600 transition-colors">
+                          {project.feeds?.length || 0}
+                        </span>
+                        <span className="text-[8px] font-bold text-slate-400 group-hover:text-blue-500 transition-colors">
+                          View Feeds →
+                        </span>
+                      </div>
                     </td>
 
                     <td className="px-6 py-4">

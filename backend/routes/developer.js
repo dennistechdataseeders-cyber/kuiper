@@ -8,6 +8,8 @@ const Feed = require('../models/Feed');
 const Log = require('../models/Log');
 const Task = require('../models/Task');
 const WorkLog = require('../models/WorkLog');
+const TicketWorkLog = require('../models/TicketWorkLog');
+
 const { getServerTimestamp } = require('../utils/serverTime');
 
 // Import your Authentication Middleware
@@ -929,4 +931,280 @@ router.post('/worklog/deduct-break/:feedId', protect, authorize('Developer'), as
   }
 });
 
+
+// ============================================
+// TICKET WORKLOG ROUTES
+// ============================================
+
+// GET /api/dev/ticket-worklog - Get all ticket worklogs for today
+router.get('/ticket-worklog', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    // Get all tickets assigned to this developer
+    const Ticket = require('../models/Ticket');
+    const tickets = await Ticket.find({
+      assignedTo: req.user._id,
+      status: { $in: ['Open', 'In Progress'] }
+    }).select('_id title ticketNumber priority projectId status');
+    
+    const result = await Promise.all(
+      tickets.map(async (ticket) => {
+        let log = await TicketWorkLog.findOne({
+          developerId: req.user._id,
+          ticketId: ticket._id,
+          date: today
+        });
+        
+        if (!log) {
+          log = await TicketWorkLog.create({
+            developerId: req.user._id,
+            ticketId: ticket._id,
+            projectId: ticket.projectId,
+            date: today,
+            timeBlocks: []
+          });
+        }
+        
+        return { ticket, worklog: log };
+      })
+    );
+    
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch ticket worklogs' });
+  }
+});
+
+// GET /api/dev/ticket-worklog/all - Get all ticket worklogs (with date filter)
+router.get('/ticket-worklog/all', protect, authorize('Developer', 'Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const { startDate, endDate, ticketId } = req.query;
+    let filter = { developerId: req.user._id };
+    
+    if (ticketId) filter.ticketId = ticketId;
+    if (startDate || endDate) {
+      filter.date = {};
+      if (startDate) filter.date.$gte = startDate;
+      if (endDate) filter.date.$lte = endDate;
+    }
+    
+    const logs = await TicketWorkLog.find(filter)
+      .populate('ticketId', 'title ticketNumber priority status')
+      .populate('projectId', 'name projectCustomId')
+      .sort({ date: -1 });
+    
+    res.json(logs);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch ticket worklogs' });
+  }
+});
+
+// POST /api/dev/ticket-worklog/start/:ticketId - Start timer for a ticket
+router.post('/ticket-worklog/start/:ticketId', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const Ticket = require('../models/Ticket');
+    const ticket = await Ticket.findById(req.params.ticketId);
+    
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+    
+    // Check if developer is assigned to this ticket
+    if (ticket.assignedTo?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: 'Not assigned to this ticket' });
+    }
+    
+    let log = await TicketWorkLog.findOne({
+      developerId: req.user._id,
+      ticketId: req.params.ticketId,
+      date: today
+    });
+    
+    if (!log) {
+      log = await TicketWorkLog.create({
+        developerId: req.user._id,
+        ticketId: req.params.ticketId,
+        projectId: ticket.projectId,
+        date: today,
+        timeBlocks: []
+      });
+    }
+    
+    if (log.isRunning) {
+      return res.status(400).json({ error: 'Timer already running for this ticket' });
+    }
+    
+    const serverNow = new Date();
+    
+    log.startedAt = serverNow;
+    log.isRunning = true;
+    
+    if (!log.timeBlocks) log.timeBlocks = [];
+    
+    log.timeBlocks.push({
+      startTime: serverNow,
+      endTime: null,
+      duration: 0
+    });
+    
+    await log.save();
+    
+    res.json({
+      success: true,
+      worklog: log,
+      serverTimestamp: serverNow.getTime()
+    });
+    
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to start timer' });
+  }
+});
+
+// POST /api/dev/ticket-worklog/pause/:ticketId - Pause timer for a ticket
+router.post('/ticket-worklog/pause/:ticketId', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const log = await TicketWorkLog.findOne({
+      developerId: req.user._id,
+      ticketId: req.params.ticketId,
+      date: today
+    });
+    
+    if (!log) {
+      return res.status(404).json({ error: 'Ticket worklog not found' });
+    }
+    
+    if (!log.isRunning) {
+      return res.status(400).json({ error: 'Timer is not running' });
+    }
+    
+    const serverNow = new Date();
+    const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
+    
+    log.totalTime += diff;
+    
+    if (log.timeBlocks?.length > 0) {
+      const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
+      if (currentBlock && !currentBlock.endTime) {
+        currentBlock.endTime = serverNow;
+        currentBlock.duration = diff;
+      }
+    }
+    
+    log.isRunning = false;
+    log.startedAt = null;
+    
+    await log.save();
+    
+    res.json({
+      success: true,
+      worklog: log,
+      serverTimestamp: serverNow.getTime()
+    });
+    
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to pause timer' });
+  }
+});
+
+// POST /api/dev/ticket-worklog/stop/:ticketId - Stop timer for a ticket
+router.post('/ticket-worklog/stop/:ticketId', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const log = await TicketWorkLog.findOne({
+      developerId: req.user._id,
+      ticketId: req.params.ticketId,
+      date: today
+    });
+    
+    if (!log) {
+      return res.status(404).json({ error: 'Ticket worklog not found' });
+    }
+    
+    if (log.isRunning) {
+      const serverNow = new Date();
+      const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
+      
+      log.totalTime += diff;
+      
+      if (log.timeBlocks?.length > 0) {
+        const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
+        if (currentBlock && !currentBlock.endTime) {
+          currentBlock.endTime = serverNow;
+          currentBlock.duration = diff;
+        }
+      }
+    }
+    
+    log.isRunning = false;
+    log.startedAt = null;
+    
+    await log.save();
+    
+    const serverNow = new Date();
+    
+    res.json({
+      success: true,
+      worklog: log,
+      serverTimestamp: serverNow.getTime()
+    });
+    
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to stop timer' });
+  }
+});
+
+// POST /api/dev/ticket-worklog/description - Save description for a ticket worklog
+router.post('/ticket-worklog/description', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const { ticketId, description } = req.body;
+    const today = new Date().toISOString().split('T')[0];
+    
+    if (!description || !description.trim()) {
+      return res.status(400).json({ error: 'Description is required' });
+    }
+    
+    let log = await TicketWorkLog.findOne({
+      developerId: req.user._id,
+      ticketId: ticketId,
+      date: today
+    });
+    
+    if (!log) {
+      const Ticket = require('../models/Ticket');
+      const ticket = await Ticket.findById(ticketId);
+      
+      log = await TicketWorkLog.create({
+        developerId: req.user._id,
+        ticketId: ticketId,
+        projectId: ticket?.projectId,
+        date: today,
+        description: description.trim(),
+        timeBlocks: []
+      });
+    } else {
+      log.description = description.trim();
+      await log.save();
+    }
+    
+    res.json({
+      success: true,
+      worklog: log
+    });
+    
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to save description' });
+  }
+});
 module.exports = router;

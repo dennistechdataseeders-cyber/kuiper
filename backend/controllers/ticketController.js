@@ -1434,6 +1434,10 @@ exports.updateStatus = async (req, res) => {
 // ASSIGN TICKET
 // ============================================
 
+// ============================================
+// ASSIGN TICKET - WITH EMAIL NOTIFICATION
+// ============================================
+
 exports.assignTicket = async (req, res) => {
   try {
     const { assignedTo } = req.body;
@@ -1443,7 +1447,23 @@ exports.assignTicket = async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
     
-    const oldAssignee = ticket.assignedTo;
+    // Store old assignee for comparison
+    const oldAssigneeId = ticket.assignedTo;
+    let oldAssignee = null;
+    if (oldAssigneeId) {
+      oldAssignee = await User.findById(oldAssigneeId).select('name email');
+    }
+    
+    // Get the new assignee details
+    let newAssignee = null;
+    if (assignedTo) {
+      newAssignee = await User.findById(assignedTo).select('name email');
+      if (!newAssignee) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+    }
+    
+    // Update the ticket
     ticket.assignedTo = assignedTo;
     await ticket.save();
     
@@ -1453,6 +1473,147 @@ exports.assignTicket = async (req, res) => {
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name');
     
+    // ============================================
+    // SEND EMAIL TO NEW ASSIGNEE
+    // ============================================
+    if (assignedTo && newAssignee) {
+      try {
+        const frontendUrl = process.env.FRONTEND_URL || 'http://192.168.1.105:5173';
+        const ticketUrl = `${frontendUrl}/tickets/${ticket._id}`;
+        
+        const emailHtml = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+  </style>
+</head>
+<body style="margin:0; padding:0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background:#f0f4f8; color:#1e293b;">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f0f4f8; padding:48px 20px;">
+    <tr>
+      <td align="center">
+        <table width="550" cellpadding="0" cellspacing="0" border="0" style="max-width:550px; width:100%; background:#ffffff; border-radius:24px; box-shadow:0 4px 12px rgba(0,0,0,0.05); overflow:hidden;">
+          
+          <!-- Header -->
+          <tr>
+            <td style="padding:32px 36px; border-bottom:1px solid #e2e8f0;">
+              <table cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td style="padding-right:12px; width:38px; vertical-align: middle;">
+                    <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1777631279/login_img_oycuic.png" alt="KUIPER" style="width:38px; height:38px; border-radius:10px; display:block;">
+                  </td>
+                  <td style="vertical-align: middle;">
+                    <div style="font-size:20px; font-weight:800; color:#2563eb;">KUIPER</div>
+                    <div style="font-size:8px; font-weight:600; color:#94a3b8; letter-spacing:0.25em; text-transform:uppercase; margin-top:3px;">Engineered for Operations</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Banner -->
+          <tr>
+            <td style="background:#d97706; padding:28px 36px;">
+              <div style="font-size:22px; font-weight:800; color:white; margin-bottom:4px;">📋 Ticket Assigned to You</div>
+              <div style="font-size:13px; color:#fef3c7; font-weight:500;">${ticket.ticketNumber} • ${ticket.title}</div>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:32px 36px;">
+              <p style="font-size:15px; margin:0 0 8px 0; line-height:1.6; color:#1e293b;">Dear <strong>${newAssignee.name}</strong>,</p>
+              <p style="font-size:14px; color:#475569; margin-bottom:24px; line-height:1.7;">
+                You have been assigned to ticket <strong>${ticket.ticketNumber}</strong>.
+                ${oldAssignee ? `This ticket was previously assigned to ${oldAssignee.name}.` : ''}
+                Please review the details and take appropriate action.
+              </p>
+              
+              <!-- Ticket Details -->
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; border-collapse: separate; margin-bottom:24px;">
+                <tr>
+                  <td width="50%" style="padding:14px 18px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Ticket</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">${ticket.ticketNumber}</div>
+                  </td>
+                  <td width="50%" style="padding:14px 18px; border-bottom:1px solid #e2e8f0;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Priority</div>
+                    <div style="font-size:14px; font-weight:700; color:${ticket.priority === 'Urgent' ? '#dc2626' : ticket.priority === 'High' ? '#ea580c' : ticket.priority === 'Medium' ? '#ca8a04' : '#16a34a'}; margin-top:2px;">${ticket.priority}</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td width="50%" style="padding:14px 18px; border-right:1px solid #e2e8f0;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Status</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">
+                      <span style="background:${ticket.status === 'Open' ? '#dbeafe' : ticket.status === 'In Progress' ? '#fef3c7' : ticket.status === 'Resolved' ? '#d1fae5' : '#f1f5f9'}; padding:2px 10px; border-radius:12px;">${ticket.status}</span>
+                    </div>
+                  </td>
+                  <td width="50%" style="padding:14px 18px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Assigned By</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">${req.user.name}</div>
+                  </td>
+                </tr>
+                ${ticket.category ? `
+                <tr>
+                  <td colspan="2" style="padding:14px 18px;">
+                    <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.05em;">Category</div>
+                    <div style="font-size:14px; font-weight:700; color:#1e293b; margin-top:2px;">${ticket.category}${ticket.subcategory ? ` → ${ticket.subcategory}` : ''}${ticket.subItem ? ` → ${ticket.subItem}` : ''}</div>
+                  </td>
+                </tr>
+                ` : ''}
+              </table>
+
+              <!-- Description -->
+              <div style="background:#f8fafc; padding:16px 20px; border-radius:12px; margin-bottom:24px; border-left:4px solid #d97706;">
+                <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Description</div>
+                <p style="margin:0; font-size:13px; line-height:1.6; color:#334155;">${ticket.description}</p>
+              </div>
+
+              <!-- Actions -->
+              <div style="display:flex; gap:12px;">
+                <a href="${ticketUrl}" style="flex:1; text-align:center; background:#2563eb; color:white; text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:14px;">
+                  View Ticket →
+                </a>
+              </div>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background:#f8fafc; padding:24px 36px; text-align:center; border-radius:0 0 24px 24px;">
+              <div style="font-size:10px; color:#94a3b8;">KUIPER CRM • Automated Assignment Notification</div>
+              <div style="font-size:9px; color:#cbd5e1; margin-top:2px;">${new Date().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+        `;
+        
+        // Send email to the new assignee
+        await sendEmail({
+          to: newAssignee.email,
+          subject: `📋 Ticket Assigned to You: ${ticket.ticketNumber} - ${ticket.title}`,
+          html: emailHtml
+        });
+        
+        console.log(`📧 Reassignment email sent to new assignee: ${newAssignee.email}`);
+        
+      } catch (emailError) {
+        console.error('Failed to send reassignment email:', emailError.message);
+      }
+    }
+    
+    // ============================================
+    // SOCKET NOTIFICATIONS
+    // ============================================
     const io = req.app.get('io');
     if (io) {
       io.emit('ticket_assigned', updatedTicket);
@@ -1460,6 +1621,7 @@ exports.assignTicket = async (req, res) => {
       if (assignedTo) {
         io.to(assignedTo.toString()).emit('ticket_assigned', updatedTicket);
         
+        // Create in-app notification for new assignee
         await createNotification(assignedTo, {
           type: 'ticket_assigned',
           ticketId: ticket._id,
@@ -1474,7 +1636,7 @@ exports.assignTicket = async (req, res) => {
     
     res.json(updatedTicket);
   } catch (error) {
-    console.error(error);
+    console.error('Error assigning ticket:', error);
     res.status(500).json({ error: 'Failed to assign ticket' });
   }
 };
