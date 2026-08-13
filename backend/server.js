@@ -100,6 +100,18 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 
 const app = express();
+
+// =========================================================
+// ✅ TRUST PROXY — REQUIRED BEHIND NGINX
+// =========================================================
+// Without this, req.protocol always reports 'http' (the protocol
+// Nginx uses to talk to Node internally) even when the public site
+// is served over https. That bug was causing file URLs saved to the
+// database (e.g. comment attachments) to be built as http://... 
+// instead of https://..., which then failed to open/download for
+// users on the production domain.
+app.set('trust proxy', 1);
+
 const server = http.createServer(app);
 
 /* =========================================================

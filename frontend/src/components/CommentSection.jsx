@@ -163,73 +163,35 @@ const CommentSection = ({
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-  // ============================================
-  // FILE DOWNLOAD FUNCTION - FIXED
-  // ============================================
-  const handleFileDownload = async (file) => {
-    if (!file || !file.url) {
-      toast.error('File URL not available');
+const handleFileDownload = async (file) => {
+  if (!file || !file.url) return toast.error('File URL not available');
+  setDownloading(file.url);
+  try {
+    const isImg = file.type === 'image' || isImageFile(file.originalName || file.filename || '');
+    if (isImg) {
+      window.open(file.url, '_blank');
+      setDownloading(null);
       return;
     }
-
-    setDownloading(file.url);
-    
-    try {
-      // If the file URL is a full URL, use it directly
-      if (file.url.startsWith('http://') || file.url.startsWith('https://')) {
-        // Open in new tab for view/download
-        window.open(file.url, '_blank');
-        toast.success('File opened in new tab');
-        setDownloading(null);
-        return;
-      }
-
-      // For relative URLs, construct the full URL
-      const baseUrl = API_BASE_URL || window.location.origin;
-      const fileUrl = file.url.startsWith('/') ? `${baseUrl}${file.url}` : `${baseUrl}/${file.url}`;
-      
-      // For images, open in new tab
-      if (file.type === 'image' || isImageFile(file.originalName || file.filename || '')) {
-        window.open(fileUrl, '_blank');
-        toast.success('Image opened in new tab');
-        setDownloading(null);
-        return;
-      }
-
-      // For other files, download using fetch
-      const response = await fetch(fileUrl, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status}`);
-      }
-
-      const blob = await response.blob();
-      const downloadUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = downloadUrl;
-      
-      // Use the original filename or generate one from the URL
-      const filename = file.originalName || file.filename || file.url.split('/').pop() || 'download';
-      a.download = filename;
-      
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
-      
-      toast.success('File downloaded successfully!');
-    } catch (error) {
-      console.error('Download error:', error);
-      toast.error('Failed to download file. Please try again.');
-    } finally {
-      setDownloading(null);
-    }
-  };
-
+    const response = await fetch(file.url, { headers: { Authorization: `Bearer ${token}` } });
+    if (!response.ok) throw new Error(`Download failed: ${response.status}`);
+    const blob = await response.blob();
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = file.originalName || file.filename || 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+    toast.success('File downloaded successfully!');
+  } catch (err) {
+    console.error(err);
+    toast.error('Failed to download file. Please try again.');
+  } finally {
+    setDownloading(null);
+  }
+};
   // Determine the API endpoint based on type
   const getEndpoint = () => {
     if (type === 'project') {

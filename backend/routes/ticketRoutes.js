@@ -168,8 +168,11 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
       });
     }
     
-    // Construct the URL for the uploaded file
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    // ✅ FIX: Construct the URL using HTTPS
+    // Check if we're behind a proxy (production) or running locally
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.get('host');
+    const baseUrl = `${protocol}://${host}`;
     const fileUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
     
     // Get file size in MB for response

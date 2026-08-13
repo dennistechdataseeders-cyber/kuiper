@@ -405,20 +405,7 @@ const Attendance = ({ userId, token }) => {
               </div>
             </div>
 
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Late</p>
-                  <p className="text-2xl font-bold text-amber-600 mt-0.5">{monthlyStats?.lateDays || 0}</p>
-                  <p className="text-[10px] text-slate-400 font-medium">
-                    {monthlyStats?.workingDays ? Math.round((monthlyStats.lateDays / monthlyStats.workingDays) * 100) : 0}% of days
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-                  <ClockAlert size={20} className="text-amber-600" />
-                </div>
-              </div>
-            </div>
+       
 
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
