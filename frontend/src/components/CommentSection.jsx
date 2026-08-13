@@ -1,4 +1,4 @@
-// frontend/src/components/CommentSection.jsx - UPDATED with file download fix
+// frontend/src/components/CommentSection.jsx - UPDATED WITH FILE DOWNLOAD FIX
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -13,7 +13,7 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const CommentSection = ({ 
-  type, // 'project' or 'feed'
+  type, // 'project' or 'feed' or 'ticket'
   entityId, 
   userRole, 
   userId,
@@ -163,39 +163,102 @@ const CommentSection = ({
     return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-const handleFileDownload = async (file) => {
-  if (!file || !file.url) return toast.error('File URL not available');
-  setDownloading(file.url);
-  try {
-    const isImg = file.type === 'image' || isImageFile(file.originalName || file.filename || '');
-    if (isImg) {
-      window.open(file.url, '_blank');
-      setDownloading(null);
+  // ✅ FIX: Enhanced file download handler with proper URL construction
+  const handleFileDownload = async (file, e) => {
+    if (e) e.stopPropagation();
+    
+    if (!file || !file.url) {
+      toast.error('File URL not available');
       return;
     }
-    const response = await fetch(file.url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!response.ok) throw new Error(`Download failed: ${response.status}`);
-    const blob = await response.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = file.originalName || file.filename || 'download';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.URL.revokeObjectURL(downloadUrl);
-    toast.success('File downloaded successfully!');
-  } catch (err) {
-    console.error(err);
-    toast.error('Failed to download file. Please try again.');
-  } finally {
-    setDownloading(null);
-  }
-};
+
+    setDownloading(file.url);
+    
+    try {
+      // If the file URL is already a full URL, use it directly
+      if (file.url.startsWith('http://') || file.url.startsWith('https://')) {
+        // For images, open in new tab
+        if (file.type === 'image' || isImageFile(file.originalName || file.filename || '')) {
+          window.open(file.url, '_blank');
+          toast.success('Image opened in new tab');
+          setDownloading(null);
+          return;
+        }
+        
+        // For other files, download via fetch
+        const response = await fetch(file.url, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = file.originalName || file.filename || file.url.split('/').pop() || 'download';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        toast.success('File downloaded successfully!');
+      } else {
+        // For relative URLs, construct the full URL
+        const baseUrl = API_BASE_URL || window.location.origin;
+        // Ensure we use HTTPS in production
+        const cleanBaseUrl = baseUrl.replace('http://', 'https://');
+        const fileUrl = file.url.startsWith('/') ? `${cleanBaseUrl}${file.url}` : `${cleanBaseUrl}/${file.url}`;
+        
+        // For images, open in new tab
+        if (file.type === 'image' || isImageFile(file.originalName || file.filename || '')) {
+          window.open(fileUrl, '_blank');
+          toast.success('Image opened in new tab');
+          setDownloading(null);
+          return;
+        }
+        
+        // For other files, download using fetch
+        const response = await fetch(fileUrl, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.status}`);
+        }
+
+        const blob = await response.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = file.originalName || file.filename || file.url.split('/').pop() || 'download';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        toast.success('File downloaded successfully!');
+      }
+    } catch (error) {
+      console.error('Download error:', error);
+      toast.error('Failed to download file. Please try again.');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   // Determine the API endpoint based on type
   const getEndpoint = () => {
     if (type === 'project') {
       return `${API_BASE_URL}/api/comments/projects/${entityId}/comments`;
+    } else if (type === 'feed') {
+      return `${API_BASE_URL}/api/comments/feeds/${entityId}/comments`;
+    } else if (type === 'ticket') {
+      return `${API_BASE_URL}/api/tickets/${entityId}/comments`;
     }
     return `${API_BASE_URL}/api/comments/feeds/${entityId}/comments`;
   };
@@ -207,16 +270,15 @@ const handleFileDownload = async (file) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('📝 Fetched comments:', res.data.comments);
+      // Handle different response formats
+      let commentsData = [];
+      if (type === 'ticket') {
+        commentsData = res.data.comments || [];
+      } else {
+        commentsData = res.data.comments || [];
+      }
       
-      // Debug: Check if any comments have files
-      res.data.comments?.forEach((comment, idx) => {
-        if (comment.files && comment.files.length > 0) {
-          console.log(`📎 Comment ${idx} has ${comment.files.length} file(s):`, comment.files);
-        }
-      });
-      
-      setComments(res.data.comments || []);
+      setComments(commentsData);
     } catch (err) {
       console.error('Error fetching comments:', err);
       toast.error('Failed to load comments');
@@ -372,10 +434,17 @@ const handleFileDownload = async (file) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setComments(prev => [...prev, res.data.comment]);
+      // Handle different response formats
+      let newCommentData = res.data.comment || res.data;
+      setComments(prev => [...prev, newCommentData]);
       setNewComment('');
       setSelectedFiles([]);
       setFilePreviews([]);
+      
+      // Reset textarea height
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
       
       if (uploadedFiles.length > 0) {
         toast.success(`Comment added with ${uploadedFiles.length} attachment(s)`);
@@ -444,15 +513,11 @@ const handleFileDownload = async (file) => {
     return isOwn ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200';
   };
 
-  // ============================================
-  // RENDER FILE ATTACHMENTS WITH DOWNLOAD FIX
-  // ============================================
+  // ✅ UPDATED: Render file attachments with download buttons
   const renderFileAttachments = (comment) => {
     const hasFiles = comment.files && comment.files.length > 0;
     
     if (!hasFiles) return null;
-    
-    console.log(`📎 Rendering ${comment.files.length} file(s) for comment:`, comment.files);
     
     return (
       <div className="mt-3 space-y-2">
@@ -467,35 +532,29 @@ const handleFileDownload = async (file) => {
           
           // If no URL, skip this file
           if (!fileUrl) {
-            console.warn(`⚠️ File ${idx} has no URL:`, file);
             return null;
           }
 
           const isDownloading = downloading === fileUrl;
 
-          // Construct full URL if needed
-          let fullUrl = fileUrl;
-          if (!fileUrl.startsWith('http://') && !fileUrl.startsWith('https://')) {
-            const baseUrl = API_BASE_URL || window.location.origin;
-            fullUrl = fileUrl.startsWith('/') ? `${baseUrl}${fileUrl}` : `${baseUrl}/${fileUrl}`;
-          }
-          
           return (
-            <div key={idx} className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group">
+            <div 
+              key={idx} 
+              className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group"
+            >
               {/* File Icon / Preview */}
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden">
+              <div 
+                className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden cursor-pointer"
+                onClick={(e) => handleFileDownload(file, e)}
+              >
                 {isImage ? (
                   <img 
-                    src={fullUrl} 
+                    src={fileUrl} 
                     alt={displayName}
                     className="w-full h-full object-cover rounded-lg"
                     onError={(e) => {
                       e.target.onerror = null;
                       e.target.style.display = 'none';
-                      const parent = e.target.parentElement;
-                      if (parent) {
-                        parent.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-slate-400"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>`;
-                      }
                     }}
                   />
                 ) : (
@@ -515,11 +574,11 @@ const handleFileDownload = async (file) => {
                 </div>
               </div>
               
-              {/* Actions - Download for everyone */}
+              {/* Download and View Buttons */}
               <div className="flex items-center gap-1">
                 {isImage && (
                   <button
-                    onClick={() => handleFileDownload(file)}
+                    onClick={(e) => handleFileDownload(file, e)}
                     disabled={isDownloading}
                     className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all disabled:opacity-50"
                     title="View image"
@@ -532,7 +591,7 @@ const handleFileDownload = async (file) => {
                   </button>
                 )}
                 <button
-                  onClick={() => handleFileDownload(file)}
+                  onClick={(e) => handleFileDownload(file, e)}
                   disabled={isDownloading}
                   className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all disabled:opacity-50"
                   title="Download file"
@@ -576,7 +635,7 @@ const handleFileDownload = async (file) => {
             
             return (
               <div
-                key={comment._id}
+                key={comment._id || comment.createdAt}
                 className={`p-4 rounded-xl border ${getCommenterClass(comment)} transition-all`}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -610,9 +669,7 @@ const handleFileDownload = async (file) => {
                       />
                     )}
                     
-                    {/* ============================================
-                        RENDER FILE ATTACHMENTS WITH DOWNLOAD
-                        ============================================ */}
+                    {/* ✅ File Attachments with Download */}
                     {hasFiles && renderFileAttachments(comment)}
                   </div>
                   
@@ -679,6 +736,7 @@ const handleFileDownload = async (file) => {
           <div className="flex items-end gap-2">
             <div className="flex-1">
               <textarea
+                ref={textareaRef}
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Write a comment... (attachments supported)"

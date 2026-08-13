@@ -1,4 +1,4 @@
-// frontend/src/pages/TicketDetails.jsx - UPDATED
+// frontend/src/pages/TicketDetails.jsx - UPDATED WITH CLOSED TICKET COMMENT DISABLE
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -8,7 +8,7 @@ import {
   CheckCircle, XCircle, Clock, Image, X, AlertCircle, 
   Loader2, Eye, Download, UploadCloud, GitFork, Paperclip,
   File, FileText, FileArchive, FileSpreadsheet, FileVideo, FileAudio,
-  FileCode, FileJson, Tag, Layers, Building2, Briefcase
+  FileCode, FileJson, Tag, Layers, Building2, Briefcase,Lock
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -49,6 +49,11 @@ const TicketDetails = () => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // ============================================
+  // ✅ CHECK IF TICKET IS CLOSED
+  // ============================================
+  const isTicketClosed = ticket?.status === 'Closed';
 
   // ============================================
   // FILE CONFIGURATION
@@ -163,7 +168,7 @@ const TicketDetails = () => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    return (bytes / (1024 * 1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
   const handleFileDownload = (file) => {
@@ -427,11 +432,9 @@ const TicketDetails = () => {
     const validPreviews = [];
 
     files.forEach(file => {
-      // Check if it's an image file
       const isImage = file.type?.startsWith('image/') || isImageFile(file.name);
       
       if (isImage) {
-        // For images, check size limit (5MB)
         if (file.size > MAX_IMAGE_SIZE) {
           toast.error(`Image "${file.name}" exceeds 5MB limit`);
           return;
@@ -449,7 +452,6 @@ const TicketDetails = () => {
           id: Date.now() + Math.random().toString(36).substr(2, 9)
         });
       } else if (isAllowedFile(file)) {
-        // For other allowed files (documents, etc.)
         if (file.size > MAX_FILE_SIZE) {
           toast.error(`File "${file.name}" exceeds 50MB limit`);
           return;
@@ -500,7 +502,12 @@ const TicketDetails = () => {
 
   useEffect(() => {
     const handlePaste = (e) => {
-      // Only process paste if the textarea is focused
+      // ✅ Skip paste if ticket is closed
+      if (isTicketClosed) {
+        toast.error('Cannot add comments to a closed ticket');
+        return;
+      }
+      
       if (document.activeElement !== textareaRef.current) return;
       
       const items = e.clipboardData?.items;
@@ -513,7 +520,6 @@ const TicketDetails = () => {
         if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
           if (file) {
-            // Validate file size (5MB max for images)
             if (file.size > MAX_IMAGE_SIZE) {
               toast.error(`Image exceeds 5MB limit`);
               continue;
@@ -524,27 +530,35 @@ const TicketDetails = () => {
       }
       
       if (imageFiles.length > 0) {
-        e.preventDefault(); // Prevent pasting the image as text
+        e.preventDefault();
         processFiles(imageFiles);
         toast.success(`${imageFiles.length} image(s) pasted successfully!`);
       }
     };
     
-    // Add paste event listener
     document.addEventListener('paste', handlePaste);
     
     return () => {
       document.removeEventListener('paste', handlePaste);
     };
-  }, []);
+  }, [isTicketClosed]);
 
   const handleFileSelect = (e) => {
+    // ✅ Skip file select if ticket is closed
+    if (isTicketClosed) {
+      toast.error('Cannot add files to a closed ticket');
+      e.target.value = '';
+      return;
+    }
+    
     const files = Array.from(e.target.files);
     processFiles(files);
     e.target.value = '';
   };
 
   const handleDragOver = (e) => {
+    // ✅ Prevent drag if ticket is closed
+    if (isTicketClosed) return;
     e.preventDefault();
     setIsDragging(true);
   };
@@ -555,6 +569,11 @@ const TicketDetails = () => {
   };
 
   const handleDrop = (e) => {
+    // ✅ Skip drop if ticket is closed
+    if (isTicketClosed) {
+      toast.error('Cannot add files to a closed ticket');
+      return;
+    }
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
@@ -620,12 +639,10 @@ const TicketDetails = () => {
         })
         .finally(() => {
           completed++;
-          // Start the next upload in the queue
           uploadNext(concurrencyLimit + index - 1);
         });
       };
       
-      // Start the first batch of uploads
       for (let i = 0; i < Math.min(concurrencyLimit, files.length); i++) {
         uploadNext(i);
       }
@@ -636,7 +653,12 @@ const TicketDetails = () => {
   const addComment = async (e) => {
     if (e) e.preventDefault();
     
-    // Prevent multiple submissions
+    // ✅ Prevent comment submission if ticket is closed
+    if (isTicketClosed) {
+      toast.error('Cannot add comments to a closed ticket');
+      return;
+    }
+    
     if (isSending) return;
     
     if (!newComment.trim() && selectedFiles.length === 0) {
@@ -669,7 +691,6 @@ const TicketDetails = () => {
       setSelectedFiles([]);
       setFilePreviews([]);
       
-      // Reset textarea height
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -756,6 +777,13 @@ const TicketDetails = () => {
     (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead');
 
   const handleTextareaKeyDown = (e) => {
+    // ✅ Prevent Enter key if ticket is closed
+    if (isTicketClosed) {
+      e.preventDefault();
+      toast.error('Cannot add comments to a closed ticket');
+      return;
+    }
+    
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       if ((newComment.trim() || selectedFiles.length > 0) && !isSending) {
@@ -764,7 +792,6 @@ const TicketDetails = () => {
     }
   };
 
-  // Auto-resize textarea
   const handleTextareaChange = (e) => {
     setNewComment(e.target.value);
     if (textareaRef.current) {
@@ -790,8 +817,6 @@ const TicketDetails = () => {
   
   // ============================================
   // CHECK IF USER CAN CLOSE THE TICKET
-  // Admin can close ANY ticket
-  // Others can only close if they are the creator
   // ============================================
   const canCloseTicket = 
     userRole === 'Admin' || 
@@ -834,14 +859,17 @@ const TicketDetails = () => {
                   {ticket.files.length} file(s)
                 </span>
               )}
+              {/* ✅ Show closed badge prominently */}
+              {isTicketClosed && (
+                <span className="inline-flex px-2 sm:px-3 py-0.5 sm:py-1 text-[8px] sm:text-xs font-bold rounded-md bg-red-600 text-white">
+                  🔒 CLOSED
+                </span>
+              )}
             </div>
             <h1 className="text-xl sm:text-3xl font-bold text-gray-900 tracking-tight break-words">{ticket.title}</h1>
           </div>
 
           <div className="flex gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto">
-            {/* ============================================
-                CLOSE BUTTON - Admin can close ANY ticket
-                ============================================ */}
             {canCloseTicket && ticket.status !== 'Closed' && (
               <button 
                 onClick={closeTicket} 
@@ -879,7 +907,7 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Ticket Category & Subcategory Info Cards - Stack on mobile */}
+      {/* Ticket Category & Subcategory Info Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
           <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
@@ -940,7 +968,7 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Ticket Attachments Section - Stack on mobile */}
+      {/* Ticket Attachments Section */}
       {hasTicketAttachments && (
         <div className="mb-4 sm:mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
           <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 sm:mb-4 flex items-center gap-2">
@@ -999,7 +1027,7 @@ const TicketDetails = () => {
         </div>
       )}
 
-      {/* Status Progress Map - Responsive */}
+      {/* Status Progress Map */}
       <div className="mb-4 sm:mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 overflow-x-auto">
         <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-4 sm:mb-6 flex items-center gap-2">
           <CheckCircle size={isMobile ? 14 : 16} className="text-blue-600" />
@@ -1019,6 +1047,7 @@ const TicketDetails = () => {
             {statusFlow.map((status, index) => {
               const isCompleted = index <= currentStatusIndex;
               const isCurrent = status === ticket.status;
+              const isClosed = status === 'Closed' && isCompleted;
               
               let statusDate = null;
               if (status === 'Open' && ticket.createdAt) {
@@ -1049,40 +1078,40 @@ const TicketDetails = () => {
                     flex: '1 1 0%'
                   }}
                 >
-                  <div className="relative z-10">
-                    <div 
-                      className={`
-                        w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center 
-                        text-[10px] sm:text-sm font-bold transition-all duration-300 cursor-pointer
-                        ${isCompleted 
-                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
-                          : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-                        }
-                        ${isCurrent 
-                          ? 'ring-2 sm:ring-4 ring-blue-100 ring-offset-1 sm:ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
-                          : ''
-                        }
-                        hover:scale-110 hover:shadow-xl
-                      `}
-                    >
-                      {isCompleted ? <CheckCircle size={isMobile ? 10 : 16} className="text-white" /> : index + 1}
-                    </div>
-                  </div>
-                  
-                  <div className="mt-1 sm:mt-2 text-center min-h-[30px] sm:min-h-[40px] flex flex-col items-center">
-                    <p className={`
-                      text-[8px] sm:text-xs font-semibold transition-colors
-                      ${isCompleted ? 'text-green-700' : 'text-gray-400'}
-                      ${isCurrent ? 'text-blue-600 font-bold' : ''}
-                    `}>
-                      {isMobile ? status.substring(0, 1) : status}
-                    </p>
-                    {isCurrent && (
-                      <span className="mt-0.5 text-[5px] sm:text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
-                        ●
-                      </span>
-                    )}
-                  </div>
+                 <div className="relative z-10">
+  <div 
+    className={`
+      w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center 
+      text-[10px] sm:text-sm font-bold transition-all duration-300 cursor-pointer
+      ${isCompleted 
+        ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
+        : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
+      }
+      ${isCurrent 
+        ? 'ring-2 sm:ring-4 ring-blue-100 ring-offset-1 sm:ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
+        : ''
+      }
+      hover:scale-110 hover:shadow-xl
+    `}
+  >
+    {isCompleted ? <CheckCircle size={isMobile ? 10 : 16} className="text-white" /> : index + 1}
+  </div>
+</div>
+
+<div className="mt-1 sm:mt-2 text-center min-h-[30px] sm:min-h-[40px] flex flex-col items-center">
+  <p className={`
+    text-[8px] sm:text-xs font-semibold transition-colors
+    ${isCompleted ? 'text-green-700' : 'text-gray-400'}
+    ${isCurrent ? 'text-blue-600 font-bold' : ''}
+  `}>
+    {isMobile ? status.substring(0, 1) : status}
+  </p>
+  {isCurrent && (
+    <span className="mt-0.5 text-[5px] sm:text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
+      ●
+    </span>
+  )}
+</div>
                   {formattedDate && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-gray-900 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-[10px] font-medium whitespace-nowrap shadow-lg z-20 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-gray-900">
                       <div className="flex flex-col items-center">
@@ -1107,14 +1136,14 @@ const TicketDetails = () => {
             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{ticket.description}</p>
           </div>
           
-          {/* Chat Container Window - Full width on mobile */}
+          {/* Chat Container Window */}
           <div 
             className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden flex flex-col relative"
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
           >
-            {isDragging && (
+            {isDragging && !isTicketClosed && (
               <div className="absolute inset-0 bg-blue-600/10 backdrop-blur-[2px] border-2 border-dashed border-blue-500 z-50 flex flex-col items-center justify-center transition-all pointer-events-none p-4">
                 <div className="bg-white p-3 sm:p-4 rounded-full shadow-lg flex items-center justify-center animate-bounce mb-2">
                   <UploadCloud size={isMobile ? 24 : 32} className="text-blue-600" />
@@ -1131,7 +1160,9 @@ const TicketDetails = () => {
                   Conversation ({ticket.comments?.length || 0})
                 </h2>
               </div>
-              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 hidden sm:block">Discuss this ticket with the team or drag files to upload</p>
+              <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5 sm:mt-1 hidden sm:block">
+                {isTicketClosed ? '🔒 This ticket is closed. No new comments can be added.' : 'Discuss this ticket with the team or drag files to upload'}
+              </p>
             </div>
             
             <div className="flex-1 max-h-[300px] sm:max-h-[400px] overflow-y-auto p-3 sm:p-6 space-y-3 sm:space-y-4 bg-gray-50/50">
@@ -1245,12 +1276,14 @@ const TicketDetails = () => {
                 <div className="flex flex-col items-center justify-center py-8 sm:py-12 text-center">
                   <MessageSquare size={isMobile ? 32 : 48} className="text-gray-300 mb-2" />
                   <p className="text-xs sm:text-sm text-gray-500 font-semibold">No comments yet</p>
-                  <p className="text-[10px] sm:text-xs text-gray-400 max-w-xs mx-auto">Start the conversation by typing a message below or dropping a file.</p>
+                  <p className="text-[10px] sm:text-xs text-gray-400 max-w-xs mx-auto">
+                    {isTicketClosed ? 'This ticket is closed.' : 'Start the conversation by typing a message below or dropping a file.'}
+                  </p>
                 </div>
               )}
             </div>
             
-            {/* Form Box - Responsive */}
+            {/* ✅ Comment Form - Disabled when ticket is closed */}
             <div className="border-t border-gray-200 bg-white p-2 sm:p-4">
               {filePreviews.length > 0 && (
                 <div className="mb-2 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-gray-50 rounded-lg border border-gray-200">
@@ -1291,10 +1324,12 @@ const TicketDetails = () => {
                   value={newComment}
                   onChange={handleTextareaChange}
                   onKeyDown={handleTextareaKeyDown}
-                  placeholder={isMobile ? "Write..." : "Write your message... (paste images directly)"}
-                  className="flex-1 bg-transparent px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 outline-none resize-none self-center min-h-[32px] sm:min-h-[38px] max-h-[80px] sm:max-h-[120px]"
+                  placeholder={isTicketClosed ? "🔒 This ticket is closed" : isMobile ? "Write..." : "Write your message... (paste images directly)"}
+                  className={`flex-1 bg-transparent px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm text-gray-700 outline-none resize-none self-center min-h-[32px] sm:min-h-[38px] max-h-[80px] sm:max-h-[120px] ${
+                    isTicketClosed ? 'opacity-50 cursor-not-allowed text-gray-400' : ''
+                  }`}
                   rows={1}
-                  disabled={isSending}
+                  disabled={isSending || isTicketClosed}
                 />
                 
                 <div className="flex items-center self-center h-full px-0.5 sm:px-1 gap-0.5 sm:gap-1">
@@ -1308,9 +1343,13 @@ const TicketDetails = () => {
                   <button
                     type="button"
                     onClick={() => fileInputRef.current.click()}
-                    disabled={uploadingFiles || isSending}
-                    className="p-1.5 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-200/70 rounded-md transition-colors flex items-center justify-center disabled:opacity-50"
-                    title="Attach files"
+                    disabled={uploadingFiles || isSending || isTicketClosed}
+                    className={`p-1.5 sm:p-2 rounded-md transition-colors flex items-center justify-center disabled:opacity-50 ${
+                      isTicketClosed 
+                        ? 'text-gray-400 cursor-not-allowed' 
+                        : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200/70'
+                    }`}
+                    title={isTicketClosed ? "Cannot attach files to closed ticket" : "Attach files"}
                   >
                     <Paperclip size={isMobile ? 14 : 18} />
                   </button>
@@ -1319,28 +1358,48 @@ const TicketDetails = () => {
                 <button
                   type="button"
                   onClick={() => addComment()}
-                  disabled={(!newComment.trim() && selectedFiles.length === 0) || uploadingFiles || isSending}
-                  className="px-2 sm:px-4 py-1.5 sm:py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 text-white rounded-md transition-all flex items-center gap-1 font-medium text-[10px] sm:text-sm shadow-sm h-[28px] sm:h-[36px] self-center disabled:shadow-none"
+                  disabled={(!newComment.trim() && selectedFiles.length === 0) || uploadingFiles || isSending || isTicketClosed}
+                  className={`px-2 sm:px-4 py-1.5 sm:py-2 rounded-md transition-all flex items-center gap-1 font-medium text-[10px] sm:text-sm shadow-sm h-[28px] sm:h-[36px] self-center ${
+                    isTicketClosed 
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' 
+                      : 'bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:text-gray-400 text-white'
+                  }`}
                 >
                   {isSending ? <Loader2 size={isMobile ? 12 : 16} className="animate-spin" /> : <Send size={isMobile ? 12 : 15} />}
                   <span className="hidden sm:inline">{isSending ? 'Sending...' : 'Send'}</span>
                 </button>
               </div>
               
-              <div className="flex flex-wrap justify-between text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 px-0.5 sm:px-1">
-                <span className="hidden sm:inline">Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
-                <span className="text-[8px] sm:text-[11px]">
-                  <button type="button" onClick={() => fileInputRef.current.click()} className="text-blue-500 hover:underline">
-                    Attach
-                  </button>
-                  {' '}(5MB images • 50MB files • <strong>Paste images with Ctrl+V</strong>)
-                </span>
-              </div>
+              {/* ✅ Closed ticket message */}
+              {isTicketClosed && (
+                <div className="mt-1.5 sm:mt-2 text-center">
+                  <span className="text-xs font-medium text-red-600 flex items-center justify-center gap-1.5">
+                    <Lock size={14} />
+                    This ticket is closed. Comments are disabled.
+                  </span>
+                </div>
+              )}
+              
+              {!isTicketClosed && (
+                <div className="flex flex-wrap justify-between text-[9px] sm:text-[11px] text-gray-400 mt-1 sm:mt-2 px-0.5 sm:px-1">
+                  <span className="hidden sm:inline">Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
+                  <span className="text-[8px] sm:text-[11px]">
+                    <button 
+                      type="button" 
+                      onClick={() => !isTicketClosed && fileInputRef.current.click()} 
+                      className={`${isTicketClosed ? 'text-gray-400 cursor-not-allowed' : 'text-blue-500 hover:underline'}`}
+                    >
+                      Attach
+                    </button>
+                    {' '}(5MB images • 50MB files • <strong>Paste images with Ctrl+V</strong>)
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </div>
         
-        {/* Right Info Sidebar Segment - Stack on mobile */}
+        {/* Right Info Sidebar Segment */}
         <div className="space-y-4 sm:space-y-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
             <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-xs sm:text-sm uppercase tracking-wider">Ticket Metadata</h3>
@@ -1431,8 +1490,8 @@ const TicketDetails = () => {
             </div>
           </div>
           
-          {/* Assignment Management - Responsive */}
-          {userRole !== 'Client' && canAssignDeveloper && (
+          {/* Assignment Management */}
+          {userRole !== 'Client' && canAssignDeveloper && ticket.status !== 'Closed' && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
               <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2 text-xs sm:text-sm uppercase tracking-wider">
                 <Users size={isMobile ? 14 : 16} className="text-gray-500" /> Assignment
@@ -1456,7 +1515,7 @@ const TicketDetails = () => {
                     : 'Ticket is unassigned.'}
                 </div>
               )}
-              {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') && (
+              {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') && ticket.status !== 'Closed' && (
                 <select 
                   onChange={(e) => assignDeveloper(e.target.value)} 
                   disabled={assigning} 
@@ -1473,6 +1532,24 @@ const TicketDetails = () => {
                 <div className="mt-2 text-[10px] sm:text-xs text-green-600 font-medium flex items-center gap-1.5">
                   <CheckCircle size={isMobile ? 12 : 14} /> You are assigned.
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* Show closed message in sidebar */}
+          {isTicketClosed && (
+            <div className="bg-red-50 rounded-lg shadow-sm border border-red-200 p-4 sm:p-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Lock size={isMobile ? 16 : 20} className="text-red-600" />
+                <h3 className="font-semibold text-red-700 text-xs sm:text-sm uppercase tracking-wider">Ticket Closed</h3>
+              </div>
+              <p className="text-xs text-red-600">
+                This ticket has been closed. No further comments or changes can be made.
+              </p>
+              {ticket.closedAt && (
+                <p className="text-[10px] text-red-500 mt-2">
+                  Closed on: {new Date(ticket.closedAt).toLocaleString()}
+                </p>
               )}
             </div>
           )}

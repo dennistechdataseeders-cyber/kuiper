@@ -265,7 +265,51 @@ if (!isProduction) {
 }
 
 // Route static access parameters for uploaded document assets
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    // Set proper content type based on file extension
+    const ext = path.extname(filePath).toLowerCase();
+    const mimeTypes = {
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.png': 'image/png',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.pdf': 'application/pdf',
+      '.doc': 'application/msword',
+      '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      '.xls': 'application/vnd.ms-excel',
+      '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      '.txt': 'text/plain',
+      '.csv': 'text/csv',
+      '.zip': 'application/zip',
+      '.rar': 'application/x-rar-compressed',
+      '.json': 'application/json',
+      '.xml': 'application/xml',
+      '.mp4': 'video/mp4',
+      '.mp3': 'audio/mpeg',
+      '.js': 'application/javascript',
+      '.py': 'text/x-python',
+      '.exe': 'application/octet-stream',
+    };
+    
+    const contentType = mimeTypes[ext] || 'application/octet-stream';
+    res.setHeader('Content-Type', contentType);
+    
+    // For non-images, force download
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
+    if (!imageExtensions.includes(ext)) {
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
+    }
+    
+    // CORS headers for file access
+    res.setHeader('Access-Control-Allow-Origin', 'https://kuiperapp.co.in');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition');
+  }
+}));
 
 /* =========================================================
    ENV RUNTIME PORT VALIDATIONS

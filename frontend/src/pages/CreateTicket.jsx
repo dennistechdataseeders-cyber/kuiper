@@ -1,3 +1,5 @@
+// frontend/src/pages/CreateTicket.jsx - UPDATED WITH CLIENT FIX
+
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
@@ -440,7 +442,16 @@ const CreateTicket = () => {
     return uploadedUrls;
   };
 
+  // ✅ FIX: Only fetch department users if NOT a client
   const fetchDepartmentUsers = async (category, subcategory = '') => {
+    // ✅ Skip if user is Client - they don't need to assign tickets
+    if (isClient) {
+      setDepartmentUsers([]);
+      setSelectedPerson('');
+      setLoadingDepartmentUsers(false);
+      return;
+    }
+
     setLoadingDepartmentUsers(true);
     setDepartmentUsers([]);
     setSelectedPerson('');
@@ -475,50 +486,45 @@ const CreateTicket = () => {
 
       console.log(`🔍 Fetching users with role: ${roleToFetch} for category: ${category}`);
 
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+      // ✅ Use the dedicated endpoint for role-based user fetching
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${roleToFetch}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      console.log('📊 All users from API:', res.data.length);
+      console.log(`✅ Found ${res.data.length} users with role ${roleToFetch}:`, res.data.map(u => u.name));
 
-      const users = res.data.filter(u => 
-        u.role && u.role.toLowerCase() === roleToFetch.toLowerCase()
-      );
+      setDepartmentUsers(res.data);
 
-      console.log(`✅ Found ${users.length} users with role ${roleToFetch}:`, users.map(u => u.name));
-
-      setDepartmentUsers(users);
-
-      if (users.length === 1) {
-        setSelectedPerson(users[0]._id);
-        setFormData(prev => ({ ...prev, assignedTo: users[0]._id }));
-        console.log('✅ Auto-selected:', users[0].name);
+      if (res.data.length === 1) {
+        setSelectedPerson(res.data[0]._id);
+        setFormData(prev => ({ ...prev, assignedTo: res.data[0]._id }));
+        console.log('✅ Auto-selected:', res.data[0].name);
       }
 
     } catch (error) {
+      console.error('Error fetching department users:', error);
       setDepartmentUsers([]);
     } finally {
       setLoadingDepartmentUsers(false);
     }
   };
 
+  // ✅ Only fetch department users when category changes AND user is not client
   useEffect(() => {
-    if (!isClient) {
-      setFormData(prev => ({
-        ...prev,
-        isInternal: true
-      }));
-    }
-  }, [isClient]);
-
-  useEffect(() => {
-    if (formData.category) {
+    if (!isClient && formData.category) {
       fetchDepartmentUsers(formData.category, formData.subcategory);
     } else {
       setDepartmentUsers([]);
       setSelectedPerson('');
     }
-  }, [formData.category, formData.subcategory]);
+  }, [formData.category, formData.subcategory, isClient]);
+
+  // ✅ Only fetch developers if user is not client
+  useEffect(() => {
+    if (!isClient && isSpecialSubcategory) {
+      fetchDevelopers();
+    }
+  }, [isSpecialSubcategory, isClient]);
 
   const getSubcategories = () => {
     if (!formData.category) return [];
@@ -559,9 +565,10 @@ const CreateTicket = () => {
       (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others');
   };
 
+  // ✅ Only show person dropdown if user is NOT client
   const shouldShowPersonDropdown = () => {
-    if (!formData.category) return false;
     if (isClient) return false;
+    if (!formData.category) return false;
     if (formData.category === 'Production') {
       if (formData.subcategory && 
           formData.subcategory !== 'Feasibility' && 
@@ -615,12 +622,6 @@ const CreateTicket = () => {
         projectId: null,
         feedId: null
       }));
-    }
-  }, [isSpecialSubcategory]);
-
-  useEffect(() => {
-    if (isSpecialSubcategory) {
-      fetchDevelopers();
     }
   }, [isSpecialSubcategory]);
 
@@ -687,7 +688,7 @@ const CreateTicket = () => {
   const fetchDevelopers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/developers`, {
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/Developer`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setDevelopers(res.data || []);
@@ -697,26 +698,24 @@ const CreateTicket = () => {
     }
   };
 
-const fetchFeeds = async (projectId) => {
-  if (!projectId) {
-    setFeeds([]);
-    return;
-  }
-  
-  try {
-    const token = localStorage.getItem('token');
-    const res = await axios.get(`${API_BASE_URL}/api/tickets/feeds/${projectId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    // The backend now returns [{ _id: 'general', name: '📁 General (Whole Project)' }, ...feeds]
-    console.log('📋 Feeds received:', res.data);
-    setFeeds(res.data);
-  } catch (error) {
-    console.error('Error fetching feeds:', error);
-    // Set default feeds with general option if API fails
-    setFeeds([{ _id: 'general', name: '📁 General (Whole Project)' }]);
-  }
-};
+  const fetchFeeds = async (projectId) => {
+    if (!projectId) {
+      setFeeds([]);
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/tickets/feeds/${projectId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log('📋 Feeds received:', res.data);
+      setFeeds(res.data);
+    } catch (error) {
+      console.error('Error fetching feeds:', error);
+      setFeeds([{ _id: 'general', name: '📁 General (Whole Project)' }]);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -731,6 +730,7 @@ const fetchFeeds = async (projectId) => {
       return;
     }
     
+    // ✅ Skip person dropdown validation for clients
     if (shouldShowPersonDropdown() && !selectedPerson && !isSpecialSubcategory) {
       const categoryName = formData.category || 'department';
       toast.error(`Please select a ${categoryName} team member for this ticket`);
@@ -754,7 +754,8 @@ const fetchFeeds = async (projectId) => {
       
       let finalAssignedTo = formData.assignedTo || null;
       
-      if (shouldShowPersonDropdown() && selectedPerson && !isSpecialSubcategory) {
+      // ✅ Only set assignedTo if user is not client
+      if (shouldShowPersonDropdown() && selectedPerson && !isSpecialSubcategory && !isClient) {
         finalAssignedTo = selectedPerson;
       }
       
@@ -853,8 +854,6 @@ const fetchFeeds = async (projectId) => {
             </div>
 
             <div className="p-8 space-y-8">
-              
-
               {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
                   <div className="p-2 bg-purple-200 rounded-lg">
@@ -932,7 +931,6 @@ const fetchFeeds = async (projectId) => {
                   <Layers size={18} className="text-blue-600" />
                   <label className="text-sm font-semibold text-slate-700">
                     Category & Subcategory <span className="text-red-500">*</span>
-                   
                   </label>
                 </div>
                 
@@ -1060,7 +1058,8 @@ const fetchFeeds = async (projectId) => {
                 )}
               </div>
 
-              {shouldShowPersonDropdown() && !isSpecialSubcategory && (
+              {/* ✅ Only show person dropdown if NOT client */}
+              {shouldShowPersonDropdown() && !isSpecialSubcategory && !isClient && (
                 <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
                   <div className="flex items-center gap-2 mb-3">
                     <Users size={18} className="text-blue-600" />
@@ -1221,50 +1220,51 @@ const fetchFeeds = async (projectId) => {
                       </p>
                     )}
                   </div>
-<div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-  <div className="flex items-center gap-2 mb-3">
-    <Hash size={18} className="text-blue-600" />
-    <label className="text-sm font-semibold text-slate-700">
-      Related Feed <span className="font-normal text-slate-400">(Optional)</span>
-    </label>
-    {formData.projectId && (
-      <span className="text-[8px] text-slate-400 ml-auto">
-        {feeds.length > 0 ? `${feeds.length} option(s)` : 'No feeds available'}
-      </span>
-    )}
-  </div>
-  
-  <select
-    value={formData.feedId}
-    onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
-    disabled={!formData.projectId}
-    className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-    <option value="">Select a feed (optional)</option>
-    {feeds.length === 0 ? (
-      <option value="" disabled>No feeds available</option>
-    ) : (
-      feeds.map(feed => (
-        <option key={feed._id} value={feed._id}>
-          {feed._id === 'general' ? '📁 General (Whole Project)' : feed.name}
-        </option>
-      ))
-    )}
-  </select>
-  
-  {!formData.projectId && (
-    <p className="text-xs text-amber-600 mt-2">Select a project first to see available feeds</p>
-  )}
-  
-  {formData.feedId === 'general' && (
-    <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200 animate-in fade-in duration-200">
-      <p className="text-[10px] text-blue-700 flex items-center gap-1.5">
-        <Info size={12} className="text-blue-500" />
-        This ticket will apply to the <strong>entire project</strong>, not a specific feed.
-      </p>
-    </div>
-  )}
-</div>
+
+                  <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Hash size={18} className="text-blue-600" />
+                      <label className="text-sm font-semibold text-slate-700">
+                        Related Feed <span className="font-normal text-slate-400">(Optional)</span>
+                      </label>
+                      {formData.projectId && (
+                        <span className="text-[8px] text-slate-400 ml-auto">
+                          {feeds.length > 0 ? `${feeds.length} option(s)` : 'No feeds available'}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <select
+                      value={formData.feedId}
+                      onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
+                      disabled={!formData.projectId}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <option value="">Select a feed (optional)</option>
+                      {feeds.length === 0 ? (
+                        <option value="" disabled>No feeds available</option>
+                      ) : (
+                        feeds.map(feed => (
+                          <option key={feed._id} value={feed._id}>
+                            {feed._id === 'general' ? '📁 General (Whole Project)' : feed.name}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                    
+                    {!formData.projectId && (
+                      <p className="text-xs text-amber-600 mt-2">Select a project first to see available feeds</p>
+                    )}
+                    
+                    {formData.feedId === 'general' && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200 animate-in fade-in duration-200">
+                        <p className="text-[10px] text-blue-700 flex items-center gap-1.5">
+                          <Info size={12} className="text-blue-500" />
+                          This ticket will apply to the <strong>entire project</strong>, not a specific feed.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
@@ -1392,17 +1392,27 @@ const fetchFeeds = async (projectId) => {
                     </>
                   )}
                 </button>
-                {isSpecialSubcategory && !formData.assignedTo && (
+                
+                {/* ✅ Client-specific messages */}
+                {isClient && !formData.projectId && (
+                  <p className="text-xs text-amber-600 mt-2 text-center">
+                    Please select a project to create a ticket
+                  </p>
+                )}
+                
+                {!isClient && isSpecialSubcategory && !formData.assignedTo && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
                     Please assign a developer to create this {formData.subcategory.toLowerCase()} ticket
                   </p>
                 )}
-                {shouldShowPersonDropdown() && !selectedPerson && departmentUsers.length > 0 && (
+                
+                {!isClient && shouldShowPersonDropdown() && !selectedPerson && departmentUsers.length > 0 && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
                     Please select a {formData.category} team member to assign this ticket
                   </p>
                 )}
-                {shouldShowPersonDropdown() && departmentUsers.length === 0 && formData.category && (
+                
+                {!isClient && shouldShowPersonDropdown() && departmentUsers.length === 0 && formData.category && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
                     No {formData.category} users available. Please contact an administrator.
                   </p>
