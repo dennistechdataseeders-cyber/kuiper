@@ -1,7 +1,9 @@
+// frontend/src/pages/TicketDashboard.jsx - WITH WATCHING FILTER
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search, GitFork } from 'lucide-react';
+import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search, GitFork, Eye } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
@@ -181,11 +183,20 @@ const TicketDashboard = () => {
   };
 
   // ============================================
-  // FILTER TICKETS WITH SEARCH
+  // FILTER TICKETS WITH SEARCH & WATCHING FILTER
   // ============================================
   const filteredTickets = tickets.filter(t => {
-    // Status filter
-    if (filter !== 'all' && t.status !== filter) return false;
+    // Status filter - includes 'Watching' as a special filter
+    if (filter === 'Watching') {
+      // Show tickets where current user is a watcher
+      const watcherIds = (t.watchers || []).map(w => w._id || w);
+      const isWatching = watcherIds.includes(currentUserId);
+      if (!isWatching) return false;
+      // For watching filter, also check that ticket is not closed
+      if (t.status === 'Closed') return false;
+    } else if (filter !== 'all' && t.status !== filter) {
+      return false;
+    }
     
     // Type filter (internal/external)
     if (filterType === 'internal' && !t.isInternal) return false;
@@ -243,7 +254,11 @@ const TicketDashboard = () => {
     resolved: tickets.filter(t => t.status === 'Resolved').length,
     internal: tickets.filter(t => t.isInternal).length,
     external: tickets.filter(t => !t.isInternal).length,
-    feasibility: tickets.filter(t => t.category === 'Production' && t.subcategory === 'Feasibility').length
+    feasibility: tickets.filter(t => t.category === 'Production' && t.subcategory === 'Feasibility').length,
+    watching: tickets.filter(t => {
+      const watcherIds = (t.watchers || []).map(w => w._id || w);
+      return watcherIds.includes(currentUserId) && t.status !== 'Closed';
+    }).length
   };
 
   // Stats for HR and Finance - only count assigned tickets
@@ -302,6 +317,18 @@ const TicketDashboard = () => {
     setSearchQuery('');
   };
 
+  // Get filter options - includes 'Watching' for non-client, non-HR, non-Finance users
+  const getFilterOptions = () => {
+    const baseOptions = ['all', 'Open', 'In Progress', 'Resolved', 'Closed'];
+    // Add 'Watching' for users who can have watchers (not Client, HR, Finance)
+    if (!isClient && !isHR && !isFinance) {
+      return [...baseOptions, 'Watching'];
+    }
+    return baseOptions;
+  };
+
+  const filterOptions = getFilterOptions();
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-gray-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -349,7 +376,7 @@ const TicketDashboard = () => {
       </div>
 
       {/* Stats Cards - Responsive grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4 mb-4 sm:mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-4 mb-4 sm:mb-8">
         <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
           <div className="flex items-center justify-between">
             <div>
@@ -397,6 +424,19 @@ const TicketDashboard = () => {
             <CheckCircle size={isMobile ? 20 : 32} className="text-green-500" />
           </div>
         </div>
+
+        {/* Watching Stats Card */}
+        {!isClient && !isHR && !isFinance && (
+          <div className="bg-white rounded-lg p-3 sm:p-6 shadow-sm border border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[10px] sm:text-sm text-gray-600">Watching</p>
+                <p className="text-lg sm:text-2xl font-bold text-purple-600">{stats.watching}</p>
+              </div>
+              <Eye size={isMobile ? 20 : 32} className="text-purple-500" />
+            </div>
+          </div>
+        )}
 
         {/* HR Specific Stats Card */}
         {isHR && (
@@ -487,20 +527,23 @@ const TicketDashboard = () => {
           )}
         </div>
 
-        {/* Filter Buttons */}
+        {/* Filter Buttons - includes Watching */}
         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
             <span className="text-[10px] sm:text-xs text-gray-500 mr-0.5 sm:mr-1 font-medium hidden sm:inline">Status:</span>
-            {['all', 'Open', 'In Progress', 'Resolved', 'Closed'].map(status => (
+            {filterOptions.map(status => (
               <button
                 key={status}
                 onClick={() => setFilter(status === 'all' ? 'all' : status)}
-                className={`px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium transition-all whitespace-nowrap ${
+                className={`px-1.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-xs font-medium transition-all whitespace-nowrap flex items-center gap-0.5 sm:gap-1 ${
                   filter === (status === 'all' ? 'all' : status)
-                    ? 'bg-blue-600 text-white'
+                    ? status === 'Watching' 
+                      ? 'bg-purple-600 text-white' 
+                      : 'bg-blue-600 text-white'
                     : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
+                {status === 'Watching' && <Eye size={isMobile ? 10 : 12} />}
                 {status === 'all' ? 'All' : status}
               </button>
             ))}
@@ -583,6 +626,7 @@ const TicketDashboard = () => {
                   const formattedNumber = formatTicketNumber(ticket.ticketNumber);
                   const isFeasibility = isFeasibilityTicket(ticket);
                   const projectFeed = getProjectFeedDisplay(ticket);
+                  const isWatching = (ticket.watchers || []).some(w => (w._id || w) === currentUserId);
                   
                   return (
                     <div 
@@ -606,6 +650,12 @@ const TicketDashboard = () => {
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded text-[8px] font-bold">
                                 <UserCheck size={8} />
                                 Feasibility
+                              </span>
+                            )}
+                            {isWatching && ticket.status !== 'Closed' && (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded text-[8px] font-bold">
+                                <Eye size={8} />
+                                Watching
                               </span>
                             )}
                           </div>
@@ -694,6 +744,7 @@ const TicketDashboard = () => {
                     const isFeasibility = isFeasibilityTicket(ticket);
                     const formattedNumber = formatTicketNumber(ticket.ticketNumber);
                     const projectFeed = getProjectFeedDisplay(ticket);
+                    const isWatching = (ticket.watchers || []).some(w => (w._id || w) === currentUserId);
                     
                     return (
                       <tr key={ticket._id} className="hover:bg-gray-50 transition-colors">
@@ -712,6 +763,12 @@ const TicketDashboard = () => {
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-indigo-100 text-indigo-700 rounded-md text-[9px] font-bold">
                                 <UserCheck size={10} />
                                 Feasibility
+                              </span>
+                            )}
+                            {isWatching && ticket.status !== 'Closed' && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-md text-[9px] font-bold">
+                                <Eye size={10} />
+                                Watching
                               </span>
                             )}
                           </div>
@@ -766,7 +823,6 @@ const TicketDashboard = () => {
                               <span className="text-sm text-gray-700 truncate max-w-[150px]" title={projectFeed.name}>
                                 {projectFeed.name}
                               </span>
-                              
                             </div>
                           ) : (
                             <span className="text-sm text-gray-400 italic">General</span>

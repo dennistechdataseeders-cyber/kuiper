@@ -1,4 +1,4 @@
-// frontend/src/pages/CreateTicket.jsx - UPDATED WITH CLIENT FIX
+// frontend/src/pages/CreateTicket.jsx - UPDATED WITH WATCHERS SEARCH
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -8,7 +8,7 @@ import {
   Users, Briefcase, AlertCircle, Clock, FileText, CheckCircle, Info,
   Building2, Hash, Sparkles, Zap, UserCheck, GitFork, Paperclip,
   UploadCloud, File, FileSpreadsheet, FileArchive, FileVideo, 
-  FileAudio, FileCode, X, Image, Download, Eye
+  FileAudio, FileCode, X, Image, Download, Eye, UserPlus, Search
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
@@ -289,6 +289,17 @@ const CreateTicket = () => {
   const [selectedPerson, setSelectedPerson] = useState('');
   const [loadingDepartmentUsers, setLoadingDepartmentUsers] = useState(false);
 
+  // ============================================
+  // WATCHERS STATE
+  // ============================================
+  const [allUsers, setAllUsers] = useState([]);
+  const [selectedWatchers, setSelectedWatchers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [showWatcherDropdown, setShowWatcherDropdown] = useState(false);
+  const [watcherSearchTerm, setWatcherSearchTerm] = useState('');
+  const watcherDropdownRef = useRef(null);
+  const watcherSearchInputRef = useRef(null);
+
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
@@ -305,6 +316,96 @@ const CreateTicket = () => {
       return CLIENT_CATEGORIES;
     }
     return TICKET_CATEGORIES;
+  };
+
+  // ============================================
+  // Fetch users for watchers - EXCLUDE Admin AND Client
+  // ============================================
+  const fetchUsersForWatchers = async () => {
+    setLoadingUsers(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Filter out current user, inactive users, Admin, and Client
+      const filteredUsers = res.data.filter(u => 
+        u._id !== currentUserId && 
+        u.isActive !== false &&
+        u.role !== 'Admin' &&
+        u.role !== 'Client'
+      );
+      setAllUsers(filteredUsers);
+    } catch (error) {
+      console.error('Error fetching users for watchers:', error);
+    } finally {
+      setLoadingUsers(false);
+    }
+  };
+
+  // Fetch users when component mounts
+  useEffect(() => {
+    fetchUsersForWatchers();
+  }, []);
+
+  // Close watcher dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (watcherDropdownRef.current && !watcherDropdownRef.current.contains(event.target)) {
+        setShowWatcherDropdown(false);
+        setWatcherSearchTerm('');
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Focus search input when dropdown opens
+  useEffect(() => {
+    if (showWatcherDropdown && watcherSearchInputRef.current) {
+      setTimeout(() => {
+        watcherSearchInputRef.current.focus();
+      }, 100);
+    }
+  }, [showWatcherDropdown]);
+
+  // Filter users based on search term
+  const filteredWatcherUsers = allUsers.filter(user => {
+    const search = watcherSearchTerm.toLowerCase().trim();
+    if (!search) return true;
+    return (
+      user.name?.toLowerCase().includes(search) ||
+      user.email?.toLowerCase().includes(search) ||
+      user.role?.toLowerCase().includes(search)
+    );
+  });
+
+  // Toggle watcher selection
+  const toggleWatcher = (userId) => {
+    setSelectedWatchers(prev => {
+      if (prev.includes(userId)) {
+        return prev.filter(id => id !== userId);
+      } else {
+        return [...prev, userId];
+      }
+    });
+  };
+
+  // Remove watcher
+  const removeWatcher = (userId) => {
+    setSelectedWatchers(prev => prev.filter(id => id !== userId));
+  };
+
+  // Get user name by ID
+  const getUserName = (userId) => {
+    const user = allUsers.find(u => u._id === userId);
+    return user ? user.name : 'Unknown';
+  };
+
+  // Get user role by ID
+  const getUserRole = (userId) => {
+    const user = allUsers.find(u => u._id === userId);
+    return user ? user.role : '';
   };
 
   const validateFile = (file) => {
@@ -486,7 +587,6 @@ const CreateTicket = () => {
 
       console.log(`🔍 Fetching users with role: ${roleToFetch} for category: ${category}`);
 
-      // ✅ Use the dedicated endpoint for role-based user fetching
       const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${roleToFetch}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -578,6 +678,11 @@ const CreateTicket = () => {
       return false;
     }
     return true;
+  };
+
+  // ✅ Show watcher section only for non-client users
+  const shouldShowWatchers = () => {
+    return !isClient;
   };
 
   useEffect(() => {
@@ -771,7 +876,8 @@ const CreateTicket = () => {
         subcategory: formData.subcategory || undefined,
         subItem: formData.subItem || undefined,
         assignedTo: finalAssignedTo,
-        files: uploadedFiles
+        files: uploadedFiles,
+        watchers: selectedWatchers // Include watchers
       };
       
       await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
@@ -1296,6 +1402,146 @@ const CreateTicket = () => {
                 </div>
               )}
 
+              {/* ============================================
+                  WATCHERS SECTION WITH SEARCH
+                  ============================================ */}
+              {shouldShowWatchers() && (
+                <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
+                  <div className="flex items-center gap-2 mb-3">
+                    <UserPlus size={18} className="text-blue-600" />
+                    <label className="text-sm font-semibold text-slate-700">
+                      Watchers <span className="font-normal text-slate-400">(Optional - users who will follow this ticket)</span>
+                    </label>
+                    <span className="text-[8px] text-slate-400 ml-auto">
+                      {selectedWatchers.length} watcher{selectedWatchers.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
+                  
+                  {/* Selected Watchers Display */}
+                  {selectedWatchers.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-3 p-2 bg-white rounded-lg border border-blue-100">
+                      {selectedWatchers.map(watcherId => {
+                        const watcher = allUsers.find(u => u._id === watcherId);
+                        return (
+                          <span key={watcherId} className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-bold">
+                            <UserCheck size={12} />
+                            {watcher?.name || 'Unknown'}
+                            <span className="text-[8px] text-blue-500">({watcher?.role || 'User'})</span>
+                            <button
+                              type="button"
+                              onClick={() => removeWatcher(watcherId)}
+                              className="hover:text-red-500 transition-colors ml-0.5"
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {/* Watcher Search/Dropdown */}
+                  <div className="relative" ref={watcherDropdownRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowWatcherDropdown(!showWatcherDropdown)}
+                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-left text-sm text-slate-500 hover:border-blue-400 transition-all flex items-center justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Users size={16} className="text-slate-400" />
+                        {selectedWatchers.length > 0 
+                          ? `${selectedWatchers.length} watcher(s) selected` 
+                          : 'Add watchers to this ticket...'}
+                      </span>
+                      <ChevronDown size={16} className={`transition-transform ${showWatcherDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {showWatcherDropdown && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                        {/* Search Bar inside dropdown */}
+                        <div className="sticky top-0 bg-white p-2 border-b border-slate-100">
+                          <div className="relative">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                              ref={watcherSearchInputRef}
+                              type="text"
+                              placeholder="Search by name, email, or role..."
+                              value={watcherSearchTerm}
+                              onChange={(e) => setWatcherSearchTerm(e.target.value)}
+                              className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                            {watcherSearchTerm && (
+                              <button
+                                type="button"
+                                onClick={() => setWatcherSearchTerm('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                              >
+                                <X size={12} />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-[8px] text-slate-400 mt-1 px-1">
+                            {filteredWatcherUsers.length} user{filteredWatcherUsers.length !== 1 ? 's' : ''} found
+                          </p>
+                        </div>
+                        
+                        {/* User List */}
+                        {loadingUsers ? (
+                          <div className="p-4 text-center text-slate-400 text-sm">
+                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                            Loading users...
+                          </div>
+                        ) : filteredWatcherUsers.length === 0 ? (
+                          <div className="p-4 text-center text-slate-400 text-sm">
+                            {watcherSearchTerm ? (
+                              <>No users found matching "<span className="font-medium">{watcherSearchTerm}</span>"</>
+                            ) : (
+                              'No users available to add as watchers'
+                            )}
+                          </div>
+                        ) : (
+                          filteredWatcherUsers.map(user => {
+                            const isSelected = selectedWatchers.includes(user._id);
+                            return (
+                              <div
+                                key={user._id}
+                                onClick={() => toggleWatcher(user._id)}
+                                className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-blue-50 border-b border-slate-50 last:border-0 ${
+                                  isSelected ? 'bg-blue-50' : ''
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                    {user.name?.charAt(0) || '?'}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
+                                    <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                                    <p className="text-[8px] text-slate-400">{user.role}</p>
+                                  </div>
+                                </div>
+                                <div className="flex-shrink-0 ml-2">
+                                  {isSelected ? (
+                                    <CheckCircle size={18} className="text-blue-600" />
+                                  ) : (
+                                    <UserPlus size={18} className="text-slate-300" />
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  <p className="text-[8px] text-slate-400 mt-2">
+                    Watchers will receive notifications and can view this ticket in their bucket
+                  </p>
+                </div>
+              )}
+
               <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
                 <div className="flex items-center gap-2 mb-3">
                   <Paperclip size={18} className="text-blue-600" />
@@ -1389,6 +1635,7 @@ const CreateTicket = () => {
                       {isClient ? <Send size={18} /> : <Lock size={18} />}
                       {isClient ? 'Submit Ticket' : 'Create Ticket'}
                       {selectedFiles.length > 0 && ` (${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''})`}
+                      {selectedWatchers.length > 0 && ` 👁 ${selectedWatchers.length} watcher${selectedWatchers.length > 1 ? 's' : ''}`}
                     </>
                   )}
                 </button>

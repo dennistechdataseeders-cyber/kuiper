@@ -1,4 +1,4 @@
-// frontend/src/pages/TicketDetails.jsx - UPDATED WITH CLOSED TICKET COMMENT DISABLE
+// frontend/src/pages/TicketDetails.jsx - COMPACT WITH WATCHERS IN RIGHT SIDEBAR
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -8,7 +8,8 @@ import {
   CheckCircle, XCircle, Clock, Image, X, AlertCircle, 
   Loader2, Eye, Download, UploadCloud, GitFork, Paperclip,
   File, FileText, FileArchive, FileSpreadsheet, FileVideo, FileAudio,
-  FileCode, FileJson, Tag, Layers, Building2, Briefcase,Lock
+  FileCode, FileJson, Tag, Layers, Building2, Briefcase, Lock,
+  UserPlus, Search, ChevronDown, ChevronRight
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -41,6 +42,21 @@ const TicketDetails = () => {
   const currentUserName = localStorage.getItem('userName');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
+  // ============================================
+  // WATCHERS STATE
+  // ============================================
+  const [watchers, setWatchers] = useState([]);
+  const [showWatcherModal, setShowWatcherModal] = useState(false);
+  const [availableUsers, setAvailableUsers] = useState([]);
+  const [addingWatcher, setAddingWatcher] = useState(false);
+  const [watcherSearchTerm, setWatcherSearchTerm] = useState('');
+  const watcherSearchInputRef = useRef(null);
+  
+  // ============================================
+  // EXPANDABLE WATCHERS
+  // ============================================
+  const [isWatchersExpanded, setIsWatchersExpanded] = useState(true);
+
   // Handle resize for mobile detection
   useEffect(() => {
     const handleResize = () => {
@@ -51,7 +67,7 @@ const TicketDetails = () => {
   }, []);
 
   // ============================================
-  // ✅ CHECK IF TICKET IS CLOSED
+  // ✅ CHECK IF TICKET IS CLOSED - SAFE WITH NULL CHECK
   // ============================================
   const isTicketClosed = ticket?.status === 'Closed';
 
@@ -76,6 +92,7 @@ const TicketDetails = () => {
     '.exe'
   ];
 
+  // ✅ SAFE: Only calculate statusFlow if ticket exists
   const statusFlow = ['Open', 'In Progress', 'Resolved', 'Closed'];
   const currentStatusIndex = ticket ? statusFlow.indexOf(ticket.status) : -1;
 
@@ -219,8 +236,8 @@ const TicketDetails = () => {
   const showCommentNotification = (ticketData, commentAuthor, fileCount = 0, imageCount = 0) => {
     if (commentAuthor === currentUserName || commentAuthor === currentUserId) return;
     
-    const isCreator = ticketData.createdBy?._id === currentUserId || ticketData.createdBy === currentUserId;
-    const isAssignee = ticketData.assignedTo?._id === currentUserId || ticketData.assignedTo === currentUserId;
+    const isCreator = ticketData?.createdBy?._id === currentUserId || ticketData?.createdBy === currentUserId;
+    const isAssignee = ticketData?.assignedTo?._id === currentUserId || ticketData?.assignedTo === currentUserId;
     
     if (isCreator || isAssignee) {
       let attachmentText = '';
@@ -234,21 +251,102 @@ const TicketDetails = () => {
       
       notificationManager.show({
         title: '💬 New Comment on Ticket',
-        body: `${commentAuthor} commented${attachmentText}: "${ticketData.title.substring(0, 50)}"`,
+        body: `${commentAuthor} commented${attachmentText}: "${ticketData?.title?.substring(0, 50) || 'Ticket'}"`,
         icon: '/images/login_img.png',
-        tag: `comment-${ticketData._id}`,
-        data: { ticketId: ticketData._id, type: 'ticket' },
+        tag: `comment-${ticketData?._id}`,
+        data: { ticketId: ticketData?._id, type: 'ticket' },
         onClick: () => {
           window.focus();
-          navigate(`/tickets/${ticketData._id}`);
+          navigate(`/tickets/${ticketData?._id}`);
         }
       });
+    }
+  };
+
+  // ============================================
+  // FETCH WATCHERS
+  // ============================================
+  const fetchWatchers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/tickets/${id}/watchers`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setWatchers(res.data.watchers || []);
+    } catch (error) {
+      console.error('Error fetching watchers:', error);
+    }
+  };
+
+  // ============================================
+  // FETCH AVAILABLE USERS FOR WATCHERS - EXCLUDE SUPER ADMIN
+  // ============================================
+  const fetchAvailableUsers = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/tickets/users/watchers`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Filter out current watchers, super admin, and client users
+      const watcherIds = watchers.map(w => w._id);
+      
+      setAvailableUsers(res.data.users.filter(u => 
+        !watcherIds.includes(u._id) && 
+        u._id !== currentUserId && // Exclude self
+        u.role !== 'Admin' && // Exclude Admin
+        u.role !== 'Client' // Exclude Client
+      ));
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // ============================================
+  // ADD WATCHER
+  // ============================================
+  const handleAddWatcher = async (userId) => {
+    setAddingWatcher(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/api/tickets/${id}/watchers`, 
+        { userId },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success('Watcher added successfully');
+      fetchWatchers();
+      setShowWatcherModal(false);
+      setWatcherSearchTerm('');
+    } catch (error) {
+      console.error('Error adding watcher:', error);
+      toast.error(error.response?.data?.error || 'Failed to add watcher');
+    } finally {
+      setAddingWatcher(false);
+    }
+  };
+
+  // ============================================
+  // REMOVE WATCHER
+  // ============================================
+  const handleRemoveWatcher = async (userId) => {
+    if (!window.confirm('Remove this watcher from the ticket?')) return;
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API_BASE_URL}/api/tickets/${id}/watchers/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      toast.success('Watcher removed');
+      fetchWatchers();
+    } catch (error) {
+      console.error('Error removing watcher:', error);
+      toast.error(error.response?.data?.error || 'Failed to remove watcher');
     }
   };
 
   useEffect(() => {
     fetchTicketDetails();
     fetchDevelopers();
+    fetchWatchers();
     
     notificationManager.initAudio();
     
@@ -260,6 +358,7 @@ const TicketDetails = () => {
       if (updatedTicket._id === id) {
         const oldStatus = ticket?.status;
         setTicket(updatedTicket);
+        fetchWatchers();
         if (oldStatus && oldStatus !== updatedTicket.status) {
           if (updatedTicket.createdBy?._id === currentUserId || updatedTicket.assignedTo?._id === currentUserId) {
             notificationManager.notifyStatusUpdate(updatedTicket, oldStatus, updatedTicket.status, () => {
@@ -309,6 +408,7 @@ const TicketDetails = () => {
     socketRef.current.on('ticket_assigned', (assignedTicket) => {
       if (assignedTicket._id === id) {
         setTicket(assignedTicket);
+        fetchWatchers();
         if (assignedTicket.assignedTo?._id === currentUserId) {
           toast.success(`Ticket assigned to you: ${assignedTicket.title}`);
           notificationManager.notifyTicketAssigned(assignedTicket, () => {
@@ -502,7 +602,6 @@ const TicketDetails = () => {
 
   useEffect(() => {
     const handlePaste = (e) => {
-      // ✅ Skip paste if ticket is closed
       if (isTicketClosed) {
         toast.error('Cannot add comments to a closed ticket');
         return;
@@ -544,7 +643,6 @@ const TicketDetails = () => {
   }, [isTicketClosed]);
 
   const handleFileSelect = (e) => {
-    // ✅ Skip file select if ticket is closed
     if (isTicketClosed) {
       toast.error('Cannot add files to a closed ticket');
       e.target.value = '';
@@ -557,7 +655,6 @@ const TicketDetails = () => {
   };
 
   const handleDragOver = (e) => {
-    // ✅ Prevent drag if ticket is closed
     if (isTicketClosed) return;
     e.preventDefault();
     setIsDragging(true);
@@ -569,7 +666,6 @@ const TicketDetails = () => {
   };
 
   const handleDrop = (e) => {
-    // ✅ Skip drop if ticket is closed
     if (isTicketClosed) {
       toast.error('Cannot add files to a closed ticket');
       return;
@@ -653,7 +749,6 @@ const TicketDetails = () => {
   const addComment = async (e) => {
     if (e) e.preventDefault();
     
-    // ✅ Prevent comment submission if ticket is closed
     if (isTicketClosed) {
       toast.error('Cannot add comments to a closed ticket');
       return;
@@ -742,6 +837,7 @@ const TicketDetails = () => {
     return colors[category] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
+  // ✅ SAFE: Only check ticket creator if ticket exists
   const isTicketCreator = ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId);
 
   const formatCommentTime = (date) => {
@@ -777,7 +873,6 @@ const TicketDetails = () => {
     (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead');
 
   const handleTextareaKeyDown = (e) => {
-    // ✅ Prevent Enter key if ticket is closed
     if (isTicketClosed) {
       e.preventDefault();
       toast.error('Cannot add comments to a closed ticket');
@@ -800,6 +895,23 @@ const TicketDetails = () => {
     }
   };
 
+  // ============================================
+  // CAN ADD WATCHER CHECK - SAFE WITH NULL CHECK
+  // ============================================
+  const canAddWatcher = 
+    ticket && // ✅ MUST have ticket
+    (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead' || 
+     (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId))) && 
+    ticket.status !== 'Closed';
+
+  // ============================================
+  // CHECK IF USER CAN CLOSE THE TICKET - SAFE WITH NULL CHECK
+  // ============================================
+  const canCloseTicket = 
+    ticket && // ✅ MUST have ticket
+    (userRole === 'Admin' || 
+     (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId)));
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-gray-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -811,16 +923,26 @@ const TicketDetails = () => {
     );
   }
 
-  if (!ticket) return null;
+  // ✅ EARLY RETURN if ticket is null
+  if (!ticket) {
+    return (
+      <div className={`min-h-screen bg-gray-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <div className="text-center">
+          <AlertCircle size={48} className="text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-800">Ticket Not Found</h2>
+          <p className="text-gray-500 mt-2">The ticket you're looking for doesn't exist or has been removed.</p>
+          <button
+            onClick={() => navigate('/tickets')}
+            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Back to Tickets
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const hasTicketAttachments = ticket.files && ticket.files.length > 0;
-  
-  // ============================================
-  // CHECK IF USER CAN CLOSE THE TICKET
-  // ============================================
-  const canCloseTicket = 
-    userRole === 'Admin' || 
-    (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId));
 
   return (
     <div className={`min-h-screen bg-gray-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10' : 'ml-64'}`}>
@@ -859,7 +981,6 @@ const TicketDetails = () => {
                   {ticket.files.length} file(s)
                 </span>
               )}
-              {/* ✅ Show closed badge prominently */}
               {isTicketClosed && (
                 <span className="inline-flex px-2 sm:px-3 py-0.5 sm:py-1 text-[8px] sm:text-xs font-bold rounded-md bg-red-600 text-white">
                   🔒 CLOSED
@@ -907,232 +1028,177 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* Ticket Category & Subcategory Info Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
-            <Layers size={isMobile ? 14 : 16} className="text-blue-600" />
-            <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Category</span>
+      {/* ============================================
+          COMPACT ROW: Project | Category | Attachments
+          ============================================ */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+        {/* Project */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5">
+          <div className="flex items-center gap-1.5">
+            <Briefcase size={12} className="text-blue-600" />
+            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Project</span>
           </div>
-          {ticket.category ? (
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold border ${getCategoryColor(ticket.category)}`}>
-                {ticket.category}
-              </span>
-              {ticket.subcategory && (
-                <>
-                  <span className="text-gray-400 text-xs">→</span>
-                  <span className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-                    {ticket.subcategory}
-                  </span>
-                </>
-              )}
-              {ticket.subItem && (
-                <>
-                  <span className="text-gray-400 text-xs">→</span>
-                  <span className="inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold bg-blue-50 text-blue-700 border border-blue-200">
-                    {ticket.subItem}
-                  </span>
-                </>
-              )}
-            </div>
-          ) : (
-            <span className="text-sm text-gray-400 italic">No category</span>
-          )}
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
-          <div className="flex items-center gap-2 mb-1.5 sm:mb-2">
-            <Briefcase size={isMobile ? 14 : 16} className="text-blue-600" />
-            <span className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider">Project & Feed</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+          <div className="flex flex-wrap items-center gap-1 mt-0.5">
             {ticket.projectId ? (
-              <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                <Building2 size={isMobile ? 12 : 14} />
+              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                <Building2 size={10} />
                 {ticket.projectId.name || ticket.projectId.projectCustomId}
               </span>
             ) : (
-              <span className="text-sm text-gray-400 italic">No project</span>
+              <span className="text-xs text-gray-400 italic">No project</span>
             )}
             {ticket.feedId && (
               <>
-                <span className="text-gray-400 text-xs">/</span>
-                <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[10px] sm:text-sm font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  <Tag size={isMobile ? 12 : 14} />
+                <span className="text-gray-400 text-[8px]">/</span>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  <Tag size={10} />
                   {ticket.feedId.name}
                 </span>
               </>
             )}
           </div>
         </div>
+
+        {/* Category */}
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5">
+          <div className="flex items-center gap-1.5">
+            <Layers size={12} className="text-blue-600" />
+            <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Category</span>
+          </div>
+          {ticket.category ? (
+            <div className="flex flex-wrap items-center gap-1 mt-0.5">
+              <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold border ${getCategoryColor(ticket.category)}`}>
+                {ticket.category}
+              </span>
+              {ticket.subcategory && (
+                <>
+                  <span className="text-gray-400 text-[8px]">→</span>
+                  <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 text-gray-700 border border-gray-200">
+                    {ticket.subcategory}
+                  </span>
+                </>
+              )}
+              {ticket.subItem && (
+                <>
+                  <span className="text-gray-400 text-[8px]">→</span>
+                  <span className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                    {ticket.subItem}
+                  </span>
+                </>
+              )}
+            </div>
+          ) : (
+            <span className="text-xs text-gray-400 italic">No category</span>
+          )}
+        </div>
+
+        {/* Attachments - Compact */}
+        {hasTicketAttachments && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5">
+            <div className="flex items-center gap-1.5 mb-1.5">
+              <Paperclip size={12} className="text-blue-600" />
+              <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Attachments ({ticket.files.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {ticket.files.slice(0, 3).map((file, index) => {
+                const isImage = isImageFile(file.originalName || file.filename);
+                const fileUrl = file.url || `${API_BASE_URL}/uploads/tickets/${file.filename}`;
+                
+                return (
+                  <div key={index} className="flex items-center gap-1 p-1 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all group">
+                    <div className="flex-shrink-0 w-5 h-5 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                      {isImage ? (
+                        <img 
+                          src={fileUrl} 
+                          alt={file.originalName || 'Attachment'}
+                          className="w-full h-full object-cover rounded-lg cursor-pointer"
+                          onClick={() => setShowImageViewer(fileUrl)}
+                        />
+                      ) : (
+                        getFileIcon(file)
+                      )}
+                    </div>
+                    <div className="min-w-0 max-w-[60px]">
+                      <p className="text-[7px] font-semibold text-gray-700 truncate">
+                        {file.originalName || file.filename}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleFileDownload(file)}
+                      className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                      title="Download"
+                    >
+                      <Download size={8} />
+                    </button>
+                  </div>
+                );
+              })}
+              {ticket.files.length > 3 && (
+                <span className="text-[8px] text-gray-400 font-medium self-center">+{ticket.files.length - 3} more</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* If no attachments, make this cell empty but keep grid consistent */}
+        {!hasTicketAttachments && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 flex items-center justify-center">
+            <span className="text-[9px] text-gray-400">No attachments</span>
+          </div>
+        )}
       </div>
 
-      {/* Ticket Attachments Section */}
-      {hasTicketAttachments && (
-        <div className="mb-4 sm:mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-6">
-          <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 sm:mb-4 flex items-center gap-2">
-            <Paperclip size={isMobile ? 14 : 16} className="text-blue-600" />
-            Attachments ({ticket.files.length})
-          </h3>
-          <div className="flex flex-wrap gap-2 sm:gap-3">
-            {ticket.files.map((file, index) => {
-              const isImage = isImageFile(file.originalName || file.filename);
-              const fileUrl = file.url || `${API_BASE_URL}/uploads/tickets/${file.filename}`;
-              
-              return (
-                <div key={index} className="flex items-center gap-2 sm:gap-3 p-2 sm:p-3 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all group w-full sm:w-auto">
-                  <div className="flex-shrink-0 w-8 sm:w-10 h-8 sm:h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
-                    {isImage ? (
-                      <img 
-                        src={fileUrl} 
-                        alt={file.originalName || 'Attachment'}
-                        className="w-full h-full object-cover rounded-lg cursor-pointer"
-                        onClick={() => setShowImageViewer(fileUrl)}
-                      />
-                    ) : (
-                      getFileIcon(file)
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[9px] sm:text-xs font-semibold text-gray-700 truncate max-w-[120px] sm:max-w-[200px]">
-                      {file.originalName || file.filename}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                      <span className="text-[7px] sm:text-[8px] text-gray-400">{formatFileSize(file.size)}</span>
-                      <span className="text-[7px] sm:text-[8px] text-gray-400 hidden sm:inline">•</span>
-                      <span className="text-[7px] sm:text-[8px] text-gray-400 hidden sm:inline">{getFileTypeLabel(file)}</span>
-                    </div>
-                  </div>
-                  {isImage && (
-                    <button
-                      onClick={() => setShowImageViewer(fileUrl)}
-                      className="p-1 sm:p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
-                      title="View image"
+      {/* Ticket Progress - Full width with same width as description */}
+      {ticket && (
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 mb-3">
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <CheckCircle size={12} className="text-blue-600" />
+            <span className="text-[10px] font-semibold text-gray-700">Progress</span>
+            <span className="text-[9px] font-medium text-gray-400 ml-auto">
+              {currentStatusIndex + 1}/{statusFlow.length}
+            </span>
+          </div>
+          <div className="relative px-4 sm:px-8">
+            <div className="absolute top-1.5 left-4 right-4 sm:left-8 sm:right-8 h-0.5 bg-gray-200 rounded-full" />
+            <div 
+              className="absolute top-1.5 left-4 sm:left-8 h-0.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
+              style={{ width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - 8px)` }}
+            />
+            <div className="flex justify-between">
+              {statusFlow.map((status, index) => {
+                const isCompleted = index <= currentStatusIndex;
+                const isCurrent = status === ticket.status;
+                
+                return (
+                  <div key={status} className="flex flex-col items-center relative group">
+                    <div 
+                      className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[5px] font-bold transition-all duration-300 cursor-pointer
+                        ${isCompleted 
+                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-sm' 
+                          : 'bg-gray-200 text-gray-500'
+                        }
+                        ${isCurrent ? 'ring-2 ring-blue-100 ring-offset-0.5 border border-blue-500' : ''}
+                      `}
                     >
-                      <Eye size={isMobile ? 12 : 14} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleFileDownload(file)}
-                    className="p-1 sm:p-1.5 rounded-lg hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
-                    title="Download file"
-                  >
-                    <Download size={isMobile ? 12 : 14} />
-                  </button>
-                </div>
-              );
-            })}
+                      {isCompleted ? <CheckCircle size={5} className="text-white" /> : index + 1}
+                    </div>
+                    <p className={`text-[5px] font-semibold transition-colors mt-0.5 ${isCompleted ? 'text-green-700' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>
+                      {isMobile ? status.substring(0, 1) : status}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
 
-      {/* Status Progress Map */}
-      <div className="mb-4 sm:mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6 overflow-x-auto">
-        <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-4 sm:mb-6 flex items-center gap-2">
-          <CheckCircle size={isMobile ? 14 : 16} className="text-blue-600" />
-          Ticket Progress
-        </h3>
-        
-        <div className="relative px-1 sm:px-2 min-w-[300px]">
-          <div className="absolute top-3 sm:top-4 left-4 sm:left-6 right-4 sm:right-6 h-1 sm:h-1.5 bg-gray-200 rounded-full" />
-          <div 
-            className="absolute top-3 sm:top-4 left-4 sm:left-6 h-1 sm:h-1.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
-            style={{ 
-              width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - ${isMobile ? 8 : 12}px)` 
-            }}
-          />
-          
-          <div className="flex justify-between items-start relative">
-            {statusFlow.map((status, index) => {
-              const isCompleted = index <= currentStatusIndex;
-              const isCurrent = status === ticket.status;
-              const isClosed = status === 'Closed' && isCompleted;
-              
-              let statusDate = null;
-              if (status === 'Open' && ticket.createdAt) {
-                statusDate = ticket.createdAt;
-              } else if (status === 'In Progress' && ticket.startedAt) {
-                statusDate = ticket.startedAt;
-              } else if (status === 'Resolved' && ticket.resolvedAt) {
-                statusDate = ticket.resolvedAt;
-              } else if (status === 'Closed' && ticket.closedAt) {
-                statusDate = ticket.closedAt;
-              }
-              
-              const formattedDate = statusDate 
-                ? new Date(statusDate).toLocaleString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                  })
-                : null;
-              
-              return (
-                <div 
-                  key={status} 
-                  className="flex flex-col items-center relative group"
-                  style={{ 
-                    minWidth: isMobile ? '40px' : '60px',
-                    flex: '1 1 0%'
-                  }}
-                >
-                 <div className="relative z-10">
-  <div 
-    className={`
-      w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center 
-      text-[10px] sm:text-sm font-bold transition-all duration-300 cursor-pointer
-      ${isCompleted 
-        ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg shadow-green-200' 
-        : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
-      }
-      ${isCurrent 
-        ? 'ring-2 sm:ring-4 ring-blue-100 ring-offset-1 sm:ring-offset-2 border-2 border-blue-500 shadow-lg shadow-blue-200' 
-        : ''
-      }
-      hover:scale-110 hover:shadow-xl
-    `}
-  >
-    {isCompleted ? <CheckCircle size={isMobile ? 10 : 16} className="text-white" /> : index + 1}
-  </div>
-</div>
-
-<div className="mt-1 sm:mt-2 text-center min-h-[30px] sm:min-h-[40px] flex flex-col items-center">
-  <p className={`
-    text-[8px] sm:text-xs font-semibold transition-colors
-    ${isCompleted ? 'text-green-700' : 'text-gray-400'}
-    ${isCurrent ? 'text-blue-600 font-bold' : ''}
-  `}>
-    {isMobile ? status.substring(0, 1) : status}
-  </p>
-  {isCurrent && (
-    <span className="mt-0.5 text-[5px] sm:text-[8px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">
-      ●
-    </span>
-  )}
-</div>
-                  {formattedDate && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 -translate-y-full opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none bg-gray-900 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[8px] sm:text-[10px] font-medium whitespace-nowrap shadow-lg z-20 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-4 after:border-transparent after:border-t-gray-900">
-                      <div className="flex flex-col items-center">
-                        <span className="font-semibold">{status}</span>
-                        <span className="text-gray-300 text-[7px] sm:text-[9px]">{formattedDate}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Content Side */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-          {/* Description Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">Description</h2>
+          {/* Description Card - Reduced padding */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Description</h2>
             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{ticket.description}</p>
           </div>
           
@@ -1178,16 +1244,12 @@ const TicketDetails = () => {
                     
                     return (
                       <div key={idx} className={`flex gap-2 sm:gap-3 ${isCurrentUser ? 'flex-row-reverse' : ''}`}>
-                        <div className={`flex-shrink-0 w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center text-white font-semibold text-[10px] sm:text-sm shadow-sm ${
-                          isCurrentUser ? 'bg-blue-600' : 'bg-gray-400'
-                        }`}>
+                        <div className={`flex-shrink-0 w-6 sm:w-8 h-6 sm:h-8 rounded-full flex items-center justify-center text-white font-semibold text-[10px] sm:text-sm shadow-sm ${isCurrentUser ? 'bg-blue-600' : 'bg-gray-400'}`}>
                           {userInitial}
                         </div>
                         
                         <div className={`flex-1 max-w-[75%] sm:max-w-[70%] ${isCurrentUser ? 'items-end' : ''}`}>
-                          <div className={`rounded-lg p-2 sm:p-3 shadow-sm ${
-                            isCurrentUser ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'
-                          }`}>
+                          <div className={`rounded-lg p-2 sm:p-3 shadow-sm ${isCurrentUser ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200'}`}>
                             <div className={`text-[10px] sm:text-xs font-bold mb-0.5 sm:mb-1 ${isCurrentUser ? 'text-blue-100' : 'text-gray-500'}`}>
                               {commentUser}
                             </div>
@@ -1283,7 +1345,7 @@ const TicketDetails = () => {
               )}
             </div>
             
-            {/* ✅ Comment Form - Disabled when ticket is closed */}
+            {/* Comment Form - Disabled when ticket is closed */}
             <div className="border-t border-gray-200 bg-white p-2 sm:p-4">
               {filePreviews.length > 0 && (
                 <div className="mb-2 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-gray-50 rounded-lg border border-gray-200">
@@ -1370,7 +1432,7 @@ const TicketDetails = () => {
                 </button>
               </div>
               
-              {/* ✅ Closed ticket message */}
+              {/* Closed ticket message */}
               {isTicketClosed && (
                 <div className="mt-1.5 sm:mt-2 text-center">
                   <span className="text-xs font-medium text-red-600 flex items-center justify-center gap-1.5">
@@ -1399,117 +1461,180 @@ const TicketDetails = () => {
           </div>
         </div>
         
-        {/* Right Info Sidebar Segment */}
-        <div className="space-y-4 sm:space-y-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-            <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 text-xs sm:text-sm uppercase tracking-wider">Ticket Metadata</h3>
-            <div className="space-y-3 sm:space-y-4">
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Created By</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <User size={isMobile ? 13 : 15} className="text-gray-400" />
-                  <span className="text-xs sm:text-sm text-gray-800 font-medium">{ticket.createdBy?.name}</span>
+        {/* Right Info Sidebar Segment - COMPACT */}
+        <div className="space-y-3 sm:space-y-4">
+          {/* Metadata - Moved UP - Column wise and compact */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+            <h3 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-[10px] sm:text-xs uppercase tracking-wider">Ticket Metadata</h3>
+            <div className="space-y-1.5 sm:space-y-2 text-xs">
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Created By</p>
+                <div className="flex items-center gap-1.5">
+                  <User size={isMobile ? 10 : 12} className="text-gray-400" />
+                  <span className="text-xs text-gray-800 font-medium">{ticket.createdBy?.name}</span>
                 </div>
               </div>
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Created At</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <Calendar size={isMobile ? 13 : 15} className="text-gray-400" />
-                  <span className="text-xs sm:text-sm text-gray-800 font-medium">{new Date(ticket.createdAt).toLocaleString()}</span>
-                </div>
-              </div>
-              
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Category</p>
-                <div className="mt-1.5 flex flex-wrap gap-1">
-                  {ticket.category ? (
-                    <>
-                      <span className={`inline-flex px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[9px] sm:text-xs font-semibold ${getCategoryColor(ticket.category)}`}>
-                        {ticket.category}
-                      </span>
-                      {ticket.subcategory && (
-                        <span className="inline-flex px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-lg text-[9px] sm:text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200">
-                          {ticket.subcategory}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    <span className="text-xs text-gray-400 italic">Not specified</span>
-                  )}
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Created At</p>
+                <div className="flex items-center gap-1.5">
+                  <Calendar size={isMobile ? 10 : 12} className="text-gray-400" />
+                  <span className="text-xs text-gray-800 font-medium">{new Date(ticket.createdAt).toLocaleString()}</span>
                 </div>
               </div>
 
               {userRole !== 'Client' && (
-                <div>
-                  <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Assigned To</p>
-                  <div className="mt-1.5">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Assigned To</p>
+                  <div>
                     {ticket.assignedTo ? (
-                      <div className="flex items-center gap-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                        <div className="w-6 sm:w-8 h-6 sm:h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-[8px] sm:text-xs font-bold">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-[7px] font-bold">
                           {ticket.assignedTo.name?.charAt(0).toUpperCase() || 'D'}
                         </div>
-                        <div>
-                          <p className="text-[11px] sm:text-sm font-semibold text-gray-800">{ticket.assignedTo.name}</p>
-                          <p className="text-[9px] sm:text-xs text-gray-500 truncate max-w-[140px] sm:max-w-none">{ticket.assignedTo.email}</p>
+                        <div className="text-xs">
+                          <p className="font-semibold text-gray-800">{ticket.assignedTo.name}</p>
                         </div>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
-                        <AlertCircle size={isMobile ? 14 : 16} className="text-amber-600" />
-                        <span className="text-[11px] sm:text-sm text-amber-700 font-medium">Unassigned</span>
+                      <div className="flex items-center gap-1">
+                        <AlertCircle size={isMobile ? 10 : 12} className="text-amber-600" />
+                        <span className="text-[9px] text-amber-700 font-medium">Unassigned</span>
                       </div>
                     )}
                   </div>
                 </div>
               )}
               
-              <div>
-                <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Project Scope</p>
-                <p className="text-xs sm:text-sm text-gray-800 font-medium mt-1.5 bg-gray-50 px-2 py-1 sm:px-2.5 sm:py-1.5 rounded-md border border-gray-200 break-words">
-                  {ticket.projectId?.name || (ticket.category === 'Production' && ticket.subcategory === 'Feasibility' ? '🔬 General (Feasibility)' : 'General')}
-                </p>
+              <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Priority</p>
+                <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-semibold ${getPriorityColor(ticket.priority)}`}>
+                  {ticket.priority}
+                </span>
               </div>
-              {ticket.feedId && (
-                <div>
-                  <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Related Feed</p>
-                  <p className="text-xs sm:text-sm text-gray-800 font-medium mt-1.5">{ticket.feedId?.name}</p>
-                </div>
-              )}
+
               {ticket.resolvedAt && (
-                <div>
-                  <p className="text-[10px] sm:text-xs font-semibold text-green-600 uppercase tracking-wider">Resolved At</p>
-                  <p className="text-xs sm:text-sm text-gray-800 font-medium mt-1">{new Date(ticket.resolvedAt).toLocaleString()}</p>
+                <div className="flex items-center justify-between border-b border-gray-100 pb-1.5">
+                  <p className="text-[9px] font-semibold text-green-600 uppercase tracking-wider">Resolved At</p>
+                  <p className="text-[10px] text-gray-800 font-medium">{new Date(ticket.resolvedAt).toLocaleString()}</p>
                 </div>
               )}
               {ticket.closedAt && (
-                <div>
-                  <p className="text-[10px] sm:text-xs font-semibold text-gray-400 uppercase tracking-wider">Closed At</p>
-                  <p className="text-xs sm:text-sm text-gray-800 font-medium mt-1">{new Date(ticket.closedAt).toLocaleString()}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">Closed At</p>
+                  <p className="text-[10px] text-gray-800 font-medium">{new Date(ticket.closedAt).toLocaleString()}</p>
                 </div>
               )}
             </div>
           </div>
+
+          {/* ============================================
+              WATCHERS SECTION - Hidden for Client users
+              ============================================ */}
+          {userRole !== 'Client' && (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+              <div 
+                className="flex items-center justify-between cursor-pointer select-none"
+                onClick={() => setIsWatchersExpanded(!isWatchersExpanded)}
+              >
+                <h3 className="font-semibold text-gray-900 text-[10px] sm:text-xs uppercase tracking-wider flex items-center gap-1.5">
+                  <Users size={isMobile ? 12 : 14} className="text-gray-500" />
+                  Watchers
+                  {watchers.length > 0 && (
+                    <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">
+                      {watchers.length}
+                    </span>
+                  )}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {canAddWatcher && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fetchAvailableUsers();
+                        setShowWatcherModal(true);
+                        setWatcherSearchTerm('');
+                      }}
+                      className="text-[9px] sm:text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5"
+                    >
+                      <UserPlus size={isMobile ? 10 : 12} />
+                      Add
+                    </button>
+                  )}
+                  <button className="p-0.5 rounded hover:bg-gray-100 transition-colors">
+                    {isWatchersExpanded ? (
+                      <ChevronDown size={14} className="text-gray-400" />
+                    ) : (
+                      <ChevronRight size={14} className="text-gray-400" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              
+              {isWatchersExpanded && (
+                <>
+                  {watchers.length === 0 ? (
+                    <p className="text-[10px] text-gray-400 italic mt-2">No watchers</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1 mt-2">
+                      {watchers.map(watcher => {
+                        const isCurrentUser = watcher._id === currentUserId;
+                        const canRemove = (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead' || 
+                                          (ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId)) || 
+                                          isCurrentUser) && 
+                                          ticket.status !== 'Closed';
+                        return (
+                          <div key={watcher._id} className="flex items-center justify-between p-1.5 bg-gray-50 rounded-lg border border-gray-200">
+                            <div className="flex items-center gap-1.5">
+                              <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[7px] font-bold">
+                                {watcher.name?.charAt(0) || '?'}
+                              </div>
+                              <div>
+                                <p className="text-[10px] font-semibold text-gray-800 truncate max-w-[100px]">
+                                  {watcher.name}
+                                  {isCurrentUser && <span className="ml-0.5 text-[7px] text-blue-600">(You)</span>}
+                                </p>
+                                <p className="text-[7px] text-gray-500">{watcher.role || 'Watcher'}</p>
+                              </div>
+                            </div>
+                            {canRemove && (
+                              <button
+                                onClick={() => handleRemoveWatcher(watcher._id)}
+                                className="p-0.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                                title="Remove watcher"
+                              >
+                                <X size={10} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           
           {/* Assignment Management */}
           {userRole !== 'Client' && canAssignDeveloper && ticket.status !== 'Closed' && (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
-              <h3 className="font-semibold text-gray-900 mb-3 sm:mb-4 flex items-center gap-2 text-xs sm:text-sm uppercase tracking-wider">
-                <Users size={isMobile ? 14 : 16} className="text-gray-500" /> Assignment
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-1.5 text-[10px] sm:text-xs uppercase tracking-wider">
+                <Users size={isMobile ? 12 : 14} className="text-gray-500" /> Assignment
               </h3>
               {ticket.assignedTo ? (
-                <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-green-50/70 border border-green-200 rounded-lg">
-                  <p className="text-[10px] sm:text-xs text-green-700 font-semibold mb-0.5 sm:mb-1">Current:</p>
-                  <p className="font-semibold text-gray-900 text-xs sm:text-sm">{ticket.assignedTo.name}</p>
-                  <p className="text-[9px] sm:text-xs text-gray-500 mt-0.5 truncate">{ticket.assignedTo.email}</p>
+                <div className="mb-2 p-1.5 bg-green-50/70 border border-green-200 rounded-lg">
+                  <p className="text-[9px] text-green-700 font-semibold">Current:</p>
+                  <p className="font-semibold text-gray-900 text-[10px]">{ticket.assignedTo.name}</p>
+                  <p className="text-[8px] text-gray-500 truncate">{ticket.assignedTo.email}</p>
                   {ticket.assignedTo.githubUsername && (
-                    <div className="flex items-center gap-1 mt-1 text-[9px] sm:text-xs text-gray-500">
-                      <GitFork size={isMobile ? 10 : 12} />
+                    <div className="flex items-center gap-0.5 mt-0.5 text-[8px] text-gray-500">
+                      <GitFork size={isMobile ? 8 : 10} />
                       <span>GitHub: {ticket.assignedTo.githubUsername}</span>
                     </div>
                   )}
                 </div>
               ) : (
-                <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-amber-50 border border-amber-200 text-amber-800 text-[10px] sm:text-xs rounded-lg font-medium">
+                <div className="mb-2 p-1.5 bg-amber-50 border border-amber-200 text-amber-800 text-[9px] rounded-lg font-medium">
                   {ticket.category === 'Production' && ticket.subcategory === 'Feasibility' 
                     ? 'Feasibility ticket needs a developer.' 
                     : 'Ticket is unassigned.'}
@@ -1519,7 +1644,7 @@ const TicketDetails = () => {
                 <select 
                   onChange={(e) => assignDeveloper(e.target.value)} 
                   disabled={assigning} 
-                  className="w-full px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm cursor-pointer" 
+                  className="w-full px-2 py-1.5 text-[9px] bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm cursor-pointer" 
                   defaultValue=""
                 >
                   <option value="">{ticket.assignedTo ? 'Reassign...' : 'Assign...'}</option>
@@ -1529,8 +1654,8 @@ const TicketDetails = () => {
                 </select>
               )}
               {userRole === 'Developer' && ticket.assignedTo?._id === currentUserId && (
-                <div className="mt-2 text-[10px] sm:text-xs text-green-600 font-medium flex items-center gap-1.5">
-                  <CheckCircle size={isMobile ? 12 : 14} /> You are assigned.
+                <div className="mt-1 text-[9px] text-green-600 font-medium flex items-center gap-1">
+                  <CheckCircle size={isMobile ? 10 : 12} /> You are assigned.
                 </div>
               )}
             </div>
@@ -1538,16 +1663,16 @@ const TicketDetails = () => {
 
           {/* Show closed message in sidebar */}
           {isTicketClosed && (
-            <div className="bg-red-50 rounded-lg shadow-sm border border-red-200 p-4 sm:p-6">
-              <div className="flex items-center gap-2 mb-2">
-                <Lock size={isMobile ? 16 : 20} className="text-red-600" />
-                <h3 className="font-semibold text-red-700 text-xs sm:text-sm uppercase tracking-wider">Ticket Closed</h3>
+            <div className="bg-red-50 rounded-lg shadow-sm border border-red-200 p-3 sm:p-4">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Lock size={isMobile ? 14 : 16} className="text-red-600" />
+                <h3 className="font-semibold text-red-700 text-[10px] uppercase tracking-wider">Ticket Closed</h3>
               </div>
-              <p className="text-xs text-red-600">
+              <p className="text-[10px] text-red-600">
                 This ticket has been closed. No further comments or changes can be made.
               </p>
               {ticket.closedAt && (
-                <p className="text-[10px] text-red-500 mt-2">
+                <p className="text-[9px] text-red-500 mt-1">
                   Closed on: {new Date(ticket.closedAt).toLocaleString()}
                 </p>
               )}
@@ -1555,6 +1680,114 @@ const TicketDetails = () => {
           )}
         </div>
       </div>
+
+      {/* ============================================
+          ADD WATCHER MODAL WITH SEARCH
+          ============================================ */}
+      {showWatcherModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h2 className="text-base font-black text-slate-800">Add Watcher</h2>
+                <p className="text-[9px] text-slate-500">Select users to watch this ticket</p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowWatcherModal(false);
+                  setWatcherSearchTerm('');
+                }} 
+                className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              {/* Search Bar */}
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  ref={watcherSearchInputRef}
+                  type="text"
+                  placeholder="Search by name, email, or role..."
+                  value={watcherSearchTerm}
+                  onChange={(e) => setWatcherSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+                {watcherSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setWatcherSearchTerm('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              
+              {/* User List */}
+              <div className="max-h-56 overflow-y-auto">
+                {availableUsers.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">
+                    {watcherSearchTerm ? (
+                      <>No users found matching "<span className="font-medium">{watcherSearchTerm}</span>"</>
+                    ) : (
+                      'No available users to add as watchers'
+                    )}
+                  </p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {availableUsers
+                      .filter(user => {
+                        const search = watcherSearchTerm.toLowerCase().trim();
+                        if (!search) return true;
+                        return (
+                          user.name?.toLowerCase().includes(search) ||
+                          user.email?.toLowerCase().includes(search) ||
+                          user.role?.toLowerCase().includes(search)
+                        );
+                      })
+                      .map(user => (
+                        <div
+                          key={user._id}
+                          onClick={() => handleAddWatcher(user._id)}
+                          className="flex items-center justify-between p-2 rounded-lg border border-slate-200 hover:border-blue-400 hover:bg-blue-50 cursor-pointer transition-all"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
+                              {user.name?.charAt(0) || '?'}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
+                              <p className="text-[8px] text-slate-500 truncate">{user.email}</p>
+                              <p className="text-[7px] text-slate-400">{user.role}</p>
+                            </div>
+                          </div>
+                          <UserPlus size={14} className="text-blue-600 flex-shrink-0 ml-2" />
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+              
+              {availableUsers.length > 0 && watcherSearchTerm && (
+                <p className="text-[8px] text-slate-400 mt-2 text-center">
+                  {availableUsers.filter(u => {
+                    const search = watcherSearchTerm.toLowerCase().trim();
+                    if (!search) return true;
+                    return (
+                      u.name?.toLowerCase().includes(search) ||
+                      u.email?.toLowerCase().includes(search) ||
+                      u.role?.toLowerCase().includes(search)
+                    );
+                  }).length} user(s) found
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Full Screen Image Viewer */}
       {showImageViewer && (

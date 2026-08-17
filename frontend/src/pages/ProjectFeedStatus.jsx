@@ -9,7 +9,7 @@ import {
   Filter, Info, ChevronDown, ChevronUp, Copy, Check, Hash, 
   Paperclip, UploadCloud, File, FileText, FileSpreadsheet, 
   FileArchive, FileVideo, FileAudio, FileCode, X, Image,
-  FolderOpen, HardDrive, Database
+  FolderOpen, HardDrive, Database, Hourglass
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
@@ -21,6 +21,7 @@ const getStatusColor = (status) => {
     case 'Completed': return 'bg-green-100 text-green-700';
     case 'In Progress': return 'bg-blue-100 text-blue-700';
     case 'Failed': return 'bg-red-100 text-red-700';
+    case 'Not Started': return 'bg-slate-100 text-slate-600';
     default: return 'bg-gray-100 text-gray-700';
   }
 };
@@ -40,7 +41,7 @@ const DISPLAY_STAGES = [
   ...STAGES
 ];
 
-const STATUS_FILTERS = ['All', 'Pending', 'In Progress', 'Completed', 'Failed'];
+const STATUS_FILTERS = ['All', 'Pending', 'In Progress', 'Completed', 'Failed', 'Not Started'];
 
 // ============================================
 // FILE UPLOAD CONFIGURATION
@@ -134,7 +135,6 @@ const getFileInfo = (feed) => {
   
   // Case 2: Array of file objects with path and size
   if (Array.isArray(outputPath) && outputPath.length > 0) {
-    // Check if it's an array of objects or strings
     if (typeof outputPath[0] === 'object' && outputPath[0].path) {
       return {
         type: 'multiple',
@@ -201,6 +201,12 @@ const ProjectFeedStatus = () => {
   // ============================================
   const [totalProjectFeeds, setTotalProjectFeeds] = useState(0);
   const [loadingTotal, setLoadingTotal] = useState(true);
+  
+  // ============================================
+  // NEW: State for Not Started feeds
+  // ============================================
+  const [notStartedFeeds, setNotStartedFeeds] = useState([]);
+  const [allProjectFeeds, setAllProjectFeeds] = useState([]);
 
   // Handle resize for mobile detection
   useEffect(() => {
@@ -663,63 +669,92 @@ const ProjectFeedStatus = () => {
     return () => clearInterval(interval);
   }, [projectId, location]);
 
-// ============================================
-// NEW: Fetch total project feeds count from main Feed table
-// Excludes: On hold[Sales], On hold[Technical], On hold[Client], and Closed
-// ============================================
-const fetchTotalProjectFeeds = async () => {
-  setLoadingTotal(true);
-  try {
-    const token = localStorage.getItem('token');
-    
-    // Use the admin projects endpoint to get all projects with feeds
-    const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    // Find the project with matching ID
-    const project = res.data.find(p => p._id === actualProjectId);
-    
-    if (project) {
-      // Get all feeds from the main Feed table
-      const allFeeds = project.feeds || [];
+  // ============================================
+  // NEW: Fetch total project feeds and not-started feeds from main Feed table
+  // ============================================
+  const fetchProjectFeedsFromMainTable = async () => {
+    setLoadingTotal(true);
+    try {
+      const token = localStorage.getItem('token');
       
-      // Filter out On Hold (all types) and Closed feeds
-      const activeFeeds = allFeeds.filter(feed => {
-        const status = feed.feedStatus || '';
-        // Exclude if status is Closed or contains 'ON hold'
-        return status !== 'Closed' && !status.includes('ON hold');
+      // Use the admin projects endpoint to get all projects with feeds
+      const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
       
-      setTotalProjectFeeds(activeFeeds.length);
-    } else {
-      // If project not found, fallback to 0
-      setTotalProjectFeeds(0);
+      // Find the project with matching ID
+      const project = res.data.find(p => p._id === actualProjectId);
+      
+      if (project) {
+        // Get all feeds from the main Feed table
+        const allFeeds = project.feeds || [];
+        setAllProjectFeeds(allFeeds);
+        
+        // Filter out On Hold (all types) and Closed feeds for total count
+        const activeFeeds = allFeeds.filter(feed => {
+          const status = feed.feedStatus || '';
+          return status !== 'Closed' && !status.includes('ON hold');
+        });
+        setTotalProjectFeeds(activeFeeds.length);
+        
+        // ============================================
+        // NEW: Find feeds that are "Not Started"
+        // A feed is "Not Started" if it:
+        // 1. Has NO entry in the FeedStatus collection for today
+        // 2. OR has status 'Pending' with no progress
+        // ============================================
+        const feedStatusNames = new Set(feeds.map(f => f.feed_name));
+        
+        const notStarted = allFeeds.filter(feed => {
+          const status = feed.feedStatus || '';
+          // Skip if feed is Closed or On Hold
+          if (status === 'Closed' || status.includes('ON hold')) return false;
+          
+          // Check if this feed has any status data in the current feeds array
+          // (feeds array contains data from FeedStatus collection)
+          const hasStatusData = feedStatusNames.has(feed.name);
+          
+          // If no status data, it's not started
+          return !hasStatusData;
+        });
+        
+        setNotStartedFeeds(notStarted);
+        
+        console.log(`📊 Total feeds: ${allFeeds.length}, Active: ${activeFeeds.length}, Not Started: ${notStarted.length}`);
+      } else {
+        setTotalProjectFeeds(0);
+        setNotStartedFeeds([]);
+        setAllProjectFeeds([]);
+      }
+    } catch (error) {
+      console.error('Error fetching project feeds from main table:', error);
+      // Fallback: try to get from current feeds data
+      if (feeds && feeds.length > 0) {
+        const uniqueFeeds = new Set(feeds.map(f => f.feed_name || f.name));
+        setTotalProjectFeeds(uniqueFeeds.size || feeds.length);
+      } else {
+        setTotalProjectFeeds(0);
+      }
+      setNotStartedFeeds([]);
+      setAllProjectFeeds([]);
+    } finally {
+      setLoadingTotal(false);
     }
-  } catch (error) {
-    console.error('Error fetching total project feeds from main table:', error);
-    // Fallback: count from current feeds data (filtering out On Hold and Closed)
-    if (feeds && feeds.length > 0) {
-      const activeFeeds = feeds.filter(feed => {
-        const status = feed.status || feed.feedStatus || '';
-        return status !== 'Closed' && !status.includes('ON hold');
-      });
-      const uniqueFeeds = new Set(activeFeeds.map(f => f.feed_name || f.name));
-      setTotalProjectFeeds(uniqueFeeds.size || activeFeeds.length);
-    } else {
-      setTotalProjectFeeds(0);
-    }
-  } finally {
-    setLoadingTotal(false);
-  }
-};
+  };
 
-  // Fetch total project feeds when project ID is available
+  // Fetch project feeds from main table when project ID is available
   useEffect(() => {
     if (actualProjectId) {
-      fetchTotalProjectFeeds();
+      fetchProjectFeedsFromMainTable();
     }
   }, [actualProjectId]);
+
+  // Also fetch when feeds data changes (to detect not-started feeds)
+  useEffect(() => {
+    if (actualProjectId && feeds.length > 0) {
+      fetchProjectFeedsFromMainTable();
+    }
+  }, [feeds]);
 
   const fetchFeeds = async (id) => {
     if (!id) {
@@ -732,9 +767,6 @@ const fetchTotalProjectFeeds = async () => {
       
       // Determine which endpoint to use based on role
       let endpoint = `/api/client/projects/${id}/feeds`;
-      
-      // The backend clientRoutes.js serves feed status data from FeedStatus collection
-      // which is role-agnostic — it just needs the project ID
       
       const res = await axios.get(`${API_BASE_URL}${endpoint}`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -838,7 +870,40 @@ const fetchTotalProjectFeeds = async () => {
     }
   };
 
-  const filteredFeeds = statusFilter === 'All' ? feeds : feeds.filter(feed => feed.status === statusFilter);
+  // Filter feeds including Not Started
+  const getFilteredFeeds = () => {
+    if (statusFilter === 'All') {
+      return feeds;
+    }
+    if (statusFilter === 'Not Started') {
+      // Return the not-started feeds from the main table
+      return notStartedFeeds.map(feed => ({
+        feed_name: feed.name,
+        _id: feed._id,
+        id: feed._id,
+        status: 'Not Started',
+        progress: 0,
+        stages: {},
+        failed: false,
+        error_message: '',
+        date: new Date().toISOString().split('T')[0],
+        project: projectName,
+        client: 'Client',
+        feed_type: feed.feedType || 'Daily',
+        feedType: feed.feedType || 'Daily',
+        projectName: projectName,
+        projectCustomId: projectName,
+        projectId: actualProjectId,
+        output_path: null,
+        record_count: null,
+        isNotStarted: true,
+        feedStatus: feed.feedStatus || 'New'
+      }));
+    }
+    return feeds.filter(feed => feed.status === statusFilter);
+  };
+
+  const filteredFeeds = getFilteredFeeds();
   const totalPages = Math.ceil(filteredFeeds.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
@@ -846,12 +911,14 @@ const fetchTotalProjectFeeds = async () => {
 
   useEffect(() => { setCurrentPage(1); }, [statusFilter]);
 
+  // Update stats to include Not Started count
   const stats = {
     total: feeds.length,
     completed: feeds.filter(f => f.status === 'Completed').length,
     inProgress: feeds.filter(f => f.status === 'In Progress').length,
     failed: feeds.filter(f => f.failed).length,
     pending: feeds.filter(f => f.status === 'Pending' || !f.status).length,
+    notStarted: notStartedFeeds.length,
     completionPercentage: feeds.length > 0 ? Math.round((feeds.filter(f => f.status === 'Completed').length / feeds.length) * 100) : 0
   };
 
@@ -893,21 +960,31 @@ const fetchTotalProjectFeeds = async () => {
         
         <div className="flex items-center gap-1.5 sm:gap-3 flex-wrap">
           {/* Filter Buttons - Horizontal scroll on mobile */}
-          <div className="flex items-center gap-0.5 bg-white rounded-lg border border-slate-200 shadow-sm px-1.5 sm:px-2 py-1 overflow-x-auto max-w-[140px] sm:max-w-none">
+          <div className="flex items-center gap-0.5 bg-white rounded-lg border border-slate-200 shadow-sm px-1.5 sm:px-2 py-1 overflow-x-auto max-w-[180px] sm:max-w-none">
             <Filter size={isMobile ? 12 : 14} className="text-slate-400 flex-shrink-0 mr-0.5 sm:mr-1" />
             <div className="flex items-center gap-0.5">
-              {STATUS_FILTERS.slice(0, isMobile ? 3 : 5).map(filter => (
-                <button
-                  key={filter}
-                  onClick={() => setStatusFilter(filter)}
-                  className={`px-1 sm:px-2 py-0.5 rounded-md text-[6px] sm:text-[8px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                    statusFilter === filter ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {filter === 'All' ? 'All' : filter === 'In Progress' ? 'Prog' : filter}
-                  {filter !== 'All' && `(${feeds.filter(f => f.status === filter).length})`}
-                </button>
-              ))}
+              {STATUS_FILTERS.slice(0, isMobile ? 4 : 6).map(filter => {
+                let count = 0;
+                if (filter === 'All') {
+                  count = feeds.length + notStartedFeeds.length;
+                } else if (filter === 'Not Started') {
+                  count = notStartedFeeds.length;
+                } else {
+                  count = feeds.filter(f => f.status === filter).length;
+                }
+                return (
+                  <button
+                    key={filter}
+                    onClick={() => setStatusFilter(filter)}
+                    className={`px-1 sm:px-2 py-0.5 rounded-md text-[6px] sm:text-[8px] font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                      statusFilter === filter ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    {filter === 'All' ? 'All' : filter === 'In Progress' ? 'Prog' : filter === 'Not Started' ? 'NotStrt' : filter}
+                    {filter !== 'All' && `(${count})`}
+                  </button>
+                );
+              })}
             </div>
           </div>
           
@@ -940,16 +1017,29 @@ const fetchTotalProjectFeeds = async () => {
       </div>
 
       {/* Stats Row - Clickable cards with filter functionality */}
-      {/* NEW: Added "Project Feeds" card as the first item - shows total feeds from main Feed table */}
       <div className="grid grid-cols-4 sm:grid-cols-7 gap-0.5 sm:gap-1 mb-1.5 sm:mb-2">
-        {/* NEW: Total Feeds in Project - Shows all feeds from the main Feed table */}
+        {/* Total Feeds in Project - Shows all feeds from the main Feed table */}
         <div 
           className="bg-white rounded-lg border p-1 sm:p-2 text-center shadow-sm"
         >
-          <p className="text-[6px] sm:text-[7px] font-black uppercase text-black">Total Feeds</p>
-          <p className="text-sm sm:text-base font-black text-black">
+          <p className="text-[6px] sm:text-[7px] font-black uppercase text-purple-500">Total Feeds</p>
+          <p className="text-sm sm:text-base font-black text-purple-600">
             {loadingTotal ? '...' : totalProjectFeeds}
           </p>
+        </div>
+
+        {/* Not Started */}
+        <div 
+          onClick={() => setStatusFilter('Not Started')}
+          className={`bg-white rounded-lg border p-1 sm:p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'Not Started' ? 'border-slate-500 ring-1 sm:ring-2 ring-slate-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-[6px] sm:text-[7px] font-black uppercase text-slate-500">
+            <Hourglass size={isMobile ? 8 : 10} className="inline mr-0.5" />
+            Not Started
+          </p>
+          <p className="text-sm sm:text-base font-black text-slate-600">{stats.notStarted}</p>
         </div>
 
         {/* Total - Shows all feeds from today's FeedStatus */}
@@ -996,18 +1086,7 @@ const fetchTotalProjectFeeds = async () => {
           <p className="text-sm sm:text-base font-black text-red-600">{stats.failed}</p>
         </div>
 
-        {/* Pending */}
-        <div 
-          onClick={() => setStatusFilter('Pending')}
-          className={`bg-white rounded-lg border p-1 sm:p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
-            statusFilter === 'Pending' ? 'border-amber-500 ring-1 sm:ring-2 ring-amber-200' : 'border-slate-200'
-          }`}
-        >
-          <p className="text-[6px] sm:text-[7px] font-black uppercase text-amber-500">Pending</p>
-          <p className="text-sm sm:text-base font-black text-amber-600">{stats.pending}</p>
-        </div>
-
-        {/* Completion Percentage - Shows all feeds */}
+        {/* Completion Percentage */}
         <div 
           onClick={() => setStatusFilter('All')}
           className={`bg-white rounded-lg border p-1 sm:p-2 shadow-sm flex flex-col justify-center cursor-pointer hover:shadow-md transition-all ${
@@ -1037,6 +1116,7 @@ const fetchTotalProjectFeeds = async () => {
                 const hasFileInfo = fileInfo && fileInfo.files && fileInfo.files.length > 0;
                 const normalizedPaths = getNormalizedPaths(feed.output_path);
                 const hasPaths = normalizedPaths.length > 0;
+                const isNotStarted = feed.isNotStarted || false;
                 
                 return (
                   <div key={feed._id || feed.feed_name} className="p-2 sm:p-4 hover:bg-slate-50/60 transition-all">
@@ -1047,8 +1127,18 @@ const fetchTotalProjectFeeds = async () => {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 sm:gap-2">
-                          <div className={`w-1.5 sm:w-2 h-4 sm:h-5 rounded-full flex-shrink-0 ${feed.failed ? 'bg-red-500' : feed.status === 'Completed' ? 'bg-green-500' : feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'}`} />
-                          <span className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{feed.feed_name || feed.name}</span>
+                          <div className={`w-1.5 sm:w-2 h-4 sm:h-5 rounded-full flex-shrink-0 ${
+                            isNotStarted ? 'bg-slate-300' :
+                            feed.failed ? 'bg-red-500' : 
+                            feed.status === 'Completed' ? 'bg-green-500' : 
+                            feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'
+                          }`} />
+                          <span className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">
+                            {feed.feed_name || feed.name}
+                            {isNotStarted && (
+                              <span className="ml-1 text-[7px] font-black text-slate-400 bg-slate-100 px-1 py-0.5 rounded">Not Started</span>
+                            )}
+                          </span>
                         </div>
                         {hasRecordCount && (
                           <span className="text-[7px] sm:text-[9px] font-mono font-semibold text-emerald-600 mt-0.5 flex items-center gap-0.5 sm:gap-1">
@@ -1069,13 +1159,15 @@ const fetchTotalProjectFeeds = async () => {
                     <div className="mt-1.5 sm:mt-2 flex items-center gap-1.5 sm:gap-2">
                       <div className="flex-1 h-1 sm:h-1.5 bg-slate-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} 
-                             style={{ width: `${Math.min(feed.progress, 100)}%` }} />
+                             style={{ width: `${isNotStarted ? 0 : Math.min(feed.progress, 100)}%` }} />
                       </div>
-                      <span className="text-[7px] sm:text-[9px] font-bold text-slate-600 min-w-[20px] sm:min-w-[30px]">{feed.progress}%</span>
+                      <span className="text-[7px] sm:text-[9px] font-bold text-slate-600 min-w-[20px] sm:min-w-[30px]">
+                        {isNotStarted ? '0%' : `${feed.progress}%`}
+                      </span>
                     </div>
 
                     {/* File Info with Copy Button */}
-                    {hasFileInfo && (
+                    {!isNotStarted && hasFileInfo && (
                       <div className="mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
                         {fileInfo.files.slice(0, isMobile ? 1 : 3).map((file, idx) => (
                           <div key={idx} className="flex items-center justify-between bg-slate-50 rounded-lg p-1 sm:p-1.5 border border-slate-200">
@@ -1117,7 +1209,7 @@ const fetchTotalProjectFeeds = async () => {
                     )}
 
                     {/* Legacy Paths (if no file info but has paths) */}
-                    {!hasFileInfo && hasPaths && (
+                    {!isNotStarted && !hasFileInfo && hasPaths && (
                       <div className="mt-1.5 sm:mt-2 flex items-center justify-between bg-slate-50 rounded-lg p-1 sm:p-2 border border-slate-200">
                         <code className="text-[6px] sm:text-[8px] font-mono text-slate-600 truncate flex-1">
                           {normalizedPaths.length === 1 
@@ -1144,65 +1236,75 @@ const fetchTotalProjectFeeds = async () => {
                     {/* Expanded Details */}
                     {isExpanded && (
                       <div className="mt-2 sm:mt-3 pt-2 sm:pt-3 border-t border-slate-100 space-y-1.5 sm:space-y-2">
-                        {/* Stages */}
-                        <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
-                          {DISPLAY_STAGES.map((stage, idx) => {
-                            const stageData = stage.virtual ? null : feed.stages?.[stage.key];
-                            const isCompleted = stage.virtual ? true : stageData?.completed === true;
-                            const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
-                            
-                            return (
-                              <React.Fragment key={`${feed._id || feed.feed_name}-mobile-${stage.key}`}>
-                                <div className={`w-3 sm:w-4 h-3 sm:h-4 rounded-full flex items-center justify-center border transition-all ${
-                                  isCompleted ? 'bg-green-500 border-green-500 text-white' : 
-                                  isFailed ? 'bg-red-500 border-red-500 text-white' : 
-                                  'bg-white border-gray-300 text-gray-300'
-                                }`}>
-                                  {isCompleted ? <CheckCircle size={isMobile ? 4 : 6} /> : isFailed ? <XCircle size={isMobile ? 4 : 6} /> : null}
-                                </div>
-                                {idx < DISPLAY_STAGES.length - 1 && (
-                                  <div className={`w-2 sm:w-3 h-0.5 ${isCompleted ? 'bg-green-400' : 'bg-gray-300'}`} />
-                                )}
-                              </React.Fragment>
-                            );
-                          })}
-                        </div>
-
-                        {/* File Details in Expanded View */}
-                        {hasFileInfo && fileInfo.files.length > 0 && (
-                          <div className="mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
-                            <p className="text-[5px] sm:text-[6px] font-bold text-slate-500 uppercase tracking-wider">Files ({fileInfo.files.length}):</p>
-                            {fileInfo.files.map((file, idx) => (
-                              <div key={idx} className="flex items-center justify-between bg-slate-100 rounded-lg p-1 sm:p-1.5">
-                                <div className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
-                                  <HardDrive size={isMobile ? 8 : 10} className="text-slate-400 flex-shrink-0" />
-                                  <code className="text-[5px] sm:text-[6px] font-mono text-slate-600 truncate flex-1">
-                                    {file.path}
-                                  </code>
-                                </div>
-                                <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
-                                  {file.size && (
-                                    <span className="text-[5px] sm:text-[6px] font-bold text-blue-600 whitespace-nowrap">
-                                      {file.size}
-                                    </span>
-                                  )}
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      copyToClipboard(file.path, `${feed._id}-expanded-${idx}`);
-                                    }}
-                                    className="p-0.5 sm:p-1 rounded hover:bg-slate-200 transition-colors"
-                                    title="Copy file path"
-                                  >
-                                    {copiedPath === `${feed._id}-expanded-${idx}` ? (
-                                      <Check size={isMobile ? 8 : 10} className="text-green-600" />
-                                    ) : (
-                                      <Copy size={isMobile ? 8 : 10} className="text-slate-400" />
+                        {!isNotStarted ? (
+                          <>
+                            {/* Stages */}
+                            <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
+                              {DISPLAY_STAGES.map((stage, idx) => {
+                                const stageData = stage.virtual ? null : feed.stages?.[stage.key];
+                                const isCompleted = stage.virtual ? true : stageData?.completed === true;
+                                const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
+                                
+                                return (
+                                  <React.Fragment key={`${feed._id || feed.feed_name}-mobile-${stage.key}`}>
+                                    <div className={`w-3 sm:w-4 h-3 sm:h-4 rounded-full flex items-center justify-center border transition-all ${
+                                      isCompleted ? 'bg-green-500 border-green-500 text-white' : 
+                                      isFailed ? 'bg-red-500 border-red-500 text-white' : 
+                                      'bg-white border-gray-300 text-gray-300'
+                                    }`}>
+                                      {isCompleted ? <CheckCircle size={isMobile ? 4 : 6} /> : isFailed ? <XCircle size={isMobile ? 4 : 6} /> : null}
+                                    </div>
+                                    {idx < DISPLAY_STAGES.length - 1 && (
+                                      <div className={`w-2 sm:w-3 h-0.5 ${isCompleted ? 'bg-green-400' : 'bg-gray-300'}`} />
                                     )}
-                                  </button>
-                                </div>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </div>
+
+                            {/* File Details in Expanded View */}
+                            {hasFileInfo && fileInfo.files.length > 0 && (
+                              <div className="mt-1.5 sm:mt-2 space-y-0.5 sm:space-y-1">
+                                <p className="text-[5px] sm:text-[6px] font-bold text-slate-500 uppercase tracking-wider">Files ({fileInfo.files.length}):</p>
+                                {fileInfo.files.map((file, idx) => (
+                                  <div key={idx} className="flex items-center justify-between bg-slate-100 rounded-lg p-1 sm:p-1.5">
+                                    <div className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
+                                      <HardDrive size={isMobile ? 8 : 10} className="text-slate-400 flex-shrink-0" />
+                                      <code className="text-[5px] sm:text-[6px] font-mono text-slate-600 truncate flex-1">
+                                        {file.path}
+                                      </code>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
+                                      {file.size && (
+                                        <span className="text-[5px] sm:text-[6px] font-bold text-blue-600 whitespace-nowrap">
+                                          {file.size}
+                                        </span>
+                                      )}
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          copyToClipboard(file.path, `${feed._id}-expanded-${idx}`);
+                                        }}
+                                        className="p-0.5 sm:p-1 rounded hover:bg-slate-200 transition-colors"
+                                        title="Copy file path"
+                                      >
+                                        {copiedPath === `${feed._id}-expanded-${idx}` ? (
+                                          <Check size={isMobile ? 8 : 10} className="text-green-600" />
+                                        ) : (
+                                          <Copy size={isMobile ? 8 : 10} className="text-slate-400" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                ))}
                               </div>
-                            ))}
+                            )}
+                          </>
+                        ) : (
+                          <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-center">
+                            <Hourglass size={isMobile ? 20 : 24} className="text-slate-400 mx-auto mb-1" />
+                            <p className="text-xs font-semibold text-slate-500">Feed not started yet</p>
+                            <p className="text-[8px] text-slate-400">No status data has been recorded for this feed</p>
                           </div>
                         )}
                       </div>
@@ -1238,6 +1340,7 @@ const fetchTotalProjectFeeds = async () => {
                     const completedStages = STAGES.filter(stage => feed.stages?.[stage.key]?.completed === true).length;
                     const calculatedProgress = Math.round((completedStages / totalStages) * 100);
                     const isExpanded = expandedFeed === (feed._id || feed.feed_name);
+                    const isNotStarted = feed.isNotStarted || false;
                     
                     const fileInfo = getFileInfo(feed);
                     const hasFileInfo = fileInfo && fileInfo.files && fileInfo.files.length > 0;
@@ -1255,7 +1358,6 @@ const fetchTotalProjectFeeds = async () => {
                     
                     const hasRecordCount = feed.record_count !== null && feed.record_count !== undefined;
                     
-                    // Get display file info
                     const displayFiles = hasFileInfo ? fileInfo.files.slice(0, 2) : [];
                     const hasMoreFiles = hasFileInfo && fileInfo.files.length > 2;
                     
@@ -1267,9 +1369,19 @@ const fetchTotalProjectFeeds = async () => {
                         >
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <div className={`w-1.5 h-6 rounded-full ${feed.failed ? 'bg-red-500' : feed.status === 'Completed' ? 'bg-green-500' : feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
+                              <div className={`w-1.5 h-6 rounded-full ${
+                                isNotStarted ? 'bg-slate-300' :
+                                feed.failed ? 'bg-red-500' : 
+                                feed.status === 'Completed' ? 'bg-green-500' : 
+                                feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'
+                              }`}></div>
                               <div className="flex flex-col">
-                                <span className="text-xs font-bold text-slate-800 truncate">{feed.feed_name || feed.name}</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-xs font-bold text-slate-800 truncate">{feed.feed_name || feed.name}</span>
+                                  {isNotStarted && (
+                                    <span className="text-[7px] font-black text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded-full">Not Started</span>
+                                  )}
+                                </div>
                                 {hasRecordCount && (
                                   <span className="text-[9px] font-mono font-semibold text-emerald-600 mt-0.5 flex items-center gap-1">
                                     <Hash size={10} className="text-emerald-500" />
@@ -1281,47 +1393,65 @@ const fetchTotalProjectFeeds = async () => {
                           </td>
 
                           <td className="px-3 py-2">
-                            <div className="flex items-center">
-                              {DISPLAY_STAGES.map((stage, idx) => {
-                                const isVirtual = !!stage.virtual;
-                                const { isCompleted, completedAt } = stageStates[idx];
-                                const isInProgress = isVirtual ? false : (!isCompleted && (idx - 1) <= completedStages);
-                                const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
-                                const timeStr = completedAt ? formatISTTime(completedAt) : null;
-                                
-                                return (
-                                  <React.Fragment key={`${feed._id || feed.feed_name}-stage-${stage.key}`}>
-                                    <div className="relative group flex items-center">
-                                      <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all cursor-default ${isCompleted ? 'bg-green-500 border-green-500 text-white' : isFailed ? 'bg-red-500 border-red-500 text-white' : isInProgress ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-gray-300 text-gray-300'}`}>
-                                        {isCompleted ? <CheckCircle size={8} /> : isFailed ? <XCircle size={8} /> : isInProgress ? <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div> : <div className="w-1.5 h-1.5 bg-gray-300 rounded-full"></div>}
-                                      </div>
-                                      {timeStr && (
-                                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
-                                          <div className="bg-gray-900 text-white text-[7px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap shadow-lg">{stage.label}: {timeStr}</div>
-                                          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                            {isNotStarted ? (
+                              <div className="flex items-center gap-1 text-slate-400">
+                                <Hourglass size={14} />
+                                <span className="text-[8px] font-medium">Not started</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center">
+                                {DISPLAY_STAGES.map((stage, idx) => {
+                                  const isVirtual = !!stage.virtual;
+                                  const { isCompleted, completedAt } = stageStates[idx];
+                                  const isInProgress = isVirtual ? false : (!isCompleted && (idx - 1) <= completedStages);
+                                  const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
+                                  const timeStr = completedAt ? formatISTTime(completedAt) : null;
+                                  
+                                  return (
+                                    <React.Fragment key={`${feed._id || feed.feed_name}-stage-${stage.key}`}>
+                                      <div className="relative group flex items-center">
+                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all cursor-default ${isCompleted ? 'bg-green-500 border-green-500 text-white' : isFailed ? 'bg-red-500 border-red-500 text-white' : isInProgress ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-gray-300 text-gray-300'}`}>
+                                          {isCompleted ? <CheckCircle size={8} /> : isFailed ? <XCircle size={8} /> : isInProgress ? <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div> : <div className="w-1.5 h-1.5 bg-gray-300 rounded-full"></div>}
                                         </div>
-                                      )}
-                                    </div>
-                                    {idx < DISPLAY_STAGES.length - 1 && <div className={`w-4 h-0.5 mx-0.5 ${isCompleted ? 'bg-green-400' : isInProgress ? 'bg-blue-300' : 'bg-gray-300'}`}></div>}
-                                  </React.Fragment>
-                                );
-                              })}
-                              <div className="ml-2">{isExpanded ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}</div>
-                            </div>
+                                        {timeStr && (
+                                          <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
+                                            <div className="bg-gray-900 text-white text-[7px] font-medium px-1.5 py-0.5 rounded whitespace-nowrap shadow-lg">{stage.label}: {timeStr}</div>
+                                            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+                                          </div>
+                                        )}
+                                      </div>
+                                      {idx < DISPLAY_STAGES.length - 1 && <div className={`w-4 h-0.5 mx-0.5 ${isCompleted ? 'bg-green-400' : isInProgress ? 'bg-blue-300' : 'bg-gray-300'}`}></div>}
+                                    </React.Fragment>
+                                  );
+                                })}
+                                <div className="ml-2">{isExpanded ? <ChevronUp size={12} className="text-slate-400" /> : <ChevronDown size={12} className="text-slate-400" />}</div>
+                              </div>
+                            )}
                           </td>
 
                           <td className="px-3 py-2">
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} style={{ width: `${Math.min(calculatedProgress, 100)}%` }} />
+                            {isNotStarted ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full bg-slate-300" style={{ width: '0%' }} />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-500 min-w-[30px]">0%</span>
                               </div>
-                              <span className="text-[10px] font-bold text-slate-700 min-w-[30px]">{calculatedProgress}%</span>
-                            </div>
+                            ) : (
+                              <div className="flex items-center gap-2">
+                                <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} style={{ width: `${Math.min(calculatedProgress, 100)}%` }} />
+                                </div>
+                                <span className="text-[10px] font-bold text-slate-700 min-w-[30px]">{calculatedProgress}%</span>
+                              </div>
+                            )}
                           </td>
 
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-1.5">
-                              <span className={`px-2 py-0.5 text-[8px] font-semibold rounded-md ${getStatusColor(feed.status)}`}>{feed.status || 'Pending'}</span>
+                              <span className={`px-2 py-0.5 text-[8px] font-semibold rounded-md ${getStatusColor(feed.status)}`}>
+                                {feed.status || 'Pending'}
+                              </span>
                               {feed.failed && <AlertCircle size={10} className="text-red-500" />}
                             </div>
                           </td>
@@ -1337,7 +1467,7 @@ const fetchTotalProjectFeeds = async () => {
                           </td>
 
                           <td className="px-3 py-2" onClick={(e) => e.stopPropagation()}>
-                            {hasFileInfo ? (
+                            {!isNotStarted && hasFileInfo ? (
                               <div className="space-y-0.5">
                                 {displayFiles.map((file, idx) => (
                                   <div key={idx} className="flex items-center justify-between group max-w-[200px]">
@@ -1376,7 +1506,7 @@ const fetchTotalProjectFeeds = async () => {
                                   </span>
                                 )}
                               </div>
-                            ) : hasPaths ? (
+                            ) : !isNotStarted && hasPaths ? (
                               <div className="flex items-center gap-1.5 group justify-between max-w-[180px]">
                                 <code className="text-[8px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 truncate flex-1 text-left">
                                   {normalizedPaths.length === 1 
@@ -1408,36 +1538,45 @@ const fetchTotalProjectFeeds = async () => {
                                 <div className="md:col-span-2 bg-white rounded-lg border border-slate-200 p-4">
                                   <h4 className="text-[9px] font-black text-slate-600 uppercase tracking-wider mb-5 flex items-center gap-1.5">
                                     <CheckCircle size={12} className="text-blue-600" />
-                                    Feed Progress
+                                    {isNotStarted ? 'Feed Status' : 'Feed Progress'}
                                   </h4>
 
-                                  <div className="relative px-2">
-                                    <div className="absolute top-3 left-4 right-4 h-1 bg-gray-200 rounded-full" />
-                                    <div className="absolute top-3 left-4 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500" style={{ width: `calc(${Math.min((Math.max(currentStageIndex, 0) / (DISPLAY_STAGES.length - 1)) * 100, 100)}% - 8px)` }} />
+                                  {isNotStarted ? (
+                                    <div className="flex flex-col items-center justify-center py-6">
+                                      <Hourglass size={32} className="text-slate-300 mb-2" />
+                                      <p className="text-sm font-bold text-slate-500">Not Started</p>
+                                      <p className="text-[10px] text-slate-400">This feed has not been started yet</p>
+                                      <p className="text-[8px] text-slate-400 mt-1">Status: {feed.feedStatus || 'New'}</p>
+                                    </div>
+                                  ) : (
+                                    <div className="relative px-2">
+                                      <div className="absolute top-3 left-4 right-4 h-1 bg-gray-200 rounded-full" />
+                                      <div className="absolute top-3 left-4 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500" style={{ width: `calc(${Math.min((Math.max(currentStageIndex, 0) / (DISPLAY_STAGES.length - 1)) * 100, 100)}% - 8px)` }} />
 
-                                    <div className="flex justify-between items-start relative">
-                                      {DISPLAY_STAGES.map((stage, idx) => {
-                                        const { isCompleted, completedAt } = stageStates[idx];
-                                        const isCurrent = !isCompleted && idx === activeStageIndex && (feed.status !== 'Pending' || stage.virtual);
-                                        const isFailed = failedStageIndex === idx && !isCompleted;
-                                        const timeStr = completedAt ? formatISTTime(completedAt) : null;
+                                      <div className="flex justify-between items-start relative">
+                                        {DISPLAY_STAGES.map((stage, idx) => {
+                                          const { isCompleted, completedAt } = stageStates[idx];
+                                          const isCurrent = !isCompleted && idx === activeStageIndex && (feed.status !== 'Pending' || stage.virtual);
+                                          const isFailed = failedStageIndex === idx && !isCompleted;
+                                          const timeStr = completedAt ? formatISTTime(completedAt) : null;
 
-                                        return (
-                                          <div key={`${feed._id || feed.feed_name}-expanded-${stage.key}`} className="flex flex-col items-center relative group" style={{ minWidth: '48px', flex: '1 1 0%' }}>
-                                            <div className="relative z-10">
-                                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-default ${isCompleted ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' : isFailed ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-md' : 'bg-gray-200 text-gray-500'} ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500 shadow-md' : ''}`}>
-                                                {isCompleted ? <CheckCircle size={13} /> : isFailed ? <XCircle size={13} /> : idx + 1}
+                                          return (
+                                            <div key={`${feed._id || feed.feed_name}-expanded-${stage.key}`} className="flex flex-col items-center relative group" style={{ minWidth: '48px', flex: '1 1 0%' }}>
+                                              <div className="relative z-10">
+                                                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-default ${isCompleted ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' : isFailed ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-md' : 'bg-gray-200 text-gray-500'} ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500 shadow-md' : ''}`}>
+                                                  {isCompleted ? <CheckCircle size={13} /> : isFailed ? <XCircle size={13} /> : idx + 1}
+                                                </div>
+                                              </div>
+                                              <div className="mt-2 text-center min-h-[28px] flex flex-col items-center">
+                                                <p className={`text-[7px] font-bold leading-tight transition-colors ${isCompleted ? 'text-green-700' : isFailed ? 'text-red-600' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>{stage.label}</p>
+                                                {isCurrent && <span className="mt-0.5 text-[6px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">● Current</span>}
                                               </div>
                                             </div>
-                                            <div className="mt-2 text-center min-h-[28px] flex flex-col items-center">
-                                              <p className={`text-[7px] font-bold leading-tight transition-colors ${isCompleted ? 'text-green-700' : isFailed ? 'text-red-600' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>{stage.label}</p>
-                                              {isCurrent && <span className="mt-0.5 text-[6px] font-bold text-blue-600 uppercase tracking-wide animate-pulse">● Current</span>}
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
+                                          );
+                                        })}
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
 
                                 <div className="bg-white rounded-lg border border-slate-200 p-4 flex flex-col justify-between">
@@ -1446,7 +1585,11 @@ const fetchTotalProjectFeeds = async () => {
                                       <Database size={12} className="text-blue-600" />
                                       Pipeline Metrics
                                     </h4>
-                                    <p className="text-[10px] text-slate-400 leading-tight">Data verification metrics captured during file integrity step cycles.</p>
+                                    <p className="text-[10px] text-slate-400 leading-tight">
+                                      {isNotStarted 
+                                        ? 'This feed is not started. No metrics available yet.' 
+                                        : 'Data verification metrics captured during file integrity step cycles.'}
+                                    </p>
                                   </div>
                                   <div className="my-auto py-2">
                                     {hasRecordCount ? (
@@ -1456,14 +1599,16 @@ const fetchTotalProjectFeeds = async () => {
                                         </span>
                                       </div>
                                     ) : (
-                                      <div className="text-xs text-slate-400 italic">No counting metrics calculated yet.</div>
+                                      <div className="text-xs text-slate-400 italic">
+                                        {isNotStarted ? 'No data yet' : 'No counting metrics calculated yet.'}
+                                      </div>
                                     )}
                                   </div>
                                 </div>
                               </div>
 
                               {/* File Details in Expanded View */}
-                              {hasFileInfo && fileInfo.files.length > 0 && (
+                              {!isNotStarted && hasFileInfo && fileInfo.files.length > 0 && (
                                 <div className="mt-3 pt-3 border-t border-slate-200 space-y-2">
                                   <div className="flex items-center justify-between">
                                     <span className="text-[7px] font-bold text-slate-500 uppercase tracking-wider">

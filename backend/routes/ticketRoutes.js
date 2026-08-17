@@ -449,5 +449,21 @@ router.get('/feeds/:projectId', protect, async (req, res) => {
 });
 // Get developers for assignment dropdown (PM, Admin, Team Lead only)
 router.get('/developers/list', authorize('Project Manager', 'Admin', 'Team Lead'), ticketController.getDevelopers);
+// backend/routes/ticketRoutes.js - ADD WATCHER ROUTES
 
+// ============================================
+// WATCHER ROUTES
+// ============================================
+
+// Get all users for watcher selection
+router.get('/users/watchers', protect, ticketController.getUsersForWatchers);
+
+// Get watchers for a ticket
+router.get('/:id/watchers', protect, ticketController.getWatchers);
+
+// Add watcher to ticket
+router.post('/:id/watchers', protect, ticketController.addWatcher);
+
+// Remove watcher from ticket
+router.delete('/:id/watchers/:userId', protect, ticketController.removeWatcher);
 module.exports = router;

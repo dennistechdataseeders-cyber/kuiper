@@ -1,3 +1,5 @@
+// backend/models/Ticket.js - ADD WATCHERS FIELD
+
 const mongoose = require('mongoose');
 
 const ticketSchema = new mongoose.Schema({
@@ -52,6 +54,13 @@ const ticketSchema = new mongoose.Schema({
     ref: 'User',
     default: null
   },
+  // ============================================
+  // NEW: Watchers field - users who follow this ticket
+  // ============================================
+  watchers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   projectId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Project',
@@ -66,15 +75,12 @@ const ticketSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // ============================================
-  // FILES FIELD - For attachments at creation
-  // ============================================
   files: [{
     url: { type: String },
     filename: { type: String },
     originalName: { type: String },
     size: { type: Number },
-    type: { type: String } // 'image' or 'document'
+    type: { type: String }
   }],
   comments: [{
     text: { type: String, default: '' },
@@ -86,7 +92,7 @@ const ticketSchema = new mongoose.Schema({
       filename: { type: String },
       originalName: { type: String },
       size: { type: Number },
-      type: { type: String } // 'image' or 'document'
+      type: { type: String }
     }],
     createdAt: { type: Date, default: Date.now }
   }],

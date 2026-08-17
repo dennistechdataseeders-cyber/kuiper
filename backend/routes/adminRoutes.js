@@ -1578,6 +1578,8 @@ const profileUpload = multer({
   }
 });
 
+// backend/routes/adminRoutes.js - FIXED PROFILE IMAGE UPLOAD URL
+
 // POST /upload-profile-image - Upload profile image
 router.post('/upload-profile-image', protect, profileUpload.single('profileImage'), async (req, res) => {
   try {
@@ -1594,8 +1596,27 @@ router.post('/upload-profile-image', protect, profileUpload.single('profileImage
       }
     }
 
+    // ✅ FIX: Determine the correct base URL
+    let baseUrl;
+    
+    // 1. Check for environment variable first (production)
+    if (process.env.API_BASE_URL) {
+      baseUrl = process.env.API_BASE_URL.replace(/\/+$/, '');
+    } 
+    // 2. Check for FRONTEND_URL as fallback
+    else if (process.env.FRONTEND_URL) {
+      baseUrl = process.env.FRONTEND_URL.replace(/\/+$/, '');
+    }
+    // 3. Check if we're behind a proxy (production)
+    else if (req.headers['x-forwarded-proto'] && req.headers['x-forwarded-host']) {
+      baseUrl = `${req.headers['x-forwarded-proto']}://${req.headers['x-forwarded-host']}`;
+    }
+    // 4. Fallback to localhost (development)
+    else {
+      baseUrl = `${req.protocol}://${req.get('host')}`;
+    }
+
     // Construct the URL for the uploaded image
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
     const imageUrl = `${baseUrl}/uploads/profiles/${req.file.filename}`;
 
     // Update user with profile image URL
@@ -1612,7 +1633,6 @@ router.post('/upload-profile-image', protect, profileUpload.single('profileImage
     res.status(500).json({ error: 'Failed to upload profile image' });
   }
 });
-
 // DELETE /remove-profile-image - Remove profile image
 router.delete('/remove-profile-image', protect, async (req, res) => {
   try {
