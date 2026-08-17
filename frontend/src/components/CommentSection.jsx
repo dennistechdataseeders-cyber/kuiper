@@ -1,4 +1,4 @@
-// frontend/src/components/CommentSection.jsx - UPDATED WITH FILE DOWNLOAD FIX
+// frontend/src/components/CommentSection.jsx - FIXED
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -7,7 +7,7 @@ import {
   Image, File, Paperclip, FileText,
   FileArchive, FileSpreadsheet,
   FileVideo, FileAudio,
-  Download, Eye, Link as LinkIcon
+  Download, Eye, LinkIcon
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -33,6 +33,9 @@ const CommentSection = ({
   const [downloading, setDownloading] = useState(null);
   const commentsEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  
+  // ✅ FIX: Add the missing ref
+  const textareaRef = useRef(null);
   
   const token = localStorage.getItem('token');
 
@@ -160,10 +163,10 @@ const CommentSection = ({
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
     if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-    return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+    return (bytes / (1024 * 1024 * 1024 * 1024)).toFixed(1) + ' GB';
   };
 
-  // ✅ FIX: Enhanced file download handler with proper URL construction
+  // File download handler
   const handleFileDownload = async (file, e) => {
     if (e) e.stopPropagation();
     
@@ -177,7 +180,6 @@ const CommentSection = ({
     try {
       // If the file URL is already a full URL, use it directly
       if (file.url.startsWith('http://') || file.url.startsWith('https://')) {
-        // For images, open in new tab
         if (file.type === 'image' || isImageFile(file.originalName || file.filename || '')) {
           window.open(file.url, '_blank');
           toast.success('Image opened in new tab');
@@ -185,7 +187,6 @@ const CommentSection = ({
           return;
         }
         
-        // For other files, download via fetch
         const response = await fetch(file.url, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -207,13 +208,10 @@ const CommentSection = ({
         window.URL.revokeObjectURL(downloadUrl);
         toast.success('File downloaded successfully!');
       } else {
-        // For relative URLs, construct the full URL
         const baseUrl = API_BASE_URL || window.location.origin;
-        // Ensure we use HTTPS in production
         const cleanBaseUrl = baseUrl.replace('http://', 'https://');
         const fileUrl = file.url.startsWith('/') ? `${cleanBaseUrl}${file.url}` : `${cleanBaseUrl}/${file.url}`;
         
-        // For images, open in new tab
         if (file.type === 'image' || isImageFile(file.originalName || file.filename || '')) {
           window.open(fileUrl, '_blank');
           toast.success('Image opened in new tab');
@@ -221,7 +219,6 @@ const CommentSection = ({
           return;
         }
         
-        // For other files, download using fetch
         const response = await fetch(fileUrl, {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -270,7 +267,6 @@ const CommentSection = ({
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Handle different response formats
       let commentsData = [];
       if (type === 'ticket') {
         commentsData = res.data.comments || [];
@@ -434,14 +430,13 @@ const CommentSection = ({
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Handle different response formats
       let newCommentData = res.data.comment || res.data;
       setComments(prev => [...prev, newCommentData]);
       setNewComment('');
       setSelectedFiles([]);
       setFilePreviews([]);
       
-      // Reset textarea height
+      // ✅ Now textareaRef is defined
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
       }
@@ -513,7 +508,6 @@ const CommentSection = ({
     return isOwn ? 'bg-blue-50 border-blue-200' : 'bg-white border-slate-200';
   };
 
-  // ✅ UPDATED: Render file attachments with download buttons
   const renderFileAttachments = (comment) => {
     const hasFiles = comment.files && comment.files.length > 0;
     
@@ -522,7 +516,6 @@ const CommentSection = ({
     return (
       <div className="mt-3 space-y-2">
         {comment.files.map((file, idx) => {
-          // Determine if it's an image
           const isImage = file.type === 'image' || 
                           (file.originalName && isImageFile(file.originalName)) ||
                           (file.filename && isImageFile(file.filename));
@@ -530,10 +523,7 @@ const CommentSection = ({
           const displayName = file.originalName || file.filename || 'Attachment';
           const fileUrl = file.url;
           
-          // If no URL, skip this file
-          if (!fileUrl) {
-            return null;
-          }
+          if (!fileUrl) return null;
 
           const isDownloading = downloading === fileUrl;
 
@@ -542,7 +532,6 @@ const CommentSection = ({
               key={idx} 
               className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group"
             >
-              {/* File Icon / Preview */}
               <div 
                 className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden cursor-pointer"
                 onClick={(e) => handleFileDownload(file, e)}
@@ -562,7 +551,6 @@ const CommentSection = ({
                 )}
               </div>
               
-              {/* File Info */}
               <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold text-slate-700 truncate" title={displayName}>
                   {displayName}
@@ -574,7 +562,6 @@ const CommentSection = ({
                 </div>
               </div>
               
-              {/* Download and View Buttons */}
               <div className="flex items-center gap-1">
                 {isImage && (
                   <button
@@ -640,7 +627,6 @@ const CommentSection = ({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    {/* User Info */}
                     <div className="flex items-center gap-2 mb-1.5">
                       <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs ${
                         isOwn ? 'bg-blue-600' : 'bg-slate-400'
@@ -661,7 +647,6 @@ const CommentSection = ({
                       )}
                     </div>
                     
-                    {/* Comment Text */}
                     {comment.text && (
                       <div 
                         className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words"
@@ -669,11 +654,9 @@ const CommentSection = ({
                       />
                     )}
                     
-                    {/* ✅ File Attachments with Download */}
                     {hasFiles && renderFileAttachments(comment)}
                   </div>
                   
-                  {/* Delete Button */}
                   {canDeleteComment(comment) && (
                     <button
                       onClick={() => handleDelete(comment._id)}
@@ -699,7 +682,6 @@ const CommentSection = ({
       {/* Comment Input */}
       {canComment && (
         <form onSubmit={addComment} className="space-y-3">
-          {/* File Preview */}
           {filePreviews.length > 0 && (
             <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
               {filePreviews.map((preview, idx) => (
