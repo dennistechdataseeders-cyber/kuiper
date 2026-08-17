@@ -116,4 +116,4 @@ const KuiperLogo = ({ isExpanded }) => {
   );
 };
 
-export default KuiperLogo;
+export default KuiperLogo;  

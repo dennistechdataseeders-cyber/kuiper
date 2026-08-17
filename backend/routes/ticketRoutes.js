@@ -147,7 +147,6 @@ function getMimeType(filename) {
 // FILE UPLOAD ENDPOINTS
 // ============================================
 
-// Single file upload endpoint - handles both images and documents
 router.post('/upload-file', protect, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -161,18 +160,16 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
     
     // Check size limits based on file type
     if (isImage && req.file.size > 5 * 1024 * 1024) {
-      // Clean up the file
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ 
         error: 'Image files must be less than 5MB' 
       });
     }
     
-    // ✅ FIX: Construct the URL using HTTPS
-    // Check if we're behind a proxy (production) or running locally
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-    const host = req.get('host');
-    const baseUrl = `${protocol}://${host}`;
+    // ✅ FIX: Use the API base URL from environment for production
+    const apiBaseUrl = process.env.API_BASE_URL || process.env.FRONTEND_URL || 'https://api.kuiperapp.co.in';
+    // Remove trailing slash if present
+    const baseUrl = apiBaseUrl.replace(/\/+$/, '');
     const fileUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
     
     // Get file size in MB for response

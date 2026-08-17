@@ -196,6 +196,12 @@ const ProjectFeedStatus = () => {
   const [copiedPath, setCopiedPath] = useState(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
 
+  // ============================================
+  // NEW: State for total project feeds count from main Feed table
+  // ============================================
+  const [totalProjectFeeds, setTotalProjectFeeds] = useState(0);
+  const [loadingTotal, setLoadingTotal] = useState(true);
+
   // Handle resize for mobile detection
   useEffect(() => {
     const handleResize = () => {
@@ -657,6 +663,64 @@ const ProjectFeedStatus = () => {
     return () => clearInterval(interval);
   }, [projectId, location]);
 
+// ============================================
+// NEW: Fetch total project feeds count from main Feed table
+// Excludes: On hold[Sales], On hold[Technical], On hold[Client], and Closed
+// ============================================
+const fetchTotalProjectFeeds = async () => {
+  setLoadingTotal(true);
+  try {
+    const token = localStorage.getItem('token');
+    
+    // Use the admin projects endpoint to get all projects with feeds
+    const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    // Find the project with matching ID
+    const project = res.data.find(p => p._id === actualProjectId);
+    
+    if (project) {
+      // Get all feeds from the main Feed table
+      const allFeeds = project.feeds || [];
+      
+      // Filter out On Hold (all types) and Closed feeds
+      const activeFeeds = allFeeds.filter(feed => {
+        const status = feed.feedStatus || '';
+        // Exclude if status is Closed or contains 'ON hold'
+        return status !== 'Closed' && !status.includes('ON hold');
+      });
+      
+      setTotalProjectFeeds(activeFeeds.length);
+    } else {
+      // If project not found, fallback to 0
+      setTotalProjectFeeds(0);
+    }
+  } catch (error) {
+    console.error('Error fetching total project feeds from main table:', error);
+    // Fallback: count from current feeds data (filtering out On Hold and Closed)
+    if (feeds && feeds.length > 0) {
+      const activeFeeds = feeds.filter(feed => {
+        const status = feed.status || feed.feedStatus || '';
+        return status !== 'Closed' && !status.includes('ON hold');
+      });
+      const uniqueFeeds = new Set(activeFeeds.map(f => f.feed_name || f.name));
+      setTotalProjectFeeds(uniqueFeeds.size || activeFeeds.length);
+    } else {
+      setTotalProjectFeeds(0);
+    }
+  } finally {
+    setLoadingTotal(false);
+  }
+};
+
+  // Fetch total project feeds when project ID is available
+  useEffect(() => {
+    if (actualProjectId) {
+      fetchTotalProjectFeeds();
+    }
+  }, [actualProjectId]);
+
   const fetchFeeds = async (id) => {
     if (!id) {
       setLoading(false);
@@ -876,15 +940,26 @@ const ProjectFeedStatus = () => {
       </div>
 
       {/* Stats Row - Clickable cards with filter functionality */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-0.5 sm:gap-1 mb-1.5 sm:mb-2">
-        {/* Total - Shows all feeds */}
+      {/* NEW: Added "Project Feeds" card as the first item - shows total feeds from main Feed table */}
+      <div className="grid grid-cols-4 sm:grid-cols-7 gap-0.5 sm:gap-1 mb-1.5 sm:mb-2">
+        {/* NEW: Total Feeds in Project - Shows all feeds from the main Feed table */}
+        <div 
+          className="bg-white rounded-lg border p-1 sm:p-2 text-center shadow-sm"
+        >
+          <p className="text-[6px] sm:text-[7px] font-black uppercase text-black">Total Feeds</p>
+          <p className="text-sm sm:text-base font-black text-black">
+            {loadingTotal ? '...' : totalProjectFeeds}
+          </p>
+        </div>
+
+        {/* Total - Shows all feeds from today's FeedStatus */}
         <div 
           onClick={() => setStatusFilter('All')}
           className={`bg-white rounded-lg border p-1 sm:p-2 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
             statusFilter === 'All' ? 'border-blue-500 ring-1 sm:ring-2 ring-blue-200' : 'border-slate-200'
           }`}
         >
-          <p className="text-[6px] sm:text-[7px] font-black uppercase text-slate-400">Total</p>
+          <p className="text-[6px] sm:text-[7px] font-black uppercase text-slate-400">Today</p>
           <p className="text-sm sm:text-base font-black text-slate-800">{stats.total}</p>
         </div>
 
