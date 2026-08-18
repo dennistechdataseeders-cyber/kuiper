@@ -1380,6 +1380,7 @@ function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
 // GET TICKETS - UPDATED WITH HR FIX
 // ============================================
 
+
 exports.getTickets = async (req, res) => {
   try {
     let filter = {};
@@ -1398,7 +1399,8 @@ exports.getTickets = async (req, res) => {
         $or: [
           { assignedTo: userId },
           { createdBy: userId },
-          { assignedTo: null }
+          { assignedTo: null },
+          { watchers: userId } // ✅ ADD THIS - Developers see tickets they're watching
         ]
       };
     } else if (userRole === 'Project Manager') {
@@ -1416,7 +1418,8 @@ exports.getTickets = async (req, res) => {
             ]
           },
           { createdBy: userId },
-          { assignedTo: userId }
+          { assignedTo: userId },
+          { watchers: userId } // ✅ ADD THIS
         ]
       };
     } else if (userRole === 'Team Lead') {
@@ -1426,7 +1429,8 @@ exports.getTickets = async (req, res) => {
         $or: [
           { projectId: { $in: projectIds } },
           { createdBy: userId },
-          { assignedTo: userId }
+          { assignedTo: userId },
+          { watchers: userId } // ✅ ADD THIS
         ]
       };
     } else if (userRole === 'HR') {
@@ -1438,6 +1442,7 @@ exports.getTickets = async (req, res) => {
           { subcategory: { $in: ['Employee Documents', 'Attendance & Leave', 'Employee Management'] } },
           { createdBy: hrUserId },
           { assignedTo: hrUserId },
+          { watchers: hrUserId }, // ✅ ADD THIS
           { createdBy: { $in: hrUsers } },
           { assignedTo: { $in: hrUsers } }
         ]
@@ -1451,6 +1456,7 @@ exports.getTickets = async (req, res) => {
           { subcategory: { $in: ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'] } },
           { createdBy: financeUserId },
           { assignedTo: financeUserId },
+          { watchers: financeUserId }, // ✅ ADD THIS
           { createdBy: { $in: financeUsers } },
           { assignedTo: { $in: financeUsers } }
         ]
@@ -1464,6 +1470,7 @@ exports.getTickets = async (req, res) => {
       .populate('assignedTo', 'name email')
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name')
+      .populate('watchers', 'name email')
       .sort({ createdAt: -1 });
 
     res.json(tickets);

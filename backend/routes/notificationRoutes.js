@@ -9,44 +9,44 @@ const Ticket = require('../models/Ticket');
 // ============================================
 // GET notification count - ONLY unread
 // ============================================
+
 router.get('/count', protect, async (req, res) => {
   try {
     const user = await User.findById(req.user._id);
-    
-    // Count unread notifications from database
     const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
     
     // Count open tickets that haven't been viewed yet
     let openTicketCount = 0;
-    
-    // Get viewed open ticket IDs
     const viewedTicketIds = new Set(user.viewedOpenTickets || []);
     
-    // Build query based on role
+    // Build query based on role - INCLUDING WATCHERS
     let ticketQuery = {};
-    if (req.user.role === 'Admin') {
+    const userId = req.user._id;
+    const userRole = req.user.role;
+    
+    if (userRole === 'Admin') {
       ticketQuery = { status: { $in: ['Open', 'In Progress'] } };
-    } else if (req.user.role === 'Client') {
+    } else if (userRole === 'Client') {
       ticketQuery = {
-        createdBy: req.user._id,
+        createdBy: userId,
         status: { $in: ['Open', 'In Progress'] }
       };
-    } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
+    } else if (userRole === 'HR' || userRole === 'Finance') {
       ticketQuery = {
-        assignedTo: req.user._id,
+        assignedTo: userId,
         status: { $in: ['Open', 'In Progress'] }
       };
     } else {
       ticketQuery = {
         $or: [
-          { createdBy: req.user._id },
-          { assignedTo: req.user._id }
+          { createdBy: userId },
+          { assignedTo: userId },
+          { watchers: userId } // ✅ ADD THIS - Include watched tickets
         ],
         status: { $in: ['Open', 'In Progress'] }
       };
     }
     
-    // Count open tickets that haven't been viewed
     const openTickets = await Ticket.find(ticketQuery).select('_id');
     openTicketCount = openTickets.filter(t => !viewedTicketIds.has(t._id.toString())).length;
     

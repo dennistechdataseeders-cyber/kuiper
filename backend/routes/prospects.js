@@ -1,17 +1,21 @@
+// backend/routes/prospects.js - FULL UPDATED CODE
+
 const express = require('express');
 const router = express.Router();
 const Prospect = require('../models/Prospect');
 const { authorize } = require('../middleware/roleCheck');
 const Lead = require('../models/LeadGen'); 
-const NoResponse = require('../models/NoResponse'); // Import the new model
+const NoResponse = require('../models/NoResponse');
 
 // ==========================================
 // 1. SPECIFIC ACTION ROUTES (MUST BE AT TOP)
 // ==========================================
+
 // POST /api/prospects/fetch-bucket
-router.post('/fetch-bucket', async (req, res) => {
+// Sales Reps can fetch unassigned prospects from the global bucket
+router.post('/fetch-bucket', authorize('Sales'), async (req, res) => {
   try {
-    // 1. Find prospects where salesRepId is explicitly null OR doesn't exist
+    // Find prospects where salesRepId is explicitly null OR doesn't exist
     const available = await Prospect.find({
       $or: [
         { salesRepId: null },
@@ -23,24 +27,44 @@ router.post('/fetch-bucket', async (req, res) => {
       return res.status(404).json({ message: "No more prospects available in the bucket!" });
     }
 
-    // 2. Map the IDs of the found prospects
+    // Map the IDs of the found prospects
     const idsToUpdate = available.map(p => p._id);
 
-    // 3. Update them to belong to the current user
-    // IMPORTANT: Ensure your auth middleware populates req.user
+    // Update them to belong to the current user
     await Prospect.updateMany(
       { _id: { $in: idsToUpdate } },
       { $set: { salesRepId: req.user.id } } 
     );
 
-    res.json({ message: `Successfully claimed ${available.length} new prospects!` });
+    res.json({ 
+      message: `Successfully claimed ${available.length} new prospects!`,
+      count: available.length
+    });
   } catch (error) {
     console.error("Fetch Bucket Error:", error);
-    // Sending the actual error message helps debugging
     res.status(500).json({ error: 'Server error', details: error.message });
   }
 });
-// Add this PUT route to update a prospect
+
+// GET /api/prospects/bucket-count
+// Get count of unassigned prospects in the global bucket
+router.get('/bucket-count', authorize('Sales'), async (req, res) => {
+  try {
+    const count = await Prospect.countDocuments({
+      $or: [
+        { salesRepId: { $exists: false } },
+        { salesRepId: null }
+      ]
+    });
+    res.json({ count });
+  } catch (error) {
+    console.error("Bucket Count Error:", error);
+    res.status(500).json({ message: "Server error calculating bucket" });
+  }
+});
+
+// PUT /api/prospects/:id
+// Update a prospect (for linking to Organization or Lead)
 router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { id } = req.params;
@@ -66,86 +90,15 @@ router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
     res.status(500).json({ error: err.message });
   }
 });
-router.get('/bucket-count', async (req, res) => {
-  try {
-    // THE FIX: Specifically look for prospects where salesRepId is missing, null, or undefined
-    const count = await Prospect.countDocuments({
-      $or: [
-        { salesRepId: { $exists: false } },
-        { salesRepId: null }
-      ]
-    });
-    res.json({ count });
-  } catch (error) {
-    console.error("Bucket Count Error:", error);
-    res.status(500).json({ message: "Server error calculating bucket" });
-  }
-});
 
-/**
- * @route   POST /api/prospects/close/:id
- * @desc    Move prospect to no_response table and delete from prospects
- */
-router.post('/close/:id', authorize('Sales', 'Sales Manager', 'Admin'), async (req, res) => {
-  try {
-    const prospectId = req.params.id;
-    const { reason } = req.body;
-
-    // 1. Find the existing prospect
-    const prospect = await Prospect.findById(prospectId);
-    if (!prospect) {
-      return res.status(404).json({ message: "Prospect not found" });
-    }
-
-    // 2. Create the "No Response" entry
-    const closedProspect = new NoResponse({
-      companyName: prospect.companyName,
-      pocName: prospect.pocName,
-      pocEmail: prospect.pocEmail,
-      industry: prospect.industry,
-      reasonForClosing: reason,
-      closedBy: req.user.id,
-      originalProspectData: prospect.toObject() // Keep full history as a snapshot
-    });
-
-    await closedProspect.save();
-
-    // 3. Delete from the Prospect table
-    await Prospect.findByIdAndDelete(prospectId);
-
-    res.json({ message: "Prospect successfully moved to No Response archive" });
-  } catch (error) {
-    console.error("Close Prospect Error:", error);
-    res.status(500).json({ error: "Server error", details: error.message });
-  }
-});
-
-// Add this helper function at the top of your prospects.js file
-const calculateNextFollowUp = (originalApproachDate, step) => {
-  // Your requested fashion: +2, +5, +12, +22, +37
-  const intervals = [2, 5, 12, 22, 37];
-  
-  if (step >= intervals.length) return null; // No more follow-ups after 37 days
-
-  let nextDate = new Date(originalApproachDate);
-  nextDate.setDate(nextDate.getDate() + intervals[step]);
-
-  // Weekend logic: Ensure it doesn't land on Sat/Sun
-  const day = nextDate.getDay();
-  if (day === 6) nextDate.setDate(nextDate.getDate() + 2); // Move Sat to Mon
-  else if (day === 0) nextDate.setDate(nextDate.getDate() + 1); // Move Sun to Mon
-
-  return nextDate;
-};
-
-// CHANGE THIS FROM router.post TO router.put
 // PUT /api/prospects/approach/:id
-router.put('/approach/:id', async (req, res) => {
+// Record an approach/follow-up on a prospect
+router.put('/approach/:id', authorize('Sales', 'Sales Manager', 'Admin'), async (req, res) => {
   try {
     const prospect = await Prospect.findById(req.params.id);
-    if (!prospect) return res.status(404).json({ message: "Not found" });
+    if (!prospect) return res.status(404).json({ message: "Prospect not found" });
 
-    // 🔹 Helper: Fix consecutive dates + weekends
+    // Helper: Fix consecutive dates + weekends
     const adjustSchedule = (approaches) => {
       for (let i = 1; i < approaches.length; i++) {
         const prev = new Date(approaches[i - 1].scheduledDate);
@@ -191,7 +144,6 @@ router.put('/approach/:id', async (req, res) => {
         };
       });
 
-      // ✅ Apply fix here
       const adjustedSchedule = adjustSchedule(schedule);
 
       prospect.status = 'Approached';
@@ -199,7 +151,6 @@ router.put('/approach/:id', async (req, res) => {
       prospect.currentFollowUpStep = 1;
       prospect.nextFollowUpDate = adjustedSchedule[1].scheduledDate;
     } 
-    
     // CASE B: Follow-Up
     else {
       const stepIndex = prospect.currentFollowUpStep;
@@ -210,7 +161,6 @@ router.put('/approach/:id', async (req, res) => {
         prospect.approaches[stepIndex].summary = req.body.summary;
         prospect.approaches[stepIndex].approachedAt = new Date();
 
-        // ✅ Re-adjust entire schedule after update
         prospect.approaches = adjustSchedule(prospect.approaches);
 
         const nextStep = stepIndex + 1;
@@ -230,23 +180,89 @@ router.put('/approach/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// POST /api/prospects/close/:id
+// Move prospect to no_response table and delete from prospects
+router.post('/close/:id', authorize('Sales', 'Sales Manager', 'Admin'), async (req, res) => {
+  try {
+    const prospectId = req.params.id;
+    const { reason } = req.body;
+
+    const prospect = await Prospect.findById(prospectId);
+    if (!prospect) {
+      return res.status(404).json({ message: "Prospect not found" });
+    }
+
+    const closedProspect = new NoResponse({
+      companyName: prospect.companyName,
+      pocName: prospect.pocName,
+      pocEmail: prospect.pocEmail,
+      industry: prospect.industry,
+      reasonForClosing: reason,
+      closedBy: req.user.id,
+      originalProspectData: prospect.toObject()
+    });
+
+    await closedProspect.save();
+
+    await Prospect.findByIdAndDelete(prospectId);
+
+    res.json({ message: "Prospect successfully moved to No Response archive" });
+  } catch (error) {
+    console.error("Close Prospect Error:", error);
+    res.status(500).json({ error: "Server error", details: error.message });
+  }
+});
+
+// ==========================================
+// 2. BULK IMPORT ROUTE (UPDATED)
+// ==========================================
+
 /**
  * @route   POST /api/prospects/bulk-import
- * @desc    SM/Admin uploads prospects into the unassigned bucket
+ * @desc    Import prospects with role-based assignment
+ *          - Sales Reps: prospects are auto-assigned to them
+ *          - Sales Managers/Admins: prospects go to global bucket (salesRepId: null)
  */
-router.post('/bulk-import', authorize('Admin', 'Sales Manager'), async (req, res) => {
+router.post('/bulk-import', authorize('Admin', 'Sales Manager', 'Sales'), async (req, res) => {
   try {
     const rawData = req.body;
+    const userRole = req.user.role;
+    const userId = req.user.id;
 
-    // 1. Remove duplicates within the incoming request (Internal Uniqueness)
-    // We use a Map to keep the first occurrence of each company name
+    // Determine if the uploader is a Sales Rep
+    const isSalesRep = userRole === 'Sales';
+
+    if (!Array.isArray(rawData) || rawData.length === 0) {
+      return res.status(400).json({ error: "No data provided. Please upload a valid Excel file." });
+    }
+
+    // 1. Validate required fields
+    const invalidRecords = rawData.filter(item => !item.companyName?.trim() || !item.pocName?.trim());
+    if (invalidRecords.length > 0) {
+      return res.status(400).json({ 
+        error: `${invalidRecords.length} record(s) missing required fields (companyName, pocName)`,
+        invalidRecords: invalidRecords.slice(0, 5) // Show first 5 invalid records
+      });
+    }
+
+    // 2. Remove duplicates within the incoming request (Internal Uniqueness)
     const uniqueMap = new Map();
     rawData.forEach(item => {
-      const identifier = item.companyName?.trim(); // Or pocName, whichever is your unique key
+      const identifier = item.companyName?.trim();
       if (identifier && !uniqueMap.has(identifier)) {
         uniqueMap.set(identifier, {
-          ...item,
-          salesRepId: null // Resetting salesRepId as per your logic
+          companyName: item.companyName?.trim(),
+          pocName: item.pocName?.trim(),
+          pocEmail: item.pocEmail?.trim() || '',
+          pocContact: item.pocContact?.trim() || '',
+          pocLinkedin: item.pocLinkedin?.trim() || '',
+          industry: item.industry?.trim() || '',
+          // ✅ KEY LOGIC: Sales Rep gets auto-assigned, others go to bucket
+          salesRepId: isSalesRep ? userId : null,
+          status: 'New',
+          currentFollowUpStep: 0,
+          approaches: []
         });
       }
     });
@@ -257,13 +273,20 @@ router.post('/bulk-import', authorize('Admin', 'Sales Manager'), async (req, res
       return res.status(400).json({ error: "No valid unique records provided." });
     }
 
-    // 2. insertMany with { ordered: false }
+    // 3. insertMany with { ordered: false }
     // This allows Mongo to skip records that already exist in the DB (External Uniqueness)
     const result = await Prospect.insertMany(formattedData, { ordered: false });
     
+    const message = isSalesRep 
+      ? `Successfully imported ${result.length} prospects assigned to you`
+      : `Successfully imported ${result.length} prospects to the global bucket`;
+
     res.status(201).json({ 
-      message: "Import successful",
-      count: result.length 
+      success: true,
+      message: message,
+      count: result.length,
+      assignedTo: isSalesRep ? userId : null,
+      role: userRole
     });
 
   } catch (err) {
@@ -272,6 +295,7 @@ router.post('/bulk-import', authorize('Admin', 'Sales Manager'), async (req, res
     if (err.code === 11000 || err.name === 'BulkWriteError' || err.insertedDocs) {
       const count = err.insertedDocs ? err.insertedDocs.length : (err.result?.nInserted || 0);
       return res.status(201).json({ 
+        success: true,
         message: "Partial import complete",
         count: count,
         duplicatesSkipped: rawData.length - count
@@ -279,34 +303,19 @@ router.post('/bulk-import', authorize('Admin', 'Sales Manager'), async (req, res
     }
 
     console.error("Import Error:", err);
-    res.status(400).json({ error: "Import failed due to data formatting" });
-  }
-});
-
-/**
- * @route   DELETE /api/prospects/clear/all
- * @desc    Admin only: Clear the entire database
- */
-router.delete('/clear/all', authorize('Admin'), async (req, res) => {
-  try {
-    await Prospect.deleteMany({});
-    res.json({ message: "All prospects cleared" });
-  } catch (err) {
-    res.status(500).json({ error: "Delete failed" });
+    res.status(400).json({ error: "Import failed due to data formatting", details: err.message });
   }
 });
 
 // ==========================================
-// 2. GENERAL CRUD ROUTES
+// 3. CRUD ROUTES
 // ==========================================
 
 /**
  * @route   GET /api/prospects
- * @desc    Fetch prospects based on role (Populated with Sales Rep Name)
- */
-/**
- * @route   GET /api/prospects
- * @desc    Fetch prospects based on role (Populated with Sales Rep Name and Conversion IDs)
+ * @desc    Fetch prospects based on role
+ *          - Sales Reps: only their own prospects
+ *          - Sales Managers/Admins: all prospects
  */
 router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
@@ -323,32 +332,47 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) =
 
     const prospects = await Prospect.find(filter)
       .populate('salesRepId', 'name') 
-      .populate('leadId', 'leadNumber createdAt') // <--- ADD THIS LINE
+      .populate('leadId', 'leadNumber createdAt')
       .sort({ createdAt: -1 });
 
     res.json(prospects);
   } catch (err) {
+    console.error("GET Prospects Error:", err);
     res.status(500).json({ error: "Server Error" });
   }
 });
 
 /**
  * @route   POST /api/prospects
- * @desc    Create a single prospect (Added to bucket by default)
+ * @desc    Create a single prospect
+ *          - Sales Reps: prospect is auto-assigned to them
+ *          - Sales Managers/Admins: prospect goes to bucket (salesRepId: null)
  */
-
-
-
-router.post('/', authorize('Admin', 'Sales Manager'), async (req, res) => {
+router.post('/', authorize('Admin', 'Sales Manager', 'Sales'), async (req, res) => {
   try {
+    const isSalesRep = req.user.role === 'Sales';
+    
     const newProspect = new Prospect({
       ...req.body,
-      salesRepId: null // Goes to bucket
+      salesRepId: isSalesRep ? req.user.id : null,
+      status: 'New',
+      currentFollowUpStep: 0,
+      approaches: []
     });
     
     const saved = await newProspect.save();
-    res.status(201).json(saved);
+    
+    const message = isSalesRep 
+      ? "Prospect created and assigned to you"
+      : "Prospect added to the global bucket";
+    
+    res.status(201).json({ 
+      success: true,
+      message: message,
+      prospect: saved 
+    });
   } catch (err) {
+    console.error("POST Prospect Error:", err);
     res.status(400).json({ error: "Validation failed", details: err.message });
   }
 });
@@ -373,7 +397,22 @@ router.delete('/:id', authorize('Admin', 'Sales Manager'), async (req, res) => {
     
     res.json({ message: "Prospect deleted successfully" });
   } catch (err) {
+    console.error("DELETE Prospect Error:", err);
     res.status(500).json({ error: "Server error during deletion" });
+  }
+});
+
+/**
+ * @route   DELETE /api/prospects/clear/all
+ * @desc    Admin only: Clear the entire database
+ */
+router.delete('/clear/all', authorize('Admin'), async (req, res) => {
+  try {
+    await Prospect.deleteMany({});
+    res.json({ message: "All prospects cleared" });
+  } catch (err) {
+    console.error("Clear All Error:", err);
+    res.status(500).json({ error: "Delete failed" });
   }
 });
 

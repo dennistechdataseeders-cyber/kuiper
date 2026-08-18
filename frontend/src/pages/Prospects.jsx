@@ -1,3 +1,5 @@
+// frontend/src/pages/Prospects.jsx - SLEEK & COMPACT WITH HEADER GUIDE
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import * as XLSX from 'xlsx';
@@ -6,8 +8,8 @@ import {
   PackageSearch, RefreshCcw, Database, Layers, 
   ChevronLeft, ChevronRight, Building2, Filter, 
   Mail, Send, ChevronDown, ChevronUp, Calendar, 
-  CheckCircle2, Clock, Trash2, AlertCircle, ExternalLink,Target,
-  ArrowRight, Users, UserPlus, Phone as PhoneIcon
+  CheckCircle2, Clock, Trash2, AlertCircle, ExternalLink, Target,
+  ArrowRight, Users, UserPlus, Phone as PhoneIcon, Info
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -64,9 +66,11 @@ const Prospects = () => {
     industry: '', pocContact: '', pocLinkedin: '', sector:''
   });
 
-  // Role Logic
+  // ✅ ROLE LOGIC
   const userRole = localStorage.getItem('role');
-  const isSM = userRole === 'Sales Manager' || userRole === 'Admin';
+  const isSalesRep = userRole === 'Sales';
+  const isManagerOrAdmin = userRole === 'Sales Manager' || userRole === 'Admin';
+  const canImport = isSalesRep || isManagerOrAdmin;
 
   const formatId = (num, prefix = "LEAD") => {
     if (!num) return `${prefix}---`;
@@ -85,7 +89,9 @@ const Prospects = () => {
   const fetchData = async () => {
     setLoading(true);
     const tasks = [fetchProspects()];
-    if (!isSM) tasks.push(fetchBucketCount());
+    if (isSalesRep) {
+      tasks.push(fetchBucketCount());
+    }
     await Promise.all(tasks);
     setLoading(false);
   };
@@ -113,6 +119,10 @@ const Prospects = () => {
   };
 
   const handleFetchBucket = async () => {
+    if (!isSalesRep) {
+      toast.error("Only Sales Representatives can fetch from the bucket");
+      return;
+    }
     setFetchingBucket(true);
     try {
       const res = await axios.post(`${API_BASE_URL}/api/prospects/fetch-bucket`, {}, {
@@ -137,7 +147,6 @@ const Prospects = () => {
         ...approachData,
         step: stepToUpdate 
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }});
-      
       toast.success("Action recorded!");
       setIsApproachModalOpen(false);
       setApproachData({ method: 'Email', summary: '' });
@@ -157,7 +166,6 @@ const Prospects = () => {
       await axios.post(`${API_BASE_URL}/api/prospects/close/${selectedProspect._id}`, {
         reason: closeReason
       }, { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }});
-      
       toast.success("Prospect closed successfully");
       setIsCloseModalOpen(false);
       setCloseReason("");
@@ -174,21 +182,17 @@ const Prospects = () => {
     setConvertingOrg(prev => ({ ...prev, [item._id]: true }));
     try {
       const token = localStorage.getItem('token');
-      
-      // First check if organization already exists
       const checkResponse = await axios.post(`${API_BASE_URL}/api/orgs/check-duplicate`, {
         companyName: item.companyName,
         prospectId: item._id
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
       if (checkResponse.data.exists) {
         toast.error(`Organization "${item.companyName}" already exists!`);
         setConvertingOrg(prev => ({ ...prev, [item._id]: false }));
         return;
       }
-      
       const payload = {
         companyName: item.companyName,
         pocName: item.pocName,
@@ -199,18 +203,14 @@ const Prospects = () => {
         address: '',
         prospectId: item._id
       };
-      
       const response = await axios.post(`${API_BASE_URL}/api/orgs`, payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      // Update the prospect with organizationId
       await axios.put(`${API_BASE_URL}/api/prospects/${item._id}`, {
         organizationId: response.data._id
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
       toast.success(`Organization created for ${item.companyName}`);
       fetchData();
     } catch (err) {
@@ -221,17 +221,12 @@ const Prospects = () => {
     }
   };
 
-  // Open Lead Conversion Modal with POCs
   const openLeadModal = async (item) => {
     setSelectedProspectForLead(item);
     setLeadType('Inbound');
     setReferredBy('');
     setSelectedPOC(null);
-    
-    // Extract POCs from the prospect
     const pocs = [];
-    
-    // Add main POC
     if (item.pocName) {
       pocs.push({
         id: 'main',
@@ -243,13 +238,10 @@ const Prospects = () => {
         department: 'Primary Contact'
       });
     }
-    
-    // If there's an organization with multiple POCs, fetch them
     if (item.organizationId && typeof item.organizationId === 'object') {
       const org = item.organizationId;
       if (org.pointsOfContact && org.pointsOfContact.length > 0) {
         org.pointsOfContact.forEach((poc, idx) => {
-          // Avoid duplicates
           if (!pocs.some(p => p.name === poc.pocName)) {
             pocs.push({
               id: poc._id || `poc_${idx}`,
@@ -264,42 +256,31 @@ const Prospects = () => {
         });
       }
     }
-    
     setAvailablePOCs(pocs);
-    
-    // Auto-select first POC
     if (pocs.length > 0) {
       setSelectedPOC(pocs[0]);
     }
-    
     setIsLeadModalOpen(true);
   };
 
-  // Handle Lead Conversion from Modal
   const handleLeadConversionSubmit = async (e) => {
     e.preventDefault();
-    
     if (!selectedPOC) {
       toast.error("Please select a Point of Contact");
       return;
     }
-    
     if (leadType === 'Reference' && !referredBy) {
       toast.error("Please provide referral information");
       return;
     }
-    
     setSubmittingLead(true);
-    
     try {
       const token = localStorage.getItem('token');
       const orgId = selectedProspectForLead.organizationId?._id || selectedProspectForLead.organizationId;
-      
       if (!orgId) {
         toast.error("Organization not found. Please create organization first.");
         return;
       }
-      
       const leadPayload = {
         organizationId: orgId,
         leadType: leadType,
@@ -310,18 +291,14 @@ const Prospects = () => {
         pocPhone: selectedPOC.phone || '',
         linkedin: selectedPOC.linkedin || ''
       };
-      
       const leadResponse = await axios.post(`${API_BASE_URL}/api/lead-generation`, leadPayload, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      // Update prospect with leadId
       await axios.put(`${API_BASE_URL}/api/prospects/${selectedProspectForLead._id}`, {
         leadId: leadResponse.data._id
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
       toast.success(`Lead generated for ${selectedProspectForLead.companyName}`);
       setIsLeadModalOpen(false);
       setSelectedProspectForLead(null);
@@ -345,17 +322,27 @@ const Prospects = () => {
       try {
         const workbook = XLSX.read(event.target.result, { type: 'binary' });
         const rawData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-        const validData = rawData.filter(row => row.pocEmail || row.pocContact || row.pocLinkedin);
-        
-        if (validData.length === 0) return toast.error("No valid records found.");
-
-        await axios.post(`${API_BASE_URL}/api/prospects/bulk-import`, validData, {
+        const validData = rawData.filter(row => 
+          row.companyName?.trim() && 
+          row.pocName?.trim()
+        );
+        if (validData.length === 0) {
+          toast.error("Each record must have companyName and pocName");
+          setImporting(false);
+          e.target.value = null;
+          return;
+        }
+        const response = await axios.post(`${API_BASE_URL}/api/prospects/bulk-import`, validData, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         });
-        toast.success("Import Complete!");
+        if (isSalesRep) {
+          toast.success(`✅ ${response.data.count} prospects assigned to you!`);
+        } else {
+          toast.success(`✅ ${response.data.count} prospects added to bucket!`);
+        }
         fetchData();
       } catch (err) { 
-        toast.error("Import failed"); 
+        toast.error(err.response?.data?.error || "Import failed"); 
       } finally { 
         setImporting(false); 
         e.target.value = null; 
@@ -367,10 +354,14 @@ const Prospects = () => {
   const handleSingleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`${API_BASE_URL}/api/prospects`, newProspect, {
+      const response = await axios.post(`${API_BASE_URL}/api/prospects`, newProspect, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      toast.success("Added successfully");
+      if (isSalesRep) {
+        toast.success("Prospect assigned to you!");
+      } else {
+        toast.success("Prospect added to bucket!");
+      }
       setIsModalOpen(false);
       setNewProspect({ companyName: '', pocName: '', pocEmail: '', industry: '', pocContact: '', pocLinkedin: '' });
       fetchData();
@@ -406,7 +397,6 @@ const Prospects = () => {
     setCurrentPage(1); 
   }, [searchTerm, statusFilter]);
 
-  // Helper to get organization and lead details
   const getOrgDetails = (prospect) => {
     if (prospect.organizationId && typeof prospect.organizationId === 'object') {
       return prospect.organizationId;
@@ -421,10 +411,33 @@ const Prospects = () => {
     return null;
   };
 
-  // Check if approach button should be shown
   const shouldShowApproachButton = (item) => {
     return !item.closed && !item.leadId && !item.organizationId;
   };
+
+  // ✅ Excel Header Guide Component
+  const ExcelHeaderGuide = () => (
+    <div className="bg-blue-50/80 border border-blue-200 rounded-lg p-3 mb-3">
+      <div className="flex items-start gap-2">
+        <FileSpreadsheet size={14} className="text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-bold text-blue-700">Required Excel Headers:</p>
+            <span className="text-[7px] text-blue-400 bg-blue-100 px-1.5 py-0.5 rounded-full">Case-sensitive</span>
+          </div>
+          <div className="flex flex-wrap gap-1.5 mt-1">
+            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] font-bold">companyName *</span>
+            <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] font-bold">pocName *</span>
+            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px] font-medium">pocEmail</span>
+            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px] font-medium">pocContact</span>
+            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px] font-medium">pocLinkedin</span>
+            <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px] font-medium">industry</span>
+          </div>
+          <p className="text-[7px] text-black mt-1">* Required fields | Order doesn't matter | Supports .xlsx, .xls, .csv</p>
+        </div>
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -440,101 +453,134 @@ const Prospects = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6  ${
+    <div className={`min-h-screen bg-slate-50 p-4 md:p-6 ${
       isCollapsed ? 'ml-20' : 'ml-64'
     }`}>
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-800 tracking-tight">
-            {isSM ? "Master Inventory" : "My Workspace"}
+          <h1 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tight">
+            {isManagerOrAdmin ? "Master Inventory" : "My Prospects"}
           </h1>
-          <p className="text-slate-500 font-medium mt-1">
-            Track and manage your prospect outreach steps.
+          <p className="text-xs md:text-sm text-slate-500 mt-0.5">
+            {isSalesRep 
+              ? "Upload prospects or fetch from the global bucket"
+              : "Manage and distribute prospects to your sales team"}
           </p>
         </div>
         
-        <div className="flex flex-col md:flex-row gap-4">
-          {!isSM && (
-            <div className="bg-white px-6 py-3 rounded-2xl border border-emerald-100 flex items-center gap-4 shadow-sm">
-              <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg"><Database size={20} /></div>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Bucket count - Sales Reps only */}
+          {isSalesRep && (
+            <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-emerald-100 shadow-sm">
+              <Database size={14} className="text-emerald-600" />
               <div>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Global Bucket</p>
-                <p className="text-xl font-black text-slate-800">{bucketCount}</p>
+                <p className="text-[7px] font-black uppercase text-slate-400">Bucket</p>
+                <p className="text-sm font-black text-slate-800">{bucketCount}</p>
               </div>
             </div>  
           )}
 
-          {isSM && (
-            <>
-              <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 px-6 py-4 bg-white text-slate-900 border-2 border-slate-900 rounded-2xl font-bold hover:bg-slate-900 hover:text-white transition-all shadow-sm">
-                <Plus size={20}/> Add Single
-              </button>
-              <input type="file" id="bulk-up" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls, .csv" />
-              <label htmlFor="bulk-up" className="flex items-center gap-2 px-6 py-4 bg-blue-600 text-white rounded-2xl font-bold cursor-pointer hover:bg-blue-700 transition-all shadow-lg shadow-blue-100">
-                {importing ? <Loader2 className="animate-spin" size={20}/> : <FileSpreadsheet size={20}/>} Bulk Import 
-              </label>
-            </>
+          {/* Add Single */}
+          {canImport && (
+            <button 
+              onClick={() => setIsModalOpen(true)} 
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white text-slate-900 border border-slate-300 rounded-lg font-bold hover:bg-slate-900 hover:text-white hover:border-slate-900 transition-all text-xs"
+            >
+              <Plus size={14}/> Add
+            </button>
           )}
 
-          {!isSM && (
+          {/* Bulk Import with Header Guide Tooltip */}
+          {canImport && (
+            <div className="relative group">
+              <input type="file" id="bulk-up" className="hidden" onChange={handleFileUpload} accept=".xlsx, .xls, .csv" />
+              <label htmlFor="bulk-up" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg font-bold cursor-pointer hover:bg-blue-700 transition-all shadow-sm text-xs">
+                {importing ? <Loader2 className="animate-spin" size={14}/> : <FileSpreadsheet size={14}/>} 
+                {isSalesRep ? "Import" : "Bulk"}
+              </label>
+              
+              {/* Tooltip showing header guide */}
+              <div className="absolute right-0 mt-1 w-64 bg-white rounded-lg shadow-xl border border-blue-100 p-3 hidden group-hover:block z-50">
+                <p className="text-[9px] font-bold text-blue-700 mb-1.5 flex items-center gap-1.5">
+                  <Info size={12} className="text-blue-500" /> Required Headers:
+                </p>
+                <div className="space-y-0.5">
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold text-[7px]">*</span>
+                    <span className="font-bold text-slate-700">companyName</span>
+                    <span className="text-slate-400 text-[7px]">- Company name</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold text-[7px]">*</span>
+                    <span className="font-bold text-slate-700">pocName</span>
+                    <span className="text-slate-400 text-[7px]">- Point of Contact</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-slate-400 w-4 text-center text-[7px]">-</span>
+                    <span className="text-slate-700">pocEmail</span>
+                    <span className="text-slate-400 text-[7px]">- Email address</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-slate-400 w-4 text-center text-[7px]">-</span>
+                    <span className="text-slate-700">pocContact</span>
+                    <span className="text-slate-400 text-[7px]">- Phone number</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-slate-400 w-4 text-center text-[7px]">-</span>
+                    <span className="text-slate-700">pocLinkedin</span>
+                    <span className="text-slate-400 text-[7px]">- LinkedIn URL</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-[8px]">
+                    <span className="text-slate-400 w-4 text-center text-[7px]">-</span>
+                    <span className="text-slate-700">industry</span>
+                    <span className="text-slate-400 text-[7px]">- Industry code</span>
+                  </div>
+                </div>
+                <p className="text-[6px] text-slate-900 mt-1.5 pt-1 border-t border-slate-100">Headers are case-sensitive (camelCase) • Order doesn't matter</p>
+              </div>
+            </div>
+          )}
+
+          {/* Fetch from bucket - Sales Reps only */}
+          {isSalesRep && (
             <button 
               onClick={handleFetchBucket} 
               disabled={fetchingBucket || bucketCount === 0}
-              className="flex items-center gap-2 px-8 py-4 bg-blue-600 text-white rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl disabled:bg-slate-300 transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 text-white rounded-lg font-bold uppercase text-[9px] tracking-wider shadow-sm disabled:bg-slate-300 transition-all"
             >
-              {fetchingBucket ? <RefreshCcw className="animate-spin" size={18}/> : <PackageSearch size={18}/>} Fetch 10 Prospects
+              {fetchingBucket ? <RefreshCcw className="animate-spin" size={14}/> : <PackageSearch size={14}/>} 
+              Fetch {Math.min(10, bucketCount)}
             </button>
           )}
         </div>
       </div>
 
       {/* Search & Filter Pagination */}
-      <div className="flex flex-col md:flex-row justify-between items-center mb-4 px-4 gap-4">
-        <p className="text-sm font-bold text-slate-500">
-          Showing <span className="text-slate-900">{currentItems.length}</span> of <span className="text-slate-900">{filtered.length}</span> prospects
+      <div className="flex flex-col md:flex-row justify-between items-center mb-3 px-1 gap-2">
+        <p className="text-xs font-bold text-slate-500">
+          Showing <span className="text-slate-900">{currentItems.length}</span> of <span className="text-slate-900">{filtered.length}</span>
         </p>
         
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button 
             onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
             disabled={currentPage === 1}
-            className="p-3 bg-white rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all shadow-sm"
+            className="p-2 bg-white rounded-lg border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all"
           >
-            <ChevronLeft size={20} />
+            <ChevronLeft size={16} />
           </button>
 
-          <div className="flex items-center gap-1 bg-white px-2 py-1 rounded-xl border border-slate-200 shadow-sm">
-            {[...Array(Math.min(totalPages, 7))].map((_, i) => {
-              let pageNum;
-              if (totalPages <= 7) {
-                pageNum = i + 1;
-              } else if (currentPage <= 4) {
-                pageNum = i + 1;
-                if (i === 6) pageNum = totalPages;
-              } else if (currentPage >= totalPages - 3) {
-                pageNum = totalPages - 6 + i;
-              } else {
-                pageNum = currentPage - 3 + i;
-                if (i === 0) pageNum = 1;
-                if (i === 6) pageNum = totalPages;
-              }
-              
-              if (pageNum === 1 && i > 0 && currentPage > 4 && totalPages > 7) {
-                return <span key="ellipsis1" className="px-2 text-slate-400">...</span>;
-              }
-              
-              if (pageNum === totalPages && i < 6 && currentPage < totalPages - 3 && totalPages > 7) {
-                return <span key="ellipsis2" className="px-2 text-slate-400">...</span>;
-              }
-              
+          <div className="flex items-center gap-0.5 bg-white px-1.5 py-0.5 rounded-lg border border-slate-200 shadow-sm">
+            {[...Array(Math.min(totalPages, 5))].map((_, i) => {
+              let pageNum = i + 1;
               return (
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`w-8 h-8 rounded-lg text-xs font-black transition-all ${
+                  className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
                     currentPage === pageNum
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
+                      ? 'bg-blue-600 text-white shadow-sm'
                       : 'text-slate-500 hover:bg-slate-100'
                   }`}
                 >
@@ -547,30 +593,30 @@ const Prospects = () => {
           <button 
             onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
             disabled={currentPage === totalPages || totalPages === 0}
-            className="p-3 bg-white rounded-xl border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all shadow-sm"
+            className="p-2 bg-white rounded-lg border border-slate-200 text-slate-600 disabled:opacity-30 hover:bg-slate-50 transition-all"
           >
-            <ChevronRight size={20} />
+            <ChevronRight size={16} />
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-4 mb-8">
-        <div className="relative flex-1 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center px-6">
-          <Search className="text-slate-400" size={20} />
+      <div className="flex flex-col md:flex-row gap-2 mb-4">
+        <div className="relative flex-1 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center px-4">
+          <Search className="text-slate-400" size={16} />
           <input 
             type="text" 
             placeholder="Search company or contact..." 
-            className="w-full py-5 px-4 outline-none font-medium text-slate-800" 
+            className="w-full py-2.5 px-3 outline-none font-medium text-sm text-slate-800" 
             value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)} 
           />
         </div>
 
-        <div className="relative min-w-[220px]">
-          <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+        <div className="relative min-w-[180px]">
+          <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
           <select 
-            className="w-full pl-12 pr-8 py-5 bg-white rounded-2xl shadow-sm border border-slate-100 outline-none font-bold text-slate-700 appearance-none cursor-pointer"
+            className="w-full pl-9 pr-6 py-2.5 bg-white rounded-xl border border-slate-100 outline-none font-bold text-xs text-slate-700 appearance-none cursor-pointer"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
           >
@@ -581,34 +627,35 @@ const Prospects = () => {
             <option value="Lead Generated">Lead Generated</option>
             <option value="Closed">Closed</option>
           </select>
+          <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
       </div>
 
       {/* Table */}
-      <div className="bg-white/70 backdrop-blur-md rounded-[2rem] shadow-xl border border-white overflow-hidden mb-6">
+      <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-lg border border-white overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200">
-                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest">Company Details</th>
-                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest">Contact</th>
-                {isSM && <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest">Assignee</th>}
-                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest">Lead ID / Org</th>
-                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest text-center">Status</th>
-                <th className="px-8 py-5 text-[11px] font-black uppercase text-slate-400 tracking-widest text-right">Actions</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase text-slate-400 tracking-wider">Company</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase text-slate-400 tracking-wider">Contact</th>
+                {isManagerOrAdmin && <th className="px-4 py-3 text-[9px] font-black uppercase text-slate-400 tracking-wider">Assignee</th>}
+                <th className="px-4 py-3 text-[9px] font-black uppercase text-slate-400 tracking-wider">Lead ID</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase text-slate-400 tracking-wider text-center">Status</th>
+                <th className="px-4 py-3 text-[9px] font-black uppercase text-slate-400 tracking-wider text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan={isSM ? "6" : "5"} className="text-center py-20">
-                    <div className="flex flex-col items-center gap-4">
-                      <PackageSearch size={48} className="text-slate-300" />
-                      <p className="text-slate-500 font-medium">No prospects found</p>
+                  <td colSpan={isManagerOrAdmin ? 6 : 5} className="px-4 py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <PackageSearch size={32} className="text-slate-300" />
+                      <p className="text-sm font-bold text-slate-500">No prospects found</p>
                       {searchTerm && (
                         <button 
                           onClick={() => setSearchTerm("")}
-                          className="text-blue-600 text-sm font-bold"
+                          className="text-xs text-blue-600 font-bold"
                         >
                           Clear search
                         </button>
@@ -640,113 +687,104 @@ const Prospects = () => {
 
                   return (
                     <React.Fragment key={item._id}>
-                      <tr className={`group transition-all ${expandedRow === item._id ? 'bg-blue-50/80' : 'hover:bg-blue-50/30'} ${item.closed ? 'opacity-60' : ''}`}>
-                        <td className="px-8 py-6 cursor-pointer" onClick={() => !item.closed && toggleRow(item._id)}>
-                          <div className="flex items-center gap-4">
-                            <div className="flex flex-col items-center">
-                              {!item.closed && (expandedRow === item._id ? <ChevronUp size={16} className="text-blue-600"/> : <ChevronDown size={16} className="text-slate-400"/>)}
-                            </div>
-                            <div className="w-10 h-10 rounded-xl bg-white border flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-colors">
-                              <Building2 size={18} />
+                      <tr className={`group transition-all ${expandedRow === item._id ? 'bg-blue-50/60' : 'hover:bg-blue-50/20'} ${item.closed ? 'opacity-60' : ''}`}>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => !item.closed && toggleRow(item._id)}>
+                          <div className="flex items-center gap-3">
+                            {!item.closed && (expandedRow === item._id ? 
+                              <ChevronUp size={12} className="text-blue-600"/> : 
+                              <ChevronDown size={12} className="text-slate-400"/>)}
+                            <div className="w-8 h-8 rounded-lg bg-white border flex items-center justify-center text-slate-400 group-hover:text-blue-600 transition-colors">
+                              <Building2 size={14} />
                             </div>
                             <div>
-                              <p className="font-bold text-slate-900">{item.companyName}</p>
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">{item.industry || 'General'}</span>
+                              <p className="font-bold text-sm text-slate-900">{item.companyName}</p>
+                              <span className="text-[8px] font-bold text-slate-400 uppercase">{item.industry || 'General'}</span>
                             </div>
                           </div>
                         </td>
 
-                        <td className="px-8 py-6">
+                        <td className="px-4 py-3">
                           <div className="flex flex-col">
                             <span className="text-sm font-bold text-slate-700">{item.pocName}</span>
-                            <span className="text-xs text-slate-400">{item.pocEmail}</span>
-                            {item.pocContact && <span className="text-xs text-slate-400">{item.pocContact}</span>}
+                            <span className="text-[10px] text-slate-400 truncate max-w-[120px]">{item.pocEmail}</span>
                           </div>
                         </td>
 
-                        {isSM && (
-                          <td className="px-8 py-6">
+                        {isManagerOrAdmin && (
+                          <td className="px-4 py-3">
                             <span className="text-xs font-bold text-slate-700">{item.salesRepId?.name || 'Unassigned'}</span>
                           </td>
                         )}
 
-                        <td className="px-8 py-6">
+                        <td className="px-4 py-3">
                           {hasLead ? (
-                            <div className="flex flex-col">
-                              <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest bg-blue-50 px-2 py-1 rounded-md border border-blue-100 inline-block w-fit">
-                                {formatId(leadDetails?.leadNumber)}
-                              </span>
-                            </div>
+                            <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                              {formatId(leadDetails?.leadNumber)}
+                            </span>
                           ) : hasOrg ? (
-                            <div className="flex flex-col">
-                              <span className="text-[10px] font-black text-violet-600 uppercase tracking-widest bg-violet-50 px-2 py-1 rounded-md border border-violet-100 inline-block w-fit">
-                                {orgDetails?.companyName?.substring(0, 20) || 'Org Created'}
-                              </span>
-                            </div>
+                            <span className="text-[9px] font-black text-violet-600 bg-violet-50 px-2 py-0.5 rounded-md border border-violet-100">
+                              {orgDetails?.companyName?.substring(0, 12) || 'Org'}
+                            </span>
                           ) : (
-                            <span className="text-[10px] font-bold text-slate-300 uppercase">Not Linked</span>
+                            <span className="text-[9px] font-bold text-slate-300">—</span>
                           )}
                         </td>
 
-                        <td className="px-8 py-6 text-center">
-                          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border-2 ${statusStyle}`}>
+                        <td className="px-4 py-3 text-center">
+                          <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${statusStyle}`}>
                             {displayStatus}
                           </span>
                         </td>
 
-                        <td className="px-8 py-6 text-right">
-                          <div className="flex justify-end gap-2">
+                        <td className="px-4 py-3 text-right">
+                          <div className="flex justify-end gap-1">
                             {!item.closed && (
                               <>
-                                {/* Approach button - only show if no org and no lead */}
                                 {shouldShowApproachButton(item) && (
                                   <button 
                                     onClick={() => { setSelectedProspect(item); setIsApproachModalOpen(true); }}
-                                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all"
+                                    className="px-2.5 py-1 bg-slate-900 text-white rounded-lg text-[8px] font-black uppercase hover:bg-blue-600 transition-all"
                                   >
-                                    {item.status === 'Approached' ? 'Follow Up' : 'Approach'}
+                                    {item.status === 'Approached' ? 'Follow-up' : 'Approach'}
                                   </button>
                                 )}
 
-                                {/* Convert to Org button - only if no org and no lead */}
                                 {!hasOrg && !hasLead && (
                                   <button 
                                     onClick={() => handleConvertToOrg(item)}
                                     disabled={convertingOrg[item._id]}
-                                    className="px-4 py-2 bg-white border-2 border-slate-900 text-slate-900 rounded-xl text-[10px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center gap-1"
+                                    className="px-2.5 py-1 bg-white border border-slate-300 text-slate-900 rounded-lg text-[8px] font-black uppercase hover:bg-slate-900 hover:text-white transition-all flex items-center gap-0.5"
                                   >
                                     {convertingOrg[item._id] ? (
-                                      <Loader2 size={12} className="animate-spin" />
+                                      <Loader2 size={10} className="animate-spin" />
                                     ) : (
-                                      <RefreshCcw size={12} />
+                                      <RefreshCcw size={10} />
                                     )}
-                                    Convert
+                                    Org
                                   </button>
                                 )}
 
-                                {/* Convert to Lead button - only if has org but no lead */}
                                 {hasOrg && !hasLead && (
                                   <button 
                                     onClick={() => openLeadModal(item)}
                                     disabled={convertingLead[item._id]}
-                                    className="px-4 py-2 bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase hover:bg-emerald-700 transition-all flex items-center gap-1 shadow-lg shadow-emerald-100"
+                                    className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[8px] font-black uppercase hover:bg-emerald-700 transition-all flex items-center gap-0.5 shadow-sm"
                                   >
                                     {convertingLead[item._id] ? (
-                                      <Loader2 size={12} className="animate-spin" />
+                                      <Loader2 size={10} className="animate-spin" />
                                     ) : (
-                                      <ArrowRight size={12} />
+                                      <ArrowRight size={10} />
                                     )}
-                                    Convert to Lead
+                                    Lead
                                   </button>
                                 )}
 
-                                {/* View Lead button */}
                                 {hasLead && (
                                   <button 
                                     onClick={() => navigate('/sales/lead_generation')}
-                                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-xl text-[10px] font-black uppercase hover:bg-blue-200 transition-all flex items-center gap-1"
+                                    className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-lg text-[8px] font-black uppercase hover:bg-blue-200 transition-all flex items-center gap-0.5"
                                   >
-                                    <ExternalLink size={12}/> View Lead
+                                    <ExternalLink size={10}/> View
                                   </button>
                                 )}
                               </>
@@ -756,46 +794,46 @@ const Prospects = () => {
                       </tr>
 
                       {expandedRow === item._id && !item.closed && (
-                        <tr className="bg-slate-50/50">
-                          <td colSpan={isSM ? "6" : "5"} className="px-12 py-8">
+                        <tr className="bg-slate-50/30">
+                          <td colSpan={isManagerOrAdmin ? 6 : 5} className="px-4 py-3">
                             <div className="max-w-5xl">
-                              <div className="flex justify-between items-center mb-6">
-                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                                  <Layers size={14} /> Approach History & Pipeline
+                              <div className="flex justify-between items-center mb-3">
+                                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                  <Layers size={12} /> Approach History
                                 </h4>
-                                {!isSM && !item.leadId && (
+                                {!isManagerOrAdmin && !item.leadId && (
                                   <button 
                                     onClick={() => { setSelectedProspect(item); setIsCloseModalOpen(true); }}
-                                    className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 rounded-xl text-[10px] font-black uppercase border-2 border-red-100 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all"
+                                    className="flex items-center gap-1.5 px-3 py-1 bg-red-50 text-red-600 rounded-lg text-[8px] font-black uppercase border border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all"
                                   >
-                                    <Trash2 size={12}/> Close Prospect
+                                    <Trash2 size={10}/> Close
                                   </button>
                                 )}
                               </div>
 
-                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                 {item.approaches?.map((appr, idx) => (
-                                  <div key={idx} className={`p-4 rounded-2xl border-2 transition-all ${appr.status === 'Completed' ? 'bg-white border-emerald-100 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
-                                    <div className="flex justify-between items-start mb-3">
-                                      <div className={`p-2 rounded-lg ${appr.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
-                                        {appr.status === 'Completed' ? <CheckCircle2 size={16}/> : <Clock size={16}/>}
+                                  <div key={idx} className={`p-3 rounded-xl border-2 transition-all ${appr.status === 'Completed' ? 'bg-white border-emerald-100 shadow-sm' : 'bg-slate-50 border-slate-200 opacity-60'}`}>
+                                    <div className="flex justify-between items-start mb-2">
+                                      <div className={`p-1.5 rounded-lg ${appr.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-200 text-slate-500'}`}>
+                                        {appr.status === 'Completed' ? <CheckCircle2 size={12}/> : <Clock size={12}/>}
                                       </div>
-                                      <span className="text-[9px] font-black bg-slate-100 px-2 py-0.5 rounded uppercase text-slate-500">Step {appr.step}</span>
+                                      <span className="text-[8px] font-black bg-slate-100 px-1.5 py-0.5 rounded uppercase text-slate-500">Step {appr.step}</span>
                                     </div>
-                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Scheduled For</p>
-                                    <p className="text-sm font-bold text-slate-800 flex items-center gap-2 mb-3">
-                                      <Calendar size={12} className="text-blue-500"/> {formatDate(appr.scheduledDate)}
+                                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Scheduled</p>
+                                    <p className="text-xs font-bold text-slate-800 flex items-center gap-1.5 mb-2">
+                                      <Calendar size={10} className="text-blue-500"/> {formatDate(appr.scheduledDate)}
                                     </p>
                                     {appr.status === 'Completed' && (
-                                      <div className="mt-2 pt-2 border-t border-slate-100">
-                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{appr.method}</span>
-                                        <p className="text-xs italic text-slate-600 mt-2 line-clamp-2">"{appr.summary}"</p>
+                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100">
+                                        <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">{appr.method}</span>
+                                        <p className="text-[10px] italic text-slate-600 mt-1 line-clamp-2">"{appr.summary}"</p>
                                       </div>
                                     )}
                                   </div>
                                 ))}
                                 {(!item.approaches || item.approaches.length === 0) && (
-                                  <p className="text-sm text-slate-400 text-center col-span-3 py-8">No approach history yet.</p>
+                                  <p className="text-xs text-slate-400 text-center col-span-3 py-4">No approach history yet.</p>
                                 )}
                               </div>
                             </div>
@@ -814,29 +852,28 @@ const Prospects = () => {
       {/* MODAL: CLOSE PROSPECT */}
       {isCloseModalOpen && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl p-10 relative">
-            <button onClick={() => setIsCloseModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600"><X size={24} /></button>
-            <div className="flex flex-col items-center text-center mb-6">
-              <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-4 border-2 border-red-100">
-                <AlertCircle size={32} />
+          <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 relative">
+            <button onClick={() => setIsCloseModalOpen(false)} className="absolute top-4 right-4 text-slate-300 hover:text-slate-600"><X size={20} /></button>
+            <div className="flex flex-col items-center text-center mb-4">
+              <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mb-3 border-2 border-red-100">
+                <AlertCircle size={24} />
               </div>
-              <h2 className="text-2xl font-black text-slate-800">Close Prospect?</h2>
-              <p className="text-slate-500 text-sm mt-1 font-medium">This will move {selectedProspect?.companyName} to the 'Closed' archive.</p>
+              <h2 className="text-xl font-black text-slate-800">Close Prospect?</h2>
+              <p className="text-xs text-slate-500 mt-1">This will move {selectedProspect?.companyName} to archive.</p>
             </div>
-            
-            <form onSubmit={handleCloseSubmit} className="space-y-6">
+            <form onSubmit={handleCloseSubmit} className="space-y-4">
               <textarea 
                 required 
-                rows="4" 
-                className="w-full p-5 bg-slate-50 rounded-2xl outline-none text-slate-700 font-medium border-2 border-transparent focus:border-red-100 transition-all" 
-                placeholder="Why are you closing this prospect? (e.g., Not interested, Wrong number, No response after 5 steps)" 
+                rows="3" 
+                className="w-full p-3 bg-slate-50 rounded-xl outline-none text-sm font-medium border-2 border-transparent focus:border-red-100 transition-all" 
+                placeholder="Why are you closing this prospect?" 
                 value={closeReason} 
                 onChange={(e) => setCloseReason(e.target.value)} 
               />
-              <div className="flex gap-3">
-                <button type="button" onClick={() => setIsCloseModalOpen(false)} className="flex-1 p-5 bg-slate-100 text-slate-600 rounded-2xl font-black uppercase hover:bg-slate-200 transition-all">Cancel</button>
-                <button type="submit" disabled={isClosing} className="flex-2 px-10 p-5 bg-red-600 text-white rounded-2xl font-black uppercase hover:bg-red-700 flex items-center justify-center gap-3 shadow-lg shadow-red-100 transition-all">
-                  {isClosing ? <Loader2 className="animate-spin"/> : "Close Account"}
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setIsCloseModalOpen(false)} className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-xs uppercase hover:bg-slate-200 transition-all">Cancel</button>
+                <button type="submit" disabled={isClosing} className="flex-[2] py-2.5 bg-red-600 text-white rounded-xl font-bold text-xs uppercase hover:bg-red-700 flex items-center justify-center gap-2 shadow-lg shadow-red-100 transition-all">
+                  {isClosing ? <Loader2 className="animate-spin" size={14}/> : "Close"}
                 </button>
               </div>
             </form>
@@ -847,53 +884,49 @@ const Prospects = () => {
       {/* MODAL: APPROACH */}
       {isApproachModalOpen && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative">
-            <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600"><X size={24} /></button>
-            <h2 className="text-2xl font-black text-slate-800 mb-2">Record Approach</h2>
-            <p className="text-slate-500 text-sm mb-4">For: <span className="font-bold text-slate-800">{selectedProspect?.companyName}</span></p>
-            <form onSubmit={handleApproachSubmit} className="space-y-6 mt-4">
-              <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl p-6 relative">
+            <button onClick={() => setIsApproachModalOpen(false)} className="absolute top-4 right-4 text-slate-300 hover:text-slate-600"><X size={20} /></button>
+            <h2 className="text-xl font-black text-slate-800 mb-1">Record Approach</h2>
+            <p className="text-xs text-slate-500 mb-4">For: <span className="font-bold text-slate-800">{selectedProspect?.companyName}</span></p>
+            <form onSubmit={handleApproachSubmit} className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
                 {['Email', 'WhatsApp', 'Message', 'LinkedIn'].map((m) => (
                   <button key={m} type="button" onClick={() => setApproachData({...approachData, method: m})}
-                    className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${approachData.method === m ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
+                    className={`py-2 rounded-xl font-bold text-xs border-2 transition-all ${approachData.method === m ? 'border-blue-600 bg-blue-50 text-blue-600' : 'border-slate-100 text-slate-400'}`}
                   > {m} </button>
                 ))}
               </div>
-              <textarea required rows="4" className="w-full p-5 bg-slate-50 rounded-2xl outline-none text-slate-700 font-medium" 
+              <textarea required rows="3" className="w-full p-3 bg-slate-50 rounded-xl outline-none text-sm font-medium" 
                 placeholder="What was the outcome?" value={approachData.summary} onChange={(e) => setApproachData({...approachData, summary: e.target.value})} />
-              <button type="submit" disabled={submittingApproach} className="w-full p-5 bg-slate-900 text-white rounded-2xl font-black uppercase hover:bg-blue-600 flex items-center justify-center gap-3">
-                {submittingApproach ? <Loader2 className="animate-spin"/> : <Send size={20}/>} Confirm Outreach
+              <button type="submit" disabled={submittingApproach} className="w-full py-2.5 bg-slate-900 text-white rounded-xl font-bold text-xs uppercase hover:bg-blue-600 flex items-center justify-center gap-2">
+                {submittingApproach ? <Loader2 className="animate-spin" size={14}/> : <Send size={14}/>} Confirm
               </button>
             </form>
           </div>
         </div>
       )}
 
-      {/* MODAL: CONVERT TO LEAD WITH POC SELECTION */}
+      {/* MODAL: CONVERT TO LEAD */}
       {isLeadModalOpen && selectedProspectForLead && (
         <div className="fixed inset-0 z-[130] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
-          <div className="bg-white w-full max-w-lg rounded-[2.5rem] shadow-2xl p-8 relative max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setIsLeadModalOpen(false)} className="absolute top-6 right-6 text-slate-300 hover:text-slate-600"><X size={24} /></button>
+          <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setIsLeadModalOpen(false)} className="absolute top-4 right-4 text-slate-300 hover:text-slate-600"><X size={20} /></button>
             
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border-2 border-emerald-100">
-                <Target size={32} />
+            <div className="text-center mb-4">
+              <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3 border-2 border-emerald-100">
+                <Target size={24} />
               </div>
-              <h2 className="text-2xl font-black text-slate-800">Generate Lead</h2>
-              <p className="text-slate-500 text-sm mt-1">
-                For: <span className="font-bold text-slate-800">{selectedProspectForLead.companyName}</span>
-              </p>
+              <h2 className="text-xl font-black text-slate-800">Generate Lead</h2>
+              <p className="text-xs text-slate-500">For: <span className="font-bold text-slate-800">{selectedProspectForLead.companyName}</span></p>
             </div>
 
-            <form onSubmit={handleLeadConversionSubmit} className="space-y-5">
-              {/* Lead Type Selection */}
+            <form onSubmit={handleLeadConversionSubmit} className="space-y-4">
+              {/* Lead Type */}
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
-                  Lead Source
-                </label>
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1">Lead Source</label>
                 <select
                   required
-                  className="w-full p-4 mt-1 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                  className="w-full p-2.5 mt-1 bg-slate-50 rounded-xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-sm text-slate-700"
                   value={leadType}
                   onChange={(e) => setLeadType(e.target.value)}
                 >
@@ -906,19 +939,17 @@ const Prospects = () => {
                 </select>
               </div>
 
-              {/* Referred By - Only for Reference type */}
+              {/* Referred By */}
               {leadType === 'Reference' && (
                 <div className="animate-in fade-in duration-300">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-blue-600 ml-2">
-                    Referred By *
-                  </label>
+                  <label className="text-[8px] font-black uppercase tracking-widest text-blue-600 ml-1">Referred By *</label>
                   <div className="relative mt-1">
-                    <UserPlus className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400" size={18} />
+                    <UserPlus className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-400" size={14} />
                     <input
                       required
                       type="text"
                       placeholder="Who referred this lead?"
-                      className="w-full p-4 pl-12 bg-blue-50/50 rounded-2xl border-2 border-blue-100 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                      className="w-full p-2.5 pl-9 bg-blue-50/50 rounded-xl border-2 border-blue-100 focus:border-blue-500 focus:bg-white outline-none font-bold text-sm text-slate-700"
                       value={referredBy}
                       onChange={(e) => setReferredBy(e.target.value)}
                     />
@@ -928,12 +959,12 @@ const Prospects = () => {
 
               {/* POC Selection */}
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2 flex items-center gap-2">
-                  <Users size={12} /> Select Point of Contact *
+                <label className="text-[8px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1.5">
+                  <Users size={12} /> Select POC *
                 </label>
                 <select
                   required
-                  className="w-full p-4 mt-1 bg-slate-50 rounded-2xl border-2 border-transparent focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                  className="w-full p-2.5 mt-1 bg-slate-50 rounded-xl border-2 border-transparent focus:border-blue-500 focus:bg-white outline-none font-bold text-sm text-slate-700"
                   value={selectedPOC?.id || ''}
                   onChange={(e) => {
                     const poc = availablePOCs.find(p => p.id === e.target.value);
@@ -949,22 +980,20 @@ const Prospects = () => {
                 </select>
               </div>
 
-              {/* Selected POC Details Preview */}
+              {/* Selected POC Preview */}
               {selectedPOC && (
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2 animate-in fade-in duration-300">
-                  <p className="text-[9px] font-black text-blue-600 uppercase tracking-widest">Selected Contact Details</p>
-                  <div className="space-y-1">
+                <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1.5 animate-in fade-in duration-300">
+                  <p className="text-[8px] font-black text-blue-600 uppercase tracking-widest">Contact Details</p>
+                  <div className="space-y-0.5">
                     <p className="text-sm font-bold text-slate-700">{selectedPOC.name}</p>
                     {selectedPOC.email && (
-                      <p className="text-xs text-slate-600 flex items-center gap-2">
-                        <Mail size={12} className="text-slate-400" />
-                        {selectedPOC.email}
+                      <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                        <Mail size={10} className="text-slate-400" /> {selectedPOC.email}
                       </p>
                     )}
                     {selectedPOC.phone && (
-                      <p className="text-xs text-slate-600 flex items-center gap-2">
-                        <PhoneIcon size={12} className="text-slate-400" />
-                        {selectedPOC.phone}
+                      <p className="text-xs text-slate-600 flex items-center gap-1.5">
+                        <PhoneIcon size={10} className="text-slate-400" /> {selectedPOC.phone}
                       </p>
                     )}
                   </div>
@@ -974,14 +1003,14 @@ const Prospects = () => {
               <button
                 type="submit"
                 disabled={submittingLead || !selectedPOC}
-                className="w-full p-5 bg-emerald-600 text-white rounded-2xl font-black uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {submittingLead ? (
-                  <Loader2 size={20} className="animate-spin" />
+                  <Loader2 size={16} className="animate-spin" />
                 ) : (
-                  <ArrowRight size={20} />
+                  <ArrowRight size={16} />
                 )}
-                Generate Lead Now
+                Generate Lead
               </button>
             </form>
           </div>
@@ -991,20 +1020,20 @@ const Prospects = () => {
       {/* MODAL: ADD SINGLE */}
       {isModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
-          <div className="bg-white w-full max-w-xl rounded-[3rem] shadow-2xl p-10 relative">
-            <button onClick={() => setIsModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600"><X size={24} /></button>
-            <h2 className="text-2xl font-black text-slate-800 mb-6">Add New Prospect</h2>
-            <form onSubmit={handleSingleSubmit} className="space-y-4">
-              <input required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Company Name" value={newProspect.companyName} onChange={(e) => setNewProspect({...newProspect, companyName: e.target.value})} />
-              <input required className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Point of Contact" value={newProspect.pocName} onChange={(e) => setNewProspect({...newProspect, pocName: e.target.value})} />
+          <div className="bg-white w-full max-w-xl rounded-xl shadow-2xl p-6 relative">
+            <button onClick={() => setIsModalOpen(false)} className="absolute top-4 right-4 text-slate-300 hover:text-slate-600"><X size={20} /></button>
+            <h2 className="text-xl font-black text-slate-800 mb-4">Add Prospect</h2>
+            <form onSubmit={handleSingleSubmit} className="space-y-3">
+              <input required className="w-full p-2.5 bg-slate-50 rounded-xl outline-none font-bold text-sm text-slate-700" placeholder="Company Name" value={newProspect.companyName} onChange={(e) => setNewProspect({...newProspect, companyName: e.target.value})} />
+              <input required className="w-full p-2.5 bg-slate-50 rounded-xl outline-none font-bold text-sm text-slate-700" placeholder="Point of Contact" value={newProspect.pocName} onChange={(e) => setNewProspect({...newProspect, pocName: e.target.value})} />
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                <input type="email" className="w-full p-4 pl-12 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Email Address" value={newProspect.pocEmail} onChange={(e) => setNewProspect({...newProspect, pocEmail: e.target.value})} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
+                <input type="email" className="w-full p-2.5 pl-9 bg-slate-50 rounded-xl outline-none font-bold text-sm text-slate-700" placeholder="Email Address" value={newProspect.pocEmail} onChange={(e) => setNewProspect({...newProspect, pocEmail: e.target.value})} />
               </div>
-              <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Contact Number (Optional)" value={newProspect.pocContact} onChange={(e) => setNewProspect({...newProspect, pocContact: e.target.value})} />
-              <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="LinkedIn Profile (Optional)" value={newProspect.pocLinkedin} onChange={(e) => setNewProspect({...newProspect, pocLinkedin: e.target.value})} />
-              <input className="w-full p-4 bg-slate-50 rounded-2xl outline-none font-bold text-slate-700" placeholder="Industry (Optional)" value={newProspect.industry} onChange={(e) => setNewProspect({...newProspect, industry: e.target.value})} />
-              <button type="submit" disabled={!isContactInfoProvided} className={`w-full p-5 rounded-2xl font-black uppercase shadow-xl ${isContactInfoProvided ? 'bg-slate-900 text-white hover:bg-blue-600' : 'bg-slate-200 text-slate-400'}`}>
+              <input className="w-full p-2.5 bg-slate-50 rounded-xl outline-none font-bold text-sm text-slate-700" placeholder="Phone (Optional)" value={newProspect.pocContact} onChange={(e) => setNewProspect({...newProspect, pocContact: e.target.value})} />
+              <input className="w-full p-2.5 bg-slate-50 rounded-xl outline-none font-bold text-sm text-slate-700" placeholder="LinkedIn (Optional)" value={newProspect.pocLinkedin} onChange={(e) => setNewProspect({...newProspect, pocLinkedin: e.target.value})} />
+              <input className="w-full p-2.5 bg-slate-50 rounded-xl outline-none font-bold text-sm text-slate-700" placeholder="Industry (Optional)" value={newProspect.industry} onChange={(e) => setNewProspect({...newProspect, industry: e.target.value})} />
+              <button type="submit" disabled={!isContactInfoProvided} className={`w-full py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider shadow-xl ${isContactInfoProvided ? 'bg-slate-900 text-white hover:bg-blue-600' : 'bg-slate-200 text-slate-400'}`}>
                 Save Prospect
               </button>
             </form>
