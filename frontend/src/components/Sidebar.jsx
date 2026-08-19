@@ -1,4 +1,4 @@
-// frontend/src/components/Sidebar.jsx - UPDATED WITH SINGLE PEOPLE OPS ENTRY
+// frontend/src/components/Sidebar.jsx - UPDATED WITH SUPER ADMIN SUPPORT
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
@@ -269,9 +269,13 @@ const Sidebar = () => {
     window.open('https://techdataseeders.com/', '_blank');
   };
 
-  // ROLE BADGE COLORS
+  // ============================================
+  // ✅ FIXED: ROLE BADGE COLORS - Added Super Admin
+  // ============================================
   const getRoleStyles = (role) => {
     switch (role) {
+      case 'Super Admin':
+        return 'from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-400/20';
       case 'Admin':
         return 'from-red-500/20 to-orange-500/20 text-orange-300 border-orange-400/20';
       case 'Sales Manager':
@@ -293,9 +297,12 @@ const Sidebar = () => {
     }
   };
 
-  // Get role display name
+  // ============================================
+  // ✅ FIXED: ROLE DISPLAY NAME - Added Super Admin
+  // ============================================
   const getRoleDisplayName = (role) => {
     switch (role) {
+      case 'Super Admin': return 'Super Admin';
       case 'Admin': return 'Admin';
       case 'Sales Manager': return 'Sales Manager';
       case 'Sales': return 'Sales';
@@ -312,6 +319,55 @@ const Sidebar = () => {
   // MENU ITEMS - PEOPLE OPS ONLY ONCE PER ROLE
   // ============================================
   const menuItems = {
+    // ============================================
+    // SUPER ADMIN - Gets ALL menus
+    // ============================================
+    'Super Admin': [
+      { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+      { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
+      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+      { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
+      { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
+      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
+      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
+      { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' },
+      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
+      { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
+      { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
+      { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
+      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
+      { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
+      { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dev Dashboard' },
+      { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
+      { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+      { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
+      { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
+      { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Team Lead' },
+      { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+      { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
+      { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
+      { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Sales' },
+      { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Sales Manager' },
+      { path: '/client', icon: <Activity size={18} />, label: 'Client View' },
+      { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
+      { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'PM Feasibility' },
+      { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'PM Dashboard' },
+      { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
+      { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
+      { path: '/profile', icon: <User size={18} />, label: 'Profile' },
+      { path: '/notifications', icon: <Bell size={18} />, label: 'Notification Settings' },
+    ],
+
+    // ============================================
+    // ADMIN
+    // ============================================
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -329,6 +385,9 @@ const Sidebar = () => {
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' }
     ],
 
+    // ============================================
+    // SALES MANAGER
+    // ============================================
     'Sales Manager': [
       { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/users', icon: <UserPlus size={18} />, label: 'Team' },
@@ -337,6 +396,9 @@ const Sidebar = () => {
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
+    // ============================================
+    // SALES
+    // ============================================
     Sales: [
       { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
@@ -347,6 +409,9 @@ const Sidebar = () => {
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
+    // ============================================
+    // PROJECT MANAGER
+    // ============================================
     'Project Manager': [
       { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -360,6 +425,9 @@ const Sidebar = () => {
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
+    // ============================================
+    // TEAM LEAD
+    // ============================================
     'Team Lead': [
       { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -371,6 +439,9 @@ const Sidebar = () => {
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
+    // ============================================
+    // DEVELOPER
+    // ============================================
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
@@ -383,11 +454,17 @@ const Sidebar = () => {
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
     ],
 
+    // ============================================
+    // CLIENT
+    // ============================================
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
     ],
 
+    // ============================================
+    // HR
+    // ============================================
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
@@ -398,7 +475,10 @@ const Sidebar = () => {
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
     ],
-          
+    
+    // ============================================
+    // FINANCE
+    // ============================================
     Finance: [
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },

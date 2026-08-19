@@ -15,7 +15,7 @@ const { authorize } = require('../middleware/roleCheck');
 router.use(protect);
 
 // FIXED: Added the space to match "Project Manager" in your database
-router.use(authorize('Admin', 'Project Manager', 'Sales', 'Sales Manager')); 
+router.use(authorize('Super Admin','Admin', 'Project Manager', 'Sales', 'Sales Manager')); 
 
 router.get('/projects', getAllProjects);
 router.post('/projects', createProject);

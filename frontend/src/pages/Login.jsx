@@ -137,7 +137,7 @@ const Login = () => {
       setIsExiting(true);
 
       const role = user.role.toLowerCase();
-      let targetRoute = role === 'admin' ? '/admin' :
+      let targetRoute = role === 'super admin' || role === 'admin' ? '/admin' :
                     role === 'developer' ? '/developer' :
                     role === 'sales' ? '/sales' :
                     role === 'sales manager' ? '/sales-manager' :

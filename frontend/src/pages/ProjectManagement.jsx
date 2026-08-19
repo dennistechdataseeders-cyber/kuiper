@@ -372,25 +372,45 @@ const ProjectManagement = () => {
     fetchStatusOptions();
   }, []);
 
-  const fetchInitialData = async () => {
-    try {
-      const [projRes, devRes, pmRes, tlRes] = await Promise.all([
-        axios.get(`${ADMIN_BASE}/projects`, authHeader),
-        axios.get(`${ADMIN_BASE}/users/developers`, authHeader),
-        axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader),
-        axios.get(`${ADMIN_BASE}/users/teamleads`, authHeader)
-      ]);
+  // frontend/src/pages/ProjectManagement.jsx - UPDATED fetchInitialData
 
-      setProjects(projRes.data);
-      setDevelopers(devRes.data);
-      setProjectManagers(pmRes.data);
-      setTeamLeads(tlRes.data);
 
-    } catch (err) {
-      console.error("Data fetch failed:", err);
-      toast.error("Failed to load data");
+const fetchInitialData = async () => {
+  try {
+    // ✅ For Super Admin and Admin, get ALL projects
+    const userRole = localStorage.getItem('role');
+    let endpoint = `${ADMIN_BASE}/projects`;
+    
+    // For Super Admin and Admin, we want ALL projects
+    // The backend now handles this correctly
+    
+    const [projRes, devRes, pmRes, tlRes] = await Promise.all([
+      axios.get(endpoint, authHeader),
+      axios.get(`${ADMIN_BASE}/users/developers`, authHeader),
+      axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader),
+      axios.get(`${ADMIN_BASE}/users/teamleads`, authHeader)
+    ]);
+
+    // For Super Admin and Admin, show ALL projects
+    // For PM, filter by projectManager
+    let projectsData = projRes.data;
+    
+    if (userRole === 'Project Manager') {
+      // PM already gets filtered by the backend
+      projectsData = projRes.data;
     }
-  };
+    // ✅ For Super Admin and Admin, NO additional filtering is applied
+    
+    setProjects(projectsData);
+    setDevelopers(devRes.data);
+    setProjectManagers(pmRes.data);
+    setTeamLeads(tlRes.data);
+
+  } catch (err) {
+    console.error("Data fetch failed:", err);
+    toast.error("Failed to load data");
+  }
+};
 
   // Filter developers based on search term
   const filteredDevelopers = useMemo(() => {
@@ -402,72 +422,78 @@ const ProjectManagement = () => {
     );
   }, [developers, developerSearchTerm]);
 
-  const filteredProjects = useMemo(() => {
-    let result = [...projects];
+const filteredProjects = useMemo(() => {
+  let result = [...projects];
 
-    // FILTER PROJECTS FOR CURRENT PM
+  // ✅ FIX: For Super Admin and Admin, show ALL projects without PM filter
+  const userRole = localStorage.getItem('role');
+  
+  // Only filter by project manager if NOT Super Admin or Admin
+  if (userRole !== 'Super Admin' && userRole !== 'Admin') {
     result = result.filter(
       (p) =>
         p.projectManager?._id === currentUserId ||
         p.projectManager === currentUserId
     );
+  }
+  // For Super Admin and Admin, skip the PM filter - show ALL projects
 
-    // FILTER BY STATUS
-    if (statusFilter === 'Active') {
-      result = result.filter(p => p.projectStatus !== 'Closed');
-    } else if (statusFilter === 'Inactive') {
-      result = result.filter(p => p.projectStatus === 'Closed');
-    } else if (statusFilter === 'On Hold') {
-      result = result.filter(p => isOnHoldStatus(p.projectStatus));
-    }
-    // 'All' shows everything
+  // FILTER BY STATUS
+  if (statusFilter === 'Active') {
+    result = result.filter(p => p.projectStatus !== 'Closed');
+  } else if (statusFilter === 'Inactive') {
+    result = result.filter(p => p.projectStatus === 'Closed');
+  } else if (statusFilter === 'On Hold') {
+    result = result.filter(p => isOnHoldStatus(p.projectStatus));
+  }
+  // 'All' shows everything
 
-    // SEARCH FILTER
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase().trim();
+  // SEARCH FILTER
+  if (searchTerm.trim()) {
+    const search = searchTerm.toLowerCase().trim();
 
-      result = result.filter((project) => {
-        const orgNames = (project.organizations || []).map(org => {
-          if (typeof org === 'object') return org?.companyName || '';
-          const orgObj = organizations.find(o => o._id === org);
-          return orgObj?.companyName || '';
-        }).join(' ') || '';
-        
-        const searchableFields = [
-          project.projectCustomId,
-          project.name,
-          project.industry,
-          project.country,
-          project.projectManager?.name,
-          orgNames
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
+    result = result.filter((project) => {
+      const orgNames = (project.organizations || []).map(org => {
+        if (typeof org === 'object') return org?.companyName || '';
+        const orgObj = organizations.find(o => o._id === org);
+        return orgObj?.companyName || '';
+      }).join(' ') || '';
+      
+      const searchableFields = [
+        project.projectCustomId,
+        project.name,
+        project.industry,
+        project.country,
+        project.projectManager?.name,
+        orgNames
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
 
-        return searchableFields.includes(search);
-      });
-    }
-
-    // SORT PROJECTS
-    result.sort((a, b) => {
-      const aId = a.projectCustomId || '';
-      const bId = b.projectCustomId || '';
-
-      return aId.localeCompare(bId, undefined, {
-        numeric: true,
-        sensitivity: 'base',
-      });
+      return searchableFields.includes(search);
     });
+  }
 
-    return result;
-  }, [
-    projects,
-    organizations,
-    statusFilter,
-    currentUserId,
-    searchTerm
-  ]);
+  // SORT PROJECTS
+  result.sort((a, b) => {
+    const aId = a.projectCustomId || '';
+    const bId = b.projectCustomId || '';
+
+    return aId.localeCompare(bId, undefined, {
+      numeric: true,
+      sensitivity: 'base',
+    });
+  });
+
+  return result;
+}, [
+  projects,
+  organizations,
+  statusFilter,
+  currentUserId,
+  searchTerm
+]);
 
   // Reset to first page when filters change
   useEffect(() => {

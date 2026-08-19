@@ -417,7 +417,7 @@ router.get('/:id', ticketController.getTicketById);
 router.patch('/:id/status', ticketController.updateStatus);
 
 // Assign ticket to user (PM, Admin, Team Lead only)
-router.patch('/:id/assign', authorize('Project Manager', 'Admin', 'Team Lead'), ticketController.assignTicket);
+router.patch('/:id/assign', authorize('Super Admin','Project Manager', 'Admin', 'Team Lead'), ticketController.assignTicket);
 
 // Add comment to ticket
 router.post('/:id/comments', ticketController.addComment);
@@ -448,7 +448,7 @@ router.get('/feeds/:projectId', protect, async (req, res) => {
   }
 });
 // Get developers for assignment dropdown (PM, Admin, Team Lead only)
-router.get('/developers/list', authorize('Project Manager', 'Admin', 'Team Lead'), ticketController.getDevelopers);
+router.get('/developers/list', authorize('Super Admin','Project Manager', 'Admin', 'Team Lead'), ticketController.getDevelopers);
 // backend/routes/ticketRoutes.js - ADD WATCHER ROUTES
 
 // ============================================

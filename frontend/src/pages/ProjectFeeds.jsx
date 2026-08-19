@@ -518,79 +518,95 @@ const ProjectFeeds = () => {
     setCurrentPage(1);
   }, [selectedProject, searchTerm, feedTypeFilter, itemsPerPage]);
   
-  const fetchData = async () => {
-    try {
-      const [projectRes, devRes] = await Promise.all([
-        axios.get(`${ADMIN_BASE}/projects`, authHeader),
-        axios.get(`${ADMIN_BASE}/users/developers`, authHeader)
-      ]);
+ // frontend/src/pages/ProjectFeeds.jsx - UPDATED fetchData
 
-      const allProjects = projectRes.data || [];
+const fetchData = async () => {
+  try {
+    const [projectRes, devRes] = await Promise.all([
+      axios.get(`${ADMIN_BASE}/projects`, authHeader),
+      axios.get(`${ADMIN_BASE}/users/developers`, authHeader)
+    ]);
 
-      const filteredProjects = allProjects.filter(
+    const allProjects = projectRes.data || [];
+
+    // ✅ FIX: For Super Admin and Admin, show ALL projects
+    // For Project Manager, filter by projectManager
+    let filteredProjects;
+    const userRole = localStorage.getItem('role');
+    
+    if (userRole === 'Super Admin' || userRole === 'Admin') {
+      // Super Admin and Admin see ALL projects
+      filteredProjects = allProjects;
+    } else {
+      // Project Manager sees only their projects
+      filteredProjects = allProjects.filter(
         p =>
           p.projectManager?._id === currentUserId ||
           p.projectManager === currentUserId
       );
-
-      setProjects(filteredProjects);
-      setDevelopers(devRes.data || []);
-
-      const allFeeds = filteredProjects.flatMap(project =>
-        (project.feeds || []).map(feed => ({
-          ...feed,
-          projectId: project._id,
-          projectName: project.name,
-          projectCustomId: project.projectCustomId,
-          gitRepoUrl: project.gitRepoUrl,
-          gitRepoName: project.gitRepoName
-        }))
-      );
-
-      setFeeds(allFeeds);
-
-    } catch (err) {
-      console.error(err);
-      toast.error('Failed to fetch data');
-    }
-  };
-
-  // FILTER + SORT
-  const filteredFeeds = useMemo(() => {
-    let result = [...feeds];
-
-    if (selectedProject !== 'ALL') {
-      result = result.filter(
-        feed => feed.projectId === selectedProject
-      );
     }
 
-    if (feedTypeFilter !== 'ALL') {
-      result = result.filter(
-        feed => feed.feedType === feedTypeFilter
-      );
-    }
+    setProjects(filteredProjects);
+    setDevelopers(devRes.data || []);
 
-    if (searchTerm.trim()) {
-      const search = searchTerm.toLowerCase();
-      result = result.filter(feed =>
-        feed.name?.toLowerCase().includes(search) ||
-        feed.projectCustomId?.toLowerCase().includes(search) ||
-        feed.webDomain?.toLowerCase().includes(search)
-      );
-    }
-
-    result.sort((a, b) =>
-      (a.projectCustomId || '').localeCompare(
-        b.projectCustomId || '',
-        undefined,
-        { numeric: true, sensitivity: 'base' }
-      )
+    // Extract all feeds from projects
+    const allFeeds = filteredProjects.flatMap(project =>
+      (project.feeds || []).map(feed => ({
+        ...feed,
+        projectId: project._id,
+        projectName: project.name,
+        projectCustomId: project.projectCustomId,
+        gitRepoUrl: project.gitRepoUrl,
+        gitRepoName: project.gitRepoName
+      }))
     );
 
-    return result;
-  }, [feeds, selectedProject, searchTerm, feedTypeFilter]);
+    setFeeds(allFeeds);
 
+  } catch (err) {
+    console.error(err);
+    toast.error('Failed to fetch data');
+  }
+};
+
+// frontend/src/pages/ProjectFeeds.jsx - UPDATED filteredFeeds
+
+const filteredFeeds = useMemo(() => {
+  let result = [...feeds];
+
+  // ✅ FIX: For Super Admin and Admin, show ALL projects in dropdown
+  // The project filter dropdown will still work, but now shows all projects
+  if (selectedProject !== 'ALL') {
+    result = result.filter(
+      feed => feed.projectId === selectedProject
+    );
+  }
+
+  if (feedTypeFilter !== 'ALL') {
+    result = result.filter(
+      feed => feed.feedType === feedTypeFilter
+    );
+  }
+
+  if (searchTerm.trim()) {
+    const search = searchTerm.toLowerCase();
+    result = result.filter(feed =>
+      feed.name?.toLowerCase().includes(search) ||
+      feed.projectCustomId?.toLowerCase().includes(search) ||
+      feed.webDomain?.toLowerCase().includes(search)
+    );
+  }
+
+  result.sort((a, b) =>
+    (a.projectCustomId || '').localeCompare(
+      b.projectCustomId || '',
+      undefined,
+      { numeric: true, sensitivity: 'base' }
+    )
+  );
+
+  return result;
+}, [feeds, selectedProject, searchTerm, feedTypeFilter]);
   // PAGINATION
   const indexOfLastFeed = currentPage * itemsPerPage;
   const indexOfFirstFeed = indexOfLastFeed - itemsPerPage;

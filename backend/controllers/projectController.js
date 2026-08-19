@@ -15,11 +15,38 @@ const COUNTRY_MAP = {
   "United States": "US", "Vietnam": "VN"
 };
 
+// backend/controllers/projectController.js - UPDATED getAllProjects
+
 exports.getAllProjects = async (req, res) => {
   try {
     let query = {};
-    if (req.user.role === 'Project Manager') {
+    
+    // ✅ FIX: Super Admin and Admin see ALL projects
+    if (req.user.role === 'Super Admin' || req.user.role === 'Admin') {
+      // No filter - show ALL projects
+      query = {};
+    } else if (req.user.role === 'Project Manager') {
       query = { projectManager: req.user.id };
+    } else if (req.user.role === 'Team Lead') {
+      query = { teamLead: req.user.id };
+    } else if (req.user.role === 'Client') {
+      // Client-specific logic
+      const clientIdStr = req.user.id;
+      const clientOrgId = req.user.organizationId;
+      
+      const projects = await Project.find({
+        $or: [
+          { clients: clientIdStr },
+          ...(clientOrgId ? [{ organizations: clientOrgId }] : [])
+        ]
+      });
+      
+      const populatedProjects = await Project.populate(projects, [
+        { path: 'projectManager', select: 'name' },
+        { path: 'leadId' }
+      ]);
+      
+      return res.json(populatedProjects);
     }
 
     const projects = await Project.find(query)
@@ -29,6 +56,7 @@ exports.getAllProjects = async (req, res) => {
       
     res.json(projects);
   } catch (error) {
+    console.error('Error in getAllProjects:', error);
     res.status(500).json({ error: "Failed to fetch PM bucket" });
   }
 };

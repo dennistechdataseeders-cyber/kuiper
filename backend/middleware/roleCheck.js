@@ -1,15 +1,19 @@
+// backend/middleware/roleCheck.js
 /**
  * Flexible Role Middleware
- * Usage: authorize('Admin', 'Sales', 'Project Manager')
+ * Usage: authorize('Admin', 'Super Admin', 'Sales', 'Project Manager')
  */
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
-    // 1. Check if user exists (set by your authMiddleware/JWT verify)
     if (!req.user) {
       return res.status(401).json({ message: "Unauthorized: No user found" });
     }
 
-    // 2. Check if the user's role is in the allowed list
+    // Super Admin has ALL access - they bypass all role checks
+    if (req.user.role === 'Super Admin') {
+      return next();
+    }
+
     if (allowedRoles.includes(req.user.role)) {
       next();
     } else {
