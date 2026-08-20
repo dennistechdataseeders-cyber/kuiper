@@ -1,4 +1,4 @@
-// frontend/src/components/Sidebar.jsx - FINAL UPDATED WITH ANNOUNCEMENTS
+// frontend/src/components/Sidebar.jsx - UPDATED WITH ANNOUNCEMENTS TAB
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
@@ -40,8 +40,7 @@ import {
   UsersRound,
   UserCog,
   UserCheck,
-  Megaphone,
-  Plus
+  Megaphone // ✅ ADDED for Announcements
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -64,17 +63,6 @@ const Sidebar = () => {
   const [ticketCount, setTicketCount] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
-  // ✅ Announcement count state
-  const [announcementCount, setAnnouncementCount] = useState(0);
-  // ✅ Track if user has viewed announcements - persist in localStorage
-  const [hasViewedAnnouncements, setHasViewedAnnouncements] = useState(() => {
-    return localStorage.getItem('hasViewedAnnouncements') === 'true';
-  });
-  // ✅ Track the last count when viewed
-  const [lastViewedCount, setLastViewedCount] = useState(() => {
-    return parseInt(localStorage.getItem('lastViewedAnnouncementCount') || '0');
-  });
-  
   // PROFILE IMAGE STATES
   const [profileImage, setProfileImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -88,9 +76,6 @@ const Sidebar = () => {
   const userRole = localStorage.getItem('role') || 'User';
   const userName = localStorage.getItem('userName') || 'User';
   const userId = localStorage.getItem('userId');
-
-  // ✅ Check if user can create announcements
-  const canCreateAnnouncements = ['Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'].includes(userRole);
 
   // CLOSE MENU ON OUTSIDE CLICK
   useEffect(() => {
@@ -169,58 +154,6 @@ const Sidebar = () => {
     const interval = setInterval(fetchTicketCount, 30000);
     return () => clearInterval(interval);
   }, []);
-
-  // ✅ Fetch announcement count and determine if badge should show
-  useEffect(() => {
-    const fetchAnnouncementCount = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        
-        const res = await axios.get(`${API_BASE_URL}/api/announcements`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        
-        if (res.data.success) {
-          // Count only non-automated announcements
-          const count = res.data.announcements.filter(a => !a.isAutomated).length;
-          setAnnouncementCount(count);
-          
-          // If count is 0, reset viewed state
-          if (count === 0) {
-            setHasViewedAnnouncements(true);
-            setLastViewedCount(0);
-            localStorage.setItem('hasViewedAnnouncements', 'true');
-            localStorage.setItem('lastViewedAnnouncementCount', '0');
-          } 
-          // If count changed and user had viewed previously, check if new announcements arrived
-          else if (hasViewedAnnouncements && count > lastViewedCount) {
-            // New announcements arrived - reset viewed state
-            setHasViewedAnnouncements(false);
-            localStorage.setItem('hasViewedAnnouncements', 'false');
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching announcement count:', error);
-      }
-    };
-    
-    fetchAnnouncementCount();
-    
-    // Refresh count every 30 seconds
-    const interval = setInterval(fetchAnnouncementCount, 30000);
-    return () => clearInterval(interval);
-  }, [hasViewedAnnouncements, lastViewedCount]);
-
-  // ✅ Mark announcements as viewed when on announcements page
-  useEffect(() => {
-    if (location.pathname === '/announcements' && announcementCount > 0) {
-      setHasViewedAnnouncements(true);
-      setLastViewedCount(announcementCount);
-      localStorage.setItem('hasViewedAnnouncements', 'true');
-      localStorage.setItem('lastViewedAnnouncementCount', String(announcementCount));
-    }
-  }, [location.pathname, announcementCount]);
 
   // LOGOUT
   const handleLogout = () => {
@@ -338,7 +271,7 @@ const Sidebar = () => {
   };
 
   // ============================================
-  // ROLE BADGE COLORS
+  // ✅ FIXED: ROLE BADGE COLORS - Added Super Admin
   // ============================================
   const getRoleStyles = (role) => {
     switch (role) {
@@ -366,7 +299,7 @@ const Sidebar = () => {
   };
 
   // ============================================
-  // ROLE DISPLAY NAME
+  // ✅ FIXED: ROLE DISPLAY NAME - Added Super Admin
   // ============================================
   const getRoleDisplayName = (role) => {
     switch (role) {
@@ -384,24 +317,21 @@ const Sidebar = () => {
   };
 
   // ============================================
-  // MENU ITEMS - ORDER: Dashboard → Projects → Feed → Tickets → Announcements → Rest
+  // MENU ITEMS - WITH ANNOUNCEMENTS FOR ALL NON-CLIENT ROLES
   // ============================================
   const menuItems = {
     // ============================================
-    // SUPER ADMIN
+    // SUPER ADMIN - Gets ALL menus including Announcements
     // ============================================
     'Super Admin': [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
+      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
@@ -411,6 +341,7 @@ const Sidebar = () => {
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dev Dashboard' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
       { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -433,6 +364,8 @@ const Sidebar = () => {
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
       { path: '/notifications', icon: <Bell size={18} />, label: 'Notification Settings' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Super Admin
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
@@ -441,20 +374,20 @@ const Sidebar = () => {
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
       { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' },
+      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
+      { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Admin
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
@@ -462,13 +395,12 @@ const Sidebar = () => {
     // ============================================
     'Sales Manager': [
       { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Projects' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/admin/users', icon: <UserPlus size={18} />, label: 'Team' },
+      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Sales Manager
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
@@ -476,33 +408,32 @@ const Sidebar = () => {
     // ============================================
     Sales: [
       { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Projects' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
+      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Sales
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
     // PROJECT MANAGER
     // ============================================
     'Project Manager': [
-      { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Project Manager
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
@@ -511,14 +442,14 @@ const Sidebar = () => {
     'Team Lead': [
       { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
+      { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Team Lead
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
@@ -526,16 +457,16 @@ const Sidebar = () => {
     // ============================================
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/developer/feeds', icon: <File size={18} />, label: 'Feed' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
+      { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+      { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Developer
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
     // ============================================
@@ -547,19 +478,19 @@ const Sidebar = () => {
     ],
 
     // ============================================
-    // HR - KEEP ORIGINAL MENU NAMES
+    // HR
     // ============================================
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
+      // ✅ ANNOUNCEMENTS TAB - Added for HR
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
     
     // ============================================
@@ -567,58 +498,80 @@ const Sidebar = () => {
     // ============================================
     Finance: [
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      // Rest
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
+      // ✅ ANNOUNCEMENTS TAB - Added for Finance
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
   };
 
   const links = menuItems[userRole] || [];
 
   // ============================================
-  // ACTIVE ROUTE LOGIC
+  // FIXED ACTIVE ROUTE LOGIC - Prevents nested route conflicts
   // ============================================
   const isRouteActive = (path) => {
+    // Exact match for specific routes (prevents nested highlighting)
     const exactMatchPaths = [
-      '/sales', '/sales-manager', '/developer', '/admin', '/teamlead',
-      '/knowledge', '/hr', '/employee', '/pm/feasibility', '/pm/dashboard',
-      '/pm/feeds', '/pm/git-manager', '/pm/resource-analytics', '/pm/feed-status',
-      '/client', '/tickets', '/profile', '/hr/leaves', '/hr/employee-attendance',
-      '/hr/employee-attendance-report', '/hr/attendance-sync', '/admin/projects',
-      '/admin/users', '/admin/project-clients', '/admin/ticket-rules',
-      '/view_analytics', '/sales/add_org', '/sales/lead_generation',
-      '/sales/prospects', '/sales/email-trigger', '/developer/projects',
-      '/developer/feeds', '/developer/git-feeds', '/developer/feed-status',
-      '/developer/worklog', '/developer/bucket', '/teamlead/projects',
-      '/teamlead/developers', '/teamlead/feeds', '/teamlead/feed-status',
-      '/client/projects', '/client/feeds', '/feasibility', '/announcements',
+      '/sales',
+      '/sales-manager',
+      '/developer',
+      '/admin',
+      '/teamlead',
+      '/knowledge',
+      '/hr',
+      '/employee',
+      '/pm/feasibility',
+      '/pm/dashboard',
+      '/pm/feeds',
+      '/pm/git-manager',
+      '/pm/resource-analytics',
+      '/pm/feed-status',
+      '/client',
+      '/tickets',
+      '/profile',
+      '/hr/leaves',
+      '/hr/employee-attendance',
+      '/hr/employee-attendance-report',
+      '/hr/attendance-sync',
+      '/admin/projects',
+      '/admin/users',
+      '/admin/project-clients',
+      '/admin/ticket-rules',
+      '/view_analytics',
+      '/sales/add_org',
+      '/sales/lead_generation',
+      '/sales/prospects',
+      '/sales/email-trigger',
+      '/developer/projects',
+      '/developer/feeds',
+      '/developer/git-feeds',
+      '/developer/feed-status',
+      '/developer/worklog',
+      '/developer/bucket',
+      '/teamlead/projects',
+      '/teamlead/developers',
+      '/teamlead/feeds',
+      '/teamlead/feed-status',
+      '/client/projects',
+      '/client/feeds',
+      '/feasibility',
+      '/announcements', // ✅ Added for Announcements
     ];
     
+    // Check if the path is in the exact match list
     if (exactMatchPaths.includes(path)) {
       return location.pathname === path;
     }
     
+    // For all other routes, use startsWith (fallback)
     return location.pathname.startsWith(path);
   };
 
-  // ✅ Helper to check if a menu item should show a badge
+  // Helper to check if a menu item should show a badge
   const shouldShowBadge = (item) => {
-    if (item.label === 'Tickets' && ticketCount > 0) return true;
-    if (item.label === 'Announcements' && announcementCount > 0) {
-      if (!hasViewedAnnouncements) return true;
-      if (announcementCount > lastViewedCount) return true;
-      return false;
-    }
-    return false;
-  };
-
-  // ✅ Helper to get badge count
-  const getBadgeCount = (item) => {
-    if (item.label === 'Tickets') return ticketCount;
-    if (item.label === 'Announcements') return announcementCount;
-    return 0;
+    return item.label === 'Tickets' && ticketCount > 0;
   };
 
   // Determine sidebar classes based on mobile state
@@ -680,53 +633,42 @@ const Sidebar = () => {
           {links.map((item) => {
             const active = isRouteActive(item.path);
             const showBadge = shouldShowBadge(item);
-            const badgeCount = getBadgeCount(item);
-            const isAnnouncementItem = item.label === 'Announcements';
 
             return (
-              <div key={item.path} className="relative">
-                <NavLink
-                  to={item.path}
-                  className={`relative flex items-center gap-2 p-1.5 rounded-xl transition-all duration-200 group ${
-                    active
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                      : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
-                  } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
-                  title={isCollapsed && !isMobile ? item.label : ''}
-                  onClick={() => {
-                    if (isMobile && !isCollapsed) {
-                      toggleSidebar();
-                    }
-                    if (item.path === '/announcements') {
-                      setHasViewedAnnouncements(true);
-                      setLastViewedCount(announcementCount);
-                      localStorage.setItem('hasViewedAnnouncements', 'true');
-                      localStorage.setItem('lastViewedAnnouncementCount', String(announcementCount));
-                    }
-                  }}
-                >
-                  <span className="flex-shrink-0">{item.icon}</span>
-                  {(!isCollapsed || isMobile) && (
-                    <>
-                      <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap flex-1">
-                        {item.label}
-                      </span>
-                      {showBadge && (
-                        <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
-                          {badgeCount > 99 ? '99+' : badgeCount}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {isCollapsed && !isMobile && showBadge && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
-                      {badgeCount > 99 ? '99+' : badgeCount}
+              <NavLink
+                key={item.path}
+                to={item.path}
+                className={`relative flex items-center gap-2 p-1.5 rounded-xl transition-all duration-200 group ${
+                  active
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
+                    : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
+                } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+                title={isCollapsed && !isMobile ? item.label : ''}
+                onClick={() => {
+                  if (isMobile && !isCollapsed) {
+                    toggleSidebar();
+                  }
+                }}
+              >
+                <span className="flex-shrink-0">{item.icon}</span>
+                {(!isCollapsed || isMobile) && (
+                  <>
+                    <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                      {item.label}
                     </span>
-                  )}
-                </NavLink>
-
-              
-              </div>
+                    {showBadge && (
+                      <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
+                        {ticketCount > 99 ? '99+' : ticketCount}
+                      </span>
+                    )}
+                  </>
+                )}
+                {isCollapsed && !isMobile && showBadge && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
+                    {ticketCount > 99 ? '99+' : ticketCount}
+                  </span>
+                )}
+              </NavLink>
             );
           })}
         </nav>
