@@ -7,7 +7,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Feed = require('../models/Feed');
-const User = require('../models/User'); // Added for department-users endpoint
+const User = require('../models/User');
 
 // All routes require authentication
 router.use(protect);
@@ -43,8 +43,8 @@ const fileFilter = (req, file, cb) => {
                   allowedDocTypes.test(path.extname(file.originalname).toLowerCase());
   const mimetype = allowedImageTypes.test(file.mimetype) ||
                    allowedDocTypes.test(file.mimetype) ||
-                   file.mimetype === 'application/octet-stream' || // Allow unknown binary files
-                   file.mimetype === 'application/x-msdownload' || // .exe files
+                   file.mimetype === 'application/octet-stream' ||
+                   file.mimetype === 'application/x-msdownload' ||
                    file.mimetype === 'application/x-rar-compressed' ||
                    file.mimetype === 'application/x-7z-compressed' ||
                    file.mimetype === 'application/x-tar' ||
@@ -53,7 +53,6 @@ const fileFilter = (req, file, cb) => {
   if (mimetype && extname) {
     cb(null, true);
   } else {
-    // For .py, .exe, .bat files that might not have recognized MIME types
     const ext = path.extname(file.originalname).toLowerCase();
     const allowedExtensions = ['.py', '.exe', '.bat', '.sh', '.bash', '.cmd', '.ps1', '.rar', '.7z', '.tar', '.gz', '.bz2'];
     if (allowedExtensions.includes(ext)) {
@@ -81,30 +80,46 @@ const upload = multer({
  * Get the correct base URL for file uploads
  * Works for both local development and production (VPS with Nginx)
  */
-// backend/routes/ticketRoutes.js
-
-
 function getBaseUrl(req) {
-  // 1. Check for environment variable (highest priority for production)
-  if (process.env.API_BASE_URL) {
-    return process.env.API_BASE_URL.replace(/\/+$/, '');
-  }
-  
-  // 2. Check for FRONTEND_URL as fallback
-  if (process.env.FRONTEND_URL) {
-    return process.env.FRONTEND_URL.replace(/\/+$/, '');
-  }
-  
-  // 3. Use the request protocol and host (works with trust proxy)
-  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-  const host = req.headers['x-forwarded-host'] || req.get('host');
-  
-  // ✅ FIX: If we're in production but headers are missing, use the API_BASE_URL from env
-  if (process.env.NODE_ENV === 'production' && !host) {
+  try {
+    // 1. Check for environment variable (highest priority for production)
+    if (process.env.API_BASE_URL) {
+      const url = process.env.API_BASE_URL.replace(/\/+$/, '');
+      console.log('🔍 Using API_BASE_URL from env:', url);
+      return url;
+    }
+    
+    // 2. Check for FRONTEND_URL as fallback
+    if (process.env.FRONTEND_URL) {
+      const url = process.env.FRONTEND_URL.replace(/\/+$/, '');
+      console.log('🔍 Using FRONTEND_URL from env:', url);
+      return url;
+    }
+    
+    // 3. Use the request protocol and host
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+    const host = req.headers['x-forwarded-host'] || req.get('host');
+    
+    console.log('🔍 Using request headers:');
+    console.log('  - protocol:', protocol);
+    console.log('  - host:', host);
+    
+    // If we're in production but headers are missing, use the API_BASE_URL
+    if (process.env.NODE_ENV === 'production' && !host) {
+      console.log('⚠️ Production mode but missing host header, using default');
+      return 'https://api.kuiperapp.co.in';
+    }
+    
+    if (!host) {
+      console.log('⚠️ No host found, using default');
+      return 'https://api.kuiperapp.co.in';
+    }
+    
+    return `${protocol}://${host}`;
+  } catch (error) {
+    console.error('❌ Error in getBaseUrl:', error.message);
     return 'https://api.kuiperapp.co.in';
   }
-  
-  return `${protocol}://${host}`;
 }
 
 // Get MIME type for file extension
@@ -178,33 +193,80 @@ function getMimeType(filename) {
 // FILE UPLOAD ENDPOINTS
 // ============================================
 
-// Single file upload endpoint
+// Single file upload endpoint - WITH DETAILED LOGGING
 router.post('/upload-file', protect, upload.single('file'), async (req, res) => {
   try {
+    console.log('========================================');
+    console.log('📤 FILE UPLOAD REQUEST RECEIVED');
+    console.log('========================================');
+    
+    // Log request details for debugging
+    console.log('🔍 Request details:');
+    console.log('  - Method:', req.method);
+    console.log('  - URL:', req.url);
+    console.log('  - Headers:', JSON.stringify({
+      'content-type': req.headers['content-type'],
+      'authorization': req.headers['authorization'] ? 'Bearer [hidden]' : 'none',
+      'x-forwarded-proto': req.headers['x-forwarded-proto'],
+      'x-forwarded-host': req.headers['x-forwarded-host'],
+      'host': req.get('host'),
+      'origin': req.headers['origin']
+    }, null, 2));
+    
+    console.log('🔍 Environment:');
+    console.log('  - NODE_ENV:', process.env.NODE_ENV);
+    console.log('  - API_BASE_URL:', process.env.API_BASE_URL);
+    console.log('  - FRONTEND_URL:', process.env.FRONTEND_URL);
+    
+    // Check if file exists
     if (!req.file) {
+      console.error('❌ No file provided in request');
       return res.status(400).json({ error: 'No file provided' });
     }
+    
+    console.log('🔍 File info:');
+    console.log('  - Original name:', req.file.originalname);
+    console.log('  - Size:', req.file.size, 'bytes');
+    console.log('  - MIME type:', req.file.mimetype);
+    console.log('  - Saved as:', req.file.filename);
+    console.log('  - Path:', req.file.path);
     
     // Determine file type
     const fileExt = path.extname(req.file.originalname).toLowerCase();
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
     const isImage = imageExtensions.includes(fileExt);
     
+    console.log('🔍 File type:', isImage ? 'Image' : 'Document');
+    console.log('  - Extension:', fileExt);
+    
     // Check size limits based on file type
     if (isImage && req.file.size > 5 * 1024 * 1024) {
+      console.error('❌ Image too large:', req.file.size, 'bytes');
       fs.unlinkSync(req.file.path);
       return res.status(400).json({ 
         error: 'Image files must be less than 5MB' 
       });
     }
     
-    // ✅ FIX: Use the dynamic base URL with fallback
-    const baseUrl = getBaseUrl(req);
-    const fileUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
+    // Get base URL
+    console.log('🔍 Getting base URL...');
+    let baseUrl;
+    try {
+      baseUrl = getBaseUrl(req);
+      console.log('  - Base URL from getBaseUrl():', baseUrl);
+    } catch (urlError) {
+      console.error('❌ Error getting base URL:', urlError.message);
+      baseUrl = 'https://api.kuiperapp.co.in';
+      console.log('  - Using fallback base URL:', baseUrl);
+    }
     
-    console.log(`📤 File uploaded: ${fileUrl}`); // For debugging
+    const fileUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
+    console.log('🔍 Final file URL:', fileUrl);
     
     const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2);
+    
+    console.log('✅ File upload successful!');
+    console.log('========================================');
     
     res.json({ 
       success: true, 
@@ -217,15 +279,47 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
       extension: fileExt.substring(1)
     });
   } catch (error) {
-    console.error('File upload error:', error);
-    res.status(500).json({ error: 'Failed to upload file' });
+    console.error('========================================');
+    console.error('❌ FILE UPLOAD ERROR:');
+    console.error('  - Message:', error.message);
+    console.error('  - Stack:', error.stack);
+    console.error('========================================');
+    
+    // Check if it's a multer error
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ 
+        error: 'File too large. Maximum size is 50MB.' 
+      });
+    }
+    
+    // Check if it's a disk space error
+    if (error.code === 'ENOSPC') {
+      return res.status(500).json({ 
+        error: 'Server disk space full. Please contact support.' 
+      });
+    }
+    
+    // Generic error
+    res.status(500).json({ 
+      error: 'Failed to upload file', 
+      message: error.message 
+    });
   }
 });
+
+// Multiple file upload endpoint
 router.post('/upload-files', protect, upload.array('files', 10), async (req, res) => {
   try {
+    console.log('========================================');
+    console.log('📤 MULTIPLE FILE UPLOAD REQUEST RECEIVED');
+    console.log('========================================');
+    
     if (!req.files || req.files.length === 0) {
+      console.error('❌ No files provided');
       return res.status(400).json({ error: 'No files provided' });
     }
+    
+    console.log(`🔍 ${req.files.length} files received`);
     
     const baseUrl = getBaseUrl(req);
     const uploadedFiles = [];
@@ -233,12 +327,13 @@ router.post('/upload-files', protect, upload.array('files', 10), async (req, res
     
     for (const file of req.files) {
       try {
-        // Determine file type
+        console.log(`📄 Processing file: ${file.originalname}`);
+        console.log(`  - Size: ${file.size} bytes`);
+        
         const fileExt = path.extname(file.originalname).toLowerCase();
         const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
         const isImage = imageExtensions.includes(fileExt);
         
-        // Check size limits based on file type
         if (isImage && file.size > 5 * 1024 * 1024) {
           fs.unlinkSync(file.path);
           errors.push({
@@ -259,13 +354,19 @@ router.post('/upload-files', protect, upload.array('files', 10), async (req, res
           type: isImage ? 'image' : 'document',
           extension: fileExt.substring(1)
         });
+        
+        console.log(`  ✅ Uploaded: ${fileUrl}`);
       } catch (err) {
+        console.error(`❌ Error processing file ${file.originalname}:`, err.message);
         errors.push({
           filename: file.originalname,
           error: err.message
         });
       }
     }
+    
+    console.log(`✅ Upload complete: ${uploadedFiles.length} successful, ${errors.length} failed`);
+    console.log('========================================');
     
     res.json({
       success: true,
@@ -275,8 +376,8 @@ router.post('/upload-files', protect, upload.array('files', 10), async (req, res
       totalFailed: errors.length
     });
   } catch (error) {
-    console.error('Multiple file upload error:', error);
-    res.status(500).json({ error: 'Failed to upload files' });
+    console.error('❌ Multiple file upload error:', error);
+    res.status(500).json({ error: 'Failed to upload files', details: error.message });
   }
 });
 
@@ -297,6 +398,8 @@ router.delete('/delete-file', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete file' });
   }
 });
+
+// Legacy: Single image upload endpoint
 router.post('/upload-image', protect, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -380,7 +483,7 @@ router.get('/download/:filename', protect, async (req, res) => {
     res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filename)}"`);
-    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 1 day
+    res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     
