@@ -1,4 +1,5 @@
 // frontend/src/pages/TicketDetails.jsx - COMPACT WITH WATCHERS IN RIGHT SIDEBAR
+// FIXED: Better error handling for file uploads and connection issues
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -687,7 +688,9 @@ const TicketDetails = () => {
     });
   };
 
-  // OPTIMIZED: Upload files with concurrency (max 3 at a time)
+  // ============================================
+  // FIXED: Upload files with better error handling
+  // ============================================
   const uploadFilesWithConcurrency = async (files) => {
     if (files.length === 0) return [];
     
@@ -695,6 +698,7 @@ const TicketDetails = () => {
     const token = localStorage.getItem('token');
     const concurrencyLimit = 3;
     let completed = 0;
+    let hasError = false;
     
     setUploadingFiles(true);
     
@@ -712,11 +716,15 @@ const TicketDetails = () => {
         const formData = new FormData();
         formData.append('file', file);
         
+        // Log the upload attempt
+        console.log(`📤 Uploading file ${index + 1}/${files.length}: ${file.name} (${formatFileSize(file.size)})`);
+        
         axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
           headers: { 
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
-          }
+          },
+          timeout: 60000 // 60 second timeout
         })
         .then(response => {
           if (response.data.success) {
@@ -727,11 +735,25 @@ const TicketDetails = () => {
               size: response.data.size,
               type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
             });
+            console.log(`✅ Uploaded: ${file.name}`);
           }
         })
         .catch(error => {
-          console.error(`File upload failed for ${file.name}:`, error);
-          toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+          hasError = true;
+          console.error(`❌ File upload failed for ${file.name}:`, error.message);
+          
+          // Show user-friendly error message
+          if (error.code === 'ECONNABORTED') {
+            toast.error(`Upload timeout for ${file.name}. The server may be busy.`);
+          } else if (error.response?.status === 413) {
+            toast.error(`File ${file.name} is too large. Maximum size is 50MB.`);
+          } else if (error.response?.status === 401) {
+            toast.error('Authentication failed. Please refresh and try again.');
+          } else if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+            toast.error(`Network error uploading ${file.name}. Please check your connection.`);
+          } else {
+            toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+          }
         })
         .finally(() => {
           completed++;
@@ -745,7 +767,9 @@ const TicketDetails = () => {
     });
   };
 
-  // OPTIMIZED: Debounced comment submission
+  // ============================================
+  // FIXED: Comment submission with better error handling
+  // ============================================
   const addComment = async (e) => {
     if (e) e.preventDefault();
     
@@ -769,6 +793,11 @@ const TicketDetails = () => {
       
       if (selectedFiles.length > 0) {
         uploadedFiles = await uploadFilesWithConcurrency(selectedFiles);
+        
+        // If all files failed to upload, show a warning
+        if (uploadedFiles.length === 0 && selectedFiles.length > 0) {
+          toast.warning('Files could not be uploaded. Comment will be sent without attachments.');
+        }
       }
       
       const payload = {
@@ -776,9 +805,14 @@ const TicketDetails = () => {
         files: uploadedFiles
       };
       
+      console.log(`📝 Sending comment with ${uploadedFiles.length} file(s)`);
+      
       const res = await axios.post(`${API_BASE_URL}/api/tickets/${id}/comments`,
         payload,
-        { headers: { Authorization: `Bearer ${token}` } }
+        { 
+          headers: { Authorization: `Bearer ${token}` },
+          timeout: 120000 // 2 minute timeout for large comments
+        }
       );
       
       setTicket(res.data);
@@ -792,12 +826,26 @@ const TicketDetails = () => {
       
       if (uploadedFiles.length > 0) {
         toast.success(`Comment added with ${uploadedFiles.length} attachment(s)`);
+      } else if (selectedFiles.length > 0) {
+        toast.success('Comment added (files could not be uploaded)');
       } else {
         toast.success('Comment added');
       }
     } catch (error) {
       console.error('Error adding comment:', error);
-      toast.error(error.response?.data?.error || 'Failed to add comment');
+      
+      // Better error messages
+      if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+        toast.error('Network error: Could not connect to server. Please check your connection and try again.');
+      } else if (error.response?.status === 401) {
+        toast.error('Session expired. Please refresh the page and try again.');
+      } else if (error.response?.status === 413) {
+        toast.error('Comment or attachments are too large. Please reduce the size and try again.');
+      } else if (error.code === 'ECONNABORTED') {
+        toast.error('Request timed out. The server may be busy. Please try again.');
+      } else {
+        toast.error(error.response?.data?.error || 'Failed to add comment. Please try again.');
+      }
     } finally {
       setIsSending(false);
     }

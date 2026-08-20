@@ -6,7 +6,8 @@ const ticketController = require('../controllers/ticketController');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const Feed = require('../models/Feed');  
+const Feed = require('../models/Feed');
+const User = require('../models/User'); // Added for department-users endpoint
 
 // All routes require authentication
 router.use(protect);
@@ -75,6 +76,30 @@ const upload = multer({
 // ============================================
 // HELPER FUNCTIONS
 // ============================================
+
+/**
+ * Get the correct base URL for file uploads
+ * Works for both local development and production (VPS with Nginx)
+ */
+function getBaseUrl(req) {
+  // 1. Check for environment variable (highest priority for production)
+  if (process.env.API_BASE_URL) {
+    return process.env.API_BASE_URL.replace(/\/+$/, '');
+  }
+  
+  // 2. Check for FRONTEND_URL as fallback
+  if (process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL.replace(/\/+$/, '');
+  }
+  
+  // 3. Use the request protocol and host (works with trust proxy)
+  // For local: http://192.168.1.7:5000
+  // For production behind Nginx: https://api.kuiperapp.co.in
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  
+  return `${protocol}://${host}`;
+}
 
 // Get MIME type for file extension
 function getMimeType(filename) {
@@ -147,6 +172,7 @@ function getMimeType(filename) {
 // FILE UPLOAD ENDPOINTS
 // ============================================
 
+// Single file upload endpoint
 router.post('/upload-file', protect, upload.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -166,11 +192,12 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
       });
     }
     
-    // ✅ FIX: Use the API base URL from environment for production
-    const apiBaseUrl = process.env.API_BASE_URL || process.env.FRONTEND_URL || 'https://api.kuiperapp.co.in';
-    // Remove trailing slash if present
-    const baseUrl = apiBaseUrl.replace(/\/+$/, '');
+    // ✅ FIX: Use the dynamic base URL
+    const baseUrl = getBaseUrl(req);
     const fileUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
+    
+    // Log for debugging
+    console.log(`📤 File uploaded: ${fileUrl}`);
     
     // Get file size in MB for response
     const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2);
@@ -198,6 +225,7 @@ router.post('/upload-files', protect, upload.array('files', 10), async (req, res
       return res.status(400).json({ error: 'No files provided' });
     }
     
+    const baseUrl = getBaseUrl(req);
     const uploadedFiles = [];
     const errors = [];
     
@@ -218,8 +246,6 @@ router.post('/upload-files', protect, upload.array('files', 10), async (req, res
           continue;
         }
         
-        // Construct the URL for the uploaded file
-        const baseUrl = `${req.protocol}://${req.get('host')}`;
         const fileUrl = `${baseUrl}/uploads/tickets/${file.filename}`;
         
         uploadedFiles.push({
@@ -285,8 +311,7 @@ router.post('/upload-image', protect, upload.single('image'), async (req, res) =
       return res.status(400).json({ error: 'Only image files are allowed' });
     }
     
-    // Construct the URL for the uploaded image
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const baseUrl = getBaseUrl(req);
     const imageUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
     
     res.json({ 
@@ -447,9 +472,9 @@ router.get('/feeds/:projectId', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch feeds' });
   }
 });
+
 // Get developers for assignment dropdown (PM, Admin, Team Lead only)
 router.get('/developers/list', authorize('Super Admin','Project Manager', 'Admin', 'Team Lead'), ticketController.getDevelopers);
-// backend/routes/ticketRoutes.js - ADD WATCHER ROUTES
 
 // ============================================
 // WATCHER ROUTES
@@ -466,4 +491,5 @@ router.post('/:id/watchers', protect, ticketController.addWatcher);
 
 // Remove watcher from ticket
 router.delete('/:id/watchers/:userId', protect, ticketController.removeWatcher);
+
 module.exports = router;

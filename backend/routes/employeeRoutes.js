@@ -795,6 +795,7 @@ router.post('/timesheet/missed-punch', async (req, res) => {
 });
 
 // GET /api/employee/profile - Get employee profile
+// GET /api/employee/profile - Add dateOfJoining
 router.get('/profile', async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -811,6 +812,13 @@ router.get('/profile', async (req, res) => {
       department: user.department,
       dateOfJoining: user.dateOfJoining,
       phoneNumber: user.phoneNumber,
+      dateOfBirth: user.dateOfBirth,
+      contactNumber: user.contactNumber,
+      emergencyContact: user.emergencyContact,
+      address: user.address,
+      shiftHour: user.shiftHour || 9,
+      shiftMinute: user.shiftMinute || 0,
+      shiftAmPm: user.shiftAmPm || 'AM',
       organization: user.organizationId ? {
         id: user.organizationId._id,
         name: user.organizationId.companyName,
@@ -826,20 +834,46 @@ router.get('/profile', async (req, res) => {
   }
 });
 
-// PUT /api/employee/profile - Update employee profile
+// PUT /api/employee/profile - Add dateOfJoining
 router.put('/profile', async (req, res) => {
   try {
-    const { phoneNumber, department, designation, name } = req.body;
+    const { 
+      phoneNumber, 
+      department, 
+      designation, 
+      name,
+      dateOfJoining,
+      dateOfBirth,
+      contactNumber,
+      emergencyContact,
+      address,
+      shiftHour,
+      shiftMinute,
+      shiftAmPm
+    } = req.body;
     
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
     
+    // Existing fields
     if (name) user.name = name;
     if (phoneNumber) user.phoneNumber = phoneNumber;
     if (department && user.role !== 'Client') user.department = department;
     if (designation && user.role !== 'Client') user.designation = designation;
+    
+    // NEW FIELDS - Only for non-Admin, non-Super Admin, non-Client
+    if (user.role !== 'Admin' && user.role !== 'Super Admin' && user.role !== 'Client') {
+      if (dateOfJoining !== undefined) user.dateOfJoining = dateOfJoining || null;
+      if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth || null;
+      if (contactNumber !== undefined) user.contactNumber = contactNumber || '';
+      if (emergencyContact !== undefined) user.emergencyContact = emergencyContact || '';
+      if (address !== undefined) user.address = address || '';
+      if (shiftHour !== undefined) user.shiftHour = parseInt(shiftHour) || 9;
+      if (shiftMinute !== undefined) user.shiftMinute = parseInt(shiftMinute) || 0;
+      if (shiftAmPm !== undefined) user.shiftAmPm = shiftAmPm || 'AM';
+    }
     
     await user.save();
     
@@ -849,7 +883,15 @@ router.put('/profile', async (req, res) => {
         name: user.name,
         phoneNumber: user.phoneNumber,
         department: user.department,
-        designation: user.designation
+        designation: user.designation,
+        dateOfJoining: user.dateOfJoining,
+        dateOfBirth: user.dateOfBirth,
+        contactNumber: user.contactNumber,
+        emergencyContact: user.emergencyContact,
+        address: user.address,
+        shiftHour: user.shiftHour,
+        shiftMinute: user.shiftMinute,
+        shiftAmPm: user.shiftAmPm
       },
       message: 'Profile updated successfully'
     });

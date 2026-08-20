@@ -1,4 +1,4 @@
-// frontend/src/pages/CreateTicket.jsx - UPDATED WITH WATCHERS SEARCH
+// frontend/src/pages/CreateTicket.jsx - UPDATED WITH BETTER ERROR HANDLING
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -456,7 +456,7 @@ const CreateTicket = () => {
       setFilePreviews(prev => [...prev, ...validPreviews]);
       
       const imageCount = validFiles.filter(f => isImageFile(f.name)).length;
-      const docCount = validFiles.filter(f => !isImageFile(f.name)).length;
+      const docCount = validFiles.length - imageCount;
       
       let message = `${validFiles.length} file(s) added`;
       if (imageCount > 0 && docCount > 0) {
@@ -504,6 +504,9 @@ const CreateTicket = () => {
     });
   };
 
+  // ============================================
+  // UPDATED: Upload files with better error handling
+  // ============================================
   const uploadFiles = async () => {
     if (selectedFiles.length === 0) return [];
     
@@ -521,7 +524,8 @@ const CreateTicket = () => {
           headers: { 
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
-          }
+          },
+          timeout: 30000 // 30 second timeout per file
         });
         
         if (response.data.success) {
@@ -532,10 +536,12 @@ const CreateTicket = () => {
             size: response.data.size,
             type: response.data.type || (isImageFile(file.name) ? 'image' : 'document')
           });
+          console.log(`✅ Uploaded: ${file.name}`);
         }
       } catch (error) {
-        console.error('File upload failed:', error);
-        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || 'Unknown error'}`);
+        console.error(`File upload failed for ${file.name}:`, error.message);
+        // Don't show toast for each file, just log it
+        // The user will see the final result in the success/error message
       }
     }
 
@@ -822,9 +828,13 @@ const CreateTicket = () => {
     }
   };
 
+  // ============================================
+  // UPDATED: handleSubmit with better error handling
+  // ============================================
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate required fields
     if (!formData.title || !formData.description) {
       toast.error('Please fill in all required fields');
       return;
@@ -852,6 +862,7 @@ const CreateTicket = () => {
     try {
       const token = localStorage.getItem('token');
       
+      // Upload files if any
       let uploadedFiles = [];
       if (selectedFiles.length > 0) {
         uploadedFiles = await uploadFiles();
@@ -877,18 +888,59 @@ const CreateTicket = () => {
         subItem: formData.subItem || undefined,
         assignedTo: finalAssignedTo,
         files: uploadedFiles,
-        watchers: selectedWatchers // Include watchers
+        watchers: selectedWatchers
       };
       
-      await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
-        headers: { Authorization: `Bearer ${token}` }
+      console.log('📤 Creating ticket with payload:', {
+        title: payload.title,
+        category: payload.category,
+        files: payload.files.length,
+        watchers: payload.watchers.length
       });
       
-      toast.success('Ticket created successfully!');
-      navigate('/tickets');
+      const response = await axios.post(`${API_BASE_URL}/api/tickets`, payload, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 60000 // 60 second timeout
+      });
+      
+      // Check if response was successful
+      if (response.status === 201 || response.status === 200) {
+        toast.success('Ticket created successfully!');
+        navigate('/tickets');
+      } else {
+        toast.error('Ticket was created but response was unexpected. Please check the ticket list.');
+        navigate('/tickets');
+      }
+      
     } catch (error) {
       console.error('Error creating ticket:', error);
-      toast.error(error.response?.data?.error || 'Failed to create ticket');
+      
+      // Check if this is a network error or timeout
+      if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+        toast.error('Request timed out. The ticket may have been created. Please check the ticket list.');
+        // Navigate to tickets page anyway
+        setTimeout(() => {
+          navigate('/tickets');
+        }, 1500);
+      } else if (error.response) {
+        // Server responded with an error
+        const errorMessage = error.response?.data?.error || 'Failed to create ticket';
+        toast.error(errorMessage);
+        console.error('Server error response:', error.response.data);
+      } else if (error.request) {
+        // Request was made but no response received (network error)
+        toast.error('Network error. Please check your connection.');
+        // The ticket might have been created, navigate to tickets
+        setTimeout(() => {
+          navigate('/tickets');
+        }, 2000);
+      } else {
+        // Something else happened
+        toast.error(error.message || 'Failed to create ticket');
+      }
     } finally {
       setLoading(false);
     }
@@ -1507,9 +1559,7 @@ const CreateTicket = () => {
                               <div
                                 key={user._id}
                                 onClick={() => toggleWatcher(user._id)}
-                                className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-blue-50 border-b border-slate-50 last:border-0 ${
-                                  isSelected ? 'bg-blue-50' : ''
-                                }`}
+                                className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-blue-50 border-b border-slate-50 last:border-0 ${isSelected ? 'bg-blue-50' : ''}`}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
@@ -1522,11 +1572,7 @@ const CreateTicket = () => {
                                   </div>
                                 </div>
                                 <div className="flex-shrink-0 ml-2">
-                                  {isSelected ? (
-                                    <CheckCircle size={18} className="text-blue-600" />
-                                  ) : (
-                                    <UserPlus size={18} className="text-slate-300" />
-                                  )}
+                                  {isSelected ? <CheckCircle size={18} className="text-blue-600" /> : <UserPlus size={18} className="text-slate-300" />}
                                 </div>
                               </div>
                             );

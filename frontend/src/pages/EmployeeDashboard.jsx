@@ -1,4 +1,4 @@
-// frontend/src/pages/EmployeeDashboard.jsx - UPDATED WITH IN/OUT STATUS CARD
+// frontend/src/pages/EmployeeDashboard.jsx - FULL UPDATED CODE
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -55,7 +55,9 @@ import {
   LogIn,
   LogOut,
   UserCheck,
-  UserX
+  UserX,
+  MapPin,
+  Clock as ClockIcon
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -82,6 +84,25 @@ const EmployeeDashboard = () => {
   const [syncStatus, setSyncStatus] = useState(null);
   const [isSocketConnected, setIsSocketConnected] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
+
+  // Profile edit state
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState({
+    name: '',
+    phoneNumber: '',
+    department: '',
+    designation: '',
+    dateOfJoining: '',
+    dateOfBirth: '',
+    contactNumber: '',
+    emergencyContact: '',
+    address: '',
+    // SHIFT TIMING - 3 FIELDS
+    shiftHour: 9,
+    shiftMinute: 0,
+    shiftAmPm: 'AM'
+  });
 
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
@@ -110,7 +131,6 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     if (!token || !userId) return;
 
-    
     socketRef.current = io(API_BASE_URL, {
       transports: ['websocket'],
       auth: { token },
@@ -172,11 +192,27 @@ const EmployeeDashboard = () => {
         axios.get(`${API_BASE_URL}/api/employee/attendance/monthly-stats?month=${attendanceMonth + 1}&year=${attendanceYear}`, authHeader)
       ]);
 
-    
-
       setProfile(profileRes.data.data);
       setTodayAttendance(attendanceRes.data.data);
       setMonthlyStats(statsRes.data.data);
+      
+      // Set profile form data with ALL fields
+      const profileData = profileRes.data.data;
+      setProfileForm({
+        name: profileData.name || '',
+        phoneNumber: profileData.phoneNumber || '',
+        department: profileData.department || '',
+        designation: profileData.designation || '',
+        dateOfJoining: profileData.dateOfJoining ? new Date(profileData.dateOfJoining).toISOString().split('T')[0] : '',
+        dateOfBirth: profileData.dateOfBirth ? new Date(profileData.dateOfBirth).toISOString().split('T')[0] : '',
+        contactNumber: profileData.contactNumber || '',
+        emergencyContact: profileData.emergencyContact || '',
+        address: profileData.address || '',
+        // SHIFT TIMING - 3 FIELDS
+        shiftHour: profileData.shiftHour || 9,
+        shiftMinute: profileData.shiftMinute || 0,
+        shiftAmPm: profileData.shiftAmPm || 'AM'
+      });
       
     } catch (error) {
       console.error('Error fetching employee data:', error);
@@ -189,6 +225,38 @@ const EmployeeDashboard = () => {
   useEffect(() => {
     fetchDashboardData();   
   }, [attendanceMonth, attendanceYear]);
+
+  // Save profile with ALL fields
+  const saveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      const payload = {
+        name: profileForm.name,
+        phoneNumber: profileForm.phoneNumber,
+        department: profileForm.department,
+        designation: profileForm.designation,
+        dateOfJoining: profileForm.dateOfJoining || null,
+        dateOfBirth: profileForm.dateOfBirth || null,
+        contactNumber: profileForm.contactNumber,
+        emergencyContact: profileForm.emergencyContact,
+        address: profileForm.address,
+        // SHIFT TIMING - 3 FIELDS
+        shiftHour: parseInt(profileForm.shiftHour) || 9,
+        shiftMinute: parseInt(profileForm.shiftMinute) || 0,
+        shiftAmPm: profileForm.shiftAmPm || 'AM'
+      };
+
+      await axios.put(`${API_BASE_URL}/api/employee/profile`, payload, authHeader);
+      toast.success('Profile updated successfully!');
+      setIsEditingProfile(false);
+      fetchDashboardData();
+    } catch (error) {
+      console.error('Error saving profile:', error);
+      toast.error(error.response?.data?.error || 'Failed to update profile');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   // Calculate attendance rate
   const getAttendanceRate = () => {
@@ -276,6 +344,19 @@ const EmployeeDashboard = () => {
     };
   };
 
+  // Check if user can edit employee profile fields
+  const canEditEmployeeProfile = () => {
+    return !['Super Admin', 'Admin', 'Client'].includes(userRole);
+  };
+
+  // Get formatted shift time
+  const getFormattedShiftTime = (hour, minute, ampm) => {
+    const h = String(hour || 9).padStart(2, '0');
+    const m = String(minute || 0).padStart(2, '0');
+    const a = ampm || 'AM';
+    return `${h}:${m} ${a}`;
+  };
+
   const attendanceRate = getAttendanceRate();
   const leaveStats = getLeaveStats();
   const inOutStatus = getInOutStatus();
@@ -300,7 +381,7 @@ const EmployeeDashboard = () => {
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               Dashboard
             </h1>
-            <p className="text-slate-500 text-sm mt-0.5">Manage your attendance and leaves</p>
+            <p className="text-slate-500 text-sm mt-0.5">Manage your attendance, leaves, and profile</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-2 px-3 py-1.5 bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -335,8 +416,6 @@ const EmployeeDashboard = () => {
                   {inOutStatus.label}
                 </p>
               </div>
-             
-             
             </div>
             <div className={`w-16 h-16 rounded-2xl flex items-center justify-center backdrop-blur-sm bg-white/30 ${inOutStatus.isIn ? 'bg-emerald-500/20' : 'bg-slate-500/20'}`}>
               {inOutStatus.icon}
@@ -440,7 +519,7 @@ const EmployeeDashboard = () => {
         </div>
       </div>
 
-      {/* Tabs: Attendance | Leave */}
+      {/* Tabs: Attendance | Leave | Profile */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-1 mb-6 flex gap-1 overflow-x-auto">
         <button
           onClick={() => setActiveTab('attendance')}
@@ -451,12 +530,12 @@ const EmployeeDashboard = () => {
           }`}
         >
           <Clock size={18} />
-          Attendance Overview
+          Attendance
           {!todayAttendance?.punchInTime && (
             <span className="text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">No Data</span>
           )}
         </button>
-        {/* <button
+        <button
           onClick={() => setActiveTab('leave')}
           className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
             activeTab === 'leave'
@@ -465,8 +544,19 @@ const EmployeeDashboard = () => {
           }`}
         >
           <Calendar size={18} />
-          Leave Management
-        </button> */}
+          Leave
+        </button>
+        <button
+          onClick={() => setActiveTab('profile')}
+          className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+            activeTab === 'profile'
+              ? 'bg-blue-600 text-white shadow-md'
+              : 'text-slate-500 hover:bg-slate-50'
+          }`}
+        >
+          <User size={18} />
+          Profile
+        </button>
       </div>
 
       {/* ATTENDANCE TAB - Uses Attendance component */}
@@ -483,6 +573,241 @@ const EmployeeDashboard = () => {
           userId={userId} 
           token={token} 
         />
+      )}
+
+      {/* PROFILE TAB - UPDATED with dateOfJoining and shift timing */}
+      {activeTab === 'profile' && (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 sm:p-6">
+          <div className="flex items-center justify-between mb-4 sm:mb-6">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Personal Information</h3>
+              <p className="text-xs text-slate-500">Update your profile details</p>
+            </div>
+            {canEditEmployeeProfile() && (
+              !isEditingProfile ? (
+                <button
+                  onClick={() => setIsEditingProfile(true)}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-all"
+                >
+                  Edit Profile
+                </button>
+              ) : (
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setIsEditingProfile(false);
+                      fetchDashboardData();
+                    }}
+                    className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg text-sm font-semibold hover:bg-slate-200 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveProfile}
+                    disabled={savingProfile}
+                    className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {savingProfile ? (
+                      <><Loader2 size={16} className="animate-spin" /> Saving...</>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </button>
+                </div>
+              )
+            )}
+          </div>
+
+          {!canEditEmployeeProfile() && (
+            <div className="mb-4 p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <p className="text-xs text-amber-700 flex items-center gap-2">
+                <AlertCircle size={14} />
+                {userRole === 'Admin' ? 'Admin users cannot edit profile details.' : 
+                 userRole === 'Super Admin' ? 'Super Admin users cannot edit profile details.' :
+                 'Client users cannot edit profile details.'}
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Full Name */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                Full Name
+              </label>
+              <input
+                type="text"
+                value={profileForm.name}
+                onChange={(e) => setProfileForm({...profileForm, name: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+              />
+            </div>
+            
+            {/* Phone Number */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <Phone size={12} className="inline mr-1" />
+                Phone Number
+              </label>
+              <input
+                type="tel"
+                value={profileForm.phoneNumber}
+                onChange={(e) => setProfileForm({...profileForm, phoneNumber: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+                placeholder="e.g., +91 98765 43210"
+              />
+            </div>
+            
+            {/* Date of Joining - NEW */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <Calendar size={12} className="inline mr-1" />
+                Date of Joining
+              </label>
+              <input
+                type="date"
+                value={profileForm.dateOfJoining}
+                onChange={(e) => setProfileForm({...profileForm, dateOfJoining: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+              />
+            </div>
+            
+            {/* Date of Birth */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <Calendar size={12} className="inline mr-1" />
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                value={profileForm.dateOfBirth}
+                onChange={(e) => setProfileForm({...profileForm, dateOfBirth: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+              />
+            </div>
+            
+            {/* Shift Timing - 3 FIELDS */}
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <ClockIcon size={12} className="inline mr-1" />
+                Shift Timing
+              </label>
+              <div className="flex gap-2">
+                {/* Hour - 1 to 12 */}
+                <div className="flex-1">
+                  <select
+                    value={profileForm.shiftHour}
+                    onChange={(e) => setProfileForm({...profileForm, shiftHour: parseInt(e.target.value)})}
+                    disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                    className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+                  >
+                    {[...Array(12)].map((_, i) => (
+                      <option key={i + 1} value={i + 1}>{String(i + 1).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <p className="text-[6px] text-slate-400 text-center mt-0.5">Hour</p>
+                </div>
+
+                {/* Minute - 00 to 59 */}
+                <div className="flex-1">
+                  <select
+                    value={profileForm.shiftMinute}
+                    onChange={(e) => setProfileForm({...profileForm, shiftMinute: parseInt(e.target.value)})}
+                    disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                    className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+                  >
+                    {[...Array(60)].map((_, i) => (
+                      <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                    ))}
+                  </select>
+                  <p className="text-[6px] text-slate-400 text-center mt-0.5">Minute</p>
+                </div>
+
+                {/* AM/PM */}
+                <div className="flex-1">
+                  <select
+                    value={profileForm.shiftAmPm}
+                    onChange={(e) => setProfileForm({...profileForm, shiftAmPm: e.target.value})}
+                    disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                    className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                  <p className="text-[6px] text-slate-400 text-center mt-0.5">AM/PM</p>
+                </div>
+              </div>
+              {!isEditingProfile && (
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Shift starts at: {getFormattedShiftTime(profileForm.shiftHour, profileForm.shiftMinute, profileForm.shiftAmPm)}
+                </p>
+              )}
+            </div>
+            
+            {/* Contact Number */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <Phone size={12} className="inline mr-1" />
+                Contact Number
+              </label>
+              <input
+                type="tel"
+                value={profileForm.contactNumber}
+                onChange={(e) => setProfileForm({...profileForm, contactNumber: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+                placeholder="Personal contact number"
+              />
+              <p className="text-[7px] text-slate-400 mt-0.5">Personal contact number</p>
+            </div>
+            
+            {/* Emergency Contact */}
+            <div>
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <AlertCircle size={12} className="inline mr-1" />
+                Emergency Contact
+              </label>
+              <input
+                type="tel"
+                value={profileForm.emergencyContact}
+                onChange={(e) => setProfileForm({...profileForm, emergencyContact: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all"
+                placeholder="e.g., +91 98765 43210 (Name)"
+              />
+              <p className="text-[7px] text-slate-400 mt-0.5">Name and contact number of emergency contact person</p>
+            </div>
+            
+            {/* Address */}
+            <div className="md:col-span-2">
+              <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                <MapPin size={12} className="inline mr-1" />
+                Address
+              </label>
+              <textarea
+                rows={2}
+                value={profileForm.address}
+                onChange={(e) => setProfileForm({...profileForm, address: e.target.value})}
+                disabled={!isEditingProfile || !canEditEmployeeProfile()}
+                className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm disabled:opacity-60 focus:border-blue-400 transition-all resize-none"
+                placeholder="Enter your full address"
+              />
+            </div>
+          </div>
+
+          {!isEditingProfile && profileForm.contactNumber && (
+            <div className="mt-4 p-3 bg-slate-50 rounded-lg border border-slate-200">
+              <p className="text-[10px] text-slate-500 flex items-center gap-2">
+                <CheckCircle size={12} className="text-emerald-600" />
+                Profile is up to date
+              </p>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

@@ -160,17 +160,26 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
 
     // Create user with organization fields
     const newUser = new User({ 
-      name, 
-      email, 
-      password: hashedPassword, 
-      role: finalRole,
-      githubUsername: githubUsername || null,
-      githubLinked: false,
-      organizationId: organizationId || null,
-      department: department || 'Other',
-      isPrimaryPOC: isPrimaryPOC || false,
-      employeeCode: null
-    });
+  name, 
+  email, 
+  password: hashedPassword, 
+  role: finalRole,
+  githubUsername: githubUsername || null,
+  githubLinked: false,
+  organizationId: organizationId || null,
+  department: department || 'Other',
+  isPrimaryPOC: isPrimaryPOC || false,
+  employeeCode: null,
+  // NEW FIELDS
+  dateOfJoining: req.body.dateOfJoining || null,
+  dateOfBirth: req.body.dateOfBirth || null,
+  contactNumber: req.body.contactNumber || '',
+  emergencyContact: req.body.emergencyContact || '',
+  address: req.body.address || '',
+  shiftHour: parseInt(req.body.shiftHour) || 9,
+  shiftMinute: parseInt(req.body.shiftMinute) || 0,
+  shiftAmPm: req.body.shiftAmPm || 'AM'
+});
 
     // If role is Developer, try to link GitHub account automatically
     let gitHubLinkResult = null;
@@ -260,19 +269,26 @@ router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => 
     }
     
     // Build update data - preserve GitHub info if not provided in request
-    const updateData = { 
-      name, 
-      email, 
-      role, 
-      // Only update githubUsername if provided, otherwise keep existing
-      githubUsername: githubUsername !== undefined ? githubUsername : existingUser.githubUsername,
-      // Only update githubLinked if provided, otherwise keep existing
-      githubLinked: existingUser.githubLinked, // Preserve existing GitHub linked status
-      organizationId: organizationId || null,
-      department: department || 'Other',
-      isPrimaryPOC: isPrimaryPOC || false,
-      employeeCode: employeeCode || null
-    };
+  const updateData = { 
+  name, 
+  email, 
+  role, 
+  githubUsername: githubUsername !== undefined ? githubUsername : existingUser.githubUsername,
+  githubLinked: existingUser.githubLinked,
+  organizationId: organizationId || null,
+  department: department || 'Other',
+  isPrimaryPOC: isPrimaryPOC || false,
+  employeeCode: employeeCode || null,
+  // NEW FIELDS
+  dateOfJoining: req.body.dateOfJoining || null,
+  dateOfBirth: req.body.dateOfBirth || null,
+  contactNumber: req.body.contactNumber || '',
+  emergencyContact: req.body.emergencyContact || '',
+  address: req.body.address || '',
+  shiftHour: parseInt(req.body.shiftHour) || 9,
+  shiftMinute: parseInt(req.body.shiftMinute) || 0,
+  shiftAmPm: req.body.shiftAmPm || 'AM'
+};
     
     // Only update password if provided
     if (password && password.trim()) {

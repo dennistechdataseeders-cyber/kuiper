@@ -73,7 +73,50 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+    dateOfJoining: {
+    type: Date,
+    default: null
+  },
+  dateOfBirth: {
+    type: Date,
+    default: null
+  },
+  contactNumber: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  emergencyContact: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  address: {
+    type: String,
+    default: '',
+    trim: true
+  },
   
+  // ============================================
+  // SHIFT TIMING - 3 FIELDS (Hour, Minute, AM/PM)
+  // ============================================
+  shiftHour: {
+    type: Number,
+    min: 1,
+    max: 12,
+    default: 9
+  },
+  shiftMinute: {
+    type: Number,
+    min: 0,
+    max: 59,
+    default: 0
+  },
+  shiftAmPm: {
+    type: String,
+    enum: ['AM', 'PM'],
+    default: 'AM'
+  },
   // ============================================
   // LEAVE BALANCES
   // ============================================

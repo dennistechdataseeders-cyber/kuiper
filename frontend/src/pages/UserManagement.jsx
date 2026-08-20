@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Users, Hash, RefreshCw } from 'lucide-react';
+import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Users, Hash, RefreshCw, Calendar, Phone, MapPin, Clock as ClockIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
@@ -37,6 +37,9 @@ const UserManagement = () => {
   const [emailReadOnly, setEmailReadOnly] = useState(true);
   const [passwordReadOnly, setPasswordReadOnly] = useState(true);
   
+  // Expand/collapse state for employee details
+  const [expandedRows, setExpandedRows] = useState({});
+  
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
@@ -57,7 +60,17 @@ const UserManagement = () => {
     organizationId: '',
     department: 'Other',
     isPrimaryPOC: false,
-    employeeCode: '' // NEW: Employee Code field
+    employeeCode: '',
+    // NEW EMPLOYEE PROFILE FIELDS
+    dateOfJoining: '',
+    dateOfBirth: '',
+    contactNumber: '',
+    emergencyContact: '',
+    address: '',
+    // SHIFT TIMING - 3 FIELDS
+    shiftHour: 9,
+    shiftMinute: 0,
+    shiftAmPm: 'AM'
   });
   
   const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
@@ -66,7 +79,7 @@ const UserManagement = () => {
   const API_BASE = `${API_BASE_URL}/api/admin`;
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-  // Available roles for filter - ADD Team Lead
+  // Available roles for filter
   const roleOptions = useMemo(() => {
     const roles = [...new Set(users.map(user => user.role))];
     return ['ALL', ...roles];
@@ -88,6 +101,7 @@ const UserManagement = () => {
         user.name?.toLowerCase().includes(search) ||
         user.email?.toLowerCase().includes(search) ||
         user.employeeCode?.toLowerCase().includes(search) ||
+        user.contactNumber?.toLowerCase().includes(search) ||
         (user.role === 'Client' && user.organizationId?.companyName?.toLowerCase().includes(search))
       );
     }
@@ -120,6 +134,14 @@ const UserManagement = () => {
     fetchOrganizations();
   }, []);
 
+  // Toggle expand/collapse for a row
+  const toggleExpandRow = (userId) => {
+    setExpandedRows(prev => ({
+      ...prev,
+      [userId]: !prev[userId]
+    }));
+  };
+
   const fetchUsers = async () => {
     try {
       const res = await axios.get(`${API_BASE}/users`, authHeader);
@@ -149,12 +171,22 @@ const UserManagement = () => {
     setFormData({
       name: user.name || '',
       email: user.email || '',
-      password: '', // Always empty for edit
+      password: '',
       role: user.role || 'Client',
       organizationId: user.organizationId?._id || user.organizationId || '',
       department: user.department || 'Other',
       isPrimaryPOC: user.isPrimaryPOC || false,
-      employeeCode: user.employeeCode || '' // NEW: Load existing employee code
+      employeeCode: user.employeeCode || '',
+      // NEW FIELDS
+      dateOfJoining: user.dateOfJoining ? new Date(user.dateOfJoining).toISOString().split('T')[0] : '',
+      dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
+      contactNumber: user.contactNumber || '',
+      emergencyContact: user.emergencyContact || '',
+      address: user.address || '',
+      // SHIFT TIMING - 3 FIELDS
+      shiftHour: user.shiftHour || 9,
+      shiftMinute: user.shiftMinute || 0,
+      shiftAmPm: user.shiftAmPm || 'AM'
     });
     setEmailReadOnly(true);
     setPasswordReadOnly(true);
@@ -178,46 +210,38 @@ const UserManagement = () => {
   };
 
   // Link GitHub account for existing user
-  // Link GitHub account for existing user
-const handleLinkGitHub = async (userId) => {
-  setLinkingGithub(prev => ({ ...prev, [userId]: true }));
-  try {
-    const res = await axios.post(
-      `${API_BASE}/users/${userId}/link-github`, 
-      {},
-      authHeader
-    );
-    
-    if (res.data.success) {
-      toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
-      fetchUsers();
-    } else {
-      // Show the error message from the backend
-      toast.error(res.data.error || 'Failed to link GitHub account');
+  const handleLinkGitHub = async (userId) => {
+    setLinkingGithub(prev => ({ ...prev, [userId]: true }));
+    try {
+      const res = await axios.post(
+        `${API_BASE}/users/${userId}/link-github`, 
+        {},
+        authHeader
+      );
       
-      // If there's debug info, log it
-      if (res.data.debug) {
-        console.log('🔍 Debug info:', res.data.debug);
-        if (res.data.debug.tip) {
-          toast.info(`💡 ${res.data.debug.tip}`, { duration: 8000 });
+      if (res.data.success) {
+        toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
+        fetchUsers();
+      } else {
+        toast.error(res.data.error || 'Failed to link GitHub account');
+        if (res.data.debug) {
+          console.log('🔍 Debug info:', res.data.debug);
+          if (res.data.debug.tip) {
+            toast.info(`💡 ${res.data.debug.tip}`, { duration: 8000 });
+          }
         }
       }
+    } catch (err) {
+      console.error('GitHub linking error:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
+      toast.error(errorMessage);
+      if (err.response?.data?.debug) {
+        console.log('🔍 Debug info:', err.response.data.debug);
+      }
+    } finally {
+      setLinkingGithub(prev => ({ ...prev, [userId]: false }));
     }
-  } catch (err) {
-    console.error('GitHub linking error:', err);
-    
-    // Better error handling
-    const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
-    toast.error(errorMessage);
-    
-    // Show additional info if available
-    if (err.response?.data?.debug) {
-      console.log('🔍 Debug info:', err.response.data.debug);
-    }
-  } finally {
-    setLinkingGithub(prev => ({ ...prev, [userId]: false }));
-  }
-};
+  };
 
   const createNewOrganization = async () => {
     if (!newOrgData.companyName.trim()) {
@@ -253,7 +277,6 @@ const handleLinkGitHub = async (userId) => {
     try {
       let finalOrgId = formData.organizationId;
       
-      // If creating new organization
       if (showNewOrgForm && newOrgData.companyName.trim()) {
         const newOrg = await createNewOrganization();
         if (newOrg) {
@@ -272,7 +295,17 @@ const handleLinkGitHub = async (userId) => {
           organizationId: finalOrgId,
           department: formData.department,
           isPrimaryPOC: formData.isPrimaryPOC,
-          employeeCode: formData.employeeCode || null // NEW: Include employee code
+          employeeCode: formData.employeeCode || null,
+          // NEW FIELDS
+          dateOfJoining: formData.dateOfJoining || null,
+          dateOfBirth: formData.dateOfBirth || null,
+          contactNumber: formData.contactNumber || '',
+          emergencyContact: formData.emergencyContact || '',
+          address: formData.address || '',
+          // SHIFT TIMING - 3 FIELDS
+          shiftHour: parseInt(formData.shiftHour) || 9,
+          shiftMinute: parseInt(formData.shiftMinute) || 0,
+          shiftAmPm: formData.shiftAmPm || 'AM'
         };
         
         if (formData.password && formData.password.trim()) {
@@ -306,7 +339,17 @@ const handleLinkGitHub = async (userId) => {
           organizationId: finalOrgId || null,
           department: formData.department,
           isPrimaryPOC: formData.isPrimaryPOC,
-          employeeCode: formData.employeeCode || null // NEW: Include employee code
+          employeeCode: formData.employeeCode || null,
+          // NEW FIELDS
+          dateOfJoining: formData.dateOfJoining || null,
+          dateOfBirth: formData.dateOfBirth || null,
+          contactNumber: formData.contactNumber || '',
+          emergencyContact: formData.emergencyContact || '',
+          address: formData.address || '',
+          // SHIFT TIMING - 3 FIELDS
+          shiftHour: parseInt(formData.shiftHour) || 9,
+          shiftMinute: parseInt(formData.shiftMinute) || 0,
+          shiftAmPm: formData.shiftAmPm || 'AM'
         };
         
         console.log("Creating user with payload:", createPayload);
@@ -353,7 +396,6 @@ const handleLinkGitHub = async (userId) => {
       website: '',
       address: ''
     });
-    // Reset form data to default values
     setFormData({ 
       name: '', 
       email: '', 
@@ -362,11 +404,20 @@ const handleLinkGitHub = async (userId) => {
       organizationId: '',
       department: 'Other',
       isPrimaryPOC: false,
-      employeeCode: '' // NEW: Reset employee code
+      employeeCode: '',
+      // NEW FIELDS
+      dateOfJoining: '',
+      dateOfBirth: '',
+      contactNumber: '',
+      emergencyContact: '',
+      address: '',
+      // SHIFT TIMING - 3 FIELDS
+      shiftHour: 9,
+      shiftMinute: 0,
+      shiftAmPm: 'AM'
     });
   };
 
-  // Reset form for new user creation
   const openCreateModal = () => {
     setFormData({ 
       name: '', 
@@ -376,7 +427,17 @@ const handleLinkGitHub = async (userId) => {
       organizationId: '',
       department: 'Other',
       isPrimaryPOC: false,
-      employeeCode: '' // NEW: Reset employee code
+      employeeCode: '',
+      // NEW FIELDS
+      dateOfJoining: '',
+      dateOfBirth: '',
+      contactNumber: '',
+      emergencyContact: '',
+      address: '',
+      // SHIFT TIMING - 3 FIELDS
+      shiftHour: 9,
+      shiftMinute: 0,
+      shiftAmPm: 'AM'
     });
     setEmailReadOnly(true);
     setPasswordReadOnly(true);
@@ -442,16 +503,43 @@ const handleLinkGitHub = async (userId) => {
     setCurrentPage(1);
   };
 
-  // Available roles for creation dropdown - ADD Team Lead
   const getAvailableRoles = () => {
     if (userRole === 'Sales Manager') {
       return ['Sales'];
     }
     if (userRole === 'Project Manager') {
-      return ['Client', 'Team Lead']; // PM can create Client and Team Lead
+      return ['Client', 'Team Lead'];
     }
-    // Admin can create all roles
-     return ['Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead', 'Admin', 'HR', 'Finance'];
+    return ['Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead', 'Admin', 'HR', 'Finance'];
+  };
+
+  const canEditEmployeeProfile = (role) => {
+    return !['Super Admin', 'Admin', 'Client'].includes(role);
+  };
+
+  const getShiftDisplay = (hour, minute, ampm) => {
+    if (!hour && !minute && !ampm) return null;
+    const h = String(hour || 9).padStart(2, '0');
+    const m = String(minute || 0).padStart(2, '0');
+    return `${h}:${m} ${ampm || 'AM'}`;
+  };
+
+  // Format date for display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
+
+  // Check if user has employee profile fields to show
+  const hasEmployeeDetails = (user) => {
+    return user.dateOfJoining || user.dateOfBirth || user.contactNumber || 
+           user.emergencyContact || user.address || user.shiftHour;
   };
 
   return (
@@ -482,7 +570,7 @@ const handleLinkGitHub = async (userId) => {
         </button>
       </div>
 
-      {/* Stats Cards - ADD Team Lead count */}
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -519,24 +607,34 @@ const handleLinkGitHub = async (userId) => {
             </div>
           </div>
         </div>
+
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Team Leads</p>
+              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Team Lead').length}</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+              <Users size={18} className="text-white" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Filters Bar */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
         <div className="flex flex-col md:flex-row gap-4">
-          {/* Search Input */}
           <div className="relative flex-1">
             <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Search by name, email, employee code, or organization..."
+              placeholder="Search by name, email, employee code, contact, or organization..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400 transition-colors"
             />
           </div>
           
-          {/* Role Filter Dropdown */}
           <div className="relative min-w-[180px]">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <select
@@ -553,7 +651,6 @@ const handleLinkGitHub = async (userId) => {
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
           
-          {/* Items Per Page */}
           <div className="relative min-w-[130px]">
             <select
               value={itemsPerPage}
@@ -570,7 +667,6 @@ const handleLinkGitHub = async (userId) => {
             </select>
           </div>
           
-          {/* Reset Filters Button */}
           {(selectedRole !== 'ALL' || searchTerm) && (
             <button
               onClick={resetFilters}
@@ -583,12 +679,15 @@ const handleLinkGitHub = async (userId) => {
         </div>
       </div>
 
-      {/* Table Section */}
+      {/* Table Section with Expandable Rows */}
       <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr>
+                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 w-8">
+                  {/* Expand/Collapse all - optional */}
+                </th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Identity</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Email</th>
                 <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Employee Code</th>
@@ -603,105 +702,223 @@ const handleLinkGitHub = async (userId) => {
                 const isTeamLead = user.role === 'Team Lead';
                 const isDeveloper = user.role === 'Developer';
                 const isLinking = linkingGithub[user._id] || false;
-                
+                const canEditProfile = canEditEmployeeProfile(user.role);
+                const shiftDisplay = getShiftDisplay(user.shiftHour, user.shiftMinute, user.shiftAmPm);
+                const isExpanded = expandedRows[user._id] || false;
+                const hasDetails = hasEmployeeDetails(user);
+                const showExpandButton = canEditProfile && hasDetails;
+
                 return (
-                  <tr key={user._id} className="hover:bg-blue-50/30 transition-colors group">
-                    <td className="p-5">
-                      <div>
-                        <p className="font-bold text-slate-800">{user.name}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          {isPOC && user.organizationId && (
-                            <span className="inline-flex items-center gap-1 text-[8px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                              <Building2 size={8} />
-                              {typeof user.organizationId === 'object' ? user.organizationId.companyName : 'Organization'}
-                            </span>
-                          )}
-                          {user.isPrimaryPOC && isPOC && (
-                            <span className="inline-flex items-center gap-1 text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                              <CheckCircle size={8} />
-                              Primary POC
-                            </span>
-                          )}
-                          {isTeamLead && (
-                            <span className="inline-flex items-center gap-1 text-[8px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                              <Users size={8} />
-                              Team Lead
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="p-5 text-slate-500 font-medium text-sm">{user.email}</td>
-                    <td className="p-5">
-                      {user.employeeCode ? (
-                        <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono">
-                          <Hash size={12} />
-                          {user.employeeCode}
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-slate-400 italic">Not set</span>
-                      )}
-                    </td>
-                    <td className="p-5">
-                      {isDeveloper ? (
-                        <div className="flex items-center gap-1.5">
-                          {user.githubLinked && user.githubUsername ? (
-                            <span className="inline-flex items-center gap-1 text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                              <CheckCircle size={8} />
-                              {user.githubUsername}
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleLinkGitHub(user._id)}
-                              disabled={isLinking}
-                              className="inline-flex items-center gap-1 text-[8px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full hover:bg-orange-100 transition-all disabled:opacity-50"
-                              title="Verify and link GitHub account"
-                            >
-                              {isLinking ? (
-                                <RefreshCw size={8} className="animate-spin" />
-                              ) : (
-                                <GitFork size={8} />
-                              )}
-                              {isLinking ? 'Verifying...' : 'Verify GitHub'}
-                            </button>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-[8px] text-slate-400 italic">—</span>
-                      )}
-                    </td>
-                    <td className="p-5">
-                      <div>
-                        <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${getRoleColor(user.role)}`}>
-                          {getRoleDisplayName(user.role)}
-                        </span>
-                        {isPOC && user.organizationId && (
-                          <p className="text-[9px] text-slate-900 mt-1">
-                            Client : {typeof user.organizationId === 'object' ? user.organizationId.companyName : 'Organization'}
-                          </p>
+                  <>
+                    {/* Main Row */}
+                    <tr key={user._id} className="hover:bg-blue-50/30 transition-colors group">
+                      <td className="p-5">
+                        {showExpandButton && (
+                          <button
+                            onClick={() => toggleExpandRow(user._id)}
+                            className="p-1 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-blue-600"
+                          >
+                            {isExpanded ? (
+                              <ChevronUp size={16} />
+                            ) : (
+                              <ChevronRightIcon size={16} />
+                            )}
+                          </button>
                         )}
-                      </div>
-                    </td>
-                    <td className="p-5 text-right">
-                      <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-                        {isDeveloper && user.githubLinked && user.githubUsername && (
-                          <div className="p-2 text-green-600 rounded-lg" title={`GitHub: ${user.githubUsername}`}>
-                            <CheckCircle size={16}/>
+                      </td>
+                      <td className="p-5">
+                        <div>
+                          <p className="font-bold text-slate-800">{user.name}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            {isPOC && user.organizationId && (
+                              <span className="inline-flex items-center gap-1 text-[8px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
+                                <Building2 size={8} />
+                                {typeof user.organizationId === 'object' ? user.organizationId.companyName : 'Organization'}
+                              </span>
+                            )}
+                            {user.isPrimaryPOC && isPOC && (
+                              <span className="inline-flex items-center gap-1 text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                <CheckCircle size={8} />
+                                Primary POC
+                              </span>
+                            )}
+                            {isTeamLead && (
+                              <span className="inline-flex items-center gap-1 text-[8px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                                <Users size={8} />
+                                Team Lead
+                              </span>
+                            )}
+                            {canEditProfile && shiftDisplay && (
+                              <span className="inline-flex items-center gap-1 text-[7px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                <ClockIcon size={8} />
+                                {shiftDisplay}
+                              </span>
+                            )}
                           </div>
+                          {canEditProfile && user.contactNumber && (
+                            <p className="text-[8px] text-slate-400 mt-0.5 flex items-center gap-1">
+                              <Phone size={8} />
+                              {user.contactNumber}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-5 text-slate-500 font-medium text-sm">{user.email}</td>
+                      <td className="p-5">
+                        {user.employeeCode ? (
+                          <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono">
+                            <Hash size={12} />
+                            {user.employeeCode}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400 italic">Not set</span>
                         )}
-                        <button onClick={() => handleEditClick(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm">
-                          <Edit2 size={16}/>
-                        </button>
-                        <button onClick={() => handleDelete(user._id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm">
-                          <Trash2 size={16}/>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td className="p-5">
+                        {isDeveloper ? (
+                          <div className="flex items-center gap-1.5">
+                            {user.githubLinked && user.githubUsername ? (
+                              <span className="inline-flex items-center gap-1 text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                <CheckCircle size={8} />
+                                {user.githubUsername}
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => handleLinkGitHub(user._id)}
+                                disabled={isLinking}
+                                className="inline-flex items-center gap-1 text-[8px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full hover:bg-orange-100 transition-all disabled:opacity-50"
+                                title="Verify and link GitHub account"
+                              >
+                                {isLinking ? (
+                                  <RefreshCw size={8} className="animate-spin" />
+                                ) : (
+                                  <GitFork size={8} />
+                                )}
+                                {isLinking ? 'Verifying...' : 'Verify GitHub'}
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[8px] text-slate-400 italic">—</span>
+                        )}
+                      </td>
+                      <td className="p-5">
+                        <div>
+                          <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${getRoleColor(user.role)}`}>
+                            {getRoleDisplayName(user.role)}
+                          </span>
+                          {isPOC && user.organizationId && (
+                            <p className="text-[9px] text-slate-900 mt-1">
+                              Client : {typeof user.organizationId === 'object' ? user.organizationId.companyName : 'Organization'}
+                            </p>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-5 text-right">
+                        <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
+                          {isDeveloper && user.githubLinked && user.githubUsername && (
+                            <div className="p-2 text-green-600 rounded-lg" title={`GitHub: ${user.githubUsername}`}>
+                              <CheckCircle size={16}/>
+                            </div>
+                          )}
+                          <button onClick={() => handleEditClick(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm">
+                            <Edit2 size={16}/>
+                          </button>
+                          <button onClick={() => handleDelete(user._id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm">
+                            <Trash2 size={16}/>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Expanded Employee Details Row */}
+                    {isExpanded && canEditProfile && hasDetails && (
+                      <tr className="bg-blue-50/20">
+                        <td colSpan="7" className="p-4">
+                          <div className="bg-white rounded-xl border border-blue-100 p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="p-1.5 bg-blue-100 rounded-lg">
+                                <UserIcon size={14} className="text-blue-600" />
+                              </div>
+                              <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Employee Profile Details</p>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {/* Date of Joining */}
+                              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
+                                  <Calendar size={10} className="inline mr-1" />
+                                  Date of Joining
+                                </label>
+                                <p className="text-sm font-bold text-slate-700">
+                                  {user.dateOfJoining ? formatDate(user.dateOfJoining) : 'N/A'}
+                                </p>
+                              </div>
+                              
+                              {/* Date of Birth */}
+                              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
+                                  <Calendar size={10} className="inline mr-1" />
+                                  Date of Birth
+                                </label>
+                                <p className="text-sm font-bold text-slate-700">
+                                  {user.dateOfBirth ? formatDate(user.dateOfBirth) : 'N/A'}
+                                </p>
+                              </div>
+                              
+                              {/* Shift Timing */}
+                              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
+                                  <ClockIcon size={10} className="inline mr-1" />
+                                  Shift Timing
+                                </label>
+                                <p className="text-sm font-bold text-slate-700">
+                                  {shiftDisplay || 'Not set'}
+                                </p>
+                              </div>
+                              
+                              {/* Contact Number */}
+                              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
+                                  <Phone size={10} className="inline mr-1" />
+                                  Contact Number
+                                </label>
+                                <p className="text-sm font-bold text-slate-700">
+                                  {user.contactNumber || 'N/A'}
+                                </p>
+                              </div>
+                              
+                              {/* Emergency Contact */}
+                              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
+                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
+                                  <AlertCircle size={10} className="inline mr-1" />
+                                  Emergency Contact
+                                </label>
+                                <p className="text-sm font-bold text-slate-700">
+                                  {user.emergencyContact || 'N/A'}
+                                </p>
+                              </div>
+                              
+                              {/* Address */}
+                              <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 md:col-span-2 lg:col-span-1">
+                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
+                                  <MapPin size={10} className="inline mr-1" />
+                                  Address
+                                </label>
+                                <p className="text-sm font-bold text-slate-700 break-words">
+                                  {user.address || 'N/A'}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </>
                 );
               }) : (
                 <tr>
-                  <td colSpan="6" className="p-10 text-center">
+                  <td colSpan="7" className="p-10 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
                         <Users size={28} className="text-slate-300" />
@@ -841,7 +1058,7 @@ const handleLinkGitHub = async (userId) => {
                 />
               </div>
               
-              {/* Employee Code Field - NEW */}
+              {/* Employee Code Field */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
                   Employee Code {!isEditing && '(Optional - auto-generated if blank)'}
@@ -900,7 +1117,7 @@ const handleLinkGitHub = async (userId) => {
                 )}
               </div>
 
-              {/* Role Selection - UPDATED with Team Lead */}
+              {/* Role Selection */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">User Type *</label>
                 <select 
@@ -1095,6 +1312,148 @@ const handleLinkGitHub = async (userId) => {
                       )}
                     </div>
                   )}
+                </div>
+              )}
+
+              {/* ============================================
+                  NEW EMPLOYEE PROFILE FIELDS (in Modal)
+                  Only show for non-Client, non-Admin, non-Super Admin
+                  ============================================ */}
+              {formData.role !== 'Client' && formData.role !== 'Admin' && formData.role !== 'Super Admin' && (
+                <div className="border-t border-slate-200 pt-4 mt-2">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="p-1.5 bg-blue-100 rounded-lg">
+                      <UserIcon size={14} className="text-blue-600" />
+                    </div>
+                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Employee Profile Details</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Date of Joining */}
+                    <div>
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                        <Calendar size={10} className="inline mr-1" />
+                        Date of Joining
+                      </label>
+                      <input 
+                        type="date" 
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                        value={formData.dateOfJoining} 
+                        onChange={(e) => setFormData({...formData, dateOfJoining: e.target.value})}
+                      />
+                    </div>
+                    
+                    {/* Date of Birth */}
+                    <div>
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                        <Calendar size={10} className="inline mr-1" />
+                        Date of Birth
+                      </label>
+                      <input 
+                        type="date" 
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                        value={formData.dateOfBirth} 
+                        onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
+                      />
+                    </div>
+                    
+                    {/* Shift Timing - 3 FIELDS */}
+                    <div className="md:col-span-2">
+                      <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                        <ClockIcon size={10} className="inline mr-1" />
+                        Shift Timing
+                      </label>
+                      <div className="flex gap-2">
+                        {/* Hour - 1 to 12 */}
+                        <div className="flex-1">
+                          <select
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
+                            value={formData.shiftHour}
+                            onChange={(e) => setFormData({...formData, shiftHour: parseInt(e.target.value)})}
+                          >
+                            {[...Array(12)].map((_, i) => (
+                              <option key={i + 1} value={i + 1}>{String(i + 1).padStart(2, '0')}</option>
+                            ))}
+                          </select>
+                          <p className="text-[6px] text-slate-400 text-center mt-0.5">Hour</p>
+                        </div>
+
+                        {/* Minute - 00 to 59 */}
+                        <div className="flex-1">
+                          <select
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
+                            value={formData.shiftMinute}
+                            onChange={(e) => setFormData({...formData, shiftMinute: parseInt(e.target.value)})}
+                          >
+                            {[...Array(60)].map((_, i) => (
+                              <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
+                            ))}
+                          </select>
+                          <p className="text-[6px] text-slate-400 text-center mt-0.5">Minute</p>
+                        </div>
+
+                        {/* AM/PM */}
+                        <div className="flex-1">
+                          <select
+                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
+                            value={formData.shiftAmPm}
+                            onChange={(e) => setFormData({...formData, shiftAmPm: e.target.value})}
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                          <p className="text-[6px] text-slate-400 text-center mt-0.5">AM/PM</p>
+                        </div>
+                      </div>
+                      <p className="text-[7px] text-slate-400 mt-1">Select the start time of your shift</p>
+                    </div>
+                  </div>
+                  
+                  {/* Contact Number */}
+                  <div className="mt-3">
+                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                      <Phone size={10} className="inline mr-1" />
+                      Contact Number
+                    </label>
+                    <input 
+                      type="tel" 
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                      placeholder="e.g., +91 98765 43210"
+                      value={formData.contactNumber} 
+                      onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
+                    />
+                  </div>
+                  
+                  {/* Emergency Contact */}
+                  <div className="mt-3">
+                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                      <AlertCircle size={10} className="inline mr-1" />
+                      Emergency Contact
+                    </label>
+                    <input 
+                      type="tel" 
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                      placeholder="e.g., +91 98765 43210 (Name)"
+                      value={formData.emergencyContact} 
+                      onChange={(e) => setFormData({...formData, emergencyContact: e.target.value})}
+                    />
+                    <p className="text-[7px] text-slate-400 mt-1">Name and contact number of emergency contact person</p>
+                  </div>
+                  
+                  {/* Address */}
+                  <div className="mt-3">
+                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
+                      <MapPin size={10} className="inline mr-1" />
+                      Address
+                    </label>
+                    <textarea 
+                      rows={2}
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-medium text-slate-700 transition-all text-sm resize-none"
+                      placeholder="Enter full address..."
+                      value={formData.address} 
+                      onChange={(e) => setFormData({...formData, address: e.target.value})}
+                    />
+                  </div>
                 </div>
               )}
 
