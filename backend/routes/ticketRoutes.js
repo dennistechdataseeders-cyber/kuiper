@@ -81,6 +81,9 @@ const upload = multer({
  * Get the correct base URL for file uploads
  * Works for both local development and production (VPS with Nginx)
  */
+// backend/routes/ticketRoutes.js
+
+
 function getBaseUrl(req) {
   // 1. Check for environment variable (highest priority for production)
   if (process.env.API_BASE_URL) {
@@ -93,10 +96,13 @@ function getBaseUrl(req) {
   }
   
   // 3. Use the request protocol and host (works with trust proxy)
-  // For local: http://192.168.1.7:5000
-  // For production behind Nginx: https://api.kuiperapp.co.in
   const protocol = req.headers['x-forwarded-proto'] || req.protocol;
   const host = req.headers['x-forwarded-host'] || req.get('host');
+  
+  // ✅ FIX: If we're in production but headers are missing, use the API_BASE_URL from env
+  if (process.env.NODE_ENV === 'production' && !host) {
+    return 'https://api.kuiperapp.co.in';
+  }
   
   return `${protocol}://${host}`;
 }
@@ -192,14 +198,12 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
       });
     }
     
-    // ✅ FIX: Use the dynamic base URL
+    // ✅ FIX: Use the dynamic base URL with fallback
     const baseUrl = getBaseUrl(req);
     const fileUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
     
-    // Log for debugging
-    console.log(`📤 File uploaded: ${fileUrl}`);
+    console.log(`📤 File uploaded: ${fileUrl}`); // For debugging
     
-    // Get file size in MB for response
     const sizeInMB = (req.file.size / (1024 * 1024)).toFixed(2);
     
     res.json({ 
@@ -217,8 +221,6 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
     res.status(500).json({ error: 'Failed to upload file' });
   }
 });
-
-// Multiple file upload endpoint
 router.post('/upload-files', protect, upload.array('files', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -295,8 +297,6 @@ router.delete('/delete-file', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to delete file' });
   }
 });
-
-// Legacy: Single image upload endpoint (kept for backward compatibility)
 router.post('/upload-image', protect, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
