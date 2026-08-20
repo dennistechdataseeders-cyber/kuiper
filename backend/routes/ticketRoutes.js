@@ -17,11 +17,20 @@ router.use(protect);
 // ============================================
 
 // Configure multer for file uploads (images + documents)
+// Replace the storage configuration with this:
+
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const uploadDir = path.join(__dirname, '../uploads/tickets');
+    // Ensure directory exists with proper permissions
     if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+      try {
+        fs.mkdirSync(uploadDir, { recursive: true, mode: 0o755 });
+        console.log(`📁 Created upload directory: ${uploadDir}`);
+      } catch (err) {
+        console.error(`❌ Failed to create upload directory: ${err.message}`);
+        // Try with sudo if needed - but better to fix permissions manually
+      }
     }
     cb(null, uploadDir);
   },
@@ -31,7 +40,6 @@ const storage = multer.diskStorage({
     cb(null, 'ticket-' + uniqueSuffix + ext);
   }
 });
-
 // File filter - allow images AND documents
 const fileFilter = (req, file, cb) => {
   // Image extensions

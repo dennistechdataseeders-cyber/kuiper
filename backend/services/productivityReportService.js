@@ -6,7 +6,8 @@ const LeadGen = require('../models/LeadGen');
 const Prospect = require('../models/Prospect');
 const Project = require('../models/Project');
 const Feed = require('../models/Feed');
-
+const EmployeePunchLog = require('../models/EmployeePunchLog');
+const LeaveApplication = require('../models/LeaveApplication');
 class ProductivityReportService {
   
   // ============================================
