@@ -1,3 +1,5 @@
+// backend/server.js - UPDATED with announcements directory
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -47,6 +49,16 @@ try {
 }
 
 // =========================================================
+// ✅ ANNOUNCEMENT AUTOMATION
+// =========================================================
+try {
+  require(path.join(__dirname, 'cron', 'announcementAutomation'));
+  console.log('⏰ Announcement Automation initialized successfully');
+} catch (err) {
+  console.log('⚠️ Notice: Announcement Automation not loaded:', err.message);
+}
+
+// =========================================================
 // CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
 // =========================================================
 
@@ -57,13 +69,18 @@ const createUploadsDirectory = () => {
     path.join(__dirname, 'uploads/profiles'),
     path.join(__dirname, 'uploads/temp'),
     path.join(__dirname, 'uploads/leads'),
-    path.join(__dirname, 'uploads/knowledge')
+    path.join(__dirname, 'uploads/knowledge'),
+    path.join(__dirname, 'uploads/announcements') // ✅ ADDED
   ];
   
   uploadDirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`📁 Created directory: ${dir}`);
+      try {
+        fs.mkdirSync(dir, { recursive: true, mode: 0o755 });
+        console.log(`📁 Created directory: ${dir}`);
+      } catch (err) {
+        console.error(`❌ Failed to create directory ${dir}:`, err.message);
+      }
     } else {
       console.log(`✅ Directory ready: ${dir}`);
     }
@@ -98,18 +115,13 @@ const knowledgeBaseRoutes = require('./routes/knowledgeBaseRoutes');
 const hrRoutes = require('./routes/hrRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
+const announcementRoutes = require('./routes/announcementRoutes');
 
 const app = express();
 
 // =========================================================
 // ✅ TRUST PROXY — REQUIRED BEHIND NGINX
 // =========================================================
-// Without this, req.protocol always reports 'http' (the protocol
-// Nginx uses to talk to Node internally) even when the public site
-// is served over https. That bug was causing file URLs saved to the
-// database (e.g. comment attachments) to be built as http://... 
-// instead of https://..., which then failed to open/download for
-// users on the production domain.
 app.set('trust proxy', 1);
 
 const server = http.createServer(app);
@@ -150,7 +162,6 @@ io.on('connection', (socket) => {
     console.log(`👤 User joined room: ${userId}`);
   });
 
-  // NEW: Join project-specific room
   socket.on('join-project-room', (projectId) => {
     socket.join(`project_${projectId}`);
     console.log(`📁 User joined project room: ${projectId}`);
@@ -166,7 +177,6 @@ io.on('connection', (socket) => {
     console.log(`🎫 Joined ticket room: ${ticketId}`);
   });
 
-  // Leave notifications
   socket.on('join-leave-room', (userId) => {
     socket.join(`leave_${userId}`);
     console.log(`📋 User joined leave room: ${userId}`);
@@ -182,19 +192,16 @@ io.on('connection', (socket) => {
     console.log(`❌ Leave rejected notification sent to user: ${data.userId}`);
   });
 
-  // Biometric sync notifications
   socket.on('join-attendance-room', (userId) => {
     socket.join(`attendance_${userId}`);
     console.log(`👤 User joined attendance room: ${userId}`);
   });
 
-  // Emit attendance update to specific user
   socket.on('attendance_updated', (data) => {
     io.to(`attendance_${data.employeeId}`).emit('attendance_updated', data);
     console.log(`📊 Attendance update sent to user: ${data.employeeId}`);
   });
 
-  // Emit sync complete to all users
   socket.on('attendance_sync_complete', (data) => {
     io.emit('attendance_sync_complete', data);
     console.log('📊 Attendance sync complete notification sent to all users');
@@ -216,11 +223,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // CORS CONFIGURATION - CLEAN SOLUTION
 // =========================================================
 
-// Check if we're in production
 const isProduction = process.env.NODE_ENV === 'production';
 
 if (!isProduction) {
-  // Development - Enable CORS
   console.log('🔧 Development mode: CORS enabled');
   app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -234,14 +239,10 @@ if (!isProduction) {
     next();
   });
 } else {
-  // Production - COMPLETELY DISABLE CORS IN EXPRESS
   console.log('🚀 Production mode: Express CORS DISABLED');
   console.log('   Nginx handles all CORS headers');
   
-  // DO NOT USE cors() middleware in production
-  // This middleware removes ALL CORS headers from responses
   app.use((req, res, next) => {
-    // Remove ALL CORS headers
     const headersToRemove = [
       'Access-Control-Allow-Origin',
       'Access-Control-Allow-Methods', 
@@ -255,7 +256,6 @@ if (!isProduction) {
       res.removeHeader(header);
     });
     
-    // For OPTIONS requests, return 204
     if (req.method === 'OPTIONS') {
       return res.status(204).end();
     }
@@ -264,10 +264,17 @@ if (!isProduction) {
   });
 }
 
-// Route static access parameters for uploaded document assets
-app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+// =========================================================
+// ✅ UPDATED STATIC FILE SERVING WITH BETTER ERROR HANDLING
+// =========================================================
+
+// Route static access for uploaded document assets
+app.use('/uploads', (req, res, next) => {
+  console.log(`📂 Static file request: ${req.path}`);
+  console.log(`   Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
+  next();
+}, express.static(path.join(__dirname, 'uploads'), {
   setHeaders: (res, filePath) => {
-    // Set proper content type based on file extension
     const ext = path.extname(filePath).toLowerCase();
     const mimeTypes = {
       '.jpg': 'image/jpeg',
@@ -275,6 +282,9 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
       '.png': 'image/png',
       '.gif': 'image/gif',
       '.webp': 'image/webp',
+      '.bmp': 'image/bmp',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
       '.pdf': 'application/pdf',
       '.doc': 'application/msword',
       '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -288,28 +298,41 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
       '.xml': 'application/xml',
       '.mp4': 'video/mp4',
       '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
       '.js': 'application/javascript',
       '.py': 'text/x-python',
-      '.exe': 'application/octet-stream',
+      '.exe': 'application/octet-stream'
     };
     
     const contentType = mimeTypes[ext] || 'application/octet-stream';
     res.setHeader('Content-Type', contentType);
     
-    // For non-images, force download
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
     if (!imageExtensions.includes(ext)) {
       res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
     }
     
-    // CORS headers for file access
-    res.setHeader('Access-Control-Allow-Origin', 'https://kuiperapp.co.in');
+    const allowedOrigin = isProduction ? 'https://kuiperapp.co.in' : '*';
+    res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Disposition');
+    
+    console.log(`   ✅ Serving file: ${path.basename(filePath)} (${contentType})`);
   }
 }));
+
+// Handle 404 for static files
+app.use('/uploads', (req, res) => {
+  console.log(`❌ File not found: ${req.path}`);
+  res.status(404).json({
+    success: false,
+    error: 'File not found',
+    path: req.path,
+    message: 'The requested file does not exist on the server'
+  });
+});
 
 /* =========================================================
    ENV RUNTIME PORT VALIDATIONS
@@ -351,6 +374,7 @@ app.use('/api/knowledge', protect, knowledgeBaseRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/leaves', leaveRoutes);
+app.use('/api/announcements', announcementRoutes);
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
@@ -384,12 +408,12 @@ mongoose.connect(MONGO_URI)
       console.log(`🚀 API System running in production mode listening on port ${PORT}`);
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
       
-      // Log all loaded services
       console.log('\n📋 Loaded Services:');
       console.log('  ✅ Drip Campaign Worker');
       console.log('  ✅ Leave Balance Updater');
       console.log('  ✅ Daily Productivity Report');
       console.log('  ✅ Biometric Sync (every 15 minutes)');
+      console.log('  ✅ Announcement Automation');
       console.log('  ✅ Socket.IO Server');
       console.log('  ✅ REST API Routes');
       console.log('  ✅ File Upload Service');

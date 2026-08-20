@@ -47,6 +47,7 @@ import PmFeasibilityDashboard from './pages/PmFeasibilityDashboard';
 import PmDashboard from './pages/PmDashboard';
 import EmployeeAttendanceDetail from './pages/EmployeeAttendanceDetail';
 import EmployeeAttendanceReport from './pages/EmployeeAttendanceReport';
+import Announcements from './pages/Announcements';
 
 // ============================================
 // HRMS IMPORTS
@@ -406,6 +407,11 @@ function AppContent() {
                           <EmployeeAttendanceReport />
                         </ProtectedRoute>
                       } />
+                      <Route path="/announcements" element={
+                          <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance']}>
+                            <Announcements />
+                          </ProtectedRoute>
+                        } />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
                   </Routes>
                   
