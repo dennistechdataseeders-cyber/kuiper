@@ -1,4 +1,4 @@
-// frontend/src/pages/Announcements.jsx - WITH SIDEBAR CREATE BUTTON SUPPORT
+// frontend/src/pages/Announcements.jsx - WITH REAL USER NAMES IN LIKES TOOLTIP
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -58,13 +58,13 @@ const Announcements = () => {
   // Check if user is Admin
   const isAdmin = ['Admin', 'Super Admin'].includes(userRole);
 
-  // ✅ Check if user can create announcements
+  // Check if user can create announcements
   const canCreateAnnouncements = ['Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'].includes(userRole);
 
-  // ✅ Check if user is HR (for display purposes)
+  // Check if user is HR (for display purposes)
   const isHR = userRole === 'HR';
 
-  // ✅ Auto-open create modal from sidebar navigation
+  // Auto-open create modal from sidebar navigation
   useEffect(() => {
     if (location.state?.openCreateModal) {
       setShowCreateModal(true);
@@ -166,52 +166,70 @@ const Announcements = () => {
     }
   };
 
-  // ============================================
-  // LIKE / UNLIKE
-  // ============================================
-  const handleLike = async (announcementId) => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(
-        `${API_BASE_URL}/api/announcements/${announcementId}/like`,
-        {},
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
+// ============================================
+// LIKE / UNLIKE - UPDATED
+// ============================================
+const handleLike = async (announcementId) => {
+  try {
+    const token = localStorage.getItem('token');
+    const res = await axios.post(
+      `${API_BASE_URL}/api/announcements/${announcementId}/like`,
+      {},
+      {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    );
+
+    if (res.data.success) {
+      setAnnouncements(prev =>
+        prev.map(a => {
+          if (a._id === announcementId) {
+            return { 
+              ...a, 
+              likes: res.data.likes, // ✅ Use the populated likes from response
+              likeCount: res.data.likeCount 
+            };
+          }
+          return a;
+        })
       );
-
-      if (res.data.success) {
-        setAnnouncements(prev =>
-          prev.map(a => {
-            if (a._id === announcementId) {
-              const likes = res.data.action === 'liked'
-                ? [...(a.likes || []), userId]
-                : (a.likes || []).filter(id => id !== userId);
-              return { ...a, likes, likeCount: res.data.likeCount };
-            }
-            return a;
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Error toggling like:', error);
-      toast.error('Failed to like announcement');
     }
-  };
+  } catch (error) {
+    console.error('Error toggling like:', error);
+    toast.error('Failed to like announcement');
+  }
+};
 
   // ============================================
-  // GET LIKED USERS
+  // GET LIKED USERS WITH REAL NAMES
   // ============================================
-  const getLikedUsers = (announcement) => {
-    if (!announcement.likes || announcement.likes.length === 0) return [];
-    
-    return announcement.likes.map(id => {
-      if (id === userId) {
-        return { name: userName || 'You', _id: id };
+const getLikedUsers = (announcement) => {
+  if (!announcement.likes || announcement.likes.length === 0) return [];
+  
+  // The likes array now contains populated user objects from the backend
+  const likedUsers = [];
+  
+  announcement.likes.forEach(user => {
+    // Check if it's a populated user object or just an ID
+    if (typeof user === 'object' && user !== null) {
+      // It's a populated user object
+      likedUsers.push({
+        name: user.name || 'Team Member',
+        _id: user._id || user,
+        isCurrentUser: user._id === userId || user === userId
+      });
+    } else {
+      // It's just an ID (fallback)
+      if (user === userId) {
+        likedUsers.push({ name: userName || 'You', _id: user, isCurrentUser: true });
+      } else {
+        likedUsers.push({ name: 'Team Member', _id: user, isCurrentUser: false });
       }
-      return { name: 'Team Member', _id: id };
-    });
-  };
+    }
+  });
+  
+  return likedUsers;
+};
 
   // ============================================
   // ADD COMMENT
@@ -487,7 +505,7 @@ const Announcements = () => {
               </div>
             </div>
           </div>
-          {/* ✅ Show Create Post button only if user has permission */}
+          {/* Show Create Post button only if user has permission */}
           {canCreateAnnouncements && (
             <button
               onClick={() => setShowCreateModal(true)}

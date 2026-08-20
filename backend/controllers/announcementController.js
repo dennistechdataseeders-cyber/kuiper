@@ -1,8 +1,17 @@
-// backend/controllers/announcementController.js
+// backend/controllers/announcementController.js - UPDATED with likes population
+
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
 const path = require('path');
 const fs = require('fs');
+
+// ============================================
+// HELPER: Check if user can create announcements
+// ============================================
+const canCreateAnnouncement = (role) => {
+    const allowedRoles = ['Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'];
+    return allowedRoles.includes(role);
+};
 
 // ============================================
 // CREATE ANNOUNCEMENT
@@ -13,6 +22,13 @@ exports.createAnnouncement = async (req, res) => {
         
         if (!title || !description) {
             return res.status(400).json({ error: 'Title and description are required' });
+        }
+
+        // Check if user has permission to create announcements
+        if (!canCreateAnnouncement(req.user.role)) {
+            return res.status(403).json({ 
+                error: 'Not authorized to create announcements. Allowed roles: Super Admin, Admin, HR, Project Manager, Sales Manager' 
+            });
         }
 
         const user = await User.findById(req.user._id);
@@ -37,7 +53,8 @@ exports.createAnnouncement = async (req, res) => {
 
         // Populate createdBy for response
         const populated = await Announcement.findById(announcement._id)
-            .populate('createdBy', 'name email role profileImage');
+            .populate('createdBy', 'name email role profileImage')
+            .populate('likes', 'name email profileImage'); // ✅ Populate likes
 
         res.status(201).json({
             success: true,
@@ -62,6 +79,7 @@ exports.getAnnouncements = async (req, res) => {
         const announcements = await Announcement.find()
             .populate('createdBy', 'name email role profileImage')
             .populate('comments.userId', 'name email role profileImage')
+            .populate('likes', 'name email profileImage') // ✅ Populate likes with user details
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(parseInt(limit));
@@ -92,7 +110,8 @@ exports.getAnnouncementById = async (req, res) => {
     try {
         const announcement = await Announcement.findById(req.params.id)
             .populate('createdBy', 'name email role profileImage')
-            .populate('comments.userId', 'name email role profileImage');
+            .populate('comments.userId', 'name email role profileImage')
+            .populate('likes', 'name email profileImage'); // ✅ Populate likes
 
         if (!announcement) {
             return res.status(404).json({ error: 'Announcement not found' });
@@ -127,19 +146,31 @@ exports.toggleLike = async (req, res) => {
             // Add like
             announcement.likes.push(userId);
             await announcement.save();
+            
+            // ✅ Fetch the updated announcement with populated likes
+            const updatedAnnouncement = await Announcement.findById(req.params.id)
+                .populate('likes', 'name email profileImage');
+
             res.json({
                 success: true,
                 action: 'liked',
-                likeCount: announcement.likes.length
+                likeCount: updatedAnnouncement.likes.length,
+                likes: updatedAnnouncement.likes // ✅ Return populated likes
             });
         } else {
             // Remove like
             announcement.likes.splice(likeIndex, 1);
             await announcement.save();
+            
+            // ✅ Fetch the updated announcement with populated likes
+            const updatedAnnouncement = await Announcement.findById(req.params.id)
+                .populate('likes', 'name email profileImage');
+
             res.json({
                 success: true,
                 action: 'unliked',
-                likeCount: announcement.likes.length
+                likeCount: updatedAnnouncement.likes.length,
+                likes: updatedAnnouncement.likes // ✅ Return populated likes
             });
         }
 
@@ -187,7 +218,8 @@ exports.addComment = async (req, res) => {
 
         // Populate the new comment with user details
         const populatedAnnouncement = await Announcement.findById(announcement._id)
-            .populate('comments.userId', 'name email role profileImage');
+            .populate('comments.userId', 'name email role profileImage')
+            .populate('likes', 'name email profileImage'); // ✅ Populate likes
 
         const newComment = populatedAnnouncement.comments[populatedAnnouncement.comments.length - 1];
 
@@ -230,6 +262,13 @@ exports.deleteComment = async (req, res) => {
         const isAdmin = req.user.role === 'Admin' || req.user.role === 'Super Admin';
         const isOwner = comment.userId.toString() === req.user._id.toString();
         
+        // For automated posts, ONLY Admins can delete comments
+        if (announcement.isAutomated && !isAdmin) {
+            return res.status(403).json({ 
+                error: 'Comments on automated posts can only be deleted by Admins' 
+            });
+        }
+        
         if (!isAdmin && !isOwner) {
             return res.status(403).json({ error: 'Not authorized to delete this comment' });
         }
@@ -264,6 +303,13 @@ exports.deleteAnnouncement = async (req, res) => {
         const isAdmin = req.user.role === 'Admin' || req.user.role === 'Super Admin';
         const isOwner = announcement.createdBy.toString() === req.user._id.toString();
         
+        // For automated posts, ONLY Admins can delete
+        if (announcement.isAutomated && !isAdmin) {
+            return res.status(403).json({ 
+                error: 'Automated posts can only be deleted by Admins' 
+            });
+        }
+        
         if (!isAdmin && !isOwner) {
             return res.status(403).json({ error: 'Not authorized to delete this announcement' });
         }
@@ -290,5 +336,36 @@ exports.deleteAnnouncement = async (req, res) => {
     } catch (error) {
         console.error('Error deleting announcement:', error);
         res.status(500).json({ error: 'Failed to delete announcement' });
+    }
+};
+
+// ============================================
+// UPLOAD IMAGE FOR ANNOUNCEMENT
+// ============================================
+exports.uploadImage = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'No image file provided' });
+        }
+
+        // Check if user has permission to upload images for announcements
+        if (!canCreateAnnouncement(req.user.role)) {
+            return res.status(403).json({ 
+                error: 'Not authorized to upload images for announcements' 
+            });
+        }
+
+        // Generate URL for the uploaded image
+        const imageUrl = `${req.protocol}://${req.get('host')}/uploads/announcements/${req.file.filename}`;
+
+        res.json({
+            success: true,
+            url: imageUrl,
+            filename: req.file.filename
+        });
+
+    } catch (error) {
+        console.error('Error uploading image:', error);
+        res.status(500).json({ error: 'Failed to upload image' });
     }
 };
