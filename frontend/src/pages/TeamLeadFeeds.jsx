@@ -1,6 +1,6 @@
 // frontend/src/pages/TeamLeadFeeds.jsx
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom'; // ✅ ADD THIS IMPORT
+import { useLocation, useNavigate } from 'react-router-dom'; // ✅ ADDED useNavigate
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import {
@@ -12,7 +12,8 @@ import {
   ChevronDown,
   ChevronUp,
   ChevronLeft,
-  ChevronRight,FileSpreadsheet,
+  ChevronRight,
+  FileSpreadsheet,
   Briefcase,
   Hash,
   Clock,
@@ -31,14 +32,18 @@ import {
   Image,
   File,
   Download,
-  Trash2
+  Trash2,
+  Ticket,        // ✅ ADDED
+  AlertTriangle  // ✅ ADDED
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const TeamLeadFeeds = () => {
   const { isCollapsed } = useSidebar();
-  const location = useLocation(); // ✅ ADD THIS
+  const location = useLocation();
+  const navigate = useNavigate(); // ✅ ADDED
+  
   const [projects, setProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +57,18 @@ const TeamLeadFeeds = () => {
   const [expandedFeed, setExpandedFeed] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // ============================================
+  // 🆕 TICKET MODAL STATE
+  // ============================================
+  const [showTicketModal, setShowTicketModal] = useState(false);
+  const [selectedTicketFeed, setSelectedTicketFeed] = useState(null);
+  const [ticketForm, setTicketForm] = useState({
+    title: '',
+    description: '',
+    priority: 'Medium'
+  });
+  const [generatingTicket, setGeneratingTicket] = useState(false);
 
   // Comment Modal State
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -74,6 +91,75 @@ const TeamLeadFeeds = () => {
   const userName = localStorage.getItem('userName') || 'Team Lead';
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
+  };
+
+  // ============================================
+  // 🆕 TICKET FUNCTIONS
+  // ============================================
+
+  const openTicketModal = (feed) => {
+    setSelectedTicketFeed(feed);
+    // Pre-fill ticket with feed and project information
+    setTicketForm({
+      title: `Issue with feed: ${feed.name}`,
+      description: `Feed: ${feed.name}\nProject: ${feed.projectCustomId || feed.projectName}\nFeed ID: ${feed._id}\n\nDescription :\n`,
+      priority: 'Medium'
+    });
+    setShowTicketModal(true);
+  };
+
+  const closeTicketModal = () => {
+    setShowTicketModal(false);
+    setSelectedTicketFeed(null);
+    setTicketForm({
+      title: '',
+      description: '',
+      priority: 'Medium'
+    });
+  };
+
+  const handleGenerateTicket = async () => {
+    if (!ticketForm.title.trim()) {
+      toast.error('Please enter a title');
+      return;
+    }
+    if (!ticketForm.description.trim()) {
+      toast.error('Please enter a description');
+      return;
+    }
+
+    setGeneratingTicket(true);
+
+    try {
+      const payload = {
+        title: ticketForm.title,
+        description: ticketForm.description,
+        priority: ticketForm.priority,
+        projectId: selectedTicketFeed.projectId,
+        feedId: selectedTicketFeed._id,
+        // Pre-set category for feed-related tickets
+        category: 'Production',
+        subcategory: 'Data Extraction',
+        subItem: 'Feed Issue',
+        isInternal: true
+      };
+
+      const response = await axios.post(`${API_BASE_URL}/api/tickets`, payload, authHeader);
+      
+      const ticketNumber = response.data.ticket?.ticketNumber || '';
+      toast.success(`Ticket ${ticketNumber} generated successfully for feed: ${selectedTicketFeed.name}`);
+      closeTicketModal();
+      
+      // Navigate to the ticket details page
+      const ticketId = response.data.ticket?._id || selectedTicketFeed._id;
+      navigate(`/tickets/${ticketId}`);
+      
+    } catch (err) {
+      console.error('Error generating ticket:', err);
+      toast.error(err.response?.data?.error || 'Failed to generate ticket');
+    } finally {
+      setGeneratingTicket(false);
+    }
   };
 
   // ============================================
@@ -490,7 +576,6 @@ const TeamLeadFeeds = () => {
   // ============================================
 
   useEffect(() => {
-    // ✅ CHECK FOR PROJECT FILTER FROM NAVIGATION STATE
     const projectIdFromState = location.state?.selectedProject;
     const projectNameFromState = location.state?.selectedProjectName;
     
@@ -505,12 +590,10 @@ const TeamLeadFeeds = () => {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch projects where user is Team Lead
       const projectsRes = await axios.get(`${API_BASE_URL}/api/teamlead/my-projects`, authHeader);
       const projectsData = projectsRes.data.projects || [];
       setProjects(projectsData);
 
-      // Extract all feeds from projects
       const allFeeds = [];
       projectsData.forEach(project => {
         if (project.feeds && project.feeds.length > 0) {
@@ -526,7 +609,6 @@ const TeamLeadFeeds = () => {
       });
       setFeeds(allFeeds);
 
-      // Fetch developers for assignment
       const devsRes = await axios.get(`${API_BASE_URL}/api/teamlead/developers`, authHeader);
       setDevelopers(devsRes.data.developers || []);
 
@@ -540,7 +622,6 @@ const TeamLeadFeeds = () => {
 
   const openAssignModal = (feed) => {
     setSelectedFeed(feed);
-    // Get the first assigned developer or null
     const currentDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0 
       ? feed.assignedDevelopers[0]._id || feed.assignedDevelopers[0]
       : null;
@@ -552,7 +633,6 @@ const TeamLeadFeeds = () => {
     if (!selectedFeed) return;
     setAssigning(true);
     try {
-      // Send as array with single developer
       const developerIds = selectedDeveloper ? [selectedDeveloper] : [];
       await axios.patch(
         `${API_BASE_URL}/api/teamlead/feeds/${selectedFeed._id}/assign-developers`,
@@ -636,7 +716,6 @@ const TeamLeadFeeds = () => {
             </div>
           </div>
           
-          {/* ✅ Show current filter if project is selected */}
           {location.state?.selectedProjectName && selectedProject !== 'ALL' && (
             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
               <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
@@ -645,7 +724,6 @@ const TeamLeadFeeds = () => {
               <button
                 onClick={() => {
                   setSelectedProject('ALL');
-                  // Clear the state without navigating
                   window.history.replaceState({}, document.title);
                 }}
                 className="text-indigo-400 hover:text-indigo-600 transition-colors"
@@ -739,7 +817,7 @@ const TeamLeadFeeds = () => {
         </div>
       </div>
 
-      {/* Feeds Table - Rest of the component remains the same */}
+      {/* Feeds Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1000px]">
@@ -836,8 +914,17 @@ const TeamLeadFeeds = () => {
                           </button>
                         </td>
 
+                        {/* ✅ UPDATED: Actions column with Raise Ticket button */}
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => openTicketModal(feed)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all text-[9px] font-black uppercase tracking-wider shadow-sm"
+                              title="Raise Ticket"
+                            >
+                              <Ticket size={14} />
+                              Raise Ticket
+                            </button>
                             <button
                               onClick={() => openAssignModal(feed)}
                               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-wider"
@@ -855,12 +942,11 @@ const TeamLeadFeeds = () => {
                         </td>
                       </tr>
 
-                      {/* Expanded Row - Same as before */}
+                      {/* Expanded Row */}
                       {isExpanded && (
                         <tr className="bg-slate-50/50">
                           <td colSpan={6} className="px-6 py-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Feed Details */}
                               <div className="bg-white rounded-lg p-4 border border-slate-200">
                                 <h4 className="text-[10px] font-black uppercase text-slate-500 mb-3 flex items-center gap-2">
                                   <Hash size={12} />
@@ -902,7 +988,6 @@ const TeamLeadFeeds = () => {
                                 </div>
                               </div>
 
-                              {/* Assigned Developer Info */}
                               <div className="bg-white rounded-lg p-4 border border-slate-200">
                                 <h4 className="text-[10px] font-black uppercase text-slate-500 mb-3 flex items-center gap-2">
                                   <User size={12} />
@@ -1005,7 +1090,108 @@ const TeamLeadFeeds = () => {
         </div>
       )}
 
-      {/* ASSIGN MODAL - Single Developer Selection */}
+      {/* 🆕 RAISE TICKET MODAL */}
+      {showTicketModal && selectedTicketFeed && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[220] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
+            <div className="p-5 border-b border-slate-100">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-lg font-black text-slate-800">Raise Ticket</h2>
+                  <p className="text-[10px] text-slate-500 mt-0.5">
+                    Feed: <span className="font-bold text-amber-600">{selectedTicketFeed.name}</span>
+                  </p>
+                  <p className="text-[9px] text-slate-400">
+                    Project: {selectedTicketFeed.projectCustomId}
+                  </p>
+                </div>
+                <button onClick={closeTicketModal} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                  Ticket Title *
+                </label>
+                <input
+                  type="text"
+                  placeholder="Brief summary of the issue"
+                  value={ticketForm.title}
+                  onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-amber-400 transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                  Priority
+                </label>
+                <select
+                  value={ticketForm.priority}
+                  onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-amber-400 transition-colors cursor-pointer"
+                >
+                  <option value="Low">Low</option>
+                  <option value="Medium">Medium</option>
+                  <option value="High">High</option>
+                  <option value="Urgent">Urgent</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                  Description *
+                </label>
+                <textarea
+                  placeholder="Detailed description of the issue..."
+                  rows={4}
+                  value={ticketForm.description}
+                  onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
+                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-amber-400 transition-colors resize-none"
+                />
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle size={14} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-[10px] text-amber-700">
+                    This ticket will be created with <strong>Production</strong> category and 
+                    assigned to the developer assigned to this feed (if any).
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 border-t border-slate-100 flex gap-2">
+              <button onClick={closeTicketModal} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-black uppercase text-[10px] tracking-wider hover:bg-slate-200 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={handleGenerateTicket}
+                disabled={generatingTicket}
+                className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-amber-600 hover:to-amber-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                {generatingTicket ? (
+                  <>
+                    <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Ticket size={14} />
+                    Raise Ticket
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ASSIGN MODAL */}
       {showAssignModal && selectedFeed && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
@@ -1113,9 +1299,7 @@ const TeamLeadFeeds = () => {
         </div>
       )}
 
-      {/* ============================================
-          FEED COMMENT MODAL - Same as before
-          ============================================ */}
+      {/* FEED COMMENT MODAL */}
       {showCommentModal && selectedFeedForComments && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[210] p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
