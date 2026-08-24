@@ -1,3 +1,5 @@
+// backend/routes/developer.js - COMPLETE FIXED VERSION
+
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -9,6 +11,7 @@ const Log = require('../models/Log');
 const Task = require('../models/Task');
 const WorkLog = require('../models/WorkLog');
 const TicketWorkLog = require('../models/TicketWorkLog');
+const WorkDescription = require('../models/WorkDescription');
 
 const { getServerTimestamp } = require('../utils/serverTime');
 
@@ -16,18 +19,13 @@ const { getServerTimestamp } = require('../utils/serverTime');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
 
-
 /**
  * @route   GET /api/dev/system-time-check
- * @desc    Get server time — used for:
- *          1. Mismatch detection (>5 min diff or different date blocks access)
- *          2. Client clock offset calculation for server-side time tracking
- *          Returns ISO timestamp so client can compute offset = serverTime - clientReceiveTime
+ * @desc    Get server time
  * @access  Private (Developer)
  */
 router.get('/system-time-check', protect, authorize('Developer'), async (req, res) => {
   try {
-    // Use getServerTimestamp if available, otherwise fall back to new Date()
     const serverNow = typeof getServerTimestamp === 'function'
       ? getServerTimestamp()
       : new Date();
@@ -35,10 +33,9 @@ router.get('/system-time-check', protect, authorize('Developer'), async (req, re
     res.json({
       success: true,
       serverTime: serverNow.toISOString(),
-      serverTimestamp: serverNow.getTime(), // ms epoch — used by client for offset math
+      serverTimestamp: serverNow.getTime(),
       timezone: 'Asia/Kolkata'
     });
-
   } catch (err) {
     console.error('Time check error:', err);
     res.status(500).json({ error: 'Failed to fetch server time' });
@@ -98,27 +95,22 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
       let gitPath = null;
       
       if (project && project.gitRepoName && project.gitRepoUrl) {
-        // Use the same sanitization logic as gitService
         const feedFolderName = feed.name
           .toLowerCase()
           .replace(/[^a-z0-9-]/g, '-')
           .replace(/-+/g, '-')
           .replace(/^-|-$/g, '');
         
-        // Create multiple path variations
         gitPath = {
           repoName: project.gitRepoName,
           repoUrl: project.gitRepoUrl,
           feedPath: feedFolderName,
-          // Different path levels
           rootPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}`,
           srcPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/src`,
           docsPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/docs`,
           testsPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/tests`,
           configPath: `${project.gitRepoUrl}/tree/main/${feedFolderName}/config`,
-          // Full URL for cloning
           cloneUrl: project.gitRepoUrl,
-          // Display path for UI
           displayPath: `${feedFolderName}/src`
         };
       }
@@ -141,7 +133,7 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
 
 /**
  * @route   GET /api/dev/feeds/:feedId/generate-script
- * @desc    Generate secure deployment script (push-only, no clone)
+ * @desc    Generate secure deployment script
  * @access  Private (Developer)
  */
 router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), async (req, res) => {
@@ -162,7 +154,6 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
       return res.status(400).json({ error: 'No Git repository linked to this feed' });
     }
 
-    // Check if developer is assigned to this feed
     const isAssigned = feed.assignedDevelopers.some(
       devId => devId.toString() === req.user._id.toString()
     );
@@ -177,22 +168,15 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
 
-    // Get write token - if not set, use the main token or provide manual instructions
     let writeToken = process.env.GITHUB_WRITE_TOKEN;
     let authenticatedUrl = null;
     
-    // Create authenticated URL with write token (if available)
     if (writeToken && writeToken.startsWith('ghp_')) {
       const repoOwner = project.gitRepoOwner || process.env.GITHUB_OWNER;
       authenticatedUrl = `https://${writeToken}@github.com/${repoOwner}/${project.gitRepoName}.git`;
-    } else {
-      // If no write token, use the main token or provide manual instructions
-      console.log('⚠️ GITHUB_WRITE_TOKEN not found, using manual instructions mode');
     }
 
-
-
-const pythonScript = `#!/usr/bin/env python3
+    const pythonScript = `#!/usr/bin/env python3
 """
 DEPLOYMENT SCRIPT for ${feed.name}
 - Uploads files to GitHub repository
@@ -511,6 +495,7 @@ except Exception as e:
     res.status(500).json({ error: 'Failed to generate script', details: err.message });
   }
 });
+
 /**
  * @route   POST /api/dev/complete-feed
  * @desc    Mark a feed as completed by the developer for today
@@ -692,9 +677,13 @@ router.get('/my-bucket', protect, authorize('Developer'), async (req, res) => {
   }
 });
 
+// ============================================
+// ✅ FIXED: WORKLOG ROUTES
+// ============================================
+
 /**
  * @route   GET /api/dev/worklog
- * @desc    Get worklogs for today
+ * @desc    Get worklogs for today with net time calculation
  * @access  Private (Developer)
  */
 router.get('/worklog', protect, authorize('Developer'), async (req, res) => {
@@ -719,17 +708,33 @@ router.get('/worklog', protect, authorize('Developer'), async (req, res) => {
             feedId: feed._id,
             projectId: feed.projectId?._id,
             date: today,
-            timeBlocks: []
+            timeBlocks: [],
+            totalTime: 0
           });
         }
 
-        return { feed, worklog: log };
+        // ✅ FIX: Get today's description for this feed
+        const todayDescription = await WorkDescription.findOne({
+          developer: req.user._id,
+          feed: feed._id,
+          date: today
+        });
+
+        // ✅ FIX: Check if user can edit today's log
+        const canEditToday = true;
+
+        return { 
+          feed, 
+          worklog: log, 
+          todayDescription: todayDescription || null,
+          canEditToday: canEditToday
+        };
       })
     );
 
     res.json(result);
   } catch (err) {
-    console.error(err);
+    console.error('Error fetching worklogs:', err);
     res.status(500).json({ error: 'Failed to fetch worklogs' });
   }
 });
@@ -879,155 +884,304 @@ router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req
 });
 
 /**
- * @route   POST /api/dev/worklog/deduct-break/:feedId
- * @desc    Deduct break time from a feed's worklog
+ * @route   POST /api/dev/worklog/log-description
+ * @desc    Save or update work description for a feed
  * @access  Private (Developer)
  */
-router.post('/worklog/deduct-break/:feedId', protect, authorize('Developer'), async (req, res) => {
+router.post('/worklog/log-description', protect, authorize('Developer'), async (req, res) => {
   try {
+    const { feedId, description } = req.body;
+    const developerId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
-    const { breakSeconds, breakDescription } = req.body;
 
-    if (!breakSeconds || breakSeconds <= 0) {
-      return res.status(400).json({ error: 'Valid break duration is required' });
+    if (!description || !description.trim()) {
+      return res.status(400).json({ error: 'Description is required' });
     }
 
-    const log = await WorkLog.findOne({
-      developerId: req.user._id,
-      feedId: req.params.feedId,
+    // ✅ FIX: Find existing description for today
+    let existing = await WorkDescription.findOne({
+      developer: developerId,
+      feed: feedId,
       date: today
     });
 
-    if (!log) return res.status(404).json({ error: 'Worklog not found' });
-
-    if (!log.breakEntries) log.breakEntries = [];
-    if (!log.totalBreakTime) log.totalBreakTime = 0;
-
-    log.totalBreakTime += breakSeconds;
-    log.breakEntries.push({
-      duration: breakSeconds,
-      reason: breakDescription || 'Break/Lunch',
-      timestamp: new Date()
-    });
-    
-    log.netTime = Math.max(0, (log.totalTime || 0) - log.totalBreakTime);
-    
-    await log.save();
-
-    if (Log) {
-      await Log.create({
-        actionType: 'BREAK_DEDUCTED',
-        performerId: req.user._id,
-        feedId: req.params.feedId,
-        details: `Deducted ${Math.floor(breakSeconds / 60)} minutes break: ${breakDescription || 'No reason provided'}`,
-        timestamp: new Date()
+    if (existing) {
+      // ✅ FIX: Append new description with timestamp
+      const timestamp = new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
       });
+      existing.description += `\n\n[${timestamp}] ${description.trim()}`;
+      await existing.save();
+      return res.json(existing);
     }
 
-    res.json(log);
+    // Create new description
+    const log = await WorkDescription.create({
+      developer: developerId,
+      feed: feedId,
+      description: description.trim(),
+      date: today
+    });
+
+    res.status(201).json(log);
   } catch (err) {
-    console.error('Error deducting break time:', err);
-    res.status(500).json({ error: 'Failed to deduct break time' });
+    console.error('Error saving work description:', err);
+    res.status(500).json({ error: 'Failed to save work description' });
   }
 });
 
+/**
+ * @route   GET /api/dev/worklog/today-descriptions
+ * @desc    Get all today's descriptions for the developer
+ * @access  Private (Developer)
+ */
+router.get('/worklog/today-descriptions', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const developerId = req.user.id;
+    const today = new Date().toISOString().split('T')[0];
+
+    const logs = await WorkDescription.find({
+      developer: developerId,
+      date: today
+    }).populate('feed', 'name');
+
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching descriptions:', error);
+    res.status(500).json({ error: 'Failed to fetch descriptions' });
+  }
+});
 
 // ============================================
-// TICKET WORKLOG ROUTES
+// ✅ FIXED: TICKET WORKLOG ROUTES - SHOWS NET TIME
 // ============================================
 
-// GET /api/dev/ticket-worklog - Get all ticket worklogs for today
-router.get('/ticket-worklog', protect, authorize('Developer'), async (req, res) => {
+/**
+ * Helper: Calculate net time without overlap for a ticket
+ * This merges overlapping time blocks and returns total unique time
+ */
+function calculateTicketNetTime(worklog) {
+  if (!worklog || !worklog.timeBlocks || worklog.timeBlocks.length === 0) {
+    return worklog?.totalTime || 0;
+  }
+
+  // Get all intervals from time blocks
+  const intervals = [];
+  const now = Date.now();
+
+  worklog.timeBlocks.forEach(block => {
+    if (block.startTime && block.endTime) {
+      intervals.push({
+        start: new Date(block.startTime).getTime(),
+        end: new Date(block.endTime).getTime()
+      });
+    } else if (block.startTime && !block.endTime && !worklog.isRunning) {
+      // If still running, use current time
+      intervals.push({
+        start: new Date(block.startTime).getTime(),
+        end: now
+      });
+    }
+  });
+
+  // If currently running, add current session
+  if (worklog.isRunning && worklog.startedAt) {
+    intervals.push({
+      start: new Date(worklog.startedAt).getTime(),
+      end: now
+    });
+  }
+
+  if (intervals.length === 0) {
+    return worklog.totalTime || 0;
+  }
+
+  // Sort intervals by start time
+  intervals.sort((a, b) => a.start - b.start);
+
+  // Merge overlapping intervals
+  const merged = [{ ...intervals[0] }];
+  for (let i = 1; i < intervals.length; i++) {
+    const current = intervals[i];
+    const last = merged[merged.length - 1];
+    if (current.start <= last.end) {
+      last.end = Math.max(last.end, current.end);
+    } else {
+      merged.push({ ...current });
+    }
+  }
+
+  // Calculate total net time
+  const totalMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
+  return Math.floor(totalMs / 1000);
+}
+
+/**
+ * @route   GET /api/dev/ticket-worklog
+ * @desc    Get all ticket worklogs for today with NET TIME
+ * @access  Private (Developer, PM, Admin, Team Lead)
+ */
+router.get('/ticket-worklog', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
-    // Get all tickets assigned to this developer
     const Ticket = require('../models/Ticket');
-    const tickets = await Ticket.find({
-      assignedTo: req.user._id,
-      status: { $in: ['Open', 'In Progress'] }
-    }).select('_id title ticketNumber priority projectId status');
+    const TicketWorkLog = require('../models/TicketWorkLog');
+    const Project = require('../models/Project');
     
+    let ticketQuery = {};
+    const userRole = req.user.role;
+    const userId = req.user._id;
+    
+    // ============================================
+    // ROLE-BASED TICKET FILTERING
+    // ============================================
+    if (userRole === 'Developer') {
+      ticketQuery = {
+        $or: [
+          { assignedTo: userId },
+          { watchers: userId }
+        ],
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    } 
+    else if (userRole === 'Project Manager') {
+      const pmProjects = await Project.find({ projectManager: userId }).select('_id');
+      const projectIds = pmProjects.map(p => p._id);
+      
+      ticketQuery = {
+        $or: [
+          { projectId: { $in: projectIds } },
+          { assignedTo: userId },
+          { createdBy: userId },
+          { watchers: userId }
+        ],
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    }
+    else if (userRole === 'Team Lead') {
+      const tlProjects = await Project.find({ teamLead: userId }).select('_id');
+      const projectIds = tlProjects.map(p => p._id);
+      
+      ticketQuery = {
+        $or: [
+          { projectId: { $in: projectIds } },
+          { assignedTo: userId },
+          { createdBy: userId },
+          { watchers: userId }
+        ],
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    }
+    else if (userRole === 'Admin') {
+      ticketQuery = {
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    }
+    else {
+      ticketQuery = {
+        assignedTo: userId,
+        status: { $in: ['Open', 'In Progress'] }
+      };
+    }
+    
+    console.log(`🔍 Fetching tickets for ${userRole} with query:`, JSON.stringify(ticketQuery));
+    
+    // Fetch tickets based on role
+    const tickets = await Ticket.find(ticketQuery)
+      .select('_id title ticketNumber priority projectId status')
+      .populate('projectId', 'name projectCustomId');
+    
+    console.log(`📊 Found ${tickets.length} tickets for ${userRole}`);
+    
+    // Build worklogs for each ticket
     const result = await Promise.all(
       tickets.map(async (ticket) => {
         let log = await TicketWorkLog.findOne({
-          developerId: req.user._id,
+          developerId: userId,
           ticketId: ticket._id,
           date: today
         });
         
+        // If no worklog exists, create one
         if (!log) {
           log = await TicketWorkLog.create({
-            developerId: req.user._id,
+            developerId: userId,
             ticketId: ticket._id,
-            projectId: ticket.projectId,
+            projectId: ticket.projectId?._id || ticket.projectId,
             date: today,
-            timeBlocks: []
+            timeBlocks: [],
+            totalTime: 0,
+            description: ''
           });
+          console.log(`📝 Created new worklog for ${userRole} on ticket: ${ticket.ticketNumber}`);
         }
         
-        return { ticket, worklog: log };
+        // ✅ FIX: Calculate NET TIME for this ticket
+        const netTime = calculateTicketNetTime(log);
+        const rawTime = log.totalTime || 0;
+        const overlapTime = Math.max(0, rawTime - netTime);
+        
+        // Create a copy with net time included
+        const worklogWithNet = {
+          ...log.toObject(),
+          netTime: netTime,
+          overlapTime: overlapTime,
+          rawTime: rawTime
+        };
+        
+        return { ticket, worklog: worklogWithNet };
       })
     );
     
     res.json(result);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch ticket worklogs' });
+    console.error('Error fetching ticket worklogs:', err);
+    res.status(500).json({ error: 'Failed to fetch ticket worklogs', details: err.message });
   }
 });
 
-// GET /api/dev/ticket-worklog/all - Get all ticket worklogs (with date filter)
-router.get('/ticket-worklog/all', protect, authorize('Developer', 'Admin', 'Project Manager'), async (req, res) => {
-  try {
-    const { startDate, endDate, ticketId } = req.query;
-    let filter = { developerId: req.user._id };
-    
-    if (ticketId) filter.ticketId = ticketId;
-    if (startDate || endDate) {
-      filter.date = {};
-      if (startDate) filter.date.$gte = startDate;
-      if (endDate) filter.date.$lte = endDate;
-    }
-    
-    const logs = await TicketWorkLog.find(filter)
-      .populate('ticketId', 'title ticketNumber priority status')
-      .populate('projectId', 'name projectCustomId')
-      .sort({ date: -1 });
-    
-    res.json(logs);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch ticket worklogs' });
-  }
-});
-
-// POST /api/dev/ticket-worklog/start/:ticketId - Start timer for a ticket
-router.post('/ticket-worklog/start/:ticketId', protect, authorize('Developer'), async (req, res) => {
+/**
+ * @route   POST /api/dev/ticket-worklog/start/:ticketId
+ * @desc    Start timer for a ticket
+ * @access  Private (Developer, PM, Admin)
+ */
+router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+    const userId = req.user._id;
     const Ticket = require('../models/Ticket');
+    
     const ticket = await Ticket.findById(req.params.ticketId);
     
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
     
-    // Check if developer is assigned to this ticket
-    if (ticket.assignedTo?.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ error: 'Not assigned to this ticket' });
+    // Check if user has access to this ticket
+    const userRole = req.user.role;
+    const hasAccess = (
+      ticket.assignedTo?.toString() === userId.toString() ||
+      ticket.createdBy?.toString() === userId.toString() ||
+      userRole === 'Admin' ||
+      userRole === 'Project Manager' ||
+      userRole === 'Team Lead'
+    );
+    
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Not authorized to start timer on this ticket' });
     }
     
     let log = await TicketWorkLog.findOne({
-      developerId: req.user._id,
+      developerId: userId,
       ticketId: req.params.ticketId,
       date: today
     });
     
     if (!log) {
       log = await TicketWorkLog.create({
-        developerId: req.user._id,
+        developerId: userId,
         ticketId: req.params.ticketId,
         projectId: ticket.projectId,
         date: today,
@@ -1054,9 +1208,15 @@ router.post('/ticket-worklog/start/:ticketId', protect, authorize('Developer'), 
     
     await log.save();
     
+    // Calculate net time for response
+    const netTime = calculateTicketNetTime(log);
+    
     res.json({
       success: true,
-      worklog: log,
+      worklog: {
+        ...log.toObject(),
+        netTime: netTime
+      },
       serverTimestamp: serverNow.getTime()
     });
     
@@ -1066,8 +1226,12 @@ router.post('/ticket-worklog/start/:ticketId', protect, authorize('Developer'), 
   }
 });
 
-// POST /api/dev/ticket-worklog/pause/:ticketId - Pause timer for a ticket
-router.post('/ticket-worklog/pause/:ticketId', protect, authorize('Developer'), async (req, res) => {
+/**
+ * @route   POST /api/dev/ticket-worklog/pause/:ticketId
+ * @desc    Pause timer for a ticket
+ * @access  Private (Developer, PM, Admin)
+ */
+router.post('/ticket-worklog/pause/:ticketId', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     
@@ -1103,9 +1267,14 @@ router.post('/ticket-worklog/pause/:ticketId', protect, authorize('Developer'), 
     
     await log.save();
     
+    const netTime = calculateTicketNetTime(log);
+    
     res.json({
       success: true,
-      worklog: log,
+      worklog: {
+        ...log.toObject(),
+        netTime: netTime
+      },
       serverTimestamp: serverNow.getTime()
     });
     
@@ -1115,8 +1284,12 @@ router.post('/ticket-worklog/pause/:ticketId', protect, authorize('Developer'), 
   }
 });
 
-// POST /api/dev/ticket-worklog/stop/:ticketId - Stop timer for a ticket
-router.post('/ticket-worklog/stop/:ticketId', protect, authorize('Developer'), async (req, res) => {
+/**
+ * @route   POST /api/dev/ticket-worklog/stop/:ticketId
+ * @desc    Stop timer for a ticket
+ * @access  Private (Developer, PM, Admin)
+ */
+router.post('/ticket-worklog/stop/:ticketId', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     
@@ -1151,10 +1324,14 @@ router.post('/ticket-worklog/stop/:ticketId', protect, authorize('Developer'), a
     await log.save();
     
     const serverNow = new Date();
+    const netTime = calculateTicketNetTime(log);
     
     res.json({
       success: true,
-      worklog: log,
+      worklog: {
+        ...log.toObject(),
+        netTime: netTime
+      },
       serverTimestamp: serverNow.getTime()
     });
     
@@ -1164,8 +1341,12 @@ router.post('/ticket-worklog/stop/:ticketId', protect, authorize('Developer'), a
   }
 });
 
-// POST /api/dev/ticket-worklog/description - Save description for a ticket worklog
-router.post('/ticket-worklog/description', protect, authorize('Developer'), async (req, res) => {
+/**
+ * @route   POST /api/dev/ticket-worklog/description
+ * @desc    Save description for a ticket worklog
+ * @access  Private (Developer, PM, Admin)
+ */
+router.post('/ticket-worklog/description', protect, async (req, res) => {
   try {
     const { ticketId, description } = req.body;
     const today = new Date().toISOString().split('T')[0];
@@ -1193,13 +1374,26 @@ router.post('/ticket-worklog/description', protect, authorize('Developer'), asyn
         timeBlocks: []
       });
     } else {
-      log.description = description.trim();
+      // ✅ FIX: Append to existing description with timestamp
+      const timestamp = new Date().toLocaleTimeString('en-IN', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+      log.description = log.description 
+        ? `${log.description}\n\n[${timestamp}] ${description.trim()}`
+        : description.trim();
       await log.save();
     }
     
+    const netTime = calculateTicketNetTime(log);
+    
     res.json({
       success: true,
-      worklog: log
+      worklog: {
+        ...log.toObject(),
+        netTime: netTime
+      }
     });
     
   } catch (err) {
@@ -1207,4 +1401,5 @@ router.post('/ticket-worklog/description', protect, authorize('Developer'), asyn
     res.status(500).json({ error: 'Failed to save description' });
   }
 });
+
 module.exports = router;

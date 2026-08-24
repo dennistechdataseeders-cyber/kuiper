@@ -1,5 +1,4 @@
 const express = require('express');
-
 const router = express.Router();
 
 const {
@@ -14,11 +13,9 @@ const {
 // HELPER FUNCTIONS
 // ============================================
 
-/**
- * Calculate net time without overlap for a collection of worklogs
- */
-function calculateNetTime(logs) {
+function getAllTimeIntervals(logs) {
   const intervals = [];
+  const now = Date.now();
   
   logs.forEach(log => {
     if (log.timeBlocks && log.timeBlocks.length > 0) {
@@ -31,7 +28,7 @@ function calculateNetTime(logs) {
         } else if (block.startTime && !block.endTime && !log.isRunning) {
           intervals.push({
             start: new Date(block.startTime).getTime(),
-            end: Date.now()
+            end: now
           });
         }
       });
@@ -40,14 +37,16 @@ function calculateNetTime(logs) {
     if (log.isRunning && log.startedAt) {
       intervals.push({
         start: new Date(log.startedAt).getTime(),
-        end: Date.now()
+        end: now
       });
     }
   });
   
-  if (intervals.length === 0) {
-    return logs.reduce((total, log) => total + (log.totalTime || 0), 0);
-  }
+  return intervals;
+}
+
+function mergeIntervals(intervals) {
+  if (intervals.length === 0) return [];
   
   intervals.sort((a, b) => a.start - b.start);
   const merged = [{ ...intervals[0] }];
@@ -62,13 +61,21 @@ function calculateNetTime(logs) {
     }
   }
   
+  return merged;
+}
+
+function calculateNetTime(logs) {
+  const intervals = getAllTimeIntervals(logs);
+  
+  if (intervals.length === 0) {
+    return logs.reduce((total, log) => total + (log.totalTime || 0), 0);
+  }
+  
+  const merged = mergeIntervals(intervals);
   const totalMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
   return Math.floor(totalMs / 1000);
 }
 
-/**
- * Format time from seconds to human readable string
- */
 function formatTime(seconds = 0) {
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
@@ -87,38 +94,63 @@ function formatTime(seconds = 0) {
 // ROUTES
 // ============================================
 
-/*
-========================================
-RESOURCE ANALYTICS - FEEDS
-========================================
-*/
 router.get(
   '/',
   protect,
   getResourceAnalytics
 );
 
-/*
-========================================
-RESOURCE ANALYTICS - TICKETS
-========================================
-*/
 router.get('/tickets', protect, async (req, res) => {
   try {
     const { startDate, endDate, developerId, projectId } = req.query;
     
     const TicketWorkLog = require('../models/TicketWorkLog');
     
-    // Get the current user's ID
     const userId = req.user._id;
     console.log('🔍 Current user ID:', userId.toString());
     
-    // 🔥 STEP 1: Check if there are ANY ticket worklogs in the database
-    const totalCount = await TicketWorkLog.countDocuments();
-    console.log(`📊 Total ticket worklogs in DB: ${totalCount}`);
+    // Get ALL ticket worklogs to see what's available
+    const allLogs = await TicketWorkLog.find({});
+    console.log(`📊 Total ticket worklogs in DB: ${allLogs.length}`);
     
-    if (totalCount === 0) {
-      console.log('⚠️ No ticket worklogs found in the database');
+    // Log sample of what's in the database
+    console.log('📋 Sample logs:');
+    allLogs.slice(0, 5).forEach((log, i) => {
+      console.log(`  ${i + 1}. developerId: ${log.developerId?.toString()}, ticketId: ${log.ticketId?.toString()}, totalTime: ${log.totalTime}, timeBlocks: ${log.timeBlocks?.length || 0}`);
+    });
+    
+    // Build filter - try to get logs for the current user
+    let filter = {};
+    if (developerId && developerId !== 'all') {
+      filter.developerId = developerId;
+    } else {
+      filter.developerId = userId;
+    }
+    
+    let logs = await TicketWorkLog.find(filter);
+    console.log(`📊 Found ${logs.length} logs for user`);
+    
+    // If no logs found for current user, try to get ALL logs with time data
+    if (logs.length === 0) {
+      console.log('🔄 No logs for current user, getting all logs with time data...');
+      const logsWithTime = await TicketWorkLog.find({
+        $or: [
+          { totalTime: { $gt: 0 } },
+          { 'timeBlocks.0': { $exists: true } }
+        ]
+      });
+      console.log(`📊 Found ${logsWithTime.length} logs with time data`);
+      
+      if (logsWithTime.length > 0) {
+        logs = logsWithTime;
+        console.log('✅ Using logs with time data from all users');
+      } else {
+        console.log('⚠️ No logs with time data found at all');
+      }
+    }
+    
+    // If still no logs, return empty
+    if (logs.length === 0) {
       return res.json({
         success: true,
         analyticsData: [],
@@ -132,52 +164,6 @@ router.get('/tickets', protect, async (req, res) => {
           totalRawHours: '0.00'
         }
       });
-    }
-    
-    // 🔥 STEP 2: Get all ticket worklogs with NO filter first to see what's there
-    const allLogs = await TicketWorkLog.find({}).limit(5);
-    console.log('📋 Sample logs (first 5):');
-    allLogs.forEach((log, i) => {
-      console.log(`  ${i + 1}. developerId: ${log.developerId?.toString()}, ticketId: ${log.ticketId?.toString()}, totalTime: ${log.totalTime}`);
-    });
-    
-    // 🔥 STEP 3: Query for this specific user - try both ways
-    // Method 1: Direct ObjectId comparison
-    let logs = await TicketWorkLog.find({
-      developerId: userId
-    });
-    
-    console.log(`📊 Method 1 (direct ObjectId): Found ${logs.length} logs for user`);
-    
-    // Method 2: If no logs found, try with string comparison
-    if (logs.length === 0) {
-      const userIdStr = userId.toString();
-      console.log(`🔄 Trying Method 2 (string comparison) for user: ${userIdStr}`);
-      
-      // Get all logs and filter manually
-      const allUserLogs = await TicketWorkLog.find({});
-      logs = allUserLogs.filter(log => 
-        log.developerId?.toString() === userIdStr
-      );
-      
-      console.log(`📊 Method 2: Found ${logs.length} logs for user after manual filter`);
-    }
-    
-    // 🔥 STEP 4: If no logs found for this user, try with a known developerId from your sample
-    if (logs.length === 0) {
-      // From your sample, the developerId is "6a2a9479427cd0f2d5e5802d"
-      // Try that as a fallback
-      const fallbackDevId = '6a2a9479427cd0f2d5e5802d';
-      console.log(`🔄 Trying fallback developerId: ${fallbackDevId}`);
-      
-      const fallbackLogs = await TicketWorkLog.find({
-        developerId: fallbackDevId
-      });
-      
-      if (fallbackLogs.length > 0) {
-        console.log(`📊 Found ${fallbackLogs.length} logs with fallback developerId`);
-        logs = fallbackLogs;
-      }
     }
     
     // Apply date filter if provided
@@ -224,8 +210,6 @@ router.get('/tickets', protect, async (req, res) => {
           developerName: log.developerId?.name || 'Unknown',
           logs: [],
           totalTime: 0,
-          netTime: 0,
-          overlapTime: 0,
           logCount: 0,
           lastDate: log.date || ''
         });
@@ -234,22 +218,20 @@ router.get('/tickets', protect, async (req, res) => {
       const entry = ticketMap.get(ticketId);
       entry.logs.push(log);
       entry.totalTime += log.totalTime || 0;
-      
-      // Use netTime from log if available, otherwise use totalTime
-      const logNetTime = log.netTime || log.totalTime || 0;
-      entry.netTime += logNetTime;
       entry.logCount++;
-      
       if (log.date > entry.lastDate) entry.lastDate = log.date;
     });
+    
+    console.log(`📊 Found ${ticketMap.size} unique tickets`);
     
     // Calculate net time for each ticket
     const analyticsData = [];
     for (const [ticketId, entry] of ticketMap) {
-      // Recalculate net time from timeBlocks for accuracy
-      const recalculatedNetTime = calculateNetTime(entry.logs);
-      const finalNetTime = Math.max(recalculatedNetTime, entry.netTime);
-      const overlapTime = Math.max(0, entry.totalTime - finalNetTime);
+      const netTime = calculateNetTime(entry.logs);
+      const rawTime = entry.totalTime;
+      const overlapTime = Math.max(0, rawTime - netTime);
+      
+      console.log(`  Ticket ${entry.ticketNumber}: raw=${rawTime}s, net=${netTime}s, overlap=${overlapTime}s`);
       
       analyticsData.push({
         ticketId: entry.ticketId,
@@ -259,24 +241,26 @@ router.get('/tickets', protect, async (req, res) => {
         projectName: entry.projectName,
         developerId: entry.developerId,
         developerName: entry.developerName,
-        totalTime: entry.totalTime,
-        netTime: finalNetTime,
+        totalTime: rawTime,
+        netTime: netTime,
         overlapTime: overlapTime,
-        formattedNetTime: formatTime(finalNetTime),
-        formattedTotalTime: formatTime(entry.totalTime),
+        formattedNetTime: formatTime(netTime),
+        formattedTotalTime: formatTime(rawTime),
         formattedOverlapTime: formatTime(overlapTime),
         logCount: entry.logCount,
         lastDate: entry.lastDate
       });
     }
     
-    analyticsData.sort((a, b) => b.netTime - a.netTime);
+    // Sort by total time
+    analyticsData.sort((a, b) => b.totalTime - a.totalTime);
     
-    const totalNetSeconds = analyticsData.reduce((sum, item) => sum + item.netTime, 0);
-    const totalOverlapSeconds = analyticsData.reduce((sum, item) => sum + item.overlapTime, 0);
-    const totalRawSeconds = analyticsData.reduce((sum, item) => sum + item.totalTime, 0);
+    // Calculate global statistics
+    const globalNetTime = calculateNetTime(populatedLogs);
+    const globalRawTime = populatedLogs.reduce((sum, log) => sum + (log.totalTime || 0), 0);
+    const globalOverlapTime = Math.max(0, globalRawTime - globalNetTime);
     
-    console.log(`📊 Returning ${analyticsData.length} tickets with ${totalNetSeconds}s net time`);
+    console.log(`📊 GLOBAL - Raw: ${globalRawTime}s, Net: ${globalNetTime}s, Overlap: ${globalOverlapTime}s`);
     
     res.json({
       success: true,
@@ -284,11 +268,11 @@ router.get('/tickets', protect, async (req, res) => {
       summary: {
         totalLogs: populatedLogs.length,
         totalTickets: analyticsData.length,
-        totalNetHours: (totalNetSeconds / 3600).toFixed(2),
-        totalNetTimeFormatted: formatTime(totalNetSeconds),
-        totalOverlapHours: (totalOverlapSeconds / 3600).toFixed(2),
-        totalOverlapTimeFormatted: formatTime(totalOverlapSeconds),
-        totalRawHours: (totalRawSeconds / 3600).toFixed(2)
+        totalNetHours: (globalNetTime / 3600).toFixed(2),
+        totalNetTimeFormatted: formatTime(globalNetTime),
+        totalOverlapHours: (globalOverlapTime / 3600).toFixed(2),
+        totalOverlapTimeFormatted: formatTime(globalOverlapTime),
+        totalRawHours: (globalRawTime / 3600).toFixed(2)
       }
     });
     
