@@ -1,8 +1,8 @@
-// frontend/src/components/NotificationBell.jsx - FIXED VERSION
+// frontend/src/components/NotificationBell.jsx - FULLY UPDATED WITH ANNOUNCEMENT SUPPORT
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock } from 'lucide-react';
+import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock, Megaphone } from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
 import notificationManager from '../utils/notifications';
@@ -15,6 +15,7 @@ const NotificationBell = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
   const [openTicketCount, setOpenTicketCount] = useState(0);
+  const [announcementCount, setAnnouncementCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
@@ -23,7 +24,9 @@ const NotificationBell = () => {
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
+  const currentUserId = localStorage.getItem('userId');
 
+  // Handle resize for mobile detection
   useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth < 640);
@@ -33,6 +36,7 @@ const NotificationBell = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Initialize notification permission
   useEffect(() => {
     setIsSupported('Notification' in window);
     setPermission(Notification.permission);
@@ -48,6 +52,60 @@ const NotificationBell = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Socket listener for real-time announcement updates
+  useEffect(() => {
+    let socket = null;
+    
+    const setupSocket = async () => {
+      try {
+        const { io } = await import('socket.io-client');
+        socket = io(API_BASE_URL, {
+          transports: ['websocket'],
+          auth: { token: localStorage.getItem('token') }
+        });
+        
+        socket.on('new_announcement', (data) => {
+          console.log('📢 New announcement received:', data);
+          // Increment announcement count
+          setAnnouncementCount(prev => prev + 1);
+          // Show toast notification
+          toast.success(`📢 ${data.title}`, {
+            duration: 5000,
+            icon: '📢'
+          });
+          // Refresh notifications if dropdown is open
+          if (showDropdown) {
+            fetchNotifications();
+          }
+          // Refresh count
+          fetchNotificationCount();
+        });
+        
+        socket.on('announcement_count_update', (data) => {
+          console.log('📢 Announcement count update:', data);
+          setAnnouncementCount(data.count || 0);
+        });
+        
+        socket.on('connect', () => {
+          console.log('🔔 NotificationBell socket connected');
+        });
+        
+        socket.on('disconnect', () => {
+          console.log('🔔 NotificationBell socket disconnected');
+        });
+      } catch (error) {
+        console.error('Socket setup error:', error);
+      }
+    };
+    
+    setupSocket();
+    
+    return () => {
+      if (socket) socket.disconnect();
+    };
+  }, [showDropdown]);
+
+  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -59,6 +117,7 @@ const NotificationBell = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Calculate dropdown position
   const calculateDropdownPosition = useCallback(() => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
@@ -86,33 +145,69 @@ const NotificationBell = () => {
     }
   }, [isMobile]);
 
+  // Fetch notification count from server
   const fetchNotificationCount = async () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) return;
       
+      // Fetch ticket notifications
       const res = await axios.get(`${API_BASE_URL}/api/notifications/count`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       setNotificationCount(res.data.unreadCount || 0);
       setOpenTicketCount(res.data.openTicketCount || 0);
+      
+      // Fetch unviewed announcements
+      try {
+        const annRes = await axios.get(`${API_BASE_URL}/api/announcements/unviewed/count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setAnnouncementCount(annRes.data.count || 0);
+      } catch (annError) {
+        console.error('Error fetching announcement count:', annError);
+        setAnnouncementCount(0);
+      }
+      
     } catch (error) {
       console.error('Error fetching notification count:', error);
     }
   };
 
+  // Fetch all notifications (tickets + announcements)
   const fetchNotifications = async () => {
     setLoading(true);
     try {
       const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
       const res = await axios.get(`${API_BASE_URL}/api/notifications`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      console.log('📨 Fetched notifications:', res.data.notifications);
-      setNotifications(res.data.notifications || []);
-      setNotificationCount(res.data.unreadCount || 0);
+      let allNotifications = res.data.notifications || [];
+      
+      // Ensure announcement notifications have the proper flags
+      allNotifications = allNotifications.map(notif => {
+        if (notif.type === 'new_announcement' || notif.isAnnouncement) {
+          return {
+            ...notif,
+            isAnnouncement: true,
+            type: 'new_announcement'
+          };
+        }
+        return notif;
+      });
+      
+      // Set announcement count from the backend
+      setAnnouncementCount(res.data.announcementCount || 0);
+      
+      setNotifications(allNotifications);
+      
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -120,6 +215,7 @@ const NotificationBell = () => {
     }
   };
 
+  // Handle bell click
   const handleBellClick = () => {
     if (permission !== 'granted') {
       requestNotificationPermission();
@@ -134,9 +230,52 @@ const NotificationBell = () => {
     }
   };
 
-  // 🔥 FIXED: Handle all notification types properly
+  // Handle notification click
   const handleNotificationClick = async (notification) => {
     console.log('🔔 Clicked notification:', notification);
+    
+    // ============================================
+    // HANDLE ANNOUNCEMENT NOTIFICATIONS
+    // ============================================
+    if (notification.type === 'new_announcement' || notification.isAnnouncement) {
+      const announcementId = notification.announcementId || notification._id?.replace('announcement_', '');
+      
+      if (!announcementId) {
+        console.error('No announcement ID found:', notification);
+        setShowDropdown(false);
+        navigate('/announcements');
+        return;
+      }
+      
+      // Mark as viewed on server
+      try {
+        const token = localStorage.getItem('token');
+        await axios.post(`${API_BASE_URL}/api/announcements/${announcementId}/viewed`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        console.log('✅ Announcement marked as viewed');
+      } catch (error) {
+        console.error('Error marking announcement as viewed:', error);
+      }
+      
+      // Remove from UI
+      setNotifications(prev => prev.filter(n => {
+        const nId = n._id || n.announcementId;
+        return nId !== notification._id && nId !== `announcement_${announcementId}`;
+      }));
+      
+      // Decrease announcement count
+      setAnnouncementCount(prev => Math.max(0, prev - 1));
+      setShowDropdown(false);
+      
+      // Navigate to announcements page
+      navigate('/announcements');
+      return;
+    }
+    
+    // ============================================
+    // HANDLE TICKET NOTIFICATIONS
+    // ============================================
     
     // Get the notification ID
     let notifId = notification._id;
@@ -157,7 +296,7 @@ const NotificationBell = () => {
     const ticketIdStr = String(ticketId || '');
     console.log('🎫 Ticket ID:', ticketIdStr);
     
-    // 🔥 STEP 1: IMMEDIATELY remove from UI
+    // IMMEDIATELY remove from UI
     setNotifications(prev => {
       const filtered = prev.filter(n => {
         let nId = n._id;
@@ -176,9 +315,6 @@ const NotificationBell = () => {
         const nTicketIdStr = String(nTicketId || '');
         
         const isMatch = nIdStr === notifIdStr || nTicketIdStr === ticketIdStr;
-        if (isMatch) {
-          console.log('🗑️ Removing notification:', n);
-        }
         return !isMatch;
       });
       
@@ -189,31 +325,17 @@ const NotificationBell = () => {
     setNotificationCount(prev => Math.max(0, prev - 1));
     setShowDropdown(false);
     
-    // 🔥 STEP 2: Call the mark-as-read API for ALL notification types
-    // For open_ticket notifications, we need to call a different endpoint or
-    // use a special parameter to mark it as read/removed
+    // Call the mark-as-read API
     try {
       const token = localStorage.getItem('token');
       
-      // For open_ticket notifications, we need to pass a special flag
-      // or use a different approach since they don't have a real _id in the database
       if (notification.type === 'open_ticket') {
-        // For open_ticket, we need to call the mark-as-read with a special flag
-        // or we can just call the same endpoint with the ticket ID
         console.log('📌 Marking open_ticket as read for ticket:', ticketIdStr);
-        
-        // The backend expects a notification ID, but for open_ticket we don't have one
-        // Instead, we can call the mark-all-read endpoint with a filter for this ticket
-        // Or we can just let it be - the UI already removed it
-        
-        // Actually, let's call the standard mark-as-read with the notification ID
-        // even though it's an open_ticket, it should still work if the backend handles it
         await axios.patch(`${API_BASE_URL}/api/notifications/${notifIdStr}/read`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
         console.log('✅ Open ticket notification marked as read on server');
       } else {
-        // Regular notification
         await axios.patch(`${API_BASE_URL}/api/notifications/${notifIdStr}/read`, {}, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -221,26 +343,24 @@ const NotificationBell = () => {
       }
     } catch (error) {
       console.error('Error marking notification as read:', error);
-      // Even if API fails, UI is already updated
     }
     
-    // 🔥 STEP 3: Navigate to the ticket
+    // Navigate to the ticket
     if (ticketIdStr) {
       console.log('🔀 Navigating to ticket:', ticketIdStr);
       navigate(`/tickets/${ticketIdStr}`);
     }
     
-    // 🔥 STEP 4: Refresh the count from server (with a delay to let the server process)
+    // Refresh the count from server
     setTimeout(() => {
       fetchNotificationCount();
-      // Also refresh notifications to ensure consistency
-      // But only if the dropdown is still open
       if (showDropdown) {
         fetchNotifications();
       }
     }, 1000);
   };
 
+  // Mark all as read
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -248,21 +368,45 @@ const NotificationBell = () => {
       // Immediately clear all notifications from UI
       setNotifications([]);
       setNotificationCount(0);
+      setAnnouncementCount(0);
       
       // Call API in background
       await axios.patch(`${API_BASE_URL}/api/notifications/mark-all-read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
+      // Also mark all announcements as viewed
+      try {
+        // Fetch all unviewed announcements and mark them
+        const annRes = await axios.get(`${API_BASE_URL}/api/announcements`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { limit: 50 }
+        });
+        
+        if (annRes.data.success && annRes.data.announcements) {
+          const unviewed = annRes.data.announcements.filter(
+            a => !a.viewedBy || !a.viewedBy.includes(currentUserId)
+          );
+          
+          for (const a of unviewed) {
+            await axios.post(`${API_BASE_URL}/api/announcements/${a._id}/viewed`, {}, {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+          }
+        }
+      } catch (annError) {
+        console.error('Error marking announcements as viewed:', annError);
+      }
+      
       toast.success('All notifications cleared');
       
       fetchNotificationCount();
     } catch (error) {
       console.error('Error clearing all notifications:', error);
-      // Even if API fails, UI is already updated
     }
   };
 
+  // Request notification permission
   const requestNotificationPermission = async () => {
     const granted = await notificationManager.requestPermission();
     setPermission(granted ? 'granted' : 'denied');
@@ -280,6 +424,7 @@ const NotificationBell = () => {
     }
   };
 
+  // Get notification icon
   const getNotificationIcon = (type) => {
     switch(type) {
       case 'ticket_created': return '🎫';
@@ -288,10 +433,12 @@ const NotificationBell = () => {
       case 'ticket_status_updated': return '🔄';
       case 'ticket_closed': return '✅';
       case 'open_ticket': return '📌';
+      case 'new_announcement': return '📢';
       default: return '🔔';
     }
   };
 
+  // Get status color
   const getStatusColor = () => {
     if (!isSupported) return 'bg-gray-100';
     if (permission === 'granted') return 'bg-green-100';
@@ -299,6 +446,7 @@ const NotificationBell = () => {
     return 'bg-yellow-100';
   };
 
+  // Get time ago
   const getTimeAgo = (date) => {
     if (!date) return '';
     const diff = Date.now() - new Date(date).getTime();
@@ -312,6 +460,7 @@ const NotificationBell = () => {
     return `${days}d ago`;
   };
 
+  // Render dropdown
   const renderDropdown = () => {
     if (!showDropdown || permission !== 'granted') return null;
 
@@ -343,16 +492,17 @@ const NotificationBell = () => {
             maxHeight: '90vh',
           }}
         >
+          {/* Header */}
           <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white flex justify-between items-center sticky top-0 bg-white z-10">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-800">Notifications</span>
-              {notificationCount > 0 && (
+              {notificationCount + announcementCount > 0 && (
                 <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">
-                  {notificationCount}
+                  {notificationCount + announcementCount}
                 </span>
               )}
             </div>
-            {notificationCount > 0 && (
+            {(notificationCount + announcementCount) > 0 && (
               <button
                 onClick={markAllAsRead}
                 className="text-xs text-blue-600 hover:text-blue-800 font-medium"
@@ -362,6 +512,7 @@ const NotificationBell = () => {
             )}
           </div>
           
+          {/* Notifications List */}
           <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="p-8 text-center">
@@ -377,6 +528,48 @@ const NotificationBell = () => {
             ) : (
               notifications.map((notification, index) => {
                 const isRead = notification.read || false;
+                
+                // Handle announcement notifications
+                if (notification.type === 'new_announcement' || notification.isAnnouncement) {
+                  return (
+                    <div
+                      key={notification._id || index}
+                      onClick={() => handleNotificationClick(notification)}
+                      className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-all ${
+                        !isRead ? 'bg-purple-50/50 border-l-4 border-l-purple-500' : ''
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-shrink-0 text-lg mt-0.5">
+                          <Megaphone size={16} className="text-purple-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className={`text-sm ${!isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
+                              {notification.message || notification.title || 'New Announcement'}
+                            </p>
+                            <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
+                              {getTimeAgo(notification.createdAt)}
+                            </span>
+                          </div>
+                          {notification.description && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                              {notification.description}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-gray-400 mt-1">
+                            {notification.createdByName || 'System'}
+                          </p>
+                        </div>
+                        {!isRead && (
+                          <div className="flex-shrink-0 w-2 h-2 mt-1.5 bg-purple-500 rounded-full"></div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+                
+                // Handle ticket notifications
                 const ticketTitle = typeof notification.ticketId === 'object' 
                   ? notification.ticketId?.title || notification.message 
                   : notification.message;
@@ -385,15 +578,9 @@ const NotificationBell = () => {
                     ? notification.ticketId.comments[notification.ticketId.comments.length - 1] 
                     : null);
                 
-                let notifKey = notification._id;
-                if (notifKey && typeof notifKey === 'object' && notifKey.$oid) {
-                  notifKey = notifKey.$oid;
-                }
-                const key = String(notifKey || index);
-                
                 return (
                   <div
-                    key={key}
+                    key={notification._id || index}
                     onClick={() => handleNotificationClick(notification)}
                     className={`p-3 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-all ${
                       !isRead ? 'bg-blue-50/50 border-l-4 border-l-blue-500' : ''
@@ -421,7 +608,7 @@ const NotificationBell = () => {
                           <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
                             <div className="flex items-center gap-1.5">
                               <span className="text-[10px] font-semibold text-gray-600">
-                                {lastComment.userName || 'User'}:
+                                {lastComment.userName || 'User'}: 
                               </span>
                               <span className="text-xs text-gray-600 line-clamp-2">
                                 {lastComment.text || 'No text'}
@@ -461,15 +648,25 @@ const NotificationBell = () => {
             )}
           </div>
           
-          <div className="p-2 border-t border-gray-100 bg-gray-50">
+          {/* Footer */}
+          <div className="p-2 border-t border-gray-100 bg-gray-50 flex gap-1">
             <button
               onClick={() => {
                 setShowDropdown(false);
                 navigate('/tickets');
               }}
-              className="w-full text-center text-xs font-medium text-blue-600 hover:text-blue-800 py-1"
+              className="flex-1 text-center text-xs font-medium text-blue-600 hover:text-blue-800 py-1"
             >
-              View all tickets →
+              View Tickets →
+            </button>
+            <button
+              onClick={() => {
+                setShowDropdown(false);
+                navigate('/announcements');
+              }}
+              className="flex-1 text-center text-xs font-medium text-purple-600 hover:text-purple-800 py-1"
+            >
+              Announcements →
             </button>
           </div>
         </div>
@@ -478,7 +675,7 @@ const NotificationBell = () => {
     );
   };
 
-  const totalCount = notificationCount;
+  const totalCount = notificationCount + announcementCount;
 
   return (
     <div className="relative inline-block">

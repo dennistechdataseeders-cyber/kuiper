@@ -1,4 +1,4 @@
-// backend/models/Announcement.js
+// backend/models/Announcement.js - Add viewedBy field
 const mongoose = require('mongoose');
 
 const commentSchema = new mongoose.Schema({
@@ -32,6 +32,8 @@ const announcementSchema = new mongoose.Schema({
     isAutomated: { type: Boolean, default: false },
     automatedType: { type: String, enum: ['birthday', 'work_anniversary'], default: null },
     automatedUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // ✅ ADDED: Track which users have viewed this announcement
+    viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 
 // Index for faster queries

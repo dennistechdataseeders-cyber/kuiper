@@ -6,6 +6,8 @@ const { authorize } = require('../middleware/roleCheck');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const Announcement = require('../models/Announcement');
+const User = require('../models/User');
 
 const {
     createAnnouncement,
@@ -94,6 +96,75 @@ router.post('/upload-image', protect, upload.single('image'), async (req, res) =
     } catch (error) {
         console.error('Image upload error:', error);
         res.status(500).json({ error: 'Failed to upload image' });
+    }
+});
+
+// ============================================
+// GET unviewed count
+// ============================================
+router.get('/unviewed/count', protect, async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const count = await Announcement.countDocuments({
+            viewedBy: { $ne: userId }
+        });
+        console.log(`📊 Unviewed announcements for ${userId}: ${count}`);
+        res.json({ success: true, count });
+    } catch (error) {
+        console.error('Error fetching unviewed count:', error);
+        res.status(500).json({ error: 'Failed to fetch count' });
+    }
+});
+
+// ============================================
+// POST mark as viewed
+// ============================================
+router.post('/:id/viewed', protect, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user._id;
+
+        const announcement = await Announcement.findById(id);
+        if (!announcement) {
+            return res.status(404).json({ error: 'Announcement not found' });
+        }
+
+        if (!announcement.viewedBy) {
+            announcement.viewedBy = [];
+        }
+
+        if (!announcement.viewedBy.includes(userId)) {
+            announcement.viewedBy.push(userId);
+            await announcement.save();
+
+            // Also remove from unread notifications
+            const user = await User.findById(userId);
+            if (user) {
+                user.unreadNotifications = user.unreadNotifications.filter(
+                    n => !(n.type === 'new_announcement' && 
+                           n.announcementId && 
+                           n.announcementId.toString() === id)
+                );
+                user.notificationCount = Math.max(0, (user.notificationCount || 0) - 1);
+                await user.save();
+
+                // Emit updated count
+                const io = req.app.get('io');
+                if (io) {
+                    const unviewedCount = await Announcement.countDocuments({
+                        viewedBy: { $ne: userId }
+                    });
+                    io.to(userId.toString()).emit('announcement_count_update', {
+                        count: unviewedCount
+                    });
+                }
+            }
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error('Error marking as viewed:', error);
+        res.status(500).json({ error: 'Failed to mark as viewed' });
     }
 });
 

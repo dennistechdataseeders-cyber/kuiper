@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import ViewAnalytics from './pages/ViewAnalytics';
@@ -65,6 +65,9 @@ import NotificationBell from './components/NotificationBell';
 
 import { AnimatePresence } from 'framer-motion';
 import { useSidebar } from './context/SidebarContext';
+import API_BASE_URL from './config';
+import toast from 'react-hot-toast';
+import { io } from 'socket.io-client';
 
 const SessionManager = ({ children }) => {
   const navigate = useNavigate();
@@ -143,6 +146,9 @@ function AppContent() {
   const token = localStorage.getItem('token');
   const location = useLocation();
   const { isCollapsed } = useSidebar();
+  const userId = localStorage.getItem('userId');
+  const socketRef = useRef(null);
+  const [socketConnected, setSocketConnected] = useState(false);
 
   // ✅ FIXED: Added Super Admin to path mapping
   const landingPath = useMemo(() => {
@@ -161,7 +167,214 @@ function AppContent() {
     };
     return pathMap[userRole] || '/login';
   }, [userRole]);
-  
+
+  // ============================================
+  // ✅ GLOBAL SOCKET CONNECTION FOR ANNOUNCEMENTS & REAL-TIME EVENTS
+  // ============================================
+  useEffect(() => {
+    // Only connect if user is logged in
+    if (!token || !userId) {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocketConnected(false);
+      }
+      return;
+    }
+
+    // Clean up existing socket
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+      socketRef.current = null;
+      setSocketConnected(false);
+    }
+
+    console.log('🔌 Setting up global socket connection...');
+
+    const socket = io(API_BASE_URL, {
+      transports: ['websocket'],
+      auth: { token },
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 10000
+    });
+
+    socketRef.current = socket;
+
+    // ============================================
+    // SOCKET EVENT HANDLERS
+    // ============================================
+
+    socket.on('connect', () => {
+      console.log('🔌 Global socket connected successfully');
+      setSocketConnected(true);
+      
+      // Join user's personal room for targeted notifications
+      socket.emit('join-user-room', userId);
+      console.log(`👤 Joined user room: ${userId}`);
+    });
+
+    socket.on('disconnect', (reason) => {
+      console.log(`🔌 Global socket disconnected: ${reason}`);
+      setSocketConnected(false);
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error('🔌 Global socket connection error:', error.message);
+      setSocketConnected(false);
+    });
+
+    socket.on('reconnect', (attemptNumber) => {
+      console.log(`🔌 Global socket reconnected after ${attemptNumber} attempts`);
+      setSocketConnected(true);
+      
+      // Re-join user room after reconnection
+      if (socket) {
+        socket.emit('join-user-room', userId);
+      }
+    });
+
+    // ============================================
+    // ✅ ANNOUNCEMENT EVENTS - GLOBAL TOAST NOTIFICATIONS
+    // ============================================
+    
+    socket.on('new_announcement', (data) => {
+      console.log('📢 App received new announcement:', data);
+      
+      // Show toast notification (visible even when notification bell is closed)
+      toast.success(`📢 ${data.title}`, {
+        duration: 6000,
+        icon: '📢',
+        style: {
+          background: '#1a1a2e',
+          color: '#fff',
+          border: '1px solid #7c3aed',
+        }
+      });
+    });
+
+    socket.on('announcement_count_update', (data) => {
+      console.log('📢 Announcement count update in App:', data);
+      // This will be handled by NotificationBell component
+    });
+
+    // ============================================
+    // TICKET EVENTS
+    // ============================================
+    
+    socket.on('ticket_created', (ticket) => {
+      console.log('🎫 New ticket created in App:', ticket.ticketNumber);
+      // NotificationBell handles this with toast
+    });
+
+    socket.on('ticket_updated', (ticket) => {
+      console.log('🔄 Ticket updated in App:', ticket.ticketNumber);
+    });
+
+    socket.on('ticket_assigned', (ticket) => {
+      console.log('📋 Ticket assigned in App:', ticket.ticketNumber);
+      
+      // Show toast if ticket is assigned to current user
+      if (ticket.assignedTo?._id === userId || ticket.assignedTo === userId) {
+        toast.info(`📋 Ticket assigned to you: ${ticket.ticketNumber} - ${ticket.title}`, {
+          duration: 5000,
+          icon: '📋'
+        });
+      }
+    });
+
+    socket.on('ticket_commented', (ticket) => {
+      console.log('💬 Ticket commented in App:', ticket.ticketNumber);
+    });
+
+    // ============================================
+    // LEAVE EVENTS
+    // ============================================
+    
+    socket.on('leave_approved', (data) => {
+      console.log('✅ Leave approved in App for:', data.userId);
+      if (data.userId === userId) {
+        toast.success(`✅ Your leave request has been approved!`, {
+          duration: 5000,
+          icon: '✅'
+        });
+      }
+    });
+
+    socket.on('leave_rejected', (data) => {
+      console.log('❌ Leave rejected in App for:', data.userId);
+      if (data.userId === userId) {
+        toast.error(`❌ Your leave request has been rejected`, {
+          duration: 5000,
+          icon: '❌'
+        });
+      }
+    });
+
+    // ============================================
+    // FEED EVENTS
+    // ============================================
+    
+    socket.on('feed_status_updated', (data) => {
+      console.log('📊 Feed status updated in App:', data.feed_name);
+    });
+
+    socket.on('feed_assigned', (data) => {
+      console.log('📋 Feed assigned in App:', data.feed?.name);
+      if (data.message) {
+        toast.info(`📋 ${data.message}`, {
+          duration: 5000,
+          icon: '📋'
+        });
+      }
+    });
+
+    // ============================================
+    // ATTENDANCE EVENTS
+    // ============================================
+    
+    socket.on('attendance_updated', (data) => {
+      console.log('📊 Attendance updated in App for:', data.employeeId);
+      if (data.employeeId === userId) {
+        toast.success(`🔄 Your attendance has been updated`, {
+          duration: 3000,
+          icon: '🔄'
+        });
+      }
+    });
+
+    socket.on('attendance_sync_complete', (data) => {
+      console.log('📊 Attendance sync complete in App:', data);
+      if (data.updatedUsers && data.updatedUsers > 0) {
+        toast.success(`✅ Attendance sync complete! ${data.updatedUsers} users updated`, {
+          duration: 5000,
+          icon: '✅'
+        });
+      }
+    });
+
+    // ============================================
+    // CLEANUP
+    // ============================================
+    
+    return () => {
+      console.log('🔌 Cleaning up global socket...');
+      if (socketRef.current) {
+        socketRef.current.emit('leave-user-room', userId);
+        socketRef.current.disconnect();
+        socketRef.current = null;
+        setSocketConnected(false);
+      }
+    };
+  }, [token, userId]);
+
+  // ============================================
+  // CONNECTION STATUS INDICATOR (optional)
+  // ============================================
+  // You can use socketConnected to show a connection status indicator
+
   return (
     <SessionManager>
       <AnimatePresence mode="wait">

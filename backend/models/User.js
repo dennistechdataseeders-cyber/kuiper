@@ -160,13 +160,32 @@ const UserSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  // ============================================
+  // ✅ FIXED: unreadNotifications with announcement support
+  // ============================================
   unreadNotifications: [{
     type: {
       type: String,
-    enum: ['ticket_created', 'ticket_assigned', 'ticket_commented', 'ticket_status_updated', 'open_ticket', 'ticket_closed', 'leave_request', 'leave_approved', 'leave_rejected']    },
+      enum: [
+        'ticket_created', 
+        'ticket_assigned', 
+        'ticket_commented', 
+        'ticket_status_updated', 
+        'open_ticket', 
+        'ticket_closed', 
+        'leave_request', 
+        'leave_approved', 
+        'leave_rejected',
+        'new_announcement'  // ✅ ADDED
+      ]
+    },
     ticketId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Ticket'
+    },
+    announcementId: {  // ✅ ADDED
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Announcement'
     },
     message: {
       type: String,

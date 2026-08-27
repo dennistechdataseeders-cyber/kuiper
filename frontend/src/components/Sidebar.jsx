@@ -1,4 +1,4 @@
-// frontend/src/components/Sidebar.jsx - UPDATED WITH ANNOUNCEMENTS TAB
+// frontend/src/components/Sidebar.jsx - WITH ANNOUNCEMENT BADGE SUPPORT (RED)
 
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
@@ -40,7 +40,7 @@ import {
   UsersRound,
   UserCog,
   UserCheck,
-  Megaphone // ✅ ADDED for Announcements
+  Megaphone
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -49,6 +49,7 @@ import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
 import API_BASE_URL from '../config';
 import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
+import io from 'socket.io-client';
 
 const Sidebar = () => {
   const navigate = useNavigate();
@@ -61,6 +62,7 @@ const Sidebar = () => {
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [ticketCount, setTicketCount] = useState(0);
+  const [announcementCount, setAnnouncementCount] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   
   // PROFILE IMAGE STATES
@@ -72,6 +74,7 @@ const Sidebar = () => {
 
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
+  const socketRef = useRef(null);
 
   const userRole = localStorage.getItem('role') || 'User';
   const userName = localStorage.getItem('userName') || 'User';
@@ -140,7 +143,6 @@ const Sidebar = () => {
           headers: { Authorization: `Bearer ${token}` }
         });
         
-        // Count tickets that are NOT closed
         const nonClosedTickets = res.data.filter(ticket => ticket.status !== 'Closed');
         setTicketCount(nonClosedTickets.length);
       } catch (error) {
@@ -150,10 +152,65 @@ const Sidebar = () => {
     
     fetchTicketCount();
     
-    // Refresh count every 30 seconds
     const interval = setInterval(fetchTicketCount, 30000);
     return () => clearInterval(interval);
   }, []);
+
+  // FETCH ANNOUNCEMENT COUNT (unviewed announcements)
+  useEffect(() => {
+    const fetchAnnouncementCount = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        
+        const res = await axios.get(`${API_BASE_URL}/api/announcements/unviewed/count`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        setAnnouncementCount(res.data.count || 0);
+      } catch (error) {
+        console.error('Error fetching announcement count:', error);
+        setAnnouncementCount(0);
+      }
+    };
+    
+    fetchAnnouncementCount();
+    
+    const interval = setInterval(fetchAnnouncementCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // SOCKET CONNECTION FOR REAL-TIME ANNOUNCEMENT UPDATES
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    socketRef.current = io(API_BASE_URL, {
+      transports: ['websocket'],
+      auth: { token }
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log('🔔 Sidebar socket connected');
+      socketRef.current.emit('join-user-room', userId);
+    });
+
+    socketRef.current.on('new_announcement', (data) => {
+      console.log('📢 New announcement received in sidebar:', data);
+      setAnnouncementCount(prev => prev + 1);
+    });
+
+    socketRef.current.on('announcement_count_update', (data) => {
+      console.log('📢 Announcement count update:', data);
+      setAnnouncementCount(data.count || 0);
+    });
+
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
+    };
+  }, [userId]);
 
   // LOGOUT
   const handleLogout = () => {
@@ -271,7 +328,7 @@ const Sidebar = () => {
   };
 
   // ============================================
-  // ✅ FIXED: ROLE BADGE COLORS - Added Super Admin
+  // ROLE BADGE COLORS
   // ============================================
   const getRoleStyles = (role) => {
     switch (role) {
@@ -299,7 +356,7 @@ const Sidebar = () => {
   };
 
   // ============================================
-  // ✅ FIXED: ROLE DISPLAY NAME - Added Super Admin
+  // ROLE DISPLAY NAME
   // ============================================
   const getRoleDisplayName = (role) => {
     switch (role) {
@@ -320,9 +377,6 @@ const Sidebar = () => {
   // MENU ITEMS - WITH ANNOUNCEMENTS FOR ALL NON-CLIENT ROLES
   // ============================================
   const menuItems = {
-    // ============================================
-    // SUPER ADMIN - Gets ALL menus including Announcements
-    // ============================================
     'Super Admin': [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -364,13 +418,9 @@ const Sidebar = () => {
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
       { path: '/notifications', icon: <Bell size={18} />, label: 'Notification Settings' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Super Admin
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
-    // ============================================
-    // ADMIN
-    // ============================================
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -386,26 +436,18 @@ const Sidebar = () => {
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Admin
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
-    // ============================================
-    // SALES MANAGER
-    // ============================================
     'Sales Manager': [
       { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/admin/users', icon: <UserPlus size={18} />, label: 'Team' },
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Sales Manager
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
-    // ============================================
-    // SALES
-    // ============================================
     Sales: [
       { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
@@ -414,31 +456,22 @@ const Sidebar = () => {
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Sales
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
-    // ============================================
-    // PROJECT MANAGER
-    // ============================================
     'Project Manager': [
       { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
-      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Project Manager
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
+      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
+      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
     ],
 
-    // ============================================
-    // TEAM LEAD
-    // ============================================
     'Team Lead': [
       { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
@@ -446,15 +479,12 @@ const Sidebar = () => {
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+        { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Team Lead
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
+    
     ],
 
-    // ============================================
-    // DEVELOPER
-    // ============================================
     Developer: [
       { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
       { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
@@ -462,24 +492,17 @@ const Sidebar = () => {
       { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
       { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
       { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Developer
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
-    // ============================================
-    // CLIENT - NO ANNOUNCEMENTS TAB
-    // ============================================
     Client: [
       { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
     ],
 
-    // ============================================
-    // HR
-    // ============================================
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
@@ -489,19 +512,14 @@ const Sidebar = () => {
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
-      // ✅ ANNOUNCEMENTS TAB - Added for HR
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
     
-    // ============================================
-    // FINANCE
-    // ============================================
     Finance: [
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/profile', icon: <User size={18} />, label: 'Profile' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      // ✅ ANNOUNCEMENTS TAB - Added for Finance
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
   };
@@ -509,69 +527,39 @@ const Sidebar = () => {
   const links = menuItems[userRole] || [];
 
   // ============================================
-  // FIXED ACTIVE ROUTE LOGIC - Prevents nested route conflicts
+  // ACTIVE ROUTE LOGIC
   // ============================================
   const isRouteActive = (path) => {
-    // Exact match for specific routes (prevents nested highlighting)
     const exactMatchPaths = [
-      '/sales',
-      '/sales-manager',
-      '/developer',
-      '/admin',
-      '/teamlead',
-      '/knowledge',
-      '/hr',
-      '/employee',
-      '/pm/feasibility',
-      '/pm/dashboard',
-      '/pm/feeds',
-      '/pm/git-manager',
-      '/pm/resource-analytics',
-      '/pm/feed-status',
-      '/client',
-      '/tickets',
-      '/profile',
-      '/hr/leaves',
-      '/hr/employee-attendance',
-      '/hr/employee-attendance-report',
-      '/hr/attendance-sync',
-      '/admin/projects',
-      '/admin/users',
-      '/admin/project-clients',
-      '/admin/ticket-rules',
-      '/view_analytics',
-      '/sales/add_org',
-      '/sales/lead_generation',
-      '/sales/prospects',
-      '/sales/email-trigger',
-      '/developer/projects',
-      '/developer/feeds',
-      '/developer/git-feeds',
-      '/developer/feed-status',
-      '/developer/worklog',
-      '/developer/bucket',
-      '/teamlead/projects',
-      '/teamlead/developers',
-      '/teamlead/feeds',
-      '/teamlead/feed-status',
-      '/client/projects',
-      '/client/feeds',
-      '/feasibility',
-      '/announcements', // ✅ Added for Announcements
+      '/sales', '/sales-manager', '/developer', '/admin', '/teamlead',
+      '/knowledge', '/hr', '/employee', '/pm/feasibility', '/pm/dashboard',
+      '/pm/feeds', '/pm/git-manager', '/pm/resource-analytics', '/pm/feed-status',
+      '/client', '/tickets', '/profile', '/hr/leaves', '/hr/employee-attendance',
+      '/hr/employee-attendance-report', '/hr/attendance-sync', '/admin/projects',
+      '/admin/users', '/admin/project-clients', '/admin/ticket-rules',
+      '/view_analytics', '/sales/add_org', '/sales/lead_generation',
+      '/sales/prospects', '/sales/email-trigger', '/developer/projects',
+      '/developer/feeds', '/developer/git-feeds', '/developer/feed-status',
+      '/developer/worklog', '/developer/bucket', '/teamlead/projects',
+      '/teamlead/developers', '/teamlead/feeds', '/teamlead/feed-status',
+      '/client/projects', '/client/feeds', '/feasibility', '/announcements'
     ];
     
-    // Check if the path is in the exact match list
     if (exactMatchPaths.includes(path)) {
       return location.pathname === path;
     }
     
-    // For all other routes, use startsWith (fallback)
     return location.pathname.startsWith(path);
   };
 
   // Helper to check if a menu item should show a badge
   const shouldShowBadge = (item) => {
     return item.label === 'Tickets' && ticketCount > 0;
+  };
+
+  // Helper to check if announcement badge should show
+  const shouldShowAnnouncementBadge = (item) => {
+    return item.label === 'Announcements' && announcementCount > 0;
   };
 
   // Determine sidebar classes based on mobile state
@@ -633,6 +621,7 @@ const Sidebar = () => {
           {links.map((item) => {
             const active = isRouteActive(item.path);
             const showBadge = shouldShowBadge(item);
+            const showAnnBadge = shouldShowAnnouncementBadge(item);
 
             return (
               <NavLink
@@ -648,6 +637,10 @@ const Sidebar = () => {
                   if (isMobile && !isCollapsed) {
                     toggleSidebar();
                   }
+                  // Reset announcement badge when clicking announcements
+                  if (item.label === 'Announcements') {
+                    setAnnouncementCount(0);
+                  }
                 }}
               >
                 <span className="flex-shrink-0">{item.icon}</span>
@@ -656,16 +649,30 @@ const Sidebar = () => {
                     <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap flex-1">
                       {item.label}
                     </span>
+                    {/* ✅ TICKET BADGE - RED */}
                     {showBadge && (
                       <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
                         {ticketCount > 99 ? '99+' : ticketCount}
                       </span>
                     )}
+                    {/* ✅ ANNOUNCEMENT BADGE - RED (same as ticket) */}
+                    {showAnnBadge && (
+                      <span className="ml-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse">
+                        {announcementCount > 99 ? '99+' : announcementCount}
+                      </span>
+                    )}
                   </>
                 )}
+                {/* ✅ COLLAPSED TICKET BADGE - RED */}
                 {isCollapsed && !isMobile && showBadge && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
                     {ticketCount > 99 ? '99+' : ticketCount}
+                  </span>
+                )}
+                {/* ✅ COLLAPSED ANNOUNCEMENT BADGE - RED (same as ticket) */}
+                {isCollapsed && !isMobile && showAnnBadge && (
+                  <span className="absolute -top-1 -right-6 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md animate-pulse">
+                    {announcementCount > 99 ? '99+' : announcementCount}
                   </span>
                 )}
               </NavLink>
