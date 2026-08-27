@@ -235,112 +235,109 @@ class GitService {
   // =====================================================
   // FIX: Add collaborator with better error handling
   // =====================================================
-  async addCollaboratorById(repoName, userId, permission = 'push') {
-    if (!this.octokit) {
-      return { success: false, error: 'GitHub not configured' };
+ async addCollaboratorById(repoName, userId, permission = 'push') {
+  if (!this.octokit) {
+    return { success: false, error: 'GitHub not configured' };
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) {
+      return { success: false, error: 'User not found' };
     }
 
-    try {
-      const user = await User.findById(userId);
-      if (!user) {
-        return { success: false, error: 'User not found' };
-      }
+    let githubUsername = user.githubUsername;
 
-      // Try to link if not already linked
-      let githubUsername = user.githubUsername;
-      
-      if (!user.githubUsername || !user.githubLinked) {
-        console.log(`🔗 Attempting to link GitHub for ${user.email}...`);
-        const linkResult = await this.linkGitHubAccountToUser(userId, user.email);
-        
-        if (linkResult.success && linkResult.githubUsername) {
-          githubUsername = linkResult.githubUsername;
-          console.log(`✅ GitHub linked: ${githubUsername}`);
-        } else {
-          console.warn(`❌ Could not link GitHub for ${user.email}: ${linkResult.message || linkResult.error}`);
-          
-          // Check if we can find by username prefix anyway
-          const emailPrefix = user.email.split('@')[0];
-          if (emailPrefix && emailPrefix.length > 3) {
-            try {
-              await this.octokit.users.getByUsername({ username: emailPrefix });
-              githubUsername = emailPrefix;
-              console.log(`⚠️ Using username from email prefix: ${githubUsername}`);
-            } catch (e) {
-              // Not found
-            }
-          }
-          if (!githubUsername) {
-            // Last resort: use the username field even if not "linked" via email search
-            if (user.githubUsername) {
-              githubUsername = user.githubUsername;
-              console.log(`⚠️ Using manually stored githubUsername: ${githubUsername}`);
-            } else {
-              return {
-                success: false,
-                error: 'No GitHub username found. Ask the developer to set their GitHub username in their profile.',
-                needsManualInvite: true,
-                inviteLink: this.getInviteLink(repoName),
-                email: user.email
-              };
-            }
-          }
-        }
+    // If no GitHub username, try to link
+    if (!user.githubUsername || !user.githubLinked) {
+      console.log(`🔗 Attempting to link GitHub for ${user.email}...`);
+      const linkResult = await this.linkGitHubAccountToUser(userId, user.email);
+      if (linkResult.success && linkResult.githubUsername) {
+        githubUsername = linkResult.githubUsername;
       } else {
-        githubUsername = user.githubUsername;
+        console.warn(`❌ Could not link GitHub for ${user.email}`);
+        return {
+          success: false,
+          error: 'Could not find GitHub account. Make sure email is public on GitHub.',
+          needsManualInvite: true,
+          inviteLink: this.getInviteLink(repoName),
+          email: user.email
+        };
       }
+    } else {
+      githubUsername = user.githubUsername;
+    }
 
-      // Add collaborator
-      console.log(`📧 Sending GitHub invitation to ${githubUsername} (${user.email}) for repo ${repoName}...`);
-      
+    console.log(`📧 Sending GitHub invitation to ${githubUsername} (${user.email}) for repo ${repoName}...`);
+    console.log(`🔍 API Call: owner=${this.owner}, repo=${repoName}, username=${githubUsername}`);
+
+    // ✅ TRY THE API CALL WITH EXCEPTION HANDLING
+    try {
       const result = await this.octokit.repos.addCollaborator({
         owner: this.owner,
         repo: repoName,
         username: githubUsername,
         permission: permission
       });
-
+      
       console.log(`✅ GitHub invitation sent to: ${githubUsername} (${user.email})`);
+      console.log(`✅ API Response:`, result.status);
+      
       return {
         success: true,
         email: user.email,
         username: githubUsername,
-        message: 'Invitation sent successfully'
+        message: 'Invitation sent successfully',
+        inviteLink: this.getInviteLink(repoName)
       };
-
-    } catch (error) {
-      console.error(`Failed to invite ${user?.email || userId}:`, error.message);
+    } catch (apiError) {
+      console.error(`❌ GitHub API Error for ${githubUsername}:`, apiError.status, apiError.message);
       
       // 422 means already a collaborator or invitation pending
-      if (error.status === 422) {
-        return { 
-          success: true, 
-          email: user?.email, 
-          username: user?.githubUsername,
-          message: 'Already a collaborator or invitation pending' 
+      if (apiError.status === 422) {
+        console.log(`ℹ️ ${githubUsername} is already a collaborator or invitation pending`);
+        return {
+          success: true,
+          email: user.email,
+          username: githubUsername,
+          message: 'Already a collaborator or invitation pending',
+          inviteLink: this.getInviteLink(repoName)
         };
       }
       
       // 404 means user not found on GitHub
-      if (error.status === 404) {
+      if (apiError.status === 404) {
+        console.log(`❌ GitHub user not found: ${githubUsername}`);
         return {
           success: false,
-          email: user?.email,
-          error: 'GitHub user not found. They may need to accept the invitation first.',
+          email: user.email,
+          error: `GitHub user "${githubUsername}" not found. They may need to accept the invitation first.`,
           inviteLink: this.getInviteLink(repoName),
           needsManualInvite: true
         };
       }
       
+      // Other errors
+      console.error(`❌ Full API error:`, JSON.stringify(apiError, null, 2));
       return {
         success: false,
-        email: user?.email,
-        error: error.message,
+        email: user.email,
+        error: apiError.message || 'Failed to add collaborator',
         inviteLink: this.getInviteLink(repoName),
         needsManualInvite: true
       };
     }
+
+  } catch (error) {
+    console.error(`❌ Failed to invite ${userId}:`, error.message);
+    return {
+      success: false,
+      error: error.message,
+      inviteLink: this.getInviteLink(repoName),
+      needsManualInvite: true
+    };
   }
+}
 
   // Legacy method - uses stored usernames
   async addCollaboratorByEmail(repoName, email, permission = 'push') {
@@ -395,9 +392,13 @@ class GitService {
     return results;
   }
 
+  // =====================================================
+  // ✅ FIXED: Correct GitHub invite link format
+  // =====================================================
   getInviteLink(repoName) {
     if (!this.owner || !repoName) return null;
-    return `https://github.com/${this.owner}/${repoName}/invite`;
+    // ✅ CORRECT: Use /invitations, not /invite
+    return `https://github.com/${this.owner}/${repoName}/invitations`;
   }
 
   getBulkInviteLinks(repos) {

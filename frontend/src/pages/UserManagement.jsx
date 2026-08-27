@@ -208,40 +208,57 @@ const UserManagement = () => {
       }
     }
   };
+// frontend/src/pages/UserManagement.jsx
+// Update the handleLinkGitHub function
 
-  // Link GitHub account for existing user
-  const handleLinkGitHub = async (userId) => {
-    setLinkingGithub(prev => ({ ...prev, [userId]: true }));
-    try {
-      const res = await axios.post(
-        `${API_BASE}/users/${userId}/link-github`, 
-        {},
-        authHeader
-      );
+const handleLinkGitHub = async (userId) => {
+  setLinkingGithub(prev => ({ ...prev, [userId]: true }));
+  try {
+    const res = await axios.post(
+      `${API_BASE}/users/${userId}/link-github`, 
+      {},
+      authHeader
+    );
+    
+    if (res.data.success) {
+      toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
+      fetchUsers();
+    } else {
+      // ✅ FIX: Use toast.error or toast.custom instead of toast.info
+      toast.error(res.data.error || 'Failed to link GitHub account');
       
-      if (res.data.success) {
-        toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
-        fetchUsers();
-      } else {
-        toast.error(res.data.error || 'Failed to link GitHub account');
-        if (res.data.debug) {
-          console.log('🔍 Debug info:', res.data.debug);
-          if (res.data.debug.tip) {
-            toast.info(`💡 ${res.data.debug.tip}`, { duration: 8000 });
-          }
-        }
+      // Show additional info if available
+      if (res.data.debug?.tip) {
+        toast.custom((t) => (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md shadow-lg">
+            <div className="flex items-start gap-3">
+              <div className="text-amber-500 text-xl">💡</div>
+              <div>
+                <p className="text-sm font-semibold text-amber-800">GitHub Linking Tip</p>
+                <p className="text-xs text-amber-700 mt-1">{res.data.debug.tip}</p>
+                <button
+                  onClick={() => toast.dismiss(t.id)}
+                  className="mt-2 text-xs font-medium text-amber-600 hover:text-amber-800"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        ), { duration: 8000 });
       }
-    } catch (err) {
-      console.error('GitHub linking error:', err);
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
-      toast.error(errorMessage);
-      if (err.response?.data?.debug) {
-        console.log('🔍 Debug info:', err.response.data.debug);
-      }
-    } finally {
-      setLinkingGithub(prev => ({ ...prev, [userId]: false }));
     }
-  };
+  } catch (err) {
+    console.error('GitHub linking error:', err);
+    const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
+    toast.error(errorMessage);
+    if (err.response?.data?.debug) {
+      console.log('🔍 Debug info:', err.response.data.debug);
+    }
+  } finally {
+    setLinkingGithub(prev => ({ ...prev, [userId]: false }));
+  }
+};
 
   const createNewOrganization = async () => {
     if (!newOrgData.companyName.trim()) {

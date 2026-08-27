@@ -20,11 +20,6 @@ const GitManager = () => {
   const [loading, setLoading] = useState(true);
   const [loadingContents, setLoadingContents] = useState(false);
   const [inviteLink, setInviteLink] = useState(null);
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [developerEmails, setDeveloperEmails] = useState('');
-  const [customMessage, setCustomMessage] = useState('');
-  const [sendingInvites, setSendingInvites] = useState(false);
-  const [inviteResults, setInviteResults] = useState([]);
   const [copiedInviteLink, setCopiedInviteLink] = useState(false);
   const [repoCollaborators, setRepoCollaborators] = useState([]);
   const [loadingCollaborators, setLoadingCollaborators] = useState(false);
@@ -171,13 +166,6 @@ const GitManager = () => {
     }
   };
 
-  const openInviteModal = () => {
-    setDeveloperEmails('');
-    setCustomMessage('');
-    setInviteResults([]);
-    setShowInviteModal(true);
-  };
-
   const openDirectInviteModal = () => {
     setDirectInviteEmail('');
     setDirectInvitePermission('push');
@@ -223,52 +211,6 @@ const GitManager = () => {
       toast.error(error.response?.data?.error || 'Failed to send invitation');
     } finally {
       setSendingDirectInvite(false);
-    }
-  };
-
-  const sendBulkInvites = async () => {
-    if (!developerEmails.trim()) {
-      toast.error('Please enter at least one email address');
-      return;
-    }
-    
-    const emails = developerEmails.split(',').map(e => e.trim()).filter(e => e);
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    const invalidEmails = emails.filter(e => !emailRegex.test(e));
-    if (invalidEmails.length > 0) {
-      toast.error(`Invalid email format: ${invalidEmails.join(', ')}`);
-      return;
-    }
-    
-    setSendingInvites(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.post(`${API_BASE_URL}/api/admin/projects/${selectedProject._id}/bulk-invite`, {
-        developerEmails: emails,
-        customMessage: customMessage
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      setInviteResults(res.data.results || []);
-      const successCount = (res.data.results || []).filter(r => r.success).length;
-      
-      if (successCount > 0) {
-        toast.success(`GitHub invitations sent to ${successCount} developer(s)`);
-        await fetchCollaborators(selectedProject._id);
-      }
-      
-      const failedCount = emails.length - successCount;
-      if (failedCount > 0) {
-        toast.error(`${failedCount} invitation(s) failed. Check results for details.`);
-      }
-      
-    } catch (error) {
-      console.error('Error sending invites:', error);
-      toast.error(error.response?.data?.error || 'Failed to send invitations');
-    } finally {
-      setSendingInvites(false);
     }
   };
 
@@ -570,23 +512,13 @@ const GitManager = () => {
                 
                 <div className="flex items-center gap-2">
                   {isManagerOrAdmin && inviteLink && (
-                    <>
-                      <button
-                        onClick={copyInviteLink}
-                        className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-70 transition-colors flex items-center gap-1"
-                      >
-                        {copiedInviteLink ? <CheckCircle size={14} className="text-green-600" /> : <LinkIcon size={14} />}
-                        {copiedInviteLink ? 'Copied!' : 'Copy Invite Link'}
-                      </button>
-                      
-                      <button
-                        onClick={openInviteModal}
-                        className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1"
-                      >
-                        <Mail size={14} />
-                        Bulk Invite
-                      </button>
-                    </>
+                    <button
+                      onClick={copyInviteLink}
+                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-70 transition-colors flex items-center gap-1"
+                    >
+                      {copiedInviteLink ? <CheckCircle size={14} className="text-green-600" /> : <LinkIcon size={14} />}
+                      {copiedInviteLink ? 'Copied!' : 'Copy Invite Link'}
+                    </button>
                   )}
                   
                   {currentPath && (
@@ -668,7 +600,7 @@ const GitManager = () => {
                 <span>
                   When you invite a developer by email, GitHub will send them an invitation link.
                   The invitation email comes from <strong>noreply@github.com</strong>. 
-                  The correct invite link format is: <strong>https://github.com/OWNER/REPO/invite</strong>
+                  The correct invite link format is: <strong>https://github.com/OWNER/REPO/invitations</strong>
                 </span>
               </div>
             </div>
@@ -752,143 +684,6 @@ const GitManager = () => {
                   </>
                 )}
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Bulk Invite Modal */}
-      {showInviteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Bulk Invite Developers</h3>
-              <button
-                onClick={() => setShowInviteModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                <div className="flex items-start gap-2">
-                  <AlertCircle size={16} className="text-yellow-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs text-yellow-800">
-                    <p className="font-semibold">How it works:</p>
-                    <p className="mt-1">
-                      GitHub will send an invitation email to the developer directly. 
-                      They must have a GitHub account with the same email address.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-xs font-semibold text-gray-600 mb-2">Or share this link:</p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-xs bg-white p-2 rounded border border-gray-200 truncate font-mono">
-                    {inviteLink}
-                  </code>
-                  <button
-                    onClick={copyInviteLink}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors flex items-center gap-1"
-                  >
-                    {copiedInviteLink ? <CheckCircle size={14} /> : <Copy size={14} />}
-                    Copy
-                  </button>
-                </div>
-                <p className="text-xs text-gray-500 mt-2">
-                  Developers can visit this link after logging into GitHub to accept the invitation.
-                  Correct format: <strong>https://github.com/OWNER/REPO/invite</strong>
-                </p>
-              </div>
-
-              <div className="border-t border-gray-200 my-2"></div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Developer Emails (comma separated)
-                </label>
-                <textarea
-                  value={developerEmails}
-                  onChange={(e) => setDeveloperEmails(e.target.value)}
-                  placeholder="developer1@example.com, developer2@example.com"
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={3}
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Separate multiple emails with commas
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Custom Message (Optional)
-                </label>
-                <textarea
-                  value={customMessage}
-                  onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder="Add a personal message to the invitation..."
-                  className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  rows={2}
-                />
-              </div>
-
-              {inviteResults.length > 0 && (
-                <div className="bg-gray-50 p-3 rounded-lg max-h-48 overflow-y-auto">
-                  <p className="text-xs font-semibold text-gray-600 mb-2">Send Results:</p>
-                  {inviteResults.map((result, idx) => (
-                    <div key={idx} className="text-xs py-1 flex items-center justify-between">
-                      <span className={result.success ? 'text-green-600' : 'text-red-600'}>
-                        {result.success ? '✓' : '✗'} {result.email}
-                      </span>
-                      {!result.success && (
-                        <span className="text-red-500 text-xs ml-2">({result.error || 'Failed'})</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {inviteResults.length === 0 && (
-                <div className="bg-blue-50 p-3 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <Info size={14} className="text-blue-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-xs text-blue-700">
-                      <strong>What developers need:</strong>
-                      <br />• A GitHub account with the same email address
-                      <br />• Check their email inbox (including spam) for GitHub's invitation
-                      <br />• The invitation email comes from <strong>noreply@github.com</strong>
-                      <br />• Invite link format: <strong>https://github.com/OWNER/REPO/invite</strong>
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={sendBulkInvites}
-                disabled={sendingInvites}
-                className="w-full py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {sendingInvites ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                    Sending...
-                  </>
-                ) : (
-                  <>
-                    <Mail size={16} />
-                    Send GitHub Invitations
-                  </>
-                )}
-              </button>
-
-              <p className="text-xs text-gray-500 text-center">
-                GitHub will send the invitation emails directly to the developers.
-                The email will come from <strong>noreply@github.com</strong>.
-              </p>
             </div>
           </div>
         </div>
