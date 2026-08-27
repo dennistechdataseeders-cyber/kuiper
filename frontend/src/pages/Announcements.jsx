@@ -1,4 +1,4 @@
-// frontend/src/pages/Announcements.jsx - WITH REAL USER NAMES IN LIKES TOOLTIP
+// frontend/src/pages/Announcements.jsx - WITH FULL IMAGE DISPLAY & IMAGE MODAL
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -20,7 +20,11 @@ import {
   ThumbsUp,
   ThumbsUp as ThumbsUpFilled,
   Users,
-  Shield
+  Shield,
+  Expand,
+  Download,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -38,6 +42,11 @@ const Announcements = () => {
   const [deleting, setDeleting] = useState(null);
   const [expandedComments, setExpandedComments] = useState({});
   const [hoveredLike, setHoveredLike] = useState(null);
+  
+  // Image Modal State
+  const [imageModalOpen, setImageModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [imageAlt, setImageAlt] = useState('');
   
   // Form state
   const [formData, setFormData] = useState({
@@ -96,6 +105,34 @@ const Announcements = () => {
   useEffect(() => {
     fetchAnnouncements();
   }, []);
+
+  // ============================================
+  // IMAGE MODAL HANDLERS
+  // ============================================
+  const openImageModal = (imageUrl, altText) => {
+    setSelectedImage(imageUrl);
+    setImageAlt(altText || 'Announcement image');
+    setImageModalOpen(true);
+    document.body.style.overflow = 'hidden';
+  };
+
+  const closeImageModal = () => {
+    setImageModalOpen(false);
+    setSelectedImage(null);
+    setImageAlt('');
+    document.body.style.overflow = 'unset';
+  };
+
+  // Handle keyboard escape for modal
+  useEffect(() => {
+    const handleEsc = (e) => {
+      if (e.key === 'Escape' && imageModalOpen) {
+        closeImageModal();
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [imageModalOpen]);
 
   // ============================================
   // CREATE ANNOUNCEMENT
@@ -166,70 +203,66 @@ const Announcements = () => {
     }
   };
 
-// ============================================
-// LIKE / UNLIKE - UPDATED
-// ============================================
-const handleLike = async (announcementId) => {
-  try {
-    const token = localStorage.getItem('token');
-    const res = await axios.post(
-      `${API_BASE_URL}/api/announcements/${announcementId}/like`,
-      {},
-      {
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    );
-
-    if (res.data.success) {
-      setAnnouncements(prev =>
-        prev.map(a => {
-          if (a._id === announcementId) {
-            return { 
-              ...a, 
-              likes: res.data.likes, // ✅ Use the populated likes from response
-              likeCount: res.data.likeCount 
-            };
-          }
-          return a;
-        })
+  // ============================================
+  // LIKE / UNLIKE - UPDATED
+  // ============================================
+  const handleLike = async (announcementId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.post(
+        `${API_BASE_URL}/api/announcements/${announcementId}/like`,
+        {},
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
       );
+
+      if (res.data.success) {
+        setAnnouncements(prev =>
+          prev.map(a => {
+            if (a._id === announcementId) {
+              return { 
+                ...a, 
+                likes: res.data.likes,
+                likeCount: res.data.likeCount 
+              };
+            }
+            return a;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+      toast.error('Failed to like announcement');
     }
-  } catch (error) {
-    console.error('Error toggling like:', error);
-    toast.error('Failed to like announcement');
-  }
-};
+  };
 
   // ============================================
   // GET LIKED USERS WITH REAL NAMES
   // ============================================
-const getLikedUsers = (announcement) => {
-  if (!announcement.likes || announcement.likes.length === 0) return [];
-  
-  // The likes array now contains populated user objects from the backend
-  const likedUsers = [];
-  
-  announcement.likes.forEach(user => {
-    // Check if it's a populated user object or just an ID
-    if (typeof user === 'object' && user !== null) {
-      // It's a populated user object
-      likedUsers.push({
-        name: user.name || 'Team Member',
-        _id: user._id || user,
-        isCurrentUser: user._id === userId || user === userId
-      });
-    } else {
-      // It's just an ID (fallback)
-      if (user === userId) {
-        likedUsers.push({ name: userName || 'You', _id: user, isCurrentUser: true });
+  const getLikedUsers = (announcement) => {
+    if (!announcement.likes || announcement.likes.length === 0) return [];
+    
+    const likedUsers = [];
+    
+    announcement.likes.forEach(user => {
+      if (typeof user === 'object' && user !== null) {
+        likedUsers.push({
+          name: user.name || 'Team Member',
+          _id: user._id || user,
+          isCurrentUser: user._id === userId || user === userId
+        });
       } else {
-        likedUsers.push({ name: 'Team Member', _id: user, isCurrentUser: false });
+        if (user === userId) {
+          likedUsers.push({ name: userName || 'You', _id: user, isCurrentUser: true });
+        } else {
+          likedUsers.push({ name: 'Team Member', _id: user, isCurrentUser: false });
+        }
       }
-    }
-  });
-  
-  return likedUsers;
-};
+    });
+    
+    return likedUsers;
+  };
 
   // ============================================
   // ADD COMMENT
@@ -281,10 +314,8 @@ const getLikedUsers = (announcement) => {
   // DELETE COMMENT
   // ============================================
   const handleDeleteComment = async (announcementId, commentId) => {
-    // Find the announcement to check if it's automated
     const announcement = announcements.find(a => a._id === announcementId);
     
-    // If automated post, only Admins can delete comments
     if (announcement?.isAutomated && !isAdmin) {
       toast.error('Comments on automated posts can only be deleted by Admins');
       return;
@@ -323,12 +354,11 @@ const getLikedUsers = (announcement) => {
   };
 
   // ============================================
-  // DELETE ANNOUNCEMENT - ADMIN ONLY FOR AUTOMATED
+  // DELETE ANNOUNCEMENT
   // ============================================
   const handleDeleteAnnouncement = async (announcementId) => {
     const announcement = announcements.find(a => a._id === announcementId);
     
-    // If automated post, only Admins can delete
     if (announcement?.isAutomated && !isAdmin) {
       toast.error('Automated posts can only be deleted by Admins');
       return;
@@ -375,8 +405,8 @@ const getLikedUsers = (announcement) => {
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image must be less than 5MB');
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('Image must be less than 10MB');
       return;
     }
 
@@ -436,11 +466,9 @@ const getLikedUsers = (announcement) => {
   // CHECK IF USER CAN DELETE ANNOUNCEMENT
   // ============================================
   const canDeleteAnnouncement = (announcement) => {
-    // Automated posts: ONLY Admins can delete
     if (announcement.isAutomated) {
       return isAdmin;
     }
-    // Regular posts: Admin or Owner
     const isOwner = announcement.createdBy?._id === userId || announcement.createdBy === userId;
     return isAdmin || isOwner;
   };
@@ -449,7 +477,6 @@ const getLikedUsers = (announcement) => {
   // CHECK IF USER CAN DELETE COMMENT
   // ============================================
   const canDeleteComment = (comment, announcement) => {
-    // If the announcement is automated, ONLY Admins can delete comments
     if (announcement?.isAutomated) {
       return isAdmin;
     }
@@ -505,7 +532,6 @@ const getLikedUsers = (announcement) => {
               </div>
             </div>
           </div>
-          {/* Show Create Post button only if user has permission */}
           {canCreateAnnouncements && (
             <button
               onClick={() => setShowCreateModal(true)}
@@ -530,7 +556,7 @@ const getLikedUsers = (announcement) => {
           </div>
         ) : (
           announcements.map((announcement) => {
-            const isLiked = announcement.likes?.includes(userId) || false;
+            const isLiked = announcement.likes?.some(l => l._id === userId || l === userId) || false;
             const likeCount = announcement.likes?.length || 0;
             const commentCount = announcement.comments?.length || 0;
             const isExpanded = expandedComments[announcement._id] || false;
@@ -539,7 +565,6 @@ const getLikedUsers = (announcement) => {
             const isWorkAnniversary = announcement.automatedType === 'work_anniversary';
             const creator = announcement.createdBy || {};
             
-            // For automated posts, display "HR" instead of "System"
             let creatorName = announcement.createdByName || creator.name || 'Unknown';
             let creatorRole = announcement.createdByRole || creator.role || '';
             
@@ -642,7 +667,6 @@ const getLikedUsers = (announcement) => {
                       </div>
                     </div>
 
-                    {/* Delete Button - ONLY show for Admins on automated posts */}
                     {canDelete && (
                       <button
                         onClick={() => handleDeleteAnnouncement(announcement._id)}
@@ -669,17 +693,25 @@ const getLikedUsers = (announcement) => {
                     {announcement.description}
                   </p>
 
-                  {/* Image */}
+                  {/* Image - Clickable to open modal */}
                   {announcement.image && (
-                    <div className="mt-4 rounded-xl overflow-hidden border border-slate-200">
+                    <div 
+                      className="mt-4 rounded-xl overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer hover:opacity-95 transition-opacity group relative"
+                      onClick={() => openImageModal(announcement.image, announcement.title)}
+                    >
                       <img
                         src={announcement.image}
                         alt={announcement.title}
-                        className="w-full max-h-[400px] object-cover"
+                        className="w-full max-h-[500px] object-contain"
                         onError={(e) => {
                           e.target.style.display = 'none';
                         }}
                       />
+                      {/* Expand icon overlay */}
+                      <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
+                        <Expand size={14} />
+                        <span className="text-[10px] font-medium">Expand</span>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -843,7 +875,67 @@ const getLikedUsers = (announcement) => {
         )}
       </div>
 
-      {/* Create Announcement Modal - Only shown if user has permission */}
+      {/* ============================================
+          IMAGE MODAL - Full screen image viewer
+          ============================================ */}
+      {imageModalOpen && selectedImage && (
+        <div 
+          className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4"
+          onClick={closeImageModal}
+        >
+          {/* Close button */}
+          <button
+            onClick={closeImageModal}
+            className="absolute top-4 right-4 text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all z-10"
+            aria-label="Close image"
+          >
+            <X size={28} />
+          </button>
+
+          {/* Download button */}
+          <a
+            href={selectedImage}
+            download
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute top-4 right-16 text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all z-10"
+            onClick={(e) => e.stopPropagation()}
+            aria-label="Download image"
+          >
+            <Download size={24} />
+          </a>
+
+          {/* Image container */}
+          <div 
+            className="relative max-w-[90vw] max-h-[85vh] flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={selectedImage}
+              alt={imageAlt || 'Announcement image'}
+              className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+              onError={(e) => {
+                e.target.alt = 'Image failed to load';
+                e.target.className = 'max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl bg-slate-800 p-8';
+              }}
+            />
+          </div>
+
+          {/* Image info */}
+          {imageAlt && (
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/60 text-sm font-medium bg-black/50 backdrop-blur-sm px-4 py-2 rounded-lg max-w-[80%] text-center">
+              {imageAlt}
+            </div>
+          )}
+
+          {/* Click to close hint */}
+          <div className="absolute bottom-20 text-white/20 text-xs font-medium animate-pulse">
+            Click outside to close
+          </div>
+        </div>
+      )}
+
+      {/* Create Announcement Modal */}
       {showCreateModal && canCreateAnnouncements && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -895,11 +987,11 @@ const getLikedUsers = (announcement) => {
                 </label>
                 
                 {formData.imagePreview ? (
-                  <div className="relative rounded-xl overflow-hidden border border-slate-200">
+                  <div className="relative rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
                     <img
                       src={formData.imagePreview}
                       alt="Preview"
-                      className="w-full max-h-[300px] object-cover"
+                      className="w-full max-h-[300px] object-contain"
                     />
                     <button
                       type="button"
@@ -923,7 +1015,7 @@ const getLikedUsers = (announcement) => {
                     />
                     <Camera size={32} className="text-slate-400 mx-auto mb-2" />
                     <p className="text-sm font-medium text-slate-600">Click to upload an image</p>
-                    <p className="text-xs text-slate-400">JPG, PNG, GIF, WEBP • Max 5MB</p>
+                    <p className="text-xs text-slate-400">JPG, PNG, GIF, WEBP • Max 10MB</p>
                   </div>
                 )}
               </div>
