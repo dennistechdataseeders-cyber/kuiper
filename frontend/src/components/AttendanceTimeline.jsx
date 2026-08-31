@@ -1,4 +1,10 @@
 // frontend/src/components/AttendanceTimeline.jsx
+// ✅ FIXED: Holiday detection with proper date comparison
+// ✅ FIXED (2026-08-31): Race condition where attendance data was processed
+//    before the holidays list finished loading, permanently baking in
+//    isHoliday: false for holidays like Rakshabandhan (Aug 28, 2026).
+//    Raw attendance data and holiday data are now merged reactively via
+//    useMemo, so it recomputes automatically whenever either finishes loading.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
@@ -8,16 +14,16 @@ import {
   Loader2, Calendar as CalendarIcon, ChevronUp, Play,
   Pause, Info, MousePointer2, ChevronDown,
   TrendingUp, TrendingDown, Minus, BarChart3,
-  Users, UserCheck, UserX, ClockAlert
+  Users, UserCheck, UserX, ClockAlert, Gift
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 // ─────────────────────────────────────────────────────────────
-// Timeline track config — the reference window each day's bar is plotted against
+// Timeline track config
 // ─────────────────────────────────────────────────────────────
-const TRACK_START_HOUR = 6;   // 6:00 AM
-const TRACK_END_HOUR = 21;    // 9:00 PM
+const TRACK_START_HOUR = 6;
+const TRACK_END_HOUR = 21;
 const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
 
 const minutesOfDayUTC = (dateString) => {
@@ -64,6 +70,12 @@ const STATUS_STYLES = {
     chip: 'bg-slate-50 text-slate-500 border-slate-200',
     bg: 'bg-slate-50'
   },
+  holiday: { 
+    bar: 'from-purple-400 to-purple-500', 
+    text: 'text-purple-700', 
+    chip: 'bg-purple-50 text-purple-700 border-purple-200',
+    bg: 'bg-purple-50'
+  },
   default: { 
     bar: 'from-blue-400 to-blue-500', 
     text: 'text-slate-600', 
@@ -72,7 +84,6 @@ const STATUS_STYLES = {
   }
 };
 
-// Helper to format time from UTC string
 const formatTimeDisplay = (dateString) => {
   if (!dateString) return '—';
   try {
@@ -131,9 +142,6 @@ const formatDuration = (hours) => {
   return `${mins}m`;
 };
 
-// ─────────────────────────────────────────────────────────────
-// Format hours to "X hr Y min" format
-// ─────────────────────────────────────────────────────────────
 const formatHoursToHrMin = (hours) => {
   if (!hours || hours <= 0) return '0 hr 0 min';
   const hrs = Math.floor(hours);
@@ -141,14 +149,6 @@ const formatHoursToHrMin = (hours) => {
   if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
   if (hrs > 0) return `${hrs} hr 0 min`;
   return `0 hr ${mins} min`;
-};
-
-// ─────────────────────────────────────────────────────────────
-// Format hours to decimal for bar chart width
-// ─────────────────────────────────────────────────────────────
-const hoursToDecimal = (hours) => {
-  if (!hours || hours <= 0) return 0;
-  return Math.round((hours) * 10) / 10;
 };
 
 const formatBreakMinutes = (minutes) => {
@@ -176,6 +176,7 @@ const getStatusIcon = (status) => {
     case 'absent': return <XCircle size={14} className="text-rose-600" />;
     case 'leave': return <CalendarIcon size={14} className="text-indigo-600" />;
     case 'weekend': return <Coffee size={14} className="text-slate-400" />;
+    case 'holiday': return <Gift size={14} className="text-purple-600" />;
     default: return <Clock size={14} className="text-slate-400" />;
   }
 };
@@ -187,6 +188,7 @@ const getStatusLabel = (status) => {
     case 'absent': return 'Absent';
     case 'leave': return 'On Leave';
     case 'weekend': return 'Weekend';
+    case 'holiday': return 'Holiday 🎉';
     default: return '—';
   }
 };
@@ -218,7 +220,6 @@ const AverageBarChart = ({ weeklyAverages }) => {
     return null;
   }
 
-  // Filter out weeks with fewer than 2 days of data
   const filteredWeeks = weeklyAverages.filter(w => w.dayCount >= 2);
 
   if (filteredWeeks.length === 0) {
@@ -229,12 +230,11 @@ const AverageBarChart = ({ weeklyAverages }) => {
     );
   }
 
-  // Find max value for scaling
   const maxAvg = Math.max(
     ...filteredWeeks.map(w => Math.max(w.avgEff || 0, w.avgGross || 0)),
-    1 // Ensure at least 1 for scaling
+    1
   );
-  const maxDisplay = Math.ceil(maxAvg / 2) * 2 + 2; // Round up to nearest even number + 2
+  const maxDisplay = Math.ceil(maxAvg / 2) * 2 + 2;
 
   return (
     <div className="mt-2 p-2 bg-white rounded-lg border border-slate-200">
@@ -264,14 +264,11 @@ const AverageBarChart = ({ weeklyAverages }) => {
                 {week.weekDisplay}
               </span>
               <div className="flex-1">
-                {/* Gross bar (background) */}
                 <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                  {/* Gross bar (full width) */}
                   <div 
                     className="absolute inset-y-0 left-0 bg-slate-600 rounded-full transition-all duration-500"
                     style={{ width: `${grossPercent}%` }}
                   />
-                  {/* Effective bar (on top, narrower) */}
                   <div 
                     className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full transition-all duration-500"
                     style={{ width: `${effPercent}%` }}
@@ -295,19 +292,20 @@ const AverageBarChart = ({ weeklyAverages }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// REDUCED HEIGHT Day Timeline Bar Component
+// Day Timeline Bar Component
 // ─────────────────────────────────────────────────────────────
 const DayTimelineBar = ({ day }) => {
-  const styles = STATUS_STYLES[day.status] || STATUS_STYLES.default;
+  const isHoliday = day.isHoliday || false;
+  const holidayName = day.holidayName || null;
+  
+  const styles = isHoliday ? STATUS_STYLES.holiday : (STATUS_STYLES[day.status] || STATUS_STYLES.default);
   const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
   const trackStart = TRACK_START_HOUR * 60;
   
-  // Use refs for hover state management
   const [localHoveredSession, setLocalHoveredSession] = useState(null);
   const [localHoveredBreak, setLocalHoveredBreak] = useState(null);
   const [localTooltipPosition, setLocalTooltipPosition] = useState({ x: 0, y: 0 });
   
-  // Clear hover on mouse leave from the bar container
   const handleBarMouseLeave = () => {
     setLocalHoveredSession(null);
     setLocalHoveredBreak(null);
@@ -352,6 +350,19 @@ const DayTimelineBar = ({ day }) => {
     setLocalHoveredSession(null);
     setLocalTooltipPosition({ x: tooltipX, y: tooltipY });
   };
+  
+  // If it's a holiday, show a special holiday bar
+  if (isHoliday) {
+    return (
+      <div className="flex items-center gap-2 h-5">
+        <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
+        <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
+          <Gift size={10} className="text-purple-500" />
+          {holidayName || 'Holiday'}
+        </span>
+      </div>
+    );
+  }
   
   if (!hasIn) {
     return (
@@ -432,9 +443,6 @@ const DayTimelineBar = ({ day }) => {
         );
       }
       
-      // ─────────────────────────────────────────────────────────────
-      // Break rendering - variables defined inside the condition
-      // ─────────────────────────────────────────────────────────────
       if (!isLast && session.punchOutUTC && day.sessions[idx + 1] && day.sessions[idx + 1].punchInUTC) {
         const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
         const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
@@ -467,7 +475,6 @@ const DayTimelineBar = ({ day }) => {
     return elements;
   };
   
-  // Local tooltip for this bar
   const LocalTooltip = () => {
     if (!localHoveredSession && !localHoveredBreak) return null;
     
@@ -561,9 +568,21 @@ const DayTimelineBar = ({ day }) => {
   );
 };
 
+// ─────────────────────────────────────────────────────────────
+// MAIN COMPONENT
+// ─────────────────────────────────────────────────────────────
 const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
   const [loading, setLoading] = useState(true);
-  const [attendanceData, setAttendanceData] = useState([]);
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ FIXED: attendance data is now split into two pieces:
+  //   - rawAttendanceData: the punch/session math only, independent of holidays
+  //   - attendanceData (below, via useMemo): rawAttendanceData + holiday info
+  // This means however long fetchHolidays() takes, once it resolves the
+  // memo recomputes automatically and the UI updates — no stale data.
+  // ─────────────────────────────────────────────────────────────
+  const [rawAttendanceData, setRawAttendanceData] = useState([]);
+
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
@@ -574,32 +593,102 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
     late: 0,
     onLeave: 0,
     weekends: 0,
+    holidays: 0,
     totalEffectiveHours: 0,
     totalGrossHours: 0,
     averageEffectiveHours: 0,
     averageGrossHours: 0,
-    weeklyAverages: [] // Store weekly averages
+    weeklyAverages: []
   });
+
+  // ─────────────────────────────────────────────────────────────
+  // HOLIDAY STATE
+  // ─────────────────────────────────────────────────────────────
+  const [holidays, setHolidays] = useState([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
+  
+  const authHeader = {
+    headers: { Authorization: `Bearer ${token}` }
+  };
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                       'July', 'August', 'September', 'October', 'November', 'December'];
 
-  // Click outside handler for month picker
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setShowMonthPicker(false);
-    };
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    fetchAttendanceData();
-  }, [selectedMonth, selectedYear]);
+  // ─────────────────────────────────────────────────────────────
+  // FETCH HOLIDAYS
+  // ─────────────────────────────────────────────────────────────
+  const fetchHolidays = async () => {
+    setHolidaysLoading(true);
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/api/holidays`,
+        authHeader
+      );
+      
+      if (res.data.success) {
+        setHolidays(res.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
+      setHolidays([]);
+    } finally {
+      setHolidaysLoading(false);
+    }
+  };
 
   // ─────────────────────────────────────────────────────────────
-  // FETCH ATTENDANCE DATA - FIXED to show last out punch
+  // ✅ FIXED: CHECK IF A DATE IS A HOLIDAY - Compare by date only (ignoring time)
+  // ─────────────────────────────────────────────────────────────
+  const isHoliday = useCallback((dateStr) => {
+    if (!dateStr) return null;
+    
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return null;
+    
+    // Get date string in YYYY-MM-DD format from the input date
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(date.getUTCDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+    
+    // Check against holidays using the same date string comparison
+    const holiday = holidays.find(h => {
+      const hDate = new Date(h.date);
+      if (isNaN(hDate.getTime())) return false;
+      const hYear = hDate.getUTCFullYear();
+      const hMonth = String(hDate.getUTCMonth() + 1).padStart(2, '0');
+      const hDay = String(hDate.getUTCDate()).padStart(2, '0');
+      const hDateString = `${hYear}-${hMonth}-${hDay}`;
+      return hDateString === dateString;
+    });
+    
+    return holiday || null;
+  }, [holidays]);
+
+  // ─────────────────────────────────────────────────────────────
+  // ✅ FIXED: DERIVE attendanceData FROM rawAttendanceData + holidays
+  // This recomputes automatically whenever either rawAttendanceData or
+  // the holidays list changes — regardless of which one loaded first.
+  // ─────────────────────────────────────────────────────────────
+  const attendanceData = useMemo(() => {
+    return rawAttendanceData.map(day => {
+      const holidayData = isHoliday(day.date);
+      const isHolidayDay = !!holidayData;
+      const holidayName = holidayData ? holidayData.name : null;
+
+      return {
+        ...day,
+        isHoliday: isHolidayDay,
+        holidayName: holidayName,
+        status: isHolidayDay ? 'holiday' : day.status
+      };
+    });
+  }, [rawAttendanceData, isHoliday]);
+
+  // ─────────────────────────────────────────────────────────────
+  // FETCH ATTENDANCE DATA
+  // Note: this now ONLY does the session/hours math. Holiday info is
+  // layered on top separately by the attendanceData useMemo above.
   // ─────────────────────────────────────────────────────────────
   const fetchAttendanceData = async () => {
     setLoading(true);
@@ -630,9 +719,8 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
           let breakMinutes = 0;
           let firstIn = null;
           let lastOut = null;
-          let lastOutUTC = null; // Track the last out punch
+          let lastOutUTC = null;
           
-          // 🔥 FIX: Find the last out punch from all sessions
           sessions.forEach((session) => {
             if (session.punchInUTC) {
               const inTime = new Date(session.punchInUTC);
@@ -640,7 +728,6 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
               
               if (session.punchOutUTC) {
                 const outTime = new Date(session.punchOutUTC);
-                // Keep track of the latest out time
                 if (!lastOutUTC || outTime > new Date(lastOutUTC)) {
                   lastOutUTC = session.punchOutUTC;
                 }
@@ -651,7 +738,6 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
             }
           });
           
-          // If we have no lastOutUTC but we have sessions, use the last session's punchOutUTC
           if (!lastOutUTC && sessions.length > 0) {
             const lastSession = sessions[sessions.length - 1];
             if (lastSession.punchOutUTC) {
@@ -659,7 +745,6 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
             }
           }
           
-          // If still no lastOutUTC, use the day's punchOutUTC as fallback
           if (!lastOutUTC) {
             lastOutUTC = day.punchOutUTC || null;
           }
@@ -692,19 +777,20 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
             ...day,
             sessions: sessions,
             punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-            // 🔥 FIX: Use lastOutUTC for the out display
             punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
-            punchOutUTC: lastOutUTC, // Store the corrected punch out
+            punchOutUTC: lastOutUTC,
             effectiveHours: effectiveHours,
             grossHours: grossHours,
             breakMinutes: breakMinutes,
             breakGaps: breakGaps,
             totalDuration: effectiveHours
+            // NOTE: isHoliday / holidayName / final status are NOT set here
+            // anymore — they're derived reactively in the attendanceData
+            // useMemo above, so they're always correct once holidays load.
           };
         });
         
-        setAttendanceData(processedDays);
-        calculateStatsForMonth(processedDays);
+        setRawAttendanceData(processedDays);
       }
     } catch (error) {
       console.error('Error fetching attendance:', error);
@@ -714,131 +800,133 @@ const AttendanceTimeline = ({ userId, token, isCollapsed }) => {
     }
   };
 
- // ─────────────────────────────────────────────────────────────
-// Calculate stats with weekly averages (excluding current day)
-// ─────────────────────────────────────────────────────────────
-const calculateStatsForMonth = (days) => {
-  // Get today's date string
-  const todayStr = new Date().toISOString().split('T')[0];
-  
-  // Filter days for the selected month
-  const monthDays = days.filter(day => {
-    if (!day.date) return false;
-    const date = new Date(day.date);
-    return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
-  });
-
-  // Sort by date (oldest first for week grouping)
-  const sortedDays = [...monthDays].sort((a, b) => new Date(a.date) - new Date(b.date));
-  
   // ─────────────────────────────────────────────────────────────
-  // Group days by week (Mon-Sun)
+  // Calculate stats with weekly averages
   // ─────────────────────────────────────────────────────────────
-  const weeks = [];
-  let currentWeek = [];
-  let weekStartDate = null;
-  let weekNumber = 1;
-  
-  for (const day of sortedDays) {
-    const date = new Date(day.date);
-    const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, ...
-    const dateStr = day.date;
+  const calculateStatsForMonth = (days) => {
+    const todayStr = new Date().toISOString().split('T')[0];
     
-    // If this is a Monday or the first day, start a new week
-    if (dayOfWeek === 1 || weekStartDate === null) {
-      if (currentWeek.length > 0) {
-        weeks.push({
-          weekNumber: weekNumber,
-          days: [...currentWeek]
-        });
-        weekNumber++;
+    const monthDays = days.filter(day => {
+      if (!day.date) return false;
+      const date = new Date(day.date);
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+    });
+
+    const sortedDays = [...monthDays].sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    const weeks = [];
+    let currentWeek = [];
+    let weekStartDate = null;
+    let weekNumber = 1;
+    
+    for (const day of sortedDays) {
+      const date = new Date(day.date);
+      const dayOfWeek = date.getDay();
+      const dateStr = day.date;
+      
+      if (dayOfWeek === 1 || weekStartDate === null) {
+        if (currentWeek.length > 0) {
+          weeks.push({
+            weekNumber: weekNumber,
+            days: [...currentWeek]
+          });
+          weekNumber++;
+        }
+        currentWeek = [];
+        weekStartDate = dateStr;
       }
-      currentWeek = [];
-      weekStartDate = dateStr;
+      
+      currentWeek.push(day);
     }
     
-    currentWeek.push(day);
-  }
-  
-  // Push the last week if it has any days
-  if (currentWeek.length > 0) {
-    weeks.push({
-      weekNumber: weekNumber,
-      days: [...currentWeek]
+    if (currentWeek.length > 0) {
+      weeks.push({
+        weekNumber: weekNumber,
+        days: [...currentWeek]
+      });
+    }
+
+    const weeklyAverages = weeks.map((week) => {
+      const daysWithoutToday = week.days.filter(day => day.date !== todayStr);
+      const daysWithoutHolidays = daysWithoutToday.filter(d => !d.isHoliday);
+      const presentDays = daysWithoutHolidays.filter(d => d.status === 'present' || d.status === 'late');
+      const lateDays = daysWithoutHolidays.filter(d => d.status === 'late');
+      
+      const totalEff = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
+      const totalGross = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
+      
+      const avgEff = presentDays.length > 0 ? totalEff / presentDays.length : 0;
+      const avgGross = presentDays.length > 0 ? totalGross / presentDays.length : 0;
+      
+      return {
+        weekNumber: week.weekNumber,
+        weekDisplay: `Week ${week.weekNumber}`,
+        avgEff,
+        avgGross,
+        avgEffFormatted: formatHoursToHrMin(avgEff),
+        avgGrossFormatted: formatHoursToHrMin(avgGross),
+        dayCount: presentDays.length,
+        lateCount: lateDays.length,
+        totalDays: week.days.length,
+        holidayCount: week.days.filter(d => d.isHoliday).length
+      };
     });
-  }
 
-  // ─────────────────────────────────────────────────────────────
-  // Calculate weekly averages (excluding current day)
-  // ─────────────────────────────────────────────────────────────
-  const weeklyAverages = weeks.map((week) => {
-    // Filter out current day from calculations
-    const daysWithoutToday = week.days.filter(day => day.date !== todayStr);
-    // Count days where user was actually present (present OR late)
+    const workingDays = monthDays.filter(d => !d.isWeekend && !d.isHoliday);
+    const daysWithoutToday = workingDays.filter(d => d.date !== todayStr);
+    
     const presentDays = daysWithoutToday.filter(d => d.status === 'present' || d.status === 'late');
-    // Count days where user was actually late (ONLY status === 'late')
     const lateDays = daysWithoutToday.filter(d => d.status === 'late');
+    const absentDays = daysWithoutToday.filter(d => d.status === 'absent');
+    const leaveDays = daysWithoutToday.filter(d => d.status === 'leave');
+    const weekends = monthDays.filter(d => d.isWeekend).length;
+    const holidays = monthDays.filter(d => d.isHoliday).length;
     
-    const totalEff = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
-    const totalGross = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
+    const totalEffectiveHours = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
+    const totalGrossHours = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
     
-    const avgEff = presentDays.length > 0 ? totalEff / presentDays.length : 0;
-    const avgGross = presentDays.length > 0 ? totalGross / presentDays.length : 0;
-    
-    return {
-      weekNumber: week.weekNumber,
-      weekDisplay: `Week ${week.weekNumber}`,
-      avgEff,
-      avgGross,
-      avgEffFormatted: formatHoursToHrMin(avgEff),
-      avgGrossFormatted: formatHoursToHrMin(avgGross),
-      dayCount: presentDays.length,
-      lateCount: lateDays.length,
-      totalDays: week.days.length
-    };
-  });
+    const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
+    const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
+
+    setStats({
+      totalDays: workingDays.length,
+      present: presentDays.length,
+      absent: absentDays.length,
+      late: lateDays.length,
+      onLeave: leaveDays.length,
+      weekends: weekends,
+      holidays: holidays,
+      totalEffectiveHours: totalEffectiveHours,
+      totalGrossHours: totalGrossHours,
+      averageEffectiveHours: avgEffectiveHours,
+      averageGrossHours: avgGrossHours,
+      weeklyAverages: weeklyAverages
+    });
+  };
 
   // ─────────────────────────────────────────────────────────────
-  // Calculate monthly averages (excluding current day)
+  // EFFECTS
   // ─────────────────────────────────────────────────────────────
-  const workingDays = monthDays.filter(d => !d.isWeekend);
-  const daysWithoutToday = workingDays.filter(d => d.date !== todayStr);
-  
-  // Count days where user was actually present (present OR late)
-  const presentDays = daysWithoutToday.filter(d => d.status === 'present' || d.status === 'late');
-  // Count days where user was actually late (ONLY status === 'late')
-  const lateDays = daysWithoutToday.filter(d => d.status === 'late');
-  const absentDays = daysWithoutToday.filter(d => d.status === 'absent');
-  const leaveDays = daysWithoutToday.filter(d => d.status === 'leave');
-  const weekends = monthDays.filter(d => d.isWeekend).length;
-  
-  const totalEffectiveHours = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
-  const totalGrossHours = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
-  
-  const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
-  const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
+  useEffect(() => {
+    fetchHolidays();
+  }, []);
 
-  setStats({
-    totalDays: workingDays.length,
-    present: presentDays.length,
-    absent: absentDays.length,
-    late: lateDays.length, // Only count days where status is 'late'
-    onLeave: leaveDays.length,
-    weekends: weekends,
-    totalEffectiveHours: totalEffectiveHours,
-    totalGrossHours: totalGrossHours,
-    averageEffectiveHours: avgEffectiveHours,
-    averageGrossHours: avgGrossHours,
-    weeklyAverages: weeklyAverages
-  });
-};
+  useEffect(() => {
+    fetchAttendanceData();
+  }, [selectedMonth, selectedYear]);
 
+  // attendanceData is now derived (raw data + holidays), so this effect
+  // re-fires whenever either piece changes — including the moment
+  // holidays finish loading after attendance data already rendered.
   useEffect(() => {
     if (attendanceData.length > 0) {
       calculateStatsForMonth(attendanceData);
     }
   }, [selectedMonth, selectedYear, attendanceData]);
 
+  // ─────────────────────────────────────────────────────────────
+  // NAVIGATION HELPERS
+  // ─────────────────────────────────────────────────────────────
   const navigateMonth = (direction) => {
     if (direction === 'prev') {
       if (selectedMonth === 0) {
@@ -889,6 +977,9 @@ const calculateStatsForMonth = (days) => {
     });
   }, [attendanceData, selectedMonth, selectedYear]);
 
+  // ─────────────────────────────────────────────────────────────
+  // RENDER
+  // ─────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -921,7 +1012,7 @@ const calculateStatsForMonth = (days) => {
   return (
     <>
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Header with Month Navigation - Compact */}
+        {/* Header with Month Navigation */}
         <div className="p-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div className="flex items-center gap-2">
@@ -975,11 +1066,7 @@ const calculateStatsForMonth = (days) => {
                         <button
                           key={month}
                           onClick={() => handleMonthSelect(index)}
-                          className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${
-                            selectedMonth === index
-                              ? 'bg-blue-600 text-white shadow-sm'
-                              : 'hover:bg-slate-100 text-slate-700'
-                          }`}
+                          className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${selectedMonth === index ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-700'}`}
                         >
                           {month.substring(0, 3)}
                         </button>
@@ -997,6 +1084,14 @@ const calculateStatsForMonth = (days) => {
                   </div>
                 )}
               </div>
+              
+              {/* Holiday indicator */}
+              {stats.holidays > 0 && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[7px] font-bold">
+                  <Gift size={10} />
+                  {stats.holidays} holidays
+                </span>
+              )}
             </div>
             
             <div className="flex items-center gap-1.5">
@@ -1022,7 +1117,7 @@ const calculateStatsForMonth = (days) => {
             </div>
           </div>
           
-          {/* Legend - Compact */}
+          {/* Legend */}
           <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-[7px] font-medium text-slate-400">
             <span className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
@@ -1032,11 +1127,15 @@ const calculateStatsForMonth = (days) => {
               <div className="w-2 h-2 rounded-full bg-amber-400"></div>
               <span>Break</span>
             </span>
+            <span className="flex items-center gap-1">
+              <div className="w-2 h-2 rounded-full bg-purple-400"></div>
+              <span>Holiday</span>
+            </span>
           </div>
         </div>
 
-        {/* Stats Summary - Compact */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-1.5 p-2 bg-slate-50/50 border-b border-slate-100">
+        {/* Stats Summary with Holiday count */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 p-2 bg-slate-50/50 border-b border-slate-100">
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
             <p className="text-[6px] font-bold text-slate-400 uppercase tracking-wider">Working</p>
             <p className="text-base font-black text-slate-800">{stats.totalDays}</p>
@@ -1054,6 +1153,10 @@ const calculateStatsForMonth = (days) => {
             <p className="text-base font-black text-indigo-700">{stats.onLeave}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
+            <p className="text-[6px] font-bold text-purple-600 uppercase tracking-wider">Holidays</p>
+            <p className="text-base font-black text-purple-700">{stats.holidays}</p>
+          </div>
+          <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
             <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Avg Eff</p>
             <p className="text-base font-black text-emerald-700">{formatHoursToHrMin(stats.averageEffectiveHours)}</p>
           </div>
@@ -1061,20 +1164,30 @@ const calculateStatsForMonth = (days) => {
             <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
             <p className="text-base font-black text-slate-700">{formatHoursToHrMin(stats.averageGrossHours)}</p>
           </div>
+          <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
+            <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late %</p>
+            <p className="text-base font-black text-amber-700">
+              {stats.present > 0 ? Math.round((stats.late / stats.present) * 100) : 0}%
+            </p>
+          </div>
         </div>
 
-        {/* Weekly Averages Section with Bar Chart */}
+        {/* Weekly Averages Section */}
         {stats.weeklyAverages && stats.weeklyAverages.length > 0 && (
           <div className="p-2 border-b border-slate-100 bg-slate-50/30">
             <div className="flex items-center gap-2 mb-1.5">
               <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Weekly Averages</span>
-              <span className="text-[7px] text-slate-400">(excluding today)</span>
+              <span className="text-[7px] text-slate-400">(excluding today & holidays)</span>
+              {stats.weeklyAverages.some(w => w.holidayCount > 0) && (
+                <span className="text-[6px] text-purple-500 bg-purple-50 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                  <Gift size={8} />
+                  {stats.weeklyAverages.reduce((sum, w) => sum + w.holidayCount, 0)} holidays
+                </span>
+              )}
             </div>
             
-            {/* Bar Chart - Only shows weeks with >= 2 days */}
             <AverageBarChart weeklyAverages={stats.weeklyAverages} />
             
-            {/* Grid view - Only shows weeks with >= 2 days */}
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-1.5 mt-2">
               {stats.weeklyAverages
                 .filter(week => week.dayCount >= 2)
@@ -1088,11 +1201,16 @@ const calculateStatsForMonth = (days) => {
                       <span className="text-[8px] font-bold text-emerald-700">{week.avgEffFormatted}</span>
                       <span className="text-[8px] font-bold text-slate-600">{week.avgGrossFormatted}</span>
                     </div>
+                    {week.holidayCount > 0 && (
+                      <div className="text-[6px] text-purple-500 mt-0.5 flex items-center gap-0.5">
+                        <Gift size={8} />
+                        {week.holidayCount} holiday{week.holidayCount > 1 ? 's' : ''}
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>
             
-            {/* Show message if no weeks with >= 2 days */}
             {stats.weeklyAverages.filter(week => week.dayCount >= 2).length === 0 && (
               <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
                 <span className="text-[8px] font-medium text-slate-400">No weeks with sufficient data (minimum 2 days)</span>
@@ -1101,7 +1219,7 @@ const calculateStatsForMonth = (days) => {
           </div>
         )}
 
-        {/* Timeline Table - Compact rows */}
+        {/* Timeline Table */}
         <div className="overflow-x-auto p-3">
           <table className="w-full min-w-[900px]">
             <thead>
@@ -1119,7 +1237,7 @@ const calculateStatsForMonth = (days) => {
             <tbody className="divide-y divide-slate-100">
               {monthDays.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-2 py-8 text-center">
+                  <td colSpan={8} className="px-2 py-8 text-center">
                     <div className="flex flex-col items-center gap-1.5">
                       <CalendarIcon size={20} className="text-slate-300" />
                       <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
@@ -1130,32 +1248,47 @@ const calculateStatsForMonth = (days) => {
                 [...monthDays]
                   .sort((a, b) => new Date(b.date) - new Date(a.date))
                   .map((day, idx) => {
-                    const styles = STATUS_STYLES[day.status] || STATUS_STYLES.default;
+                    const isHolidayDay = day.isHoliday || false;
+                    const holidayName = day.holidayName || null;
+                    const styles = isHolidayDay ? STATUS_STYLES.holiday : (STATUS_STYLES[day.status] || STATUS_STYLES.default);
                     const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
                     const today = isToday(day.date);
                     const isWeekend = day.isWeekend || false;
                     
                     let outDisplay = '—';
-                    if (!isWeekend) {
+                    if (!isWeekend && !isHolidayDay) {
                       outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
                     }
                     
                     return (
-                      <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${today ? 'bg-blue-50/30' : ''}`}>
+                      <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''}`}>
                         <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : 'text-slate-700'}`}>
+                          <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : 'text-slate-700'}`}>
                             {formatDateDisplay(day.date)}
                           </span>
                           {today && (
                             <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>
                           )}
+                          {isHolidayDay && (
+                            <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                              <Gift size={8} />
+                              Holiday
+                            </span>
+                          )}
                         </td>
                         <td className="px-2 py-1.5">
                           <span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span>
                         </td>
-                      
                         <td className="px-2 py-1.5 min-w-[180px]">
-                          {hasIn ? (
+                          {isHolidayDay ? (
+                            <div className="flex items-center gap-2 h-5">
+                              <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
+                              <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
+                                <Gift size={10} className="text-purple-500" />
+                                {holidayName || 'Holiday'}
+                              </span>
+                            </div>
+                          ) : hasIn ? (
                             <DayTimelineBar day={day} />
                           ) : (
                             <span className="text-[9px] text-slate-400 italic">—</span>
@@ -1163,30 +1296,27 @@ const calculateStatsForMonth = (days) => {
                         </td>
                         <td className="px-2 py-1.5">
                           <span className="text-[10px] font-mono font-medium text-slate-700">
-                            {day.punchInDisplay || '—'}
+                            {isHolidayDay ? '—' : (day.punchInDisplay || '—')}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-mono font-medium ${
-                            isWeekend ? 'text-slate-400' :
-                            outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'
-                          }`}>
-                            {outDisplay}
+                          <span className={`text-[10px] font-mono font-medium ${isHolidayDay ? 'text-slate-400' : isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
+                            {isHolidayDay ? '—' : outDisplay}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
                           <span className="text-[10px] font-bold text-emerald-700">
-                            {day.effectiveHours ? formatHoursToHrMin(day.effectiveHours) : '0 hr 0 min'}
+                            {isHolidayDay ? '—' : (day.effectiveHours ? formatHoursToHrMin(day.effectiveHours) : '0 hr 0 min')}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
                           <span className="text-[10px] font-bold text-slate-700">
-                            {day.grossHours ? formatHoursToHrMin(day.grossHours) : '0 hr 0 min'}
+                            {isHolidayDay ? '—' : (day.grossHours ? formatHoursToHrMin(day.grossHours) : '0 hr 0 min')}
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-medium ${day.status === 'late' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {isWeekend ? '—' : getArrivalStatus(day)}
+                          <span className={`text-[10px] font-medium ${isHolidayDay ? 'text-purple-600' : day.status === 'late' ? 'text-amber-600' : 'text-emerald-600'}`}>
+                            {isHolidayDay ? '🎉' : (isWeekend ? '—' : getArrivalStatus(day))}
                           </span>
                         </td>
                       </tr>

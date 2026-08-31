@@ -1,5 +1,3 @@
-// frontend/src/components/Sidebar.jsx - WITH ANNOUNCEMENT BADGE SUPPORT (RED)
-
 import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -40,7 +38,8 @@ import {
   UsersRound,
   UserCog,
   UserCheck,
-  Megaphone
+  Megaphone,
+  CalendarDays  // ADDED FOR HOLIDAY LIST
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
@@ -374,7 +373,7 @@ const Sidebar = () => {
   };
 
   // ============================================
-  // MENU ITEMS - WITH ANNOUNCEMENTS FOR ALL NON-CLIENT ROLES
+  // MENU ITEMS - WITH HOLIDAY LIST & ANNOUNCEMENTS
   // ============================================
   const menuItems = {
     'Super Admin': [
@@ -390,6 +389,7 @@ const Sidebar = () => {
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
+      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' }, // ADDED
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
@@ -433,6 +433,7 @@ const Sidebar = () => {
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
+      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' }, // ADDED
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
@@ -464,6 +465,7 @@ const Sidebar = () => {
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
@@ -479,10 +481,9 @@ const Sidebar = () => {
       { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-        { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
+      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
       { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-    
     ],
 
     Developer: [
@@ -505,6 +506,7 @@ const Sidebar = () => {
 
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
+      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' }, // ADDED
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
@@ -542,7 +544,8 @@ const Sidebar = () => {
       '/developer/feeds', '/developer/git-feeds', '/developer/feed-status',
       '/developer/worklog', '/developer/bucket', '/teamlead/projects',
       '/teamlead/developers', '/teamlead/feeds', '/teamlead/feed-status',
-      '/client/projects', '/client/feeds', '/feasibility', '/announcements'
+      '/client/projects', '/client/feeds', '/feasibility', '/announcements',
+      '/hr/holidays' // ADDED
     ];
     
     if (exactMatchPaths.includes(path)) {

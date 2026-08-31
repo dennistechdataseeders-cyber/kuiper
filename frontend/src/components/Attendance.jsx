@@ -23,7 +23,8 @@ import {
   UserX,
   ClockAlert,
   RefreshCw,
-  Eye
+  Eye,
+  Gift
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -42,6 +43,12 @@ const Attendance = ({ userId, token }) => {
   const [activeTab, setActiveTab] = useState('monthly');
   const [showMonthSelector, setShowMonthSelector] = useState(false);
   const [viewMode, setViewMode] = useState('table'); // 'table' | 'grid'
+
+  // ============================================
+  // HOLIDAY STATE
+  // ============================================
+  const [holidays, setHolidays] = useState([]);
+  const [holidaysLoading, setHolidaysLoading] = useState(false);
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -68,6 +75,63 @@ const Attendance = ({ userId, token }) => {
     return `${hour12}:${String(minutes).padStart(2, '0')} ${ampm}`;
   };
 
+  // ============================================
+  // FETCH HOLIDAYS
+  // ============================================
+  const fetchHolidays = async () => {
+    setHolidaysLoading(true);
+    try {
+      const res = await axios.get(
+        `${API_BASE_URL}/api/holidays`,
+        authHeader
+      );
+      
+      if (res.data.success) {
+        setHolidays(res.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
+      setHolidays([]);
+    } finally {
+      setHolidaysLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchHolidays();
+  }, []);
+
+  // ============================================
+  // CHECK IF A DATE IS A HOLIDAY
+  // ============================================
+  const isHoliday = (dateStr) => {
+    if (!dateStr) return null;
+    const date = new Date(dateStr);
+    const dateString = date.toISOString().split('T')[0];
+    
+    const holiday = holidays.find(h => {
+      const hDate = new Date(h.date);
+      const hDateString = hDate.toISOString().split('T')[0];
+      return hDateString === dateString;
+    });
+    
+    return holiday || null;
+  };
+
+  const isHolidayDate = (dateStr) => {
+    return !!isHoliday(dateStr);
+  };
+
+  const getHolidayName = (dateStr) => {
+    const holiday = isHoliday(dateStr);
+    return holiday ? holiday.name : null;
+  };
+
+  const isOptionalHoliday = (dateStr) => {
+    const holiday = isHoliday(dateStr);
+    return holiday ? holiday.isOptional : false;
+  };
+
   // Get arrival status based on punch time
   const getArrivalStatus = (day) => {
     // Check both punchInUTC and punchIn
@@ -92,6 +156,11 @@ const Attendance = ({ userId, token }) => {
 
   // Get status based on punch time and day status
   const getDisplayStatus = (day) => {
+    // If it's a holiday, return 'holiday' status
+    if (isHolidayDate(day.date)) {
+      return 'holiday';
+    }
+    
     // If weekend or leave, use the original status
     if (day.status === 'weekend' || day.status === 'leave') {
       return day.status;
@@ -171,6 +240,14 @@ const Attendance = ({ userId, token }) => {
         icon: CalendarIcon,
         iconColor: 'text-slate-400',
         label: 'Weekend'
+      },
+      holiday: {
+        bg: 'bg-purple-50',
+        text: 'text-purple-700',
+        border: 'border-purple-200',
+        icon: Gift,
+        iconColor: 'text-purple-500',
+        label: 'Holiday 🎉'
       }
     };
     return configs[status] || configs.absent;
@@ -405,8 +482,6 @@ const Attendance = ({ userId, token }) => {
               </div>
             </div>
 
-       
-
             <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between">
                 <div>
@@ -433,6 +508,24 @@ const Attendance = ({ userId, token }) => {
                 </div>
                 <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
                   <CalendarDays size={20} className="text-indigo-600" />
+                </div>
+              </div>
+            </div>
+
+            {/* NEW: Holidays Card */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider">Holidays</p>
+                  <p className="text-2xl font-bold text-purple-600 mt-0.5">
+                    {displayDays.filter(d => isHolidayDate(d.date)).length}
+                  </p>
+                  <p className="text-[10px] text-purple-600 font-medium">
+                    🎉 This month
+                  </p>
+                </div>
+                <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center">
+                  <Gift size={20} className="text-purple-600" />
                 </div>
               </div>
             </div>
@@ -572,9 +665,11 @@ const Attendance = ({ userId, token }) => {
                           const arrivalStatus = getArrivalStatus(day);
                           const statusConfig = getStatusConfig(displayStatus);
                           const StatusIcon = statusConfig.icon;
+                          const holidayName = isHolidayDate(day.date) ? getHolidayName(day.date) : null;
+                          const isHolidayDay = isHolidayDate(day.date);
                           
                           return (
-                            <tr key={idx} className="hover:bg-slate-50/50 transition-all">
+                            <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${isHolidayDay ? 'bg-purple-50/30' : ''}`}>
                               <td className="px-4 py-3 text-sm font-medium text-slate-700">
                                 {day.date}
                               </td>
@@ -585,16 +680,24 @@ const Attendance = ({ userId, token }) => {
                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border}`}>
                                   <StatusIcon size={10} className={statusConfig.iconColor} />
                                   {statusConfig.label}
+                                  {isHolidayDay && holidayName && (
+                                    <span className="text-[8px] text-purple-500 ml-0.5">({holidayName})</span>
+                                  )}
                                 </span>
                               </td>
                               <td className="px-4 py-3 text-sm text-slate-600 font-mono">
-                                {day.punchIn ? formatTimeShortUTC(day.punchIn) : '-'}
+                                {isHolidayDay ? '—' : (day.punchIn ? formatTimeShortUTC(day.punchIn) : '-')}
                               </td>
                               <td className="px-4 py-3 text-sm text-slate-600 font-mono">
-                                {day.punchOut ? formatTimeShortUTC(day.punchOut) : '-'}
+                                {isHolidayDay ? '—' : (day.punchOut ? formatTimeShortUTC(day.punchOut) : '-')}
                               </td>
                               <td className="px-4 py-3">
-                                {arrivalStatus !== '—' && arrivalStatus !== 'On Time' && (
+                                {isHolidayDay ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold bg-purple-100 text-purple-700 border border-purple-200">
+                                    <Gift size={10} className="text-purple-500" />
+                                    {holidayName || 'Holiday 🎉'}
+                                  </span>
+                                ) : arrivalStatus !== '—' && arrivalStatus !== 'On Time' ? (
                                   <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold ${
                                     arrivalStatus.includes('late') 
                                       ? 'bg-amber-50 text-amber-700 border border-amber-200' 
@@ -607,19 +710,15 @@ const Attendance = ({ userId, token }) => {
                                     )}
                                     {arrivalStatus}
                                   </span>
-                                )}
-                                {displayStatus === 'partial' && (
+                                ) : displayStatus === 'partial' ? (
                                   <span className="text-[10px] text-blue-600 font-medium">Partial Day</span>
-                                )}
-                                {displayStatus === 'weekend' && (
+                                ) : displayStatus === 'weekend' ? (
                                   <span className="text-[10px] text-slate-400 font-medium">—</span>
-                                )}
-                                {displayStatus === 'absent' && (
+                                ) : displayStatus === 'absent' ? (
                                   <span className="text-[10px] text-rose-600 font-medium">✕ No Punch</span>
-                                )}
-                                {displayStatus === 'present' && arrivalStatus === 'On Time' && (
+                                ) : displayStatus === 'present' && arrivalStatus === 'On Time' ? (
                                   <span className="text-[10px] text-emerald-600 font-medium">✓ On Time</span>
-                                )}
+                                ) : null}
                               </td>
                             </tr>
                           );
@@ -653,11 +752,13 @@ const Attendance = ({ userId, token }) => {
                         const arrivalStatus = getArrivalStatus(day);
                         const statusConfig = getStatusConfig(displayStatus);
                         const StatusIcon = statusConfig.icon;
+                        const holidayName = isHolidayDate(day.date) ? getHolidayName(day.date) : null;
+                        const isHolidayDay = isHolidayDate(day.date);
                         
                         return (
                           <div
                             key={idx}
-                            className={`p-4 rounded-xl border ${statusConfig.border} ${statusConfig.bg} hover:shadow-md transition-all`}
+                            className={`p-4 rounded-xl border ${statusConfig.border} ${statusConfig.bg} hover:shadow-md transition-all ${isHolidayDay ? 'ring-2 ring-purple-300' : ''}`}
                           >
                             <div className="flex items-start justify-between">
                               <div>
@@ -669,16 +770,27 @@ const Attendance = ({ userId, token }) => {
                             <div className="mt-2">
                               <span className={`text-[10px] font-semibold ${statusConfig.text}`}>
                                 {statusConfig.label}
+                                {isHolidayDay && holidayName && (
+                                  <span className="text-[8px] text-purple-500 ml-1">({holidayName})</span>
+                                )}
                               </span>
                             </div>
                             <div className="mt-1.5 flex items-center gap-2 text-[10px] text-slate-500">
-                              {day.punchIn && <span>In: {formatTimeShortUTC(day.punchIn)}</span>}
-                              {day.punchOut && <span>Out: {formatTimeShortUTC(day.punchOut)}</span>}
-                              {!day.punchIn && !day.punchOut && displayStatus !== 'weekend' && (
-                                <span className="text-rose-500 font-medium">No punch</span>
+                              {isHolidayDay ? (
+                                <span className="text-purple-500 font-medium flex items-center gap-1">
+                                  <Gift size={12} /> {holidayName || 'Holiday'}
+                                </span>
+                              ) : (
+                                <>
+                                  {day.punchIn && <span>In: {formatTimeShortUTC(day.punchIn)}</span>}
+                                  {day.punchOut && <span>Out: {formatTimeShortUTC(day.punchOut)}</span>}
+                                  {!day.punchIn && !day.punchOut && displayStatus !== 'weekend' && (
+                                    <span className="text-rose-500 font-medium">No punch</span>
+                                  )}
+                                </>
                               )}
                             </div>
-                            {arrivalStatus !== '—' && arrivalStatus !== 'On Time' && (
+                            {!isHolidayDay && arrivalStatus !== '—' && arrivalStatus !== 'On Time' && (
                               <div className={`mt-1.5 text-[9px] font-semibold ${
                                 arrivalStatus.includes('late') 
                                   ? 'text-amber-700 bg-amber-100/50' 
@@ -687,9 +799,14 @@ const Attendance = ({ userId, token }) => {
                                 {arrivalStatus}
                               </div>
                             )}
-                            {arrivalStatus === 'On Time' && displayStatus === 'present' && (
+                            {!isHolidayDay && arrivalStatus === 'On Time' && displayStatus === 'present' && (
                               <div className="mt-1.5 text-[9px] font-semibold text-emerald-700 bg-emerald-100/50 px-2 py-0.5 rounded-full inline-block">
                                 On Time
+                              </div>
+                            )}
+                            {isHolidayDay && (
+                              <div className="mt-1.5 text-[8px] font-semibold text-purple-600 bg-purple-100/50 px-2 py-0.5 rounded-full inline-block">
+                                🎉 Holiday
                               </div>
                             )}
                           </div>

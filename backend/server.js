@@ -116,6 +116,7 @@ const hrRoutes = require('./routes/hrRoutes');
 const employeeRoutes = require('./routes/employeeRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
+const holidayRoutes = require('./routes/holidayRoutes');
 
 const app = express();
 
@@ -375,6 +376,7 @@ app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/leaves', leaveRoutes);
 app.use('/api/announcements', announcementRoutes);
+app.use('/api/holidays', holidayRoutes);
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
