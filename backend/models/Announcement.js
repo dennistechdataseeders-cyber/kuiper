@@ -1,4 +1,5 @@
-// backend/models/Announcement.js - Add viewedBy field
+// backend/models/Announcement.js - FULL UPDATED WITH HOLIDAY REMINDER SUPPORT
+
 const mongoose = require('mongoose');
 
 const commentSchema = new mongoose.Schema({
@@ -23,16 +24,24 @@ const announcementSchema = new mongoose.Schema({
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
     image: { type: String, default: null },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    createdBy: { 
+        type: mongoose.Schema.Types.ObjectId, 
+        ref: 'User', 
+        default: null 
+    },
     createdByName: { type: String, required: true },
     createdByRole: { type: String, default: '' },
     createdByAvatar: { type: String, default: null },
     likes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     comments: [commentSchema],
     isAutomated: { type: Boolean, default: false },
-    automatedType: { type: String, enum: ['birthday', 'work_anniversary'], default: null },
+    automatedType: { 
+        type: String, 
+        enum: ['birthday', 'work_anniversary', 'holiday_reminder'], 
+        default: null 
+    },
     automatedUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    // ✅ ADDED: Track which users have viewed this announcement
+    // Track which users have viewed this announcement
     viewedBy: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }]
 }, { timestamps: true });
 

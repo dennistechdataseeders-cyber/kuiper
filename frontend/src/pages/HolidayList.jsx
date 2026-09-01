@@ -31,8 +31,11 @@ const HolidayList = () => {
     const [holidays, setHolidays] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-    const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // Pagination
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 10;
     
     // Modal states
     const [showModal, setShowModal] = useState(false);
@@ -66,19 +69,21 @@ const HolidayList = () => {
 
     useEffect(() => {
         fetchHolidays();
-    }, [selectedYear, selectedMonth]);
+    }, [selectedYear]);
 
     const fetchHolidays = async () => {
         setLoading(true);
         try {
             const res = await axios.get(
-                `${API_BASE_URL}/api/holidays?year=${selectedYear}&month=${selectedMonth}`,
+                `${API_BASE_URL}/api/holidays?year=${selectedYear}`,
                 authHeader
             );
             
             if (res.data.success) {
-                setHolidays(res.data.data);
-                calculateStats(res.data.data);
+                // Sort by date
+                const sortedData = res.data.data.sort((a, b) => new Date(a.date) - new Date(b.date));
+                setHolidays(sortedData);
+                calculateStats(sortedData);
             }
         } catch (error) {
             console.error('Error fetching holidays:', error);
@@ -141,16 +146,15 @@ const HolidayList = () => {
                 isOptional: formData.isOptional
             };
             
-            let response;
             if (editingHoliday) {
-                response = await axios.put(
+                await axios.put(
                     `${API_BASE_URL}/api/holidays/${editingHoliday._id}`,
                     payload,
                     authHeader
                 );
                 toast.success('Holiday updated successfully');
             } else {
-                response = await axios.post(
+                await axios.post(
                     `${API_BASE_URL}/api/holidays`,
                     payload,
                     authHeader
@@ -188,28 +192,19 @@ const HolidayList = () => {
         }
     };
 
-    const navigateMonth = (direction) => {
-        if (direction === 'prev') {
-            if (selectedMonth === 1) {
-                setSelectedMonth(12);
-                setSelectedYear(selectedYear - 1);
-            } else {
-                setSelectedMonth(selectedMonth - 1);
-            }
-        } else {
-            if (selectedMonth === 12) {
-                setSelectedMonth(1);
-                setSelectedYear(selectedYear + 1);
-            } else {
-                setSelectedMonth(selectedMonth + 1);
-            }
-        }
+    const goToCurrentYear = () => {
+        const now = new Date();
+        setSelectedYear(now.getFullYear());
+        setCurrentPage(1);
     };
 
-    const goToCurrentMonth = () => {
-        const now = new Date();
-        setSelectedMonth(now.getMonth() + 1);
-        setSelectedYear(now.getFullYear());
+    const navigateYear = (direction) => {
+        if (direction === 'prev') {
+            setSelectedYear(selectedYear - 1);
+        } else {
+            setSelectedYear(selectedYear + 1);
+        }
+        setCurrentPage(1);
     };
 
     const getWeekdayName = (dateStr) => {
@@ -245,6 +240,18 @@ const HolidayList = () => {
         holiday.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         holiday.description?.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Pagination
+    const totalPages = Math.ceil(filteredHolidays.length / itemsPerPage);
+    const currentHolidays = filteredHolidays.slice(
+        (currentPage - 1) * itemsPerPage,
+        currentPage * itemsPerPage
+    );
+
+    // Reset to first page when search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm]);
 
     if (loading) {
         return (
@@ -313,33 +320,36 @@ const HolidayList = () => {
                 </div>
             </div>
 
-            {/* Month Navigation */}
+            {/* Year Navigation & Search */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
                 <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
                         <button
-                            onClick={goToCurrentMonth}
+                            onClick={goToCurrentYear}
                             className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all"
                         >
-                            Today
+                            Current Year
                         </button>
                         <div className="flex items-center gap-1">
                             <button
-                                onClick={() => navigateMonth('prev')}
+                                onClick={() => navigateYear('prev')}
                                 className="p-1.5 rounded-lg hover:bg-slate-100 transition-all"
                             >
                                 <ChevronLeft size={18} className="text-slate-500" />
                             </button>
-                            <span className="text-sm font-bold text-slate-700 min-w-[120px] text-center">
-                                {monthNames[selectedMonth - 1]} {selectedYear}
+                            <span className="text-sm font-bold text-slate-700 min-w-[80px] text-center">
+                                {selectedYear}
                             </span>
                             <button
-                                onClick={() => navigateMonth('next')}
+                                onClick={() => navigateYear('next')}
                                 className="p-1.5 rounded-lg hover:bg-slate-100 transition-all"
                             >
                                 <ChevronRight size={18} className="text-slate-500" />
                             </button>
                         </div>
+                        <span className="text-xs text-slate-400 ml-2">
+                            {holidays.length} holidays
+                        </span>
                     </div>
                     
                     <div className="relative w-full md:w-64">
@@ -357,7 +367,7 @@ const HolidayList = () => {
 
             {/* Holiday List */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                {filteredHolidays.length === 0 ? (
+                {currentHolidays.length === 0 ? (
                     <div className="p-12 text-center">
                         <CalendarDays size={48} className="text-slate-300 mx-auto mb-4" />
                         <p className="text-slate-500 font-medium">No holidays found</p>
@@ -366,82 +376,117 @@ const HolidayList = () => {
                         </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full min-w-[600px]">
-                            <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
-                                <tr>
-                                    <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
-                                    <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Day</th>
-                                    <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Holiday Name</th>
-                                    <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Type</th>
-                                    <th className="text-right px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                                {filteredHolidays.map((holiday) => {
-                                    const isPastDate = isPast(holiday.date);
-                                    const isTodayDate = isToday(holiday.date);
-                                    const weekday = getWeekdayName(holiday.date);
-                                    const displayDate = formatDateDisplay(holiday.date);
-                                    
-                                    return (
-                                        <tr key={holiday._id} className={`hover:bg-slate-50/60 transition-all ${isTodayDate ? 'bg-blue-50/30' : ''}`}>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center gap-2">
-                                                    <span className={`text-sm font-bold ${isTodayDate ? 'text-blue-600' : isPastDate ? 'text-slate-400' : 'text-slate-800'}`}>
-                                                        {displayDate}
+                    <>
+                        <div className="overflow-x-auto">
+                            <table className="w-full min-w-[600px]">
+                                <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
+                                    <tr>
+                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">#</th>
+                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
+                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Day</th>
+                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Holiday Name</th>
+                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Type</th>
+                                        <th className="text-right px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {currentHolidays.map((holiday, index) => {
+                                        const isPastDate = isPast(holiday.date);
+                                        const isTodayDate = isToday(holiday.date);
+                                        const weekday = getWeekdayName(holiday.date);
+                                        const displayDate = formatDateDisplay(holiday.date);
+                                        const serialNumber = (currentPage - 1) * itemsPerPage + index + 1;
+                                        
+                                        return (
+                                            <tr key={holiday._id} className={`hover:bg-slate-50/60 transition-all ${isTodayDate ? 'bg-blue-50/30' : ''}`}>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-sm font-bold text-slate-400">{serialNumber}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className={`text-sm font-bold ${isTodayDate ? 'text-blue-600' : isPastDate ? 'text-slate-400' : 'text-slate-800'}`}>
+                                                            {displayDate}
+                                                        </span>
+                                                        {isTodayDate && (
+                                                            <span className="text-[8px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Today</span>
+                                                        )}
+                                                        {isPastDate && (
+                                                            <span className="text-[8px] font-bold bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Past</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className="text-sm font-medium text-slate-600">{weekday}</span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div>
+                                                        <p className="text-sm font-bold text-slate-800">{holiday.name}</p>
+                                                        {holiday.description && (
+                                                            <p className="text-xs text-slate-400">{holiday.description}</p>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold ${holiday.isOptional ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                        {holiday.isOptional ? 'Optional' : 'Public'}
                                                     </span>
-                                                    {isTodayDate && (
-                                                        <span className="text-[8px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Today</span>
-                                                    )}
-                                                    {isPastDate && (
-                                                        <span className="text-[8px] font-bold bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Past</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className="text-sm font-medium text-slate-600">{weekday}</span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-800">{holiday.name}</p>
-                                                    {holiday.description && (
-                                                        <p className="text-xs text-slate-400">{holiday.description}</p>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold ${holiday.isOptional ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                    {holiday.isOptional ? 'Optional' : 'Public'}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <button
-                                                        onClick={() => openEditModal(holiday)}
-                                                        className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit2 size={14} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => {
-                                                            setDeletingHoliday(holiday);
-                                                            setShowDeleteModal(true);
-                                                        }}
-                                                        className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all"
-                                                        title="Delete"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button
+                                                            onClick={() => openEditModal(holiday)}
+                                                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => {
+                                                                setDeletingHoliday(holiday);
+                                                                setShowDeleteModal(true);
+                                                            }}
+                                                            className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        {/* Pagination */}
+                        {totalPages > 1 && (
+                            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+                                <span className="text-xs text-slate-500">
+                                    Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredHolidays.length)} of {filteredHolidays.length} holidays
+                                </span>
+                                <div className="flex gap-1">
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                    <span className="text-xs font-bold text-slate-600 flex items-center px-2">
+                                        {currentPage} / {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                                    >
+                                        <ChevronRight size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

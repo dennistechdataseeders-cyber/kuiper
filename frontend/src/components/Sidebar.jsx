@@ -39,13 +39,15 @@ import {
   UserCog,
   UserCheck,
   Megaphone,
-  CalendarDays  // ADDED FOR HOLIDAY LIST
+  CalendarDays,
+  Pencil // ADDED for edit profile icon
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
+import UpdateProfileModal from './UpdateProfileModal'; // ADDED
 import API_BASE_URL from '../config';
 import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
 import io from 'socket.io-client';
@@ -70,6 +72,12 @@ const Sidebar = () => {
   const [showImageUploadModal, setShowImageUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
+  
+  // ============================================
+  // PROFILE UPDATE MODAL STATE - ADDED
+  // ============================================
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileUpdated, setProfileUpdated] = useState(0);
 
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -129,7 +137,7 @@ const Sidebar = () => {
     };
     
     fetchProfileImage();
-  }, [userId]);
+  }, [profileUpdated, userId]); // ADDED profileUpdated dependency
 
   // FETCH TICKET COUNT (non-closed tickets)
   useEffect(() => {
@@ -210,6 +218,14 @@ const Sidebar = () => {
       }
     };
   }, [userId]);
+
+  // ============================================
+  // PROFILE UPDATE HANDLER - ADDED
+  // ============================================
+  const handleProfileUpdated = () => {
+    setProfileUpdated(prev => prev + 1);
+    toast.success('Profile updated successfully!');
+  };
 
   // LOGOUT
   const handleLogout = () => {
@@ -389,7 +405,7 @@ const Sidebar = () => {
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' }, // ADDED
+      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
@@ -433,7 +449,7 @@ const Sidebar = () => {
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' }, // ADDED
+      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
       { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
@@ -506,7 +522,7 @@ const Sidebar = () => {
 
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
-      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' }, // ADDED
+      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
@@ -545,7 +561,7 @@ const Sidebar = () => {
       '/developer/worklog', '/developer/bucket', '/teamlead/projects',
       '/teamlead/developers', '/teamlead/feeds', '/teamlead/feed-status',
       '/client/projects', '/client/feeds', '/feasibility', '/announcements',
-      '/hr/holidays' // ADDED
+      '/hr/holidays'
     ];
     
     if (exactMatchPaths.includes(path)) {
@@ -652,13 +668,11 @@ const Sidebar = () => {
                     <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap flex-1">
                       {item.label}
                     </span>
-                    {/* ✅ TICKET BADGE - RED */}
                     {showBadge && (
                       <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
                         {ticketCount > 99 ? '99+' : ticketCount}
                       </span>
                     )}
-                    {/* ✅ ANNOUNCEMENT BADGE - RED (same as ticket) */}
                     {showAnnBadge && (
                       <span className="ml-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse">
                         {announcementCount > 99 ? '99+' : announcementCount}
@@ -666,13 +680,11 @@ const Sidebar = () => {
                     )}
                   </>
                 )}
-                {/* ✅ COLLAPSED TICKET BADGE - RED */}
                 {isCollapsed && !isMobile && showBadge && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
                     {ticketCount > 99 ? '99+' : ticketCount}
                   </span>
                 )}
-                {/* ✅ COLLAPSED ANNOUNCEMENT BADGE - RED (same as ticket) */}
                 {isCollapsed && !isMobile && showAnnBadge && (
                   <span className="absolute -top-1 -right-6 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md animate-pulse">
                     {announcementCount > 99 ? '99+' : announcementCount}
@@ -747,6 +759,22 @@ const Sidebar = () => {
                 isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
               }`}
             >
+              {/* ============================================
+                  UPDATE PROFILE BUTTON - ADDED
+                  ============================================ */}
+              <button
+                onClick={() => {
+                  setShowProfileModal(true);
+                  setShowUserMenu(false);
+                }}
+                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+              >
+                <Pencil size={13} className="text-emerald-400" />
+                <span>Update Profile</span>
+              </button>
+
+              <div className="h-px bg-white/5 my-1 mx-1" />
+
               <button
                 onClick={() => {
                   setShowImageUploadModal(true);
@@ -964,6 +992,18 @@ const Sidebar = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* ============================================
+          UPDATE PROFILE MODAL - ADDED
+          ============================================ */}
+      {showProfileModal && (
+        <UpdateProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userId={userId}
+          onProfileUpdated={handleProfileUpdated}
+        />
       )}
 
       {/* LOGOUT MODAL */}

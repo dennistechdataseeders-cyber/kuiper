@@ -29,7 +29,6 @@ import {
   Bell,
   Activity,
   BarChart3,
-  Fingerprint,
   X as XIcon
 } from 'lucide-react';
 import API_BASE_URL from '../config';
@@ -65,6 +64,14 @@ const HrDashboard = () => {
   // 🔥 NEW: Store present employees data for display on the card
   const [presentEmployees, setPresentEmployees] = useState([]);
   const [presentEmployeesLoaded, setPresentEmployeesLoaded] = useState(false);
+
+  // 🔥 NEW: Store absent/late/onLeave employees for direct display in Today's Overview tables
+  const [absentEmployees, setAbsentEmployees] = useState([]);
+  const [absentEmployeesLoaded, setAbsentEmployeesLoaded] = useState(false);
+  const [lateEmployees, setLateEmployees] = useState([]);
+  const [lateEmployeesLoaded, setLateEmployeesLoaded] = useState(false);
+  const [onLeaveEmployeesList, setOnLeaveEmployeesList] = useState([]);
+  const [onLeaveEmployeesLoaded, setOnLeaveEmployeesLoaded] = useState(false);
 
   const [pendingLeaves, setPendingLeaves] = useState([]);
   const [pendingCorrections, setPendingCorrections] = useState([]);
@@ -110,10 +117,9 @@ const fetchData = async () => {
       attendanceRate: statsData.attendanceRate || 0
     });
     
-    // 🔥 FIX: Set present employees directly from backend response
-    setPresentEmployees(statsData.presentEmployees || []);
-    setPresentEmployeesLoaded(true);
-    
+    // Note: /api/hr/dashboard/stats only returns counts, not employee names -
+    // the actual present/absent/late/onLeave employee lists are fetched
+    // separately in fetchOverviewLists() below.
     setPendingLeaves(leavesRes.data.data || []);
     setPendingCorrections(correctionsRes.data.data || []);
     setLeaveTypes(typesRes.data.data || []);
@@ -125,19 +131,6 @@ const fetchData = async () => {
     setLoading(false);
   }
 };
-
-  // 🔥 NEW: Fetch only present employees for display
-  const fetchPresentEmployees = async () => {
-    try {
-      setPresentEmployeesLoaded(false);
-      const result = await fetchEmployeesByStatusInternal('present');
-      setPresentEmployees(result || []);
-      setPresentEmployeesLoaded(true);
-    } catch (error) {
-      console.error('Error fetching present employees:', error);
-      setPresentEmployeesLoaded(true);
-    }
-  };
 
   // Internal function to fetch employees by status
   const fetchEmployeesByStatusInternal = async (status) => {
@@ -271,8 +264,37 @@ const fetchData = async () => {
     }
   };
 
+  // 🔥 NEW: Fetch absent/late/onLeave employees so they can be shown directly
+  // on the dashboard (no click needed) inside the Today's Overview tables
+  const fetchOverviewLists = async () => {
+    setPresentEmployeesLoaded(false);
+    setAbsentEmployeesLoaded(false);
+    setLateEmployeesLoaded(false);
+    setOnLeaveEmployeesLoaded(false);
+    try {
+      const [presentList, absentList, lateList, onLeaveList] = await Promise.all([
+        fetchEmployeesByStatusInternal('present'),
+        fetchEmployeesByStatusInternal('absent'),
+        fetchEmployeesByStatusInternal('late'),
+        fetchEmployeesByStatusInternal('onLeave')
+      ]);
+      setPresentEmployees(presentList || []);
+      setAbsentEmployees(absentList || []);
+      setLateEmployees(lateList || []);
+      setOnLeaveEmployeesList(onLeaveList || []);
+    } catch (error) {
+      console.error('Error fetching overview lists:', error);
+    } finally {
+      setPresentEmployeesLoaded(true);
+      setAbsentEmployeesLoaded(true);
+      setLateEmployeesLoaded(true);
+      setOnLeaveEmployeesLoaded(true);
+    }
+  };
+
   useEffect(() => {
     fetchData();
+    fetchOverviewLists();
   }, []);
 
   // Open employee list modal
@@ -481,149 +503,108 @@ const fetchData = async () => {
     );
   }
 
+  // 🔥 FIX: /api/hr/dashboard/stats counts ANYONE who punched in today as
+  // "present" (including late arrivals), while the lists below only include
+  // employees whose actual per-day status is strictly on-time/absent/late/leave.
+  // That mismatch is what made "Present: 3" show 0 rows when all 3 who punched
+  // in today were actually late. Once each list has loaded, show its real
+  // length so the badge number always matches the rows underneath it.
+  const presentCount = presentEmployeesLoaded ? presentEmployees.length : stats.present;
+  const absentCount = absentEmployeesLoaded ? absentEmployees.length : stats.absent;
+  const lateCount = lateEmployeesLoaded ? lateEmployees.length : stats.late;
+  const onLeaveCount = onLeaveEmployeesLoaded ? onLeaveEmployeesList.length : stats.onLeave;
+
   return (
     <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
       {/* Header */}
       <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div>
             <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
               HR Dashboard
             </h1>
             <p className="text-slate-500 mt-1">Manage employee attendance, leaves, and corrections</p>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[9px] font-black text-slate-500 uppercase">Live</span>
-            </div>
-            <button
-              onClick={fetchData}
-              className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2"
-            >
-              <Activity size={16} />
-              Refresh
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* Stats Cards - Clickable */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {/* Total Employees - Navigate to Attendance Sync */}
-        <div
-          onClick={() => navigate('/hr/attendance-sync')}
-          className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200"
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total Employees</p>
-              <p className="text-2xl font-black text-white">{stats.totalEmployees}</p>
+          {/* Right column: Live/Refresh controls stacked above the snapshot card,
+              so nothing overlaps. Sticky keeps the snapshot visible near the
+              top-right corner as the page scrolls, without covering other content. */}
+          <div className="flex flex-col items-end gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                <span className="text-[9px] font-black text-slate-500 uppercase">Live</span>
+              </div>
+           
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <Users size={18} className="text-white" />
-            </div>
-          </div>
-          <div className="mt-2 text-xs text-white/60">
-            Click to view all employees
-          </div>
-        </div>
 
-        {/* Present - Opens modal */}
-        <div
-          onClick={() => stats.present > 0 && openEmployeeListModal('present')}
-          className={`bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 shadow-sm ${stats.present > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Present Today</p>
-              <p className="text-2xl font-black text-white">{stats.present}</p>
-              {/* 🔥 FIX: Show employee names on the card if available */}
-              {presentEmployeesLoaded && presentEmployees.length > 0 && (
-                <div className="mt-1 text-[10px] text-white/80 truncate max-w-[160px]">
-                  {presentEmployees.slice(0, 3).map(e => e.name).join(', ')}
-                  {presentEmployees.length > 3 && ` +${presentEmployees.length - 3} more`}
+          
+   
+          <div className="sticky top-12 w-auto bg-white rounded-xl border border-slate-200 shadow-lg p-4">
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Attendance % */}
+              <div className="flex items-center gap-3">
+                <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">Attendance</span>
+                <span className="text-base font-black text-blue-600">{stats.attendanceRate}%</span>
+              </div>
+              
+              <div className="w-px h-8 bg-slate-200"></div>
+              
+              {/* Total */}
+              <div className="flex items-center gap-2">
+                <Users size={15} className="text-blue-600" />
+                <div>
+                  <span className="text-[10px] font-bold text-blue-700 block leading-none">Total</span>
+                  <span className="text-sm font-black text-blue-700 block leading-tight">{stats.totalEmployees}</span>
                 </div>
-              )}
-              {presentEmployeesLoaded && presentEmployees.length === 0 && stats.present > 0 && (
-                <div className="mt-1 text-[10px] text-white/60 italic">Loading names...</div>
-              )}
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <UserCheck size={18} className="text-white" />
-            </div>
-          </div>
-          {stats.present > 0 && (
-            <div className="mt-2 text-xs text-white/60">
-              Click to view {stats.present} present employees
-            </div>
-          )}
-          <div className="mt-1 text-xs text-white/60">
-            {stats.attendanceRate}% attendance rate
-          </div>
-        </div>
-
-        {/* Absent - Opens modal */}
-        <div
-          onClick={() => stats.absent > 0 && openEmployeeListModal('absent')}
-          className={`bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-4 shadow-sm ${stats.absent > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Absent</p>
-              <p className="text-2xl font-black text-white">{stats.absent}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <UserX size={18} className="text-white" />
-            </div>
-          </div>
-          {stats.absent > 0 && (
-            <div className="mt-2 text-xs text-white/60">
-              Click to view absent employees
-            </div>
-          )}
-        </div>
-
-        {/* Late - Opens modal */}
-        <div
-          onClick={() => stats.late > 0 && openEmployeeListModal('late')}
-          className={`bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 shadow-sm ${stats.late > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Late</p>
-              <p className="text-2xl font-black text-white">{stats.late}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <Clock size={18} className="text-white" />
+              </div>
+              
+              <div className="w-px h-8 bg-slate-200"></div>
+              
+              {/* Present */}
+              <div className="flex items-center gap-2">
+                <UserCheck size={15} className="text-emerald-600" />
+                <div>
+                  <span className="text-[10px] font-bold text-emerald-700 block leading-none">Present</span>
+                  <span className="text-sm font-black text-emerald-700 block leading-tight">{presentCount}</span>
+                </div>
+              </div>
+              
+              <div className="w-px h-8 bg-slate-200"></div>
+              
+              {/* Late */}
+              <div className="flex items-center gap-2">
+                <Clock size={15} className="text-amber-600" />
+                <div>
+                  <span className="text-[10px] font-bold text-amber-700 block leading-none">Late</span>
+                  <span className="text-sm font-black text-amber-700 block leading-tight">{lateCount}</span>
+                </div>
+              </div>
+              
+              <div className="w-px h-8 bg-slate-200"></div>
+              
+              {/* Absent */}
+              <div className="flex items-center gap-2">
+                <UserX size={15} className="text-red-600" />
+                <div>
+                  <span className="text-[10px] font-bold text-red-700 block leading-none">Absent</span>
+                  <span className="text-sm font-black text-red-700 block leading-tight">{absentCount}</span>
+                </div>
+              </div>
+              
+              <div className="w-px h-8 bg-slate-200"></div>
+              
+              {/* On Leave */}
+              <div className="flex items-center gap-2">
+                <Calendar size={15} className="text-purple-600" />
+                <div>
+                  <span className="text-[10px] font-bold text-purple-700 block leading-none">On Leave</span>
+                  <span className="text-sm font-black text-purple-700 block leading-tight">{onLeaveCount}</span>
+                </div>
+              </div>
             </div>
           </div>
-          {stats.late > 0 && (
-            <div className="mt-2 text-xs text-white/60">
-              Click to view late employees
-            </div>
-          )}
-        </div>
-
-        {/* On Leave - Opens modal */}
-        <div
-          onClick={() => stats.onLeave > 0 && openEmployeeListModal('onLeave')}
-          className={`bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 shadow-sm ${stats.onLeave > 0 ? 'cursor-pointer hover:shadow-lg hover:scale-[1.02] transition-all duration-200' : 'opacity-70'}`}
-        >
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">On Leave</p>
-              <p className="text-2xl font-black text-white">{stats.onLeave}</p>
-            </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
-              <Calendar size={18} className="text-white" />
-            </div>
           </div>
-          {stats.onLeave > 0 && (
-            <div className="mt-2 text-xs text-white/60">
-              Click to view employees on leave
-            </div>
-          )}
         </div>
       </div>
 
@@ -687,100 +668,101 @@ const fetchData = async () => {
       <div className="space-y-6">
         {/* Dashboard Tab */}
         {selectedTab === 'dashboard' && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Quick Stats */}
+          <div>
+            {/* Today's Overview - 4 tables side by side, full info shown directly (no click needed) */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
               <h3 className="text-sm font-black text-slate-700 mb-4 flex items-center gap-2">
                 <Users size={16} className="text-blue-600" />
                 Today's Overview
               </h3>
-              <div className="space-y-3">
-                <div
-                  onClick={() => navigate('/hr/attendance-sync')}
-                  className="flex justify-between items-center p-3 bg-slate-50 rounded-lg cursor-pointer hover:bg-slate-100 transition-all"
-                >
-                  <span className="text-sm font-medium text-slate-600">Total Employees</span>
-                  <span className="text-lg font-black text-slate-800">{stats.totalEmployees}</span>
-                </div>
-                <div
-                  onClick={() => stats.present > 0 && openEmployeeListModal('present')}
-                  className={`flex justify-between items-center p-3 bg-emerald-50 rounded-lg ${stats.present > 0 ? 'cursor-pointer hover:bg-emerald-100 transition-all' : ''}`}
-                >
-                  <span className="text-sm font-medium text-emerald-700">Present (On time)</span>
-                </div>
-                <div
-                  onClick={() => stats.absent > 0 && openEmployeeListModal('absent')}
-                  className={`flex justify-between items-center p-3 bg-red-50 rounded-lg ${stats.absent > 0 ? 'cursor-pointer hover:bg-red-100 transition-all' : ''}`}
-                >
-                  <span className="text-sm font-medium text-red-700">Absent</span>
-                  <span className="text-lg font-black text-red-700">{stats.absent}</span>
-                </div>
-                <div
-                  onClick={() => stats.late > 0 && openEmployeeListModal('late')}
-                  className={`flex justify-between items-center p-3 bg-amber-50 rounded-lg ${stats.late > 0 ? 'cursor-pointer hover:bg-amber-100 transition-all' : ''}`}
-                >
-                  <span className="text-sm font-medium text-amber-700">Present (Late)</span>
-                </div>
-                <div
-                  onClick={() => stats.onLeave > 0 && openEmployeeListModal('onLeave')}
-                  className={`flex justify-between items-center p-3 bg-purple-50 rounded-lg ${stats.onLeave > 0 ? 'cursor-pointer hover:bg-purple-100 transition-all' : ''}`}
-                >
-                  <span className="text-sm font-medium text-purple-700">On Leave</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-              <h3 className="text-sm font-black text-slate-700 mb-4 flex items-center gap-2">
-                <Activity size={16} className="text-blue-600" />
-                Quick Actions
-              </h3>
-              <div className="space-y-3">
-                <button
-                  onClick={() => setSelectedTab('leaves')}
-                  className="w-full p-4 bg-amber-50 hover:bg-amber-100 rounded-xl border border-amber-200 transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <FileText size={18} className="text-amber-600" />
-                    <span className="font-bold text-amber-700">Review Pending Leaves</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Present table */}
+                <div className="border border-emerald-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-emerald-50 border-b border-emerald-200">
+                    <div className="flex items-center gap-1.5">
+                      <UserCheck size={14} className="text-emerald-600" />
+                      <span className="text-xs font-black text-emerald-700">Present (On time)</span>
+                    </div>
+                    <span className="text-sm font-black text-emerald-700">{presentCount}</span>
                   </div>
-                  <span className="text-sm font-black text-amber-600">{stats.pendingLeaves}</span>
-                </button>
-
-                {/* Biometric Sync Button */}
-                <button
-                  onClick={() => navigate('/hr/attendance-sync')}
-                  className="w-full p-4 bg-indigo-50 hover:bg-indigo-100 rounded-xl border border-indigo-200 transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <Fingerprint size={18} className="text-indigo-600" />
-                    <span className="font-bold text-indigo-700">Sync Biometric Attendance</span>
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                    {!presentEmployeesLoaded ? (
+                      <div className="flex justify-center py-6"><Loader2 size={18} className="text-emerald-500 animate-spin" /></div>
+                    ) : presentEmployees.length === 0 ? (
+                      <p className="text-center text-[11px] text-slate-400 py-6">No employees present</p>
+                    ) : (
+                      presentEmployees.map((emp) => (
+                        <div key={emp._id} className="px-3 py-2 text-xs text-slate-700 truncate">{emp.name}</div>
+                      ))
+                    )}
                   </div>
-                  <span className="text-sm font-black text-indigo-600">📋</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedTab('corrections')}
-                  className="w-full p-4 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200 transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <Clock size={18} className="text-purple-600" />
-                    <span className="font-bold text-purple-700">Review Corrections</span>
+                </div>
+                 {/* Present (Late) table */}
+                <div className="border border-amber-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-amber-50 border-b border-amber-200">
+                    <div className="flex items-center gap-1.5">
+                      <Clock size={14} className="text-amber-600" />
+                      <span className="text-xs font-black text-amber-700">Present (Late)</span>
+                    </div>
+                    <span className="text-sm font-black text-amber-700">{lateCount}</span>
                   </div>
-                  <span className="text-sm font-black text-purple-600">{stats.pendingCorrections}</span>
-                </button>
-
-                <button
-                  onClick={() => setSelectedTab('settings')}
-                  className="w-full p-4 bg-blue-50 hover:bg-blue-100 rounded-xl border border-blue-200 transition-all flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <Settings size={18} className="text-blue-600" />
-                    <span className="font-bold text-blue-700">Manage Leave Types</span>
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                    {!lateEmployeesLoaded ? (
+                      <div className="flex justify-center py-6"><Loader2 size={18} className="text-amber-500 animate-spin" /></div>
+                    ) : lateEmployees.length === 0 ? (
+                      <p className="text-center text-[11px] text-slate-400 py-6">No late arrivals</p>
+                    ) : (
+                      lateEmployees.map((emp) => (
+                        <div key={emp._id} className="px-3 py-2 text-xs text-slate-700 truncate">{emp.name}</div>
+                      ))
+                    )}
                   </div>
-                  <span className="text-sm font-black text-blue-600">{leaveTypes.length}</span>
-                </button>
+                </div>
+                {/* Absent table */}
+                <div className="border border-red-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-red-50 border-b border-red-200">
+                    <div className="flex items-center gap-1.5">
+                      <UserX size={14} className="text-red-600" />
+                      <span className="text-xs font-black text-red-700">Absent</span>
+                    </div>
+                    <span className="text-sm font-black text-red-700">{absentCount}</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                    {!absentEmployeesLoaded ? (
+                      <div className="flex justify-center py-6"><Loader2 size={18} className="text-red-500 animate-spin" /></div>
+                    ) : absentEmployees.length === 0 ? (
+                      <p className="text-center text-[11px] text-slate-400 py-6">No absences today</p>
+                    ) : (
+                      absentEmployees.map((emp) => (
+                        <div key={emp._id} className="px-3 py-2 text-xs text-slate-700 truncate">{emp.name}</div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+               
+
+                {/* On Leave table */}
+                <div className="border border-purple-200 rounded-xl overflow-hidden">
+                  <div className="flex items-center justify-between px-3 py-2.5 bg-purple-50 border-b border-purple-200">
+                    <div className="flex items-center gap-1.5">
+                      <Calendar size={14} className="text-purple-600" />
+                      <span className="text-xs font-black text-purple-700">On Leave</span>
+                    </div>
+                    <span className="text-sm font-black text-purple-700">{onLeaveCount}</span>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto divide-y divide-slate-100">
+                    {!onLeaveEmployeesLoaded ? (
+                      <div className="flex justify-center py-6"><Loader2 size={18} className="text-purple-500 animate-spin" /></div>
+                    ) : onLeaveEmployeesList.length === 0 ? (
+                      <p className="text-center text-[11px] text-slate-400 py-6">No one on leave</p>
+                    ) : (
+                      onLeaveEmployeesList.map((emp) => (
+                        <div key={emp._id} className="px-3 py-2 text-xs text-slate-700 truncate">{emp.name}</div>
+                      ))
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>

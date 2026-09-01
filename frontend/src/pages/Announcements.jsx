@@ -650,11 +650,7 @@ const Announcements = () => {
                               HR
                             </span>
                           )}
-                          {isAutomated && (
-                            <span className="ml-2 text-[8px] font-bold uppercase tracking-wider text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-full">
-                              Automated
-                            </span>
-                          )}
+                         
                         </p>
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <span>{creatorRole || 'Team Member'}</span>

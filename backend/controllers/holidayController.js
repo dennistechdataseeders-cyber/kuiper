@@ -2,6 +2,8 @@
 const Holiday = require('../models/Holiday');
 const User = require('../models/User');
 const Log = require('../models/Log');
+const sendEmail = require('../services/zohoMailer');
+const { getHolidayCreatedTemplate } = require('../templates/holidayEmailTemplates');
 
 // ============================================
 // GET ALL HOLIDAYS
@@ -60,7 +62,7 @@ exports.getHolidayById = async (req, res) => {
 };
 
 // ============================================
-// CREATE HOLIDAY
+// CREATE HOLIDAY - WITH EMAIL NOTIFICATIONS
 // ============================================
 exports.createHoliday = async (req, res) => {
     try {
@@ -111,10 +113,68 @@ exports.createHoliday = async (req, res) => {
                 holiday: populatedHoliday
             });
         }
+
+        // ============================================
+        // SEND HOLIDAY NOTIFICATION EMAILS
+        // ============================================
+        try {
+            // Get all active users except Admins (they already know)
+            const users = await User.find({ 
+                isActive: true,
+                role: { $nin: ['Admin', 'Super Admin'] }
+            }).select('email name role');
+            
+            console.log(`📧 Sending holiday notification to ${users.length} employees`);
+
+            const frontendUrl = process.env.FRONTEND_URL || 'https://kuiperapp.co.in';
+            
+            // Create email content once to reuse
+            const emailHtml = getHolidayCreatedTemplate({
+                name: holiday.name,
+                date: holiday.date,
+                description: holiday.description,
+                isOptional: holiday.isOptional,
+                frontendUrl: frontendUrl
+            });
+
+            // Send emails in batches to avoid overwhelming the email service
+            const batchSize = 20;
+            const emailPromises = [];
+            
+            for (let i = 0; i < users.length; i += batchSize) {
+                const batch = users.slice(i, i + batchSize);
+                const batchPromises = batch.map(async (user) => {
+                    try {
+                        await sendEmail({
+                            to: user.email,
+                            subject: `🎉 New Holiday: ${holiday.name} (${new Date(holiday.date).toLocaleDateString()})`,
+                            html: emailHtml
+                        });
+                        console.log(`✅ Holiday email sent to: ${user.email}`);
+                    } catch (emailError) {
+                        console.error(`❌ Failed to send holiday email to ${user.email}:`, emailError.message);
+                    }
+                });
+                
+                // Wait for current batch to complete before starting next
+                await Promise.all(batchPromises);
+                
+                // Small delay between batches to avoid rate limiting
+                if (i + batchSize < users.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            console.log(`📧 Holiday notification emails sent to ${users.length} employees`);
+
+        } catch (emailError) {
+            console.error('Holiday email notification failed:', emailError.message);
+            // Don't fail the request if emails fail - the holiday is already created
+        }
         
         res.status(201).json({
             success: true,
-            message: 'Holiday created successfully',
+            message: 'Holiday created successfully and notifications sent',
             data: populatedHoliday
         });
         
@@ -125,7 +185,7 @@ exports.createHoliday = async (req, res) => {
 };
 
 // ============================================
-// UPDATE HOLIDAY
+// UPDATE HOLIDAY - WITH EMAIL NOTIFICATIONS
 // ============================================
 exports.updateHoliday = async (req, res) => {
     try {
@@ -150,6 +210,12 @@ exports.updateHoliday = async (req, res) => {
                 });
             }
         }
+        
+        // Store old values for notification
+        const oldName = holiday.name;
+        const oldDate = holiday.date;
+        const oldIsOptional = holiday.isOptional;
+        const oldDescription = holiday.description;
         
         const updates = {};
         if (date) updates.date = new Date(date);
@@ -182,10 +248,74 @@ exports.updateHoliday = async (req, res) => {
                 holiday: updatedHoliday
             });
         }
+
+        // ============================================
+        // SEND HOLIDAY UPDATE NOTIFICATION EMAILS
+        // ============================================
+        try {
+            // Only send update notifications if significant changes were made
+            const hasSignificantChanges = 
+                oldName !== updatedHoliday.name ||
+                oldDate.getTime() !== updatedHoliday.date.getTime() ||
+                oldIsOptional !== updatedHoliday.isOptional ||
+                (oldDescription || '') !== (updatedHoliday.description || '');
+
+            if (hasSignificantChanges) {
+                // Get all active users except Admins
+                const users = await User.find({ 
+                    isActive: true,
+                    role: { $nin: ['Admin', 'Super Admin'] }
+                }).select('email name role');
+                
+                console.log(`📧 Sending holiday update notification to ${users.length} employees`);
+
+                const frontendUrl = process.env.FRONTEND_URL || 'https://kuiperapp.co.in';
+                
+                // Create a different template for updates
+                const emailHtml = getHolidayUpdatedTemplate({
+                    oldName: oldName,
+                    newName: updatedHoliday.name,
+                    oldDate: oldDate,
+                    newDate: updatedHoliday.date,
+                    oldIsOptional: oldIsOptional,
+                    newIsOptional: updatedHoliday.isOptional,
+                    oldDescription: oldDescription,
+                    newDescription: updatedHoliday.description,
+                    frontendUrl: frontendUrl
+                });
+
+                // Send emails in batches
+                const batchSize = 20;
+                for (let i = 0; i < users.length; i += batchSize) {
+                    const batch = users.slice(i, i + batchSize);
+                    const batchPromises = batch.map(async (user) => {
+                        try {
+                            await sendEmail({
+                                to: user.email,
+                                subject: `📝 Holiday Updated: ${updatedHoliday.name} (${new Date(updatedHoliday.date).toLocaleDateString()})`,
+                                html: emailHtml
+                            });
+                        } catch (emailError) {
+                            console.error(`Failed to send holiday update email to ${user.email}:`, emailError.message);
+                        }
+                    });
+                    await Promise.all(batchPromises);
+                    if (i + batchSize < users.length) {
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    }
+                }
+
+                console.log(`📧 Holiday update emails sent to ${users.length} employees`);
+            }
+
+        } catch (emailError) {
+            console.error('Holiday update email notification failed:', emailError.message);
+            // Don't fail the request if emails fail
+        }
         
         res.json({
             success: true,
-            message: 'Holiday updated successfully',
+            message: 'Holiday updated successfully and notifications sent',
             data: updatedHoliday
         });
         
@@ -226,6 +356,54 @@ exports.deleteHoliday = async (req, res) => {
                 action: 'deleted',
                 holidayId: req.params.id
             });
+        }
+
+        // ============================================
+        // SEND HOLIDAY DELETION NOTIFICATION EMAILS
+        // ============================================
+        try {
+            // Get all active users except Admins
+            const users = await User.find({ 
+                isActive: true,
+                role: { $nin: ['Admin', 'Super Admin'] }
+            }).select('email name role');
+            
+            console.log(`📧 Sending holiday deletion notification to ${users.length} employees`);
+
+            const frontendUrl = process.env.FRONTEND_URL || 'https://kuiperapp.co.in';
+            
+            const emailHtml = getHolidayDeletedTemplate({
+                name: holidayName,
+                date: holidayDate,
+                frontendUrl: frontendUrl
+            });
+
+            // Send emails in batches
+            const batchSize = 20;
+            for (let i = 0; i < users.length; i += batchSize) {
+                const batch = users.slice(i, i + batchSize);
+                const batchPromises = batch.map(async (user) => {
+                    try {
+                        await sendEmail({
+                            to: user.email,
+                            subject: `🗑️ Holiday Removed: ${holidayName} (${holidayDate})`,
+                            html: emailHtml
+                        });
+                    } catch (emailError) {
+                        console.error(`Failed to send holiday deletion email to ${user.email}:`, emailError.message);
+                    }
+                });
+                await Promise.all(batchPromises);
+                if (i + batchSize < users.length) {
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            console.log(`📧 Holiday deletion emails sent to ${users.length} employees`);
+
+        } catch (emailError) {
+            console.error('Holiday deletion email notification failed:', emailError.message);
+            // Don't fail the request if emails fail
         }
         
         res.json({

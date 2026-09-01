@@ -648,15 +648,13 @@ router.get('/attendance/device-codes', async (req, res) => {
     });
   }
 });
-// ============================================
-// DASHBOARD STATS (HR) - FIXED with IST timezone and proper status mapping
-// ============================================
+// backend/routes/hrRoutes.js - UPDATED DASHBOARD STATS WITH EMPLOYEE LISTS
 
 // ============================================
-// DASHBOARD STATS (HR) - Uses employee-timeline logic
+// DASHBOARD STATS (HR) - Returns employee lists for each status
 // ============================================
 
-// GET /api/hr/dashboard/stats - Get dashboard statistics
+// GET /api/hr/dashboard/stats - Get dashboard statistics with employee lists
 router.get('/dashboard/stats', async (req, res) => {
     try {
         // Get today's date in IST
@@ -673,7 +671,8 @@ router.get('/dashboard/stats', async (req, res) => {
         const allEmployees = await User.find({ 
             isActive: true,
             role: { $nin: ['Admin', 'HR', 'Client'] }
-        });
+        }).select('_id name email employeeCode role');
+        
         const totalEmployees = allEmployees.length;
         
         // Get today's punch logs
@@ -698,7 +697,6 @@ router.get('/dashboard/stats', async (req, res) => {
             const istPunch = new Date(istPunchStr);
             const hours = istPunch.getHours();
             const minutes = istPunch.getMinutes();
-            // Late if AFTER 10:45 AM IST (10:46 or later)
             return hours > 10 || (hours === 10 && minutes > 45);
         };
         
@@ -716,7 +714,11 @@ router.get('/dashboard/stats', async (req, res) => {
             onLeaveIds.add(leave.employeeId.toString());
         });
         
-        // Count employees by status
+        // Categorize employees
+        const presentEmployees = [];
+        const absentEmployees = [];
+        const lateEmployees = [];
+        const onLeaveEmployees = [];
         let presentCount = 0;
         let lateCount = 0;
         let absentCount = 0;
@@ -724,10 +726,17 @@ router.get('/dashboard/stats', async (req, res) => {
         
         allEmployees.forEach(emp => {
             const empId = emp._id.toString();
+            const empData = {
+                _id: emp._id,
+                name: emp.name,
+                email: emp.email,
+                employeeCode: emp.employeeCode,
+                role: emp.role
+            };
             
             // Check if on leave
             if (onLeaveIds.has(empId)) {
-                onLeaveCount++;
+                onLeaveEmployees.push(empData);
                 return;
             }
             
@@ -738,9 +747,13 @@ router.get('/dashboard/stats', async (req, res) => {
                 // Check if late
                 if (punch.punchIn && isLatePunch(punch.punchIn)) {
                     lateCount++;
+                    lateEmployees.push(empData);
+                } else {
+                    presentEmployees.push(empData);
                 }
             } else {
                 absentCount++;
+                absentEmployees.push(empData);
             }
         });
         
@@ -759,7 +772,12 @@ router.get('/dashboard/stats', async (req, res) => {
                 pendingCorrections,
                 attendanceRate: totalEmployees > 0 
                     ? Math.round((presentCount / totalEmployees) * 100) 
-                    : 0
+                    : 0,
+                // ✅ ADDED: Employee lists for each category
+                presentEmployees: presentEmployees,
+                absentEmployees: absentEmployees,
+                lateEmployees: lateEmployees,
+                onLeaveEmployees: onLeaveEmployees
             }
         });
     } catch (error) {
@@ -767,7 +785,6 @@ router.get('/dashboard/stats', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch dashboard stats' });
     }
 });
-
 // ============================================
 // LEAVE TYPE MANAGEMENT (Admin/HR)
 // ============================================

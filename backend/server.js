@@ -57,7 +57,12 @@ try {
 } catch (err) {
   console.log('⚠️ Notice: Announcement Automation not loaded:', err.message);
 }
-
+try {
+  require(path.join(__dirname, 'cron', 'holidayReminder'));
+  console.log('⏰ Holiday Reminder initialized (daily at 6:00 PM IST)');
+} catch (err) {
+  console.log('⚠️ Notice: Holiday Reminder not loaded:', err.message);
+}
 // =========================================================
 // CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
 // =========================================================
