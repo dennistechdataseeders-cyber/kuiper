@@ -1814,7 +1814,7 @@ router.get('/projects/:id/repo-folder-last-updated', authorize('Super Admin', 'A
 // ============================================
 // BULK IMPORT FEEDS VIA EXCEL
 // ============================================
-router.post('/feeds/bulk', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.post('/feeds/bulk', authorize('Super Admin', 'Admin', 'Project Manager','Team Lead'), async (req, res) => {
   try {
     const { projectId, feeds } = req.body;
     

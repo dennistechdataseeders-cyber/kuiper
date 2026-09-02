@@ -1,6 +1,8 @@
-// frontend/src/pages/TeamLeadProjects.jsx
+// frontend/src/pages/TeamLeadProjects.jsx - WITH BULK FEED IMPORT (Button after Comment section)
+
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../context/SidebarContext';
 import { 
@@ -9,19 +11,29 @@ import {
   Filter, ChevronDown, Globe, LayoutGrid,
   MessageSquare, Eye, Send, Loader2, Clock,
   User, Paperclip, Image, File, Download, Trash2,
-  CheckCircle, AlertCircle
+  CheckCircle, AlertCircle, FileSpreadsheet, Upload, Plus
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const TeamLeadProjects = () => {
   const { isCollapsed } = useSidebar();
-  const navigate = useNavigate(); // Make sure navigate is imported
+  const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // ============================================
+  // BULK FEED IMPORT STATE
+  // ============================================
+  const [showBulkFeedModal, setShowBulkFeedModal] = useState(false);
+  const [bulkFeedFile, setBulkFeedFile] = useState(null);
+  const [bulkFeedPreview, setBulkFeedPreview] = useState([]);
+  const [bulkFeedUploading, setBulkFeedUploading] = useState(false);
+  const [selectedProjectForBulk, setSelectedProjectForBulk] = useState(null);
+  const fileInputRef = React.useRef(null);
 
   // Comment Modal State
   const [showCommentModal, setShowCommentModal] = useState(false);
@@ -36,11 +48,15 @@ const TeamLeadProjects = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const fileInputRef = React.useRef(null);
+  const commentFileInputRef = React.useRef(null);
 
   const userRole = localStorage.getItem('role');
   const userId = localStorage.getItem('userId');
   const userName = localStorage.getItem('userName') || 'Team Lead';
+  const token = localStorage.getItem('token');
+  const authHeader = {
+    headers: { Authorization: `Bearer ${token}` }
+  };
 
   useEffect(() => {
     fetchProjects();
@@ -48,10 +64,7 @@ const TeamLeadProjects = () => {
 
   const fetchProjects = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/teamlead/my-projects`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await axios.get(`${API_BASE_URL}/api/teamlead/my-projects`, authHeader);
       setProjects(res.data.projects || []);
     } catch (err) {
       console.error('Error fetching projects:', err);
@@ -62,7 +75,106 @@ const TeamLeadProjects = () => {
   };
 
   // ============================================
-  // ✅ NEW: Navigate to TeamLeadFeeds with project filter
+  // BULK FEED IMPORT HANDLERS
+  // ============================================
+
+  const openBulkFeedModal = (project) => {
+    setSelectedProjectForBulk(project);
+    setBulkFeedFile(null);
+    setBulkFeedPreview([]);
+    setShowBulkFeedModal(true);
+  };
+
+  const handleBulkFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setBulkFeedFile(file);
+    
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        setBulkFeedPreview(json);
+        toast.success(`Loaded ${json.length} feed(s) from Excel`);
+      } catch (error) {
+        console.error('Error reading Excel file:', error);
+        toast.error('Failed to read Excel file. Please check the format.');
+        setBulkFeedPreview([]);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const handleBulkFeedSubmit = async () => {
+    if (!selectedProjectForBulk) {
+      toast.error('No project selected');
+      return;
+    }
+
+    if (bulkFeedPreview.length === 0) {
+      toast.error('Please upload an Excel file with feed data');
+      return;
+    }
+
+    setBulkFeedUploading(true);
+
+    try {
+      // Map Excel columns to feed fields
+      const feedsToCreate = bulkFeedPreview.map(row => ({
+        name: row.name || row.Name || row.feedName || row['Feed Name'] || '',
+        feedType: row.feedType || row['Feed Type'] || 'Daily',
+        weekDay: row.weekDay || row['Week Day'] || '',
+        monthDay: row.monthDay || row['Month Day'] || null,
+        feedPlatform: row.feedPlatform || row['Platform'] || '',
+        webDomain: row.webDomain || row['Domain'] || '',
+        assignedDevelopers: row.assignedDevelopers || row['Developers'] || '',
+        feedStatus: row.feedStatus || row['Status'] || 'New'
+      })).filter(f => f.name.trim() !== '');
+
+      if (feedsToCreate.length === 0) {
+        toast.error('No valid feed data found in Excel. Please ensure "name" column exists.');
+        setBulkFeedUploading(false);
+        return;
+      }
+
+      // Send all feeds in one request
+      const response = await axios.post(
+        `${API_BASE_URL}/api/admin/feeds/bulk`,
+        {
+          projectId: selectedProjectForBulk._id,
+          feeds: feedsToCreate
+        },
+        authHeader
+      );
+
+      if (response.data.success) {
+        toast.success(`✅ ${response.data.created} feed(s) created successfully! ${response.data.failed || 0} failed.`);
+        if (response.data.errors && response.data.errors.length > 0) {
+          console.warn('Bulk feed import errors:', response.data.errors);
+          toast.warning(`${response.data.errors.length} feed(s) had issues. Check console for details.`);
+        }
+        setShowBulkFeedModal(false);
+        setBulkFeedFile(null);
+        setBulkFeedPreview([]);
+        fetchProjects();
+      } else {
+        toast.error(response.data.error || 'Failed to import feeds');
+      }
+    } catch (error) {
+      console.error('Bulk feed import error:', error);
+      toast.error(error.response?.data?.error || 'Failed to import feeds');
+    } finally {
+      setBulkFeedUploading(false);
+    }
+  };
+
+  // ============================================
+  // ✅ Navigate to TeamLeadFeeds with project filter
   // ============================================
   const navigateToFeedsWithProject = (project) => {
     navigate('/teamlead/feeds', {
@@ -80,10 +192,9 @@ const TeamLeadProjects = () => {
   const fetchProjectComments = async (projectId) => {
     setLoadingComments(true);
     try {
-      const token = localStorage.getItem('token');
       const res = await axios.get(
         `${API_BASE_URL}/api/comments/projects/${projectId}/comments`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        authHeader
       );
       setProjectComments(res.data.comments || []);
     } catch (err) {
@@ -345,7 +456,7 @@ const TeamLeadProjects = () => {
       const res = await axios.post(
         `${API_BASE_URL}/api/comments/projects/${selectedProject._id}/comments`,
         payload,
-        { headers: { Authorization: `Bearer ${token}` } }
+        authHeader
       );
 
       setProjectComments(prev => [...prev, res.data.comment]);
@@ -380,7 +491,7 @@ const TeamLeadProjects = () => {
       const token = localStorage.getItem('token');
       await axios.delete(
         `${API_BASE_URL}/api/comments/projects/${selectedProject._id}/comments/${commentId}`,
-        { headers: { Authorization: `Bearer ${token}` } }
+        authHeader
       );
 
       setProjectComments(prev => prev.filter(c => c._id !== commentId));
@@ -527,7 +638,7 @@ const TeamLeadProjects = () => {
       
       {/* Header */}
       <div className="mb-8">
-        <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl">
             <FolderKanban size={24} className="text-white" />
           </div>
@@ -616,12 +727,13 @@ const TeamLeadProjects = () => {
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project Manager</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feeds</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Comments</th>
+                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Bulk Import</th>
               </tr>
             </thead>
             <tbody>
               {currentProjects.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center">
                       <FolderKanban size={48} className="text-slate-300 mb-4" />
                       <p className="text-slate-500 font-medium">No projects found</p>
@@ -696,6 +808,17 @@ const TeamLeadProjects = () => {
                         Comments
                       </button>
                     </td>
+
+                    <td className="px-6 py-4">
+                      <button
+                        onClick={() => openBulkFeedModal(project)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-wider"
+                        title="Bulk Import Feeds from Excel"
+                      >
+                        <FileSpreadsheet size={14} />
+                        Import Feeds
+                      </button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -754,6 +877,189 @@ const TeamLeadProjects = () => {
           >
             <ChevronRight size={14} />
           </button>
+        </div>
+      )}
+
+      {/* ============================================
+          BULK FEED IMPORT MODAL
+          ============================================ */}
+      {showBulkFeedModal && selectedProjectForBulk && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[250] p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6">
+              <div>
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                  <FileSpreadsheet size={20} className="text-emerald-600" />
+                  Bulk Import Feeds
+                </h2>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  For: <span className="font-bold text-purple-600">{selectedProjectForBulk.projectCustomId}</span>
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowBulkFeedModal(false);
+                  setBulkFeedFile(null);
+                  setBulkFeedPreview([]);
+                  setSelectedProjectForBulk(null);
+                }} 
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Excel Format Guide */}
+              <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <FileSpreadsheet size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-blue-700">Excel Format Guide</p>
+                    <p className="text-[10px] text-blue-600 mt-1">
+                      Include these columns in your Excel file (headers are case-sensitive):
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] font-bold">name *</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedType</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">weekDay</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">monthDay</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedPlatform</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">webDomain</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">assignedDevelopers</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedStatus</span>
+                    </div>
+                    <p className="text-[8px] text-blue-500 mt-2">
+                      * Required column. Order doesn't matter. Supports .xlsx, .xls, .csv
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleBulkFileSelect}
+                  className="hidden"
+                />
+                <div 
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
+                    bulkFeedFile ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-blue-400'
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {bulkFeedFile ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <FileSpreadsheet size={40} className="text-emerald-600" />
+                      <p className="text-sm font-bold text-emerald-700">{bulkFeedFile.name}</p>
+                      <p className="text-[10px] text-slate-500">
+                        {(bulkFeedFile.size / 1024).toFixed(1)} KB • {bulkFeedPreview.length} feed(s) found
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBulkFeedFile(null);
+                          setBulkFeedPreview([]);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700 font-bold"
+                      >
+                        Remove file
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload size={40} className="text-slate-400" />
+                      <p className="text-sm font-bold text-slate-600">Click to upload Excel file</p>
+                      <p className="text-[10px] text-slate-400">or drag and drop</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview Table */}
+              {bulkFeedPreview.length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-600 flex items-center gap-2">
+                      <FileSpreadsheet size={14} className="text-emerald-600" />
+                      Preview ({bulkFeedPreview.length} feeds)
+                    </p>
+                    <span className="text-[8px] text-slate-400">
+                      Showing first {Math.min(bulkFeedPreview.length, 10)} rows
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50/80 sticky top-0">
+                        <tr>
+                          {Object.keys(bulkFeedPreview[0] || {}).map((key, idx) => (
+                            <th key={idx} className="px-3 py-2 text-left font-bold text-slate-600 border-b border-slate-200">
+                              {key}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkFeedPreview.slice(0, 10).map((row, rowIdx) => (
+                          <tr key={rowIdx} className="border-b border-slate-100 hover:bg-slate-50">
+                            {Object.values(row).map((val, colIdx) => (
+                              <td key={colIdx} className="px-3 py-1.5 text-slate-700 truncate max-w-[150px]">
+                                {String(val || '')}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {bulkFeedPreview.length > 10 && (
+                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-center text-[8px] text-slate-400">
+                      + {bulkFeedPreview.length - 10} more rows not shown
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBulkFeedModal(false);
+                    setBulkFeedFile(null);
+                    setBulkFeedPreview([]);
+                    setSelectedProjectForBulk(null);
+                  }}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkFeedSubmit}
+                  disabled={bulkFeedUploading || bulkFeedPreview.length === 0}
+                  className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkFeedUploading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Import {bulkFeedPreview.length} Feed(s)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
@@ -925,7 +1231,7 @@ const TeamLeadProjects = () => {
                   
                   <div className="flex items-center gap-1">
                     <input
-                      ref={fileInputRef}
+                      ref={commentFileInputRef}
                       type="file"
                       multiple
                       onChange={handleFileSelect}
@@ -933,7 +1239,7 @@ const TeamLeadProjects = () => {
                     />
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => commentFileInputRef.current?.click()}
                       disabled={uploadingFiles}
                       className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-50"
                       title="Attach files (images up to 5MB, documents up to 50MB)"
@@ -960,7 +1266,7 @@ const TeamLeadProjects = () => {
                   <span>
                     <button 
                       type="button" 
-                      onClick={() => fileInputRef.current?.click()} 
+                      onClick={() => commentFileInputRef.current?.click()} 
                       className="text-purple-500 hover:underline"
                     >
                       Attach files
