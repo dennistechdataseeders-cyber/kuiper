@@ -1,6 +1,8 @@
-// frontend/src/pages/ProjectManagement.jsx
-import React, { useState, useEffect, useMemo } from 'react';
+// frontend/src/pages/ProjectManagement.jsx - ADD MULTIPLE FEEDS VIA EXCEL
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import {
   FolderPlus,
   Activity,
@@ -33,7 +35,10 @@ import {
   Clock,
   Building2,
   Filter,
-  MessageSquare
+  MessageSquare,
+  Upload,
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
@@ -53,6 +58,17 @@ const POPULAR_COUNTRIES = [
   { label: "South Korea", value: "KR" }, { label: "Spain", value: "ES" }, { label: "Turkey", value: "TR" },
   { label: "United Arab Emirates", value: "AE" }, { label: "United Kingdom", value: "GB" },
   { label: "United States", value: "US" }, { label: "Vietnam", value: "VN" }
+];
+
+const INDUSTRY_OPTIONS = [
+  { label: "ECOM", value: "ECOM" },
+  { label: "FOOD", value: "FOOD" },
+  { label: "HTL", value: "HTL" },
+  { label: "TRVL", value: "TRVL" },
+  { label: "FNC", value: "FNC" },
+  { label: "SCLM", value: "SCLM" },
+  { label: "JOB", value: "JOB" },
+  { label: "AUTO", value: "AUTO" }
 ];
 
 const ProjectManagement = () => {
@@ -95,6 +111,13 @@ const ProjectManagement = () => {
     address: ''
   });
 
+  // --- Bulk Feed Import State ---
+  const [showBulkFeedModal, setShowBulkFeedModal] = useState(false);
+  const [bulkFeedFile, setBulkFeedFile] = useState(null);
+  const [bulkFeedPreview, setBulkFeedPreview] = useState([]);
+  const [bulkFeedUploading, setBulkFeedUploading] = useState(false);
+  const fileInputRef = useRef(null);
+
   const [activeProjectId, setActiveProjectId] = useState(null);
   const [activeFeed, setActiveFeed] = useState(null);
   const [activeFeedId, setActiveFeedId] = useState(null);
@@ -133,17 +156,6 @@ const ProjectManagement = () => {
       Authorization: `Bearer ${token}`
     }
   };
-
-  const industries = useMemo(() => [
-    { label: "ECOM", value: "ECOM" },
-    { label: "FOOD", value: "FOOD" },
-    { label: "HTL", value: "HTL" },
-    { label: "TRVL", value: "TRVL" },
-    { label: "FNC", value: "FNC" },
-    { label: "SCLM", value: "SCLM" },
-    { label: "JOB", value: "JOB" },
-    { label: "AUTO", value: "AUTO" }
-  ], []);
 
   const weekDays = [
     'Monday',
@@ -752,6 +764,106 @@ const filteredProjects = useMemo(() => {
     setShowFeedModal(true);
   };
 
+  // ============================================
+  // BULK FEED IMPORT HANDLERS
+  // ============================================
+
+  const openBulkFeedModal = (projectId) => {
+    setActiveProjectId(projectId);
+    setBulkFeedFile(null);
+    setBulkFeedPreview([]);
+    setShowBulkFeedModal(true);
+  };
+
+  const handleBulkFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    setBulkFeedFile(file);
+    
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(sheet);
+        setBulkFeedPreview(json);
+        toast.success(`Loaded ${json.length} feed(s) from Excel`);
+      } catch (error) {
+        console.error('Error reading Excel file:', error);
+        toast.error('Failed to read Excel file. Please check the format.');
+        setBulkFeedPreview([]);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    e.target.value = '';
+  };
+
+  const handleBulkFeedSubmit = async () => {
+    if (!activeProjectId) {
+      toast.error('No project selected');
+      return;
+    }
+
+    if (bulkFeedPreview.length === 0) {
+      toast.error('Please upload an Excel file with feed data');
+      return;
+    }
+
+    setBulkFeedUploading(true);
+
+    try {
+      // Map Excel columns to feed fields
+      // Expected columns: name, feedType, weekDay, monthDay, feedPlatform, webDomain, assignedDevelopers
+      const feedsToCreate = bulkFeedPreview.map(row => ({
+        name: row.name || row.Name || row.feedName || row['Feed Name'] || '',
+        feedType: row.feedType || row['Feed Type'] || 'Daily',
+        weekDay: row.weekDay || row['Week Day'] || '',
+        monthDay: row.monthDay || row['Month Day'] || null,
+        feedPlatform: row.feedPlatform || row['Platform'] || '',
+        webDomain: row.webDomain || row['Domain'] || '',
+        assignedDevelopers: row.assignedDevelopers || row['Developers'] || '',
+        feedStatus: row.feedStatus || row['Status'] || 'New'
+      })).filter(f => f.name.trim() !== '');
+
+      if (feedsToCreate.length === 0) {
+        toast.error('No valid feed data found in Excel. Please ensure "name" column exists.');
+        setBulkFeedUploading(false);
+        return;
+      }
+
+      // Send all feeds in one request
+      const response = await axios.post(
+        `${ADMIN_BASE}/feeds/bulk`,
+        {
+          projectId: activeProjectId,
+          feeds: feedsToCreate
+        },
+        authHeader
+      );
+
+      if (response.data.success) {
+        toast.success(`✅ ${response.data.created} feed(s) created successfully! ${response.data.failed || 0} failed.`);
+        if (response.data.errors && response.data.errors.length > 0) {
+          console.warn('Bulk feed import errors:', response.data.errors);
+          toast.warning(`${response.data.errors.length} feed(s) had issues. Check console for details.`);
+        }
+        setShowBulkFeedModal(false);
+        setBulkFeedFile(null);
+        setBulkFeedPreview([]);
+        fetchInitialData();
+      } else {
+        toast.error(response.data.error || 'Failed to import feeds');
+      }
+    } catch (error) {
+      console.error('Bulk feed import error:', error);
+      toast.error(error.response?.data?.error || 'Failed to import feeds');
+    } finally {
+      setBulkFeedUploading(false);
+    }
+  };
+
   const handleCreateTask = async (e) => {
     e.preventDefault();
     if (!taskText.trim()) {
@@ -974,9 +1086,7 @@ const filteredProjects = useMemo(() => {
                     <tr key={project._id} className="border-b border-slate-100 hover:bg-slate-50/70 transition-all">
                       <td className="px-3 sm:px-8 py-3 sm:py-6">
                         <div className="flex items-center gap-2 sm:gap-4">
-                          <div className={`w-10 sm:w-14 h-10 sm:h-14 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0 ${
-                            isFromSales ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'
-                          }`}>
+                          <div className={`w-10 sm:w-14 h-10 sm:h-14 rounded-2xl flex items-center justify-center shadow-sm flex-shrink-0 ${isFromSales ? 'bg-amber-500 text-white' : 'bg-blue-600 text-white'}`}>
                             {isFromSales ? <ShoppingBag size={isMobile ? 16 : 22} /> : <Activity size={isMobile ? 16 : 22} />}
                           </div>
                           <div>
@@ -1099,6 +1209,13 @@ const filteredProjects = useMemo(() => {
                             <Plus size={isMobile ? 14 : 16} />
                           </button>
                           <button 
+                            onClick={() => openBulkFeedModal(project._id)}
+                            className="w-8 sm:w-11 h-8 sm:h-11 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 transition-all shadow-sm"
+                            title="Bulk Import Feeds"
+                          >
+                            <FileSpreadsheet size={isMobile ? 14 : 16} />
+                          </button>
+                          <button 
                             onClick={() => {
                               setSelectedProjectForComments(project);
                               setShowProjectCommentModal(true);
@@ -1176,11 +1293,7 @@ const filteredProjects = useMemo(() => {
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-5 sm:w-6 h-5 sm:h-6 rounded-md text-[8px] sm:text-[10px] font-black transition-all ${
-                      currentPage === pageNum
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
-                        : 'text-slate-500 hover:bg-slate-100'
-                    }`}
+                    className={`w-5 sm:w-6 h-5 sm:h-6 rounded-md text-[8px] sm:text-[10px] font-black transition-all ${currentPage === pageNum ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-100'}`}
                   >
                     {pageNum}
                   </button>
@@ -1356,7 +1469,7 @@ const filteredProjects = useMemo(() => {
 
               <div className="grid grid-cols-2 gap-3 sm:gap-6">
                 <CreatableSelect isClearable options={POPULAR_COUNTRIES} placeholder="Select Country" value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || { label: projectForm.country, value: projectForm.country }} onChange={(v) => setProjectForm({ ...projectForm, country: v?.label || '' })} styles={customDropdownStyles} />
-                <CreatableSelect isClearable options={industries} value={industries.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} styles={customDropdownStyles} />
+                <CreatableSelect isClearable options={INDUSTRY_OPTIONS} value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} styles={customDropdownStyles} />
               </div>
               <select className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({ ...projectForm, projectManager: e.target.value })}>
                 <option value="">Select Manager</option>
@@ -1652,6 +1765,186 @@ const filteredProjects = useMemo(() => {
                 {isEditingFeed ? 'Save Configuration' : 'Connect Stream'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          BULK FEED IMPORT MODAL
+          ============================================ */}
+      {showBulkFeedModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[115] p-3 sm:p-6">
+          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-6 sm:mb-8">
+              <div>
+                <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
+                  Bulk Import Feeds
+                </h2>
+                <p className="text-xs text-slate-500 mt-1">
+                  Upload an Excel file to create multiple feeds at once
+                </p>
+              </div>
+              <button 
+                onClick={() => {
+                  setShowBulkFeedModal(false);
+                  setBulkFeedFile(null);
+                  setBulkFeedPreview([]);
+                }} 
+                className="text-slate-300 hover:text-slate-600 transition-colors"
+              >
+                <X size={isMobile ? 20 : 28} />
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Excel Format Guide */}
+              <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4">
+                <div className="flex items-start gap-3">
+                  <FileSpreadsheet size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-xs font-bold text-blue-700">Excel Format Guide</p>
+                    <p className="text-[10px] text-blue-600 mt-1">
+                      Include these columns in your Excel file (headers are case-sensitive):
+                    </p>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] font-bold">name *</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedType</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">weekDay</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">monthDay</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedPlatform</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">webDomain</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">assignedDevelopers</span>
+                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedStatus</span>
+                    </div>
+                    <p className="text-[8px] text-blue-500 mt-2">
+                      * Required column. Order doesn't matter. Supports .xlsx, .xls, .csv
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* File Upload */}
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleBulkFileSelect}
+                  className="hidden"
+                />
+                <div 
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
+                    bulkFeedFile ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-blue-400'
+                  }`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  {bulkFeedFile ? (
+                    <div className="flex flex-col items-center gap-2">
+                      <FileSpreadsheet size={40} className="text-emerald-600" />
+                      <p className="text-sm font-bold text-emerald-700">{bulkFeedFile.name}</p>
+                      <p className="text-[10px] text-slate-500">
+                        {(bulkFeedFile.size / 1024).toFixed(1)} KB • {bulkFeedPreview.length} feed(s) found
+                      </p>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setBulkFeedFile(null);
+                          setBulkFeedPreview([]);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="text-xs text-red-500 hover:text-red-700 font-bold"
+                      >
+                        Remove file
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload size={40} className="text-slate-400" />
+                      <p className="text-sm font-bold text-slate-600">Click to upload Excel file</p>
+                      <p className="text-[10px] text-slate-400">or drag and drop</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Preview Table */}
+              {bulkFeedPreview.length > 0 && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                    <p className="text-xs font-bold text-slate-600 flex items-center gap-2">
+                      <FileSpreadsheet size={14} className="text-emerald-600" />
+                      Preview ({bulkFeedPreview.length} feeds)
+                    </p>
+                    <span className="text-[8px] text-slate-400">
+                      Showing first {Math.min(bulkFeedPreview.length, 10)} rows
+                    </span>
+                  </div>
+                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-50/80 sticky top-0">
+                        <tr>
+                          {Object.keys(bulkFeedPreview[0] || {}).map((key, idx) => (
+                            <th key={idx} className="px-3 py-2 text-left font-bold text-slate-600 border-b border-slate-200">
+                              {key}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkFeedPreview.slice(0, 10).map((row, rowIdx) => (
+                          <tr key={rowIdx} className="border-b border-slate-100 hover:bg-slate-50">
+                            {Object.values(row).map((val, colIdx) => (
+                              <td key={colIdx} className="px-3 py-1.5 text-slate-700 truncate max-w-[150px]">
+                                {String(val || '')}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {bulkFeedPreview.length > 10 && (
+                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-center text-[8px] text-slate-400">
+                      + {bulkFeedPreview.length - 10} more rows not shown
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 sm:gap-4 pt-4 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowBulkFeedModal(false);
+                    setBulkFeedFile(null);
+                    setBulkFeedPreview([]);
+                  }}
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkFeedSubmit}
+                  disabled={bulkFeedUploading || bulkFeedPreview.length === 0}
+                  className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {bulkFeedUploading ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Importing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={16} />
+                      Import {bulkFeedPreview.length} Feed(s)
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

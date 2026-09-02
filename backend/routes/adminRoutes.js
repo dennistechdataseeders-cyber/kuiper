@@ -1807,7 +1807,118 @@ router.get('/projects/:id/repo-folder-last-updated', authorize('Super Admin', 'A
     res.status(500).json({ error: err.message });
   }
 });
+// backend/routes/adminRoutes.js - ADD BULK FEED IMPORT ENDPOINT
 
+// Add this route after your existing feed routes (around line 500-600)
+
+// ============================================
+// BULK IMPORT FEEDS VIA EXCEL
+// ============================================
+router.post('/feeds/bulk', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+  try {
+    const { projectId, feeds } = req.body;
+    
+    if (!projectId) {
+      return res.status(400).json({ error: 'Project ID is required' });
+    }
+    
+    if (!feeds || !Array.isArray(feeds) || feeds.length === 0) {
+      return res.status(400).json({ error: 'At least one feed is required' });
+    }
+    
+    // Verify project exists
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+    
+    const createdFeeds = [];
+    const errors = [];
+    
+    // Process each feed
+    for (const feedData of feeds) {
+      try {
+        // Validate required fields
+        if (!feedData.name || !feedData.name.trim()) {
+          errors.push({ feed: feedData, error: 'Feed name is required' });
+          continue;
+        }
+        
+        // Parse assigned developers (can be comma-separated list of names or emails)
+        let assignedDeveloperIds = [];
+        if (feedData.assignedDevelopers && feedData.assignedDevelopers.trim()) {
+          const devNames = feedData.assignedDevelopers.split(',').map(s => s.trim()).filter(Boolean);
+          // Try to find developers by name or email
+          const foundDevs = await User.find({
+            $or: [
+              { name: { $in: devNames } },
+              { email: { $in: devNames } }
+            ],
+            role: 'Developer'
+          }).select('_id');
+          assignedDeveloperIds = foundDevs.map(d => d._id);
+          
+          // If some developers weren't found, log a warning
+          const foundNames = foundDevs.map(d => d.name);
+          const notFound = devNames.filter(n => !foundNames.includes(n));
+          if (notFound.length > 0) {
+            errors.push({ 
+              feed: feedData.name, 
+              error: `Developers not found: ${notFound.join(', ')}` 
+            });
+          }
+        }
+        
+        // Create the feed
+        const feed = new Feed({
+          name: feedData.name.trim(),
+          projectId: projectId,
+          feedType: feedData.feedType || 'Daily',
+          weekDay: feedData.feedType === 'Weekly' ? feedData.weekDay : '',
+          monthDay: feedData.feedType === 'Monthly' ? (feedData.monthDay || null) : null,
+          feedPlatform: feedData.feedPlatform || null,
+          webDomain: (feedData.feedPlatform === 'Web' || feedData.feedPlatform === 'Both') ? feedData.webDomain : null,
+          assignedDevelopers: assignedDeveloperIds,
+          feedStatus: feedData.feedStatus || 'New',
+          adminId: req.user._id
+        });
+        
+        await feed.save();
+        createdFeeds.push(feed);
+        
+      } catch (err) {
+        console.error('Error creating feed:', err);
+        errors.push({ 
+          feed: feedData.name || 'Unknown', 
+          error: err.message 
+        });
+      }
+    }
+    
+    // Update project's feeds array
+    if (createdFeeds.length > 0) {
+      const feedIds = createdFeeds.map(f => f._id);
+      await Project.findByIdAndUpdate(projectId, {
+        $push: { feeds: { $each: feedIds } }
+      });
+    }
+    
+    res.json({
+      success: true,
+      created: createdFeeds.length,
+      failed: errors.length,
+      feeds: createdFeeds,
+      errors: errors.length > 0 ? errors : undefined
+    });
+    
+  } catch (error) {
+    console.error('Bulk feed import error:', error);
+    res.status(500).json({ 
+      error: 'Failed to import feeds',
+      details: error.message 
+    });
+  }
+});
 // ============================================
 // COUNTRY MAP
 // ============================================
