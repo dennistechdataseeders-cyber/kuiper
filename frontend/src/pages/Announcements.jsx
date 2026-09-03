@@ -1,5 +1,3 @@
-// frontend/src/pages/Announcements.jsx - WITH FULL IMAGE DISPLAY & IMAGE MODAL
-
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
@@ -36,6 +34,14 @@ const Announcements = () => {
   
   const [announcements, setAnnouncements] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Infinite scroll state
+  const PAGE_LIMIT = 10;
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef(null);
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creating, setCreating] = useState(false);
   const [submittingComment, setSubmittingComment] = useState({});
@@ -82,29 +88,60 @@ const Announcements = () => {
     }
   }, [location, navigate]);
 
-  // Fetch announcements
-  const fetchAnnouncements = async () => {
-    setLoading(true);
+  // Fetch announcements (page 1 replaces the list; later pages append for infinite scroll)
+  const fetchAnnouncements = async (pageNum = 1, append = false) => {
+    if (append) {
+      setLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API_BASE_URL}/api/announcements`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params: { page: pageNum, limit: PAGE_LIMIT }
       });
-      
+
       if (res.data.success) {
-        setAnnouncements(res.data.announcements);
+        setAnnouncements(prev =>
+          append ? [...prev, ...res.data.announcements] : res.data.announcements
+        );
+        setPage(pageNum);
+        const totalPages = res.data.pagination?.pages ?? pageNum;
+        setHasMore(pageNum < totalPages);
       }
     } catch (error) {
       console.error('Error fetching announcements:', error);
       toast.error('Failed to load announcements');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
-    fetchAnnouncements();
+    fetchAnnouncements(1, false);
   }, []);
+
+  // Infinite scroll: observe a sentinel just past the last card and load
+  // the next page in once it enters the viewport.
+  useEffect(() => {
+    if (!hasMore || loading) return undefined;
+    const sentinel = loadMoreRef.current;
+    if (!sentinel) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          fetchAnnouncements(page + 1, true);
+        }
+      },
+      { rootMargin: '300px' }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [page, hasMore, loadingMore, loading]);
 
   // ============================================
   // IMAGE MODAL HANDLERS
@@ -193,7 +230,7 @@ const Announcements = () => {
           image: null,
           imagePreview: null
         });
-        fetchAnnouncements();
+        fetchAnnouncements(1, false);
       }
     } catch (error) {
       console.error('Error creating announcement:', error);
@@ -868,6 +905,20 @@ const Announcements = () => {
               </div>
             );
           })
+        )}
+
+        {/* Infinite scroll sentinel + loading / end-of-list states */}
+        {announcements.length > 0 && (
+          <div ref={loadMoreRef} className="py-6 flex items-center justify-center">
+            {loadingMore ? (
+              <div className="flex items-center gap-2 text-slate-400">
+                <Loader2 size={18} className="animate-spin" />
+                <span className="text-sm font-medium">Loading more...</span>
+              </div>
+            ) : !hasMore ? (
+              <p className="text-sm font-medium text-slate-300">You're all caught up</p>
+            ) : null}
+          </div>
         )}
       </div>
 
