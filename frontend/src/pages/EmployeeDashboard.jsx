@@ -895,7 +895,7 @@ const EmployeeDashboard = () => {
                   </p>
                 </div>
 
-                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-8 border-blue-300 text-blue-600 font-black text-lg">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-4 border-blue-300 text-blue-600 font-black text-lg">
                   {inOutStatus.displayText}
                 </div>
 

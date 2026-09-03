@@ -5,7 +5,7 @@ const EmployeePunchLog = require('../models/EmployeePunchLog');
 
 class BiometricAttendanceService {
   constructor() {
-    this.baseUrl = process.env.BIOMETRIC_API_URL || 'http://103.170.149.84:2000/api';
+    this.baseUrl = process.env.BIOMETRIC_API_URL || 'http://192.168.1.100:81/api';
     this.username = process.env.BIOMETRIC_USERNAME || 'biomax';
     this.password = process.env.BIOMETRIC_PASSWORD || 'biomax';
     this.deviceKey = process.env.BIOMETRIC_DEVICE_KEY || 'C2642CA867382C34';
