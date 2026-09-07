@@ -1,6 +1,6 @@
 // frontend/src/pages/TeamLeadFeeds.jsx
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom'; // ✅ ADDED useNavigate
+import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import {
@@ -33,8 +33,8 @@ import {
   File,
   Download,
   Trash2,
-  Ticket,        // ✅ ADDED
-  AlertTriangle  // ✅ ADDED
+  Ticket,
+  AlertTriangle
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -42,8 +42,8 @@ import toast from 'react-hot-toast';
 const TeamLeadFeeds = () => {
   const { isCollapsed } = useSidebar();
   const location = useLocation();
-  const navigate = useNavigate(); // ✅ ADDED
-  
+  const navigate = useNavigate();
+
   const [projects, setProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -57,6 +57,12 @@ const TeamLeadFeeds = () => {
   const [expandedFeed, setExpandedFeed] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // ============================================
+  // 🆕 FEED STATUS STATE
+  // ============================================
+  const [feedStatusOptions, setFeedStatusOptions] = useState([]);
+  const [updatingFeedStatus, setUpdatingFeedStatus] = useState({});
 
   // ============================================
   // 🆕 TICKET MODAL STATE
@@ -94,12 +100,63 @@ const TeamLeadFeeds = () => {
   };
 
   // ============================================
+  // 🆕 FEED STATUS FUNCTIONS
+  // ============================================
+
+  const getFeedStatusColor = (status) => {
+    if (!status) return 'bg-slate-100 text-slate-700 border-slate-200';
+    if (status === 'New') return 'bg-blue-100 text-blue-700 border-blue-200';
+    if (status === 'In process') return 'bg-cyan-100 text-cyan-700 border-cyan-200';
+    if (status === 'Awaiting Client Approval') return 'bg-pink-100 text-pink-700 border-pink-200';
+    if (status.includes('In progress')) return 'bg-amber-100 text-amber-700 border-amber-200';
+    if (status.includes('Delivered')) return 'bg-emerald-100 text-emerald-700 border-emerald-200';
+    if (status === 'BAU Initiated') return 'bg-indigo-100 text-indigo-700 border-indigo-200';
+    if (status === 'Closed') return 'bg-slate-100 text-slate-700 border-slate-200';
+    if (status.includes('ON hold')) {
+      if (status.includes('Sales')) return 'bg-orange-100 text-orange-700 border-orange-200';
+      if (status.includes('Technical')) return 'bg-red-100 text-red-700 border-red-200';
+      if (status.includes('Client')) return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+    }
+    return 'bg-slate-100 text-slate-700 border-slate-200';
+  };
+
+  const fetchFeedStatusOptions = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/admin/feed-status-options`, authHeader);
+      setFeedStatusOptions(res.data);
+    } catch (err) {
+      console.error('Error fetching feed status options:', err);
+    }
+  };
+
+  const updateFeedStatus = async (feedId, newStatus) => {
+    setUpdatingFeedStatus(prev => ({ ...prev, [feedId]: true }));
+    try {
+      await axios.patch(
+        `${API_BASE_URL}/api/admin/feeds/${feedId}/status`,
+        { feedStatus: newStatus },
+        authHeader
+      );
+      toast.success(`Feed status updated to ${newStatus}`);
+
+      // Update local state
+      setFeeds(prev => prev.map(feed =>
+        feed._id === feedId ? { ...feed, feedStatus: newStatus } : feed
+      ));
+    } catch (err) {
+      console.error('Error updating feed status:', err);
+      toast.error(err.response?.data?.error || 'Failed to update feed status');
+    } finally {
+      setUpdatingFeedStatus(prev => ({ ...prev, [feedId]: false }));
+    }
+  };
+
+  // ============================================
   // 🆕 TICKET FUNCTIONS
   // ============================================
 
   const openTicketModal = (feed) => {
     setSelectedTicketFeed(feed);
-    // Pre-fill ticket with feed and project information
     setTicketForm({
       title: `Issue with feed: ${feed.name}`,
       description: `Feed: ${feed.name}\nProject: ${feed.projectCustomId || feed.projectName}\nFeed ID: ${feed._id}\n\nDescription :\n`,
@@ -137,7 +194,6 @@ const TeamLeadFeeds = () => {
         priority: ticketForm.priority,
         projectId: selectedTicketFeed.projectId,
         feedId: selectedTicketFeed._id,
-        // Pre-set category for feed-related tickets
         category: 'Production',
         subcategory: 'Data Extraction',
         subItem: 'Feed Issue',
@@ -145,15 +201,14 @@ const TeamLeadFeeds = () => {
       };
 
       const response = await axios.post(`${API_BASE_URL}/api/tickets`, payload, authHeader);
-      
+
       const ticketNumber = response.data.ticket?.ticketNumber || '';
       toast.success(`Ticket ${ticketNumber} generated successfully for feed: ${selectedTicketFeed.name}`);
       closeTicketModal();
-      
-      // Navigate to the ticket details page
+
       const ticketId = response.data.ticket?._id || selectedTicketFeed._id;
       navigate(`/tickets/${ticketId}`);
-      
+
     } catch (err) {
       console.error('Error generating ticket:', err);
       toast.error(err.response?.data?.error || 'Failed to generate ticket');
@@ -244,7 +299,7 @@ const TeamLeadFeeds = () => {
 
     const isImage = isImageFile(file.name);
     const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
-    
+
     if (file.size > maxSize) {
       const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
       const maxSizeInMB = isImage ? '5MB' : '50MB';
@@ -258,9 +313,9 @@ const TeamLeadFeeds = () => {
   const getFileIcon = (file) => {
     const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
     if (!filename) return <File size={16} className="text-slate-400" />;
-    
+
     const ext = filename.split('.').pop()?.toLowerCase() || '';
-    
+
     if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext)) {
       return <Image size={16} className="text-blue-500" />;
     }
@@ -290,7 +345,7 @@ const TeamLeadFeeds = () => {
   const getFileTypeLabel = (file) => {
     const filename = typeof file === 'string' ? file : (file?.originalName || file?.filename || file?.name || '');
     if (!filename) return 'File';
-    
+
     const ext = filename.split('.').pop()?.toLowerCase() || '';
     const typeMap = {
       'pdf': 'PDF', 'doc': 'Word', 'docx': 'Word',
@@ -312,12 +367,12 @@ const TeamLeadFeeds = () => {
     files.forEach(file => {
       if (validateFile(file)) {
         validFiles.push(file);
-        
+
         let previewUrl = null;
         if (isImageFile(file.name)) {
           previewUrl = URL.createObjectURL(file);
         }
-        
+
         validPreviews.push({
           file: file,
           name: file.name,
@@ -332,10 +387,10 @@ const TeamLeadFeeds = () => {
     if (validFiles.length > 0) {
       setSelectedFiles(prev => [...prev, ...validFiles]);
       setFilePreviews(prev => [...prev, ...validPreviews]);
-      
+
       const imageCount = validFiles.filter(f => isImageFile(f.name)).length;
       const docCount = validFiles.length - imageCount;
-      
+
       let message = `${validFiles.length} file(s) added`;
       if (imageCount > 0 && docCount > 0) {
         message = `${imageCount} image(s) and ${docCount} document(s) added`;
@@ -367,7 +422,7 @@ const TeamLeadFeeds = () => {
 
   const uploadFiles = async () => {
     if (selectedFiles.length === 0) return [];
-    
+
     const uploadedUrls = [];
     setUploadingFiles(true);
     const token = localStorage.getItem('token');
@@ -375,15 +430,15 @@ const TeamLeadFeeds = () => {
     for (const file of selectedFiles) {
       const formData = new FormData();
       formData.append('file', file);
-      
+
       try {
         const response = await axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           }
         });
-        
+
         if (response.data.success) {
           uploadedUrls.push({
             url: response.data.url,
@@ -409,7 +464,7 @@ const TeamLeadFeeds = () => {
 
   const handleAddComment = async (e) => {
     e.preventDefault();
-    
+
     if (!newComment.trim() && selectedFiles.length === 0) {
       toast.error('Please enter a comment or attach a file');
       return;
@@ -493,7 +548,7 @@ const TeamLeadFeeds = () => {
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
     const diffDays = Math.floor(diffMs / 86400000);
-    
+
     if (diffMins < 1) return 'Just now';
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
@@ -522,7 +577,7 @@ const TeamLeadFeeds = () => {
     return (
       <div className="mt-2 space-y-1.5">
         {comment.files.map((file, idx) => {
-          const isImage = file.type === 'image' || 
+          const isImage = file.type === 'image' ||
                           (file.originalName && isImageFile(file.originalName)) ||
                           (file.filename && isImageFile(file.filename));
           const displayName = file.originalName || file.filename || 'Attachment';
@@ -534,8 +589,8 @@ const TeamLeadFeeds = () => {
             <div key={idx} className="flex items-center gap-2 p-1.5 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group">
               <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden">
                 {isImage ? (
-                  <img 
-                    src={fileUrl} 
+                  <img
+                    src={fileUrl}
                     alt={displayName}
                     className="w-full h-full object-cover rounded-lg"
                     onError={(e) => {
@@ -578,13 +633,14 @@ const TeamLeadFeeds = () => {
   useEffect(() => {
     const projectIdFromState = location.state?.selectedProject;
     const projectNameFromState = location.state?.selectedProjectName;
-    
+
     if (projectIdFromState) {
       console.log(`🔍 Filtering feeds for project: ${projectNameFromState || projectIdFromState}`);
       setSelectedProject(projectIdFromState);
     }
-    
+
     fetchData();
+    fetchFeedStatusOptions();
   }, []);
 
   const fetchData = async () => {
@@ -622,7 +678,7 @@ const TeamLeadFeeds = () => {
 
   const openAssignModal = (feed) => {
     setSelectedFeed(feed);
-    const currentDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0 
+    const currentDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0
       ? feed.assignedDevelopers[0]._id || feed.assignedDevelopers[0]
       : null;
     setSelectedDeveloper(currentDev);
@@ -639,11 +695,11 @@ const TeamLeadFeeds = () => {
         { developerIds: developerIds },
         authHeader
       );
-      
-      const developerName = selectedDeveloper 
+
+      const developerName = selectedDeveloper
         ? developers.find(d => d._id === selectedDeveloper)?.name || 'Developer'
         : 'No developer';
-      
+
       toast.success(`Feed assigned to ${developerName} successfully!`);
       setShowAssignModal(false);
       fetchData();
@@ -674,7 +730,7 @@ const TeamLeadFeeds = () => {
   };
 
   const filteredFeeds = feeds.filter(feed => {
-    const matchesSearch = 
+    const matchesSearch =
       feed.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       feed.projectCustomId?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProject = selectedProject === 'ALL' || feed.projectId === selectedProject;
@@ -700,7 +756,7 @@ const TeamLeadFeeds = () => {
 
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-      
+
       {/* Header */}
       <div className="mb-8">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
@@ -715,7 +771,7 @@ const TeamLeadFeeds = () => {
               </div>
             </div>
           </div>
-          
+
           {location.state?.selectedProjectName && selectedProject !== 'ALL' && (
             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
               <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
@@ -797,7 +853,7 @@ const TeamLeadFeeds = () => {
               </button>
             )}
           </div>
-          
+
           <div className="relative">
             <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <select
@@ -820,12 +876,13 @@ const TeamLeadFeeds = () => {
       {/* Feeds Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1000px]">
+          <table className="w-full min-w-[1100px]">
             <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
               <tr>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Type</th>
+                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Assigned Developer</th>
                 <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Comments</th>
                 <th className="text-right px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
@@ -834,7 +891,7 @@ const TeamLeadFeeds = () => {
             <tbody>
               {currentFeeds.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-16 text-center">
+                  <td colSpan={7} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center">
                       <Activity size={48} className="text-slate-300 mb-4" />
                       <p className="text-slate-500 font-medium">No feeds found</p>
@@ -845,8 +902,8 @@ const TeamLeadFeeds = () => {
               ) : (
                 currentFeeds.map((feed) => {
                   const isExpanded = expandedFeed === feed._id;
-                  const assignedDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0 
-                    ? feed.assignedDevelopers[0] 
+                  const assignedDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0
+                    ? feed.assignedDevelopers[0]
                     : null;
                   const assignedDevName = assignedDev?.name || 'Unassigned';
 
@@ -856,8 +913,8 @@ const TeamLeadFeeds = () => {
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
-                              assignedDev 
-                                ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white' 
+                              assignedDev
+                                ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
                                 : 'bg-slate-200 text-slate-500'
                             }`}>
                               <Activity size={16} />
@@ -888,6 +945,33 @@ const TeamLeadFeeds = () => {
                           </span>
                         </td>
 
+                        {/* 🆕 STATUS COLUMN */}
+                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                          <div className="relative min-w-[120px]">
+                            <select
+                              value={feed.feedStatus || 'New'}
+                              onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
+                              disabled={updatingFeedStatus[feed._id]}
+                              className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
+                              style={{
+                                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                                backgroundRepeat: 'no-repeat',
+                                backgroundPosition: 'right 4px center',
+                                backgroundSize: '8px'
+                              }}
+                            >
+                              {feedStatusOptions.map(status => (
+                                <option key={status} value={status}>{status}</option>
+                              ))}
+                            </select>
+                            {updatingFeedStatus[feed._id] && (
+                              <div className="absolute right-1 top-1/2 -translate-y-1/2">
+                                <div className="w-2.5 h-2.5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+
                         <td className="px-6 py-4">
                           {assignedDev ? (
                             <div className="flex items-center gap-2">
@@ -914,7 +998,6 @@ const TeamLeadFeeds = () => {
                           </button>
                         </td>
 
-                        {/* ✅ UPDATED: Actions column with Raise Ticket button */}
                         <td className="px-6 py-4">
                           <div className="flex items-center justify-end gap-2">
                             <button
@@ -945,7 +1028,7 @@ const TeamLeadFeeds = () => {
                       {/* Expanded Row */}
                       {isExpanded && (
                         <tr className="bg-slate-50/50">
-                          <td colSpan={6} className="px-6 py-4">
+                          <td colSpan={7} className="px-6 py-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                               <div className="bg-white rounded-lg p-4 border border-slate-200">
                                 <h4 className="text-[10px] font-black uppercase text-slate-500 mb-3 flex items-center gap-2">
@@ -1047,7 +1130,7 @@ const TeamLeadFeeds = () => {
           >
             <ChevronLeft size={14} />
           </button>
-          
+
           <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
             {[...Array(Math.min(totalPages, 5))].map((_, i) => {
               let pageNum;
@@ -1063,7 +1146,7 @@ const TeamLeadFeeds = () => {
                 if (i === 0) pageNum = 1;
                 if (i === 4) pageNum = totalPages;
               }
-              
+
               return (
                 <button
                   key={pageNum}
@@ -1079,7 +1162,7 @@ const TeamLeadFeeds = () => {
               );
             })}
           </div>
-          
+
           <button
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage(p => p + 1)}
@@ -1090,7 +1173,7 @@ const TeamLeadFeeds = () => {
         </div>
       )}
 
-      {/* 🆕 RAISE TICKET MODAL */}
+      {/* RAISE TICKET MODAL */}
       {showTicketModal && selectedTicketFeed && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[220] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
@@ -1158,7 +1241,7 @@ const TeamLeadFeeds = () => {
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={14} className="text-amber-600 mt-0.5 flex-shrink-0" />
                   <p className="text-[10px] text-amber-700">
-                    This ticket will be created with <strong>Production</strong> category and 
+                    This ticket will be created with <strong>Production</strong> category and
                     assigned to the developer assigned to this feed (if any).
                   </p>
                 </div>
@@ -1235,7 +1318,7 @@ const TeamLeadFeeds = () => {
                       <p className="text-[10px] text-slate-500">Remove current assignment</p>
                     </div>
                   </div>
-                  
+
                   {developers.length === 0 ? (
                     <p className="text-sm text-slate-400 text-center py-4">No developers found</p>
                   ) : (
@@ -1290,7 +1373,7 @@ const TeamLeadFeeds = () => {
                   </>
                 )}
               </button>
-              
+
               <p className="text-[8px] text-slate-400 text-center">
                 Only one developer can be assigned per feed. Select a developer or choose "Unassigned" to remove.
               </p>
@@ -1366,8 +1449,8 @@ const TeamLeadFeeds = () => {
                               )}
                               {comment.userId?.role && !isOwn && (
                                 <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
-                                  comment.userId.role === 'Project Manager' 
-                                    ? 'bg-purple-100 text-purple-700' 
+                                  comment.userId.role === 'Project Manager'
+                                    ? 'bg-purple-100 text-purple-700'
                                     : comment.userId.role === 'Developer'
                                     ? 'bg-blue-100 text-blue-700'
                                     : comment.userId.role === 'Team Lead'
@@ -1378,16 +1461,16 @@ const TeamLeadFeeds = () => {
                                 </span>
                               )}
                             </div>
-                            
+
                             {comment.text && (
                               <div className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap break-words">
                                 {comment.text}
                               </div>
                             )}
-                            
+
                             {hasFiles && renderFileAttachments(comment)}
                           </div>
-                          
+
                           {canDelete && (
                             <button
                               onClick={() => handleDeleteComment(comment._id)}
@@ -1418,8 +1501,8 @@ const TeamLeadFeeds = () => {
                         <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
                           <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
                             {preview.file.type?.startsWith('image/') || isImageFile(preview.name) ? (
-                              <img 
-                                src={preview.preview || URL.createObjectURL(preview.file)} 
+                              <img
+                                src={preview.preview || URL.createObjectURL(preview.file)}
                                 alt={preview.name}
                                 className="w-full h-full object-cover rounded-lg"
                               />
@@ -1462,7 +1545,7 @@ const TeamLeadFeeds = () => {
                       }}
                     />
                   </div>
-                  
+
                   <div className="flex items-center gap-1">
                     <input
                       ref={fileInputRef}
@@ -1480,7 +1563,7 @@ const TeamLeadFeeds = () => {
                     >
                       <Paperclip size={18} />
                     </button>
-                    
+
                     <button
                       type="submit"
                       disabled={submittingComment || uploadingFiles}
@@ -1494,13 +1577,13 @@ const TeamLeadFeeds = () => {
                     </button>
                   </div>
                 </form>
-                
+
                 <div className="flex justify-between text-[10px] text-slate-400 px-1 mt-2">
                   <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
                   <span>
-                    <button 
-                      type="button" 
-                      onClick={() => fileInputRef.current?.click()} 
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
                       className="text-purple-500 hover:underline"
                     >
                       Attach files

@@ -1280,7 +1280,7 @@ router.delete('/feeds/:id', authorize('Super Admin', 'Admin', 'Project Manager')
   }
 });
 
-router.patch('/feeds/:id/status', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.patch('/feeds/:id/status', authorize('Super Admin', 'Admin', 'Project Manager','Team Lead'), async (req, res) => {
   try {
     const { feedStatus } = req.body;
     const feed = await Feed.findById(req.params.id);
@@ -1422,7 +1422,7 @@ router.get('/project-status-options', authorize('Super Admin', 'Admin', 'Project
   res.json(statuses);
 });
 
-router.get('/feed-status-options', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.get('/feed-status-options', authorize('Super Admin', 'Admin', 'Project Manager','Team Lead'), async (req, res) => {
   const statuses = [
     'New',  'In process','Awaiting Client Approval','Once off[In progress]', 'Once off[Delivered]',
     'Ad hoc In-progress', 'Ad hoc delivered','BAU Initiated',

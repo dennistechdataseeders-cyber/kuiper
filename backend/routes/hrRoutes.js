@@ -4,6 +4,7 @@ const router = express.Router();
 const axios = require('axios');
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
+const mssqlService = require('../services/mssqlBiometricService');
 
 // Import models
 const LeaveType = require('../models/LeaveType');
@@ -1461,5 +1462,82 @@ router.get('/employees', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch employees' });
   }
 });
+router.post('/biometric/mssql/sync', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const { fromDate, toDate } = req.body;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const from = fromDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const to = toDate || today;
+        
+        const result = await mssqlService.syncAttendanceToMongoDB(from, to);
+        
+        res.json({
+            success: true,
+            data: result
+        });
+    } catch (error) {
+        console.error('❌ MSSQL Sync error:', error);
+        res.status(500).json({ error: 'Failed to sync from MSSQL', details: error.message });
+    }
+});
 
+// GET /api/hr/biometric/mssql/logs
+// Get logs directly from MSSQL
+router.get('/biometric/mssql/logs', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const { fromDate, toDate, employeeCode } = req.query;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const from = fromDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const to = toDate || today;
+        
+        let logs;
+        if (employeeCode) {
+            logs = await mssqlService.getEmployeeTodayAttendance(employeeCode);
+        } else {
+            logs = await mssqlService.getDeviceLogs(from, to);
+        }
+        
+        res.json({
+            success: true,
+            data: logs
+        });
+    } catch (error) {
+        console.error('❌ Error fetching MSSQL logs:', error);
+        res.status(500).json({ error: 'Failed to fetch MSSQL logs', details: error.message });
+    }
+});
+
+// GET /api/hr/biometric/mssql/employees
+// Get employee codes from MSSQL
+router.get('/biometric/mssql/employees', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const { fromDate, toDate } = req.query;
+        
+        const today = new Date().toISOString().split('T')[0];
+        const from = fromDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const to = toDate || today;
+        
+        const codes = await mssqlService.getEmployeeCodes(from, to);
+        
+        res.json({
+            success: true,
+            data: codes
+        });
+    } catch (error) {
+        console.error('❌ Error fetching employee codes:', error);
+        res.status(500).json({ error: 'Failed to fetch employee codes', details: error.message });
+    }
+});
+
+router.get('/biometric/mssql/test', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const result = await mssqlService.testConnection();
+        res.json(result);
+    } catch (error) {
+        console.error('❌ MSSQL test error:', error);
+        res.status(500).json({ error: 'MSSQL connection test failed', details: error.message });
+    }
+});
 module.exports = router;
