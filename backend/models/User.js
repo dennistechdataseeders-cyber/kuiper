@@ -1,4 +1,4 @@
-// backend/models/User.js - Add leave balances
+// backend/models/User.js - COMPLETE UPDATED FILE WITH PROBATION SUPPORT
 
 const mongoose = require('mongoose');
 
@@ -8,7 +8,8 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
   role: { 
     type: String, 
-   enum: ['Super Admin', 'Admin', 'Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'POC', 'Team Lead', 'HR', 'Finance'],     default: 'Client' 
+    enum: ['Super Admin', 'Admin', 'Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'POC', 'Team Lead', 'HR', 'Finance'], 
+    default: 'Client' 
   },
   pocName: String, 
   pocPhone: String,
@@ -73,7 +74,7 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-    dateOfJoining: {
+  dateOfJoining: {
     type: Date,
     default: null
   },
@@ -95,6 +96,18 @@ const UserSchema = new mongoose.Schema({
     type: String,
     default: '',
     trim: true
+  },
+  
+  // ============================================
+  // ✅ PROBATION FIELDS
+  // ============================================
+  isProbationary: {
+    type: Boolean,
+    default: false
+  },
+  probationEndDate: {
+    type: Date,
+    default: null
   },
   
   // ============================================
@@ -161,7 +174,7 @@ const UserSchema = new mongoose.Schema({
     default: Date.now
   },
   // ============================================
-  // ✅ FIXED: unreadNotifications with announcement support
+  // unreadNotifications with announcement support
   // ============================================
   unreadNotifications: [{
     type: {
@@ -176,14 +189,16 @@ const UserSchema = new mongoose.Schema({
         'leave_request', 
         'leave_approved', 
         'leave_rejected',
-        'new_announcement'  // ✅ ADDED
+        'new_announcement',
+        'leave_balance_updated',
+        'system' // ✅ Added for probation notifications
       ]
     },
     ticketId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Ticket'
     },
-    announcementId: {  // ✅ ADDED
+    announcementId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Announcement'
     },
@@ -205,14 +220,16 @@ const UserSchema = new mongoose.Schema({
     default: null
   },
   viewedOpenTickets: {
-  type: [String],
-  default: []
-},
+    type: [String],
+    default: []
+  },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
 
-// Update leave balances monthly (for Paid Leave accrual)
+// ============================================
+// UPDATE LEAVE BALANCES MONTHLY
+// ============================================
 UserSchema.methods.updateLeaveBalances = async function() {
   const now = new Date();
   const lastUpdated = this.leaveBalancesLastUpdated || this.createdAt;
@@ -246,7 +263,9 @@ UserSchema.methods.updateLeaveBalances = async function() {
   }
 };
 
-// Grant annual leaves (run at start of year)
+// ============================================
+// GRANT ANNUAL LEAVES
+// ============================================
 UserSchema.methods.grantAnnualLeaves = async function() {
   const now = new Date();
   const yearStart = new Date(now.getFullYear(), 0, 1);
@@ -271,6 +290,153 @@ UserSchema.methods.grantAnnualLeaves = async function() {
     });
     
     await this.save();
+  }
+};
+
+// ============================================
+// ✅ PROBATION HELPER METHODS
+// ============================================
+
+/**
+ * Check if employee is currently on probation
+ * @returns {boolean} True if on probation
+ */
+UserSchema.methods.isOnProbation = function() {
+  if (!this.isProbationary) return false;
+  if (!this.probationEndDate) return true; // If flagged but no end date, still on probation
+  
+  const now = new Date();
+  return now < this.probationEndDate;
+};
+
+/**
+ * Get detailed probation status
+ * @returns {Object} Probation status object
+ */
+UserSchema.methods.getProbationStatus = function() {
+  // If not flagged as probationary
+  if (!this.isProbationary) {
+    return { 
+      isProbationary: false, 
+      status: 'Not on probation',
+      daysRemaining: 0,
+      endDate: null
+    };
+  }
+  
+  // If flagged but no end date
+  if (!this.probationEndDate) {
+    return { 
+      isProbationary: true, 
+      status: 'On probation (end date not set)',
+      daysRemaining: null,
+      endDate: null
+    };
+  }
+  
+  const now = new Date();
+  const endDate = new Date(this.probationEndDate);
+  
+  // If probation period has ended
+  if (now >= endDate) {
+    return { 
+      isProbationary: false, 
+      status: 'Probation completed',
+      daysRemaining: 0,
+      endDate: endDate
+    };
+  }
+  
+  // Currently on probation
+  const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+  return { 
+    isProbationary: true, 
+    status: 'On probation',
+    daysRemaining: daysRemaining,
+    endDate: endDate
+  };
+};
+
+/**
+ * Auto-calculate probation end date based on joining date
+ * @param {number} probationMonths - Number of months for probation (default: 3)
+ */
+UserSchema.methods.setProbationFromJoining = function(probationMonths = 3) {
+  if (!this.dateOfJoining) {
+    this.isProbationary = false;
+    this.probationEndDate = null;
+    return;
+  }
+  
+  const joiningDate = new Date(this.dateOfJoining);
+  const endDate = new Date(joiningDate);
+  endDate.setMonth(endDate.getMonth() + probationMonths);
+  
+  this.isProbationary = true;
+  this.probationEndDate = endDate;
+};
+
+/**
+ * Complete probation early
+ */
+UserSchema.methods.completeProbation = async function() {
+  this.isProbationary = false;
+  this.probationEndDate = null;
+  await this.save();
+  
+  // Add notification
+  await this.addNotification({
+    type: 'system',
+    message: '🎉 Congratulations! Your probation period has been completed successfully.'
+  });
+};
+
+// ============================================
+// ✅ ADD NOTIFICATION METHOD
+// ============================================
+UserSchema.methods.addNotification = async function(notification) {
+  try {
+    if (!this.unreadNotifications) {
+      this.unreadNotifications = [];
+    }
+    
+    // Check for duplicate within last minute (avoid spam)
+    const exists = this.unreadNotifications.some(
+      n => n.type === notification.type && 
+           n.message === notification.message &&
+           n.createdAt > new Date(Date.now() - 60000)
+    );
+    
+    if (exists) {
+      console.log('⚠️ Duplicate notification skipped:', notification.type);
+      return true;
+    }
+    
+    this.unreadNotifications.push({
+      type: notification.type || 'system',
+      message: notification.message,
+      createdAt: new Date(),
+      read: false
+    });
+    
+    this.notificationCount = (this.notificationCount || 0) + 1;
+    await this.save();
+    
+    // Emit socket notification if available
+    const io = global.io;
+    if (io) {
+      io.to(this._id.toString()).emit('notification_count_update', {
+        count: this.notificationCount,
+        type: notification.type,
+        message: notification.message
+      });
+    }
+    
+    console.log(`✅ Notification sent to ${this.email}: ${notification.message}`);
+    return true;
+  } catch (error) {
+    console.error('Error adding notification:', error);
+    return false;
   }
 };
 

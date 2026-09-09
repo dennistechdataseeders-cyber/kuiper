@@ -1,6 +1,16 @@
+// frontend/src/pages/UserManagement.jsx
+// COMPLETE UPDATED FILE WITH LEAVE BALANCE MANAGEMENT
+
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Filter, Users, Hash, RefreshCw, Calendar, Phone, MapPin, Clock as ClockIcon, ChevronRight as ChevronRightIcon } from 'lucide-react';
+import { 
+  UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, 
+  CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, 
+  Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, 
+  ChevronRight, Filter, Users, Hash, RefreshCw, Calendar, Phone, 
+  MapPin, Clock as ClockIcon, ChevronRight as ChevronRightIcon,
+  Minus, Clock, Settings,Loader2
+} from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
@@ -12,7 +22,7 @@ const UserManagement = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [linkingGithub, setLinkingGithub] = useState({}); // Track per user
+  const [linkingGithub, setLinkingGithub] = useState({});
   const [searchOrgTerm, setSearchOrgTerm] = useState('');
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const [showNewOrgForm, setShowNewOrgForm] = useState(false);
@@ -40,6 +50,22 @@ const UserManagement = () => {
   // Expand/collapse state for employee details
   const [expandedRows, setExpandedRows] = useState({});
   
+  // ============================================
+  // LEAVE BALANCE MANAGEMENT STATE
+  // ============================================
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [selectedUserForLeave, setSelectedUserForLeave] = useState(null);
+  const [leaveBalanceData, setLeaveBalanceData] = useState({
+    leaveType: 'Paid Leave',
+    action: 'deduct',
+    amount: 0.5,
+    reason: ''
+  });
+  const [leaveHistory, setLeaveHistory] = useState([]);
+  const [leaveBalances, setLeaveBalances] = useState({});
+  const [submittingLeave, setSubmittingLeave] = useState(false);
+  const [loadingLeaveHistory, setLoadingLeaveHistory] = useState(false);
+  
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
@@ -61,13 +87,11 @@ const UserManagement = () => {
     department: 'Other',
     isPrimaryPOC: false,
     employeeCode: '',
-    // NEW EMPLOYEE PROFILE FIELDS
     dateOfJoining: '',
     dateOfBirth: '',
     contactNumber: '',
     emergencyContact: '',
     address: '',
-    // SHIFT TIMING - 3 FIELDS
     shiftHour: 9,
     shiftMinute: 0,
     shiftAmPm: 'AM'
@@ -89,12 +113,10 @@ const UserManagement = () => {
   const filteredUsers = useMemo(() => {
     let result = [...users];
     
-    // Filter by selected role
     if (selectedRole !== 'ALL') {
       result = result.filter(user => user.role === selectedRole);
     }
     
-    // Filter by search term
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
       result = result.filter(user =>
@@ -106,12 +128,10 @@ const UserManagement = () => {
       );
     }
     
-    // Additional role-based filtering
     if (userRole === 'Sales Manager') {
       result = result.filter(user => user.role === 'Sales');
     }
     if (userRole === 'Project Manager') {
-      // PM can see Clients and Team Leads
       result = result.filter(user => user.role === 'Client' || user.role === 'Team Lead');
     }
     
@@ -134,7 +154,6 @@ const UserManagement = () => {
     fetchOrganizations();
   }, []);
 
-  // Toggle expand/collapse for a row
   const toggleExpandRow = (userId) => {
     setExpandedRows(prev => ({
       ...prev,
@@ -165,6 +184,127 @@ const UserManagement = () => {
     }
   };
 
+  // ============================================
+  // LEAVE BALANCE FUNCTIONS
+  // ============================================
+  
+  const openLeaveBalanceModal = async (user) => {
+    setSelectedUserForLeave(user);
+    setLeaveBalanceData({
+      leaveType: 'Paid Leave',
+      action: 'deduct',
+      amount: 0.5,
+      reason: ''
+    });
+    setShowLeaveModal(true);
+    await fetchLeaveHistory(user._id);
+  };
+
+  const fetchLeaveHistory = async (userId) => {
+    setLoadingLeaveHistory(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users/${userId}/leave-history`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data.success) {
+        setLeaveBalances(res.data.data.balances);
+        setLeaveHistory(res.data.data.history || []);
+      }
+    } catch (error) {
+      console.error('Error fetching leave history:', error);
+      toast.error('Failed to load leave history');
+    } finally {
+      setLoadingLeaveHistory(false);
+    }
+  };
+
+  const handleLeaveBalanceUpdate = async (e) => {
+    e.preventDefault();
+    
+    if (!leaveBalanceData.leaveType) {
+      toast.error('Please select a leave type');
+      return;
+    }
+    
+    if (!leaveBalanceData.amount || leaveBalanceData.amount <= 0) {
+      toast.error('Please enter a valid amount');
+      return;
+    }
+    
+    if (leaveBalanceData.amount % 0.5 !== 0) {
+      toast.error('Amount must be in increments of 0.5 (e.g., 0.5, 1.0, 1.5)');
+      return;
+    }
+    
+    if (!leaveBalanceData.reason.trim()) {
+      toast.error('Please provide a reason for this adjustment');
+      return;
+    }
+    
+    setSubmittingLeave(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const payload = {
+        leaveType: leaveBalanceData.leaveType,
+        amount: parseFloat(leaveBalanceData.amount),
+        action: leaveBalanceData.action,
+        reason: leaveBalanceData.reason.trim()
+      };
+      
+      const res = await axios.patch(
+        `${API_BASE_URL}/api/admin/users/${selectedUserForLeave._id}/leave-balance`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      if (res.data.success) {
+        toast.success(`Leave balance updated successfully!`);
+        
+        setLeaveBalances(res.data.data.allBalances);
+        
+        const newHistoryEntry = {
+          type: leaveBalanceData.action,
+          leaveType: leaveBalanceData.leaveType,
+          amount: leaveBalanceData.action === 'deduct' ? -parseFloat(leaveBalanceData.amount) : parseFloat(leaveBalanceData.amount),
+          previousBalance: res.data.data.previousBalance,
+          newBalance: res.data.data.newBalance,
+          reason: leaveBalanceData.reason.trim(),
+          date: new Date().toISOString()
+        };
+        setLeaveHistory([newHistoryEntry, ...leaveHistory]);
+        
+        setLeaveBalanceData({
+          leaveType: 'Paid Leave',
+          action: 'deduct',
+          amount: 0.5,
+          reason: ''
+        });
+        
+        fetchUsers();
+      }
+    } catch (error) {
+      console.error('Error updating leave balance:', error);
+      toast.error(error.response?.data?.error || 'Failed to update leave balance');
+    } finally {
+      setSubmittingLeave(false);
+    }
+  };
+
+  const closeLeaveModal = () => {
+    setShowLeaveModal(false);
+    setSelectedUserForLeave(null);
+    setLeaveHistory([]);
+    setLeaveBalances({});
+    setLeaveBalanceData({
+      leaveType: 'Paid Leave',
+      action: 'deduct',
+      amount: 0.5,
+      reason: ''
+    });
+  };
+
   const handleEditClick = (user) => {
     setIsEditing(true);
     setCurrentUserId(user._id);
@@ -177,13 +317,11 @@ const UserManagement = () => {
       department: user.department || 'Other',
       isPrimaryPOC: user.isPrimaryPOC || false,
       employeeCode: user.employeeCode || '',
-      // NEW FIELDS
       dateOfJoining: user.dateOfJoining ? new Date(user.dateOfJoining).toISOString().split('T')[0] : '',
       dateOfBirth: user.dateOfBirth ? new Date(user.dateOfBirth).toISOString().split('T')[0] : '',
       contactNumber: user.contactNumber || '',
       emergencyContact: user.emergencyContact || '',
       address: user.address || '',
-      // SHIFT TIMING - 3 FIELDS
       shiftHour: user.shiftHour || 9,
       shiftMinute: user.shiftMinute || 0,
       shiftAmPm: user.shiftAmPm || 'AM'
@@ -208,57 +346,53 @@ const UserManagement = () => {
       }
     }
   };
-// frontend/src/pages/UserManagement.jsx
-// Update the handleLinkGitHub function
 
-const handleLinkGitHub = async (userId) => {
-  setLinkingGithub(prev => ({ ...prev, [userId]: true }));
-  try {
-    const res = await axios.post(
-      `${API_BASE}/users/${userId}/link-github`, 
-      {},
-      authHeader
-    );
-    
-    if (res.data.success) {
-      toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
-      fetchUsers();
-    } else {
-      // ✅ FIX: Use toast.error or toast.custom instead of toast.info
-      toast.error(res.data.error || 'Failed to link GitHub account');
+  const handleLinkGitHub = async (userId) => {
+    setLinkingGithub(prev => ({ ...prev, [userId]: true }));
+    try {
+      const res = await axios.post(
+        `${API_BASE}/users/${userId}/link-github`, 
+        {},
+        authHeader
+      );
       
-      // Show additional info if available
-      if (res.data.debug?.tip) {
-        toast.custom((t) => (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md shadow-lg">
-            <div className="flex items-start gap-3">
-              <div className="text-amber-500 text-xl">💡</div>
-              <div>
-                <p className="text-sm font-semibold text-amber-800">GitHub Linking Tip</p>
-                <p className="text-xs text-amber-700 mt-1">{res.data.debug.tip}</p>
-                <button
-                  onClick={() => toast.dismiss(t.id)}
-                  className="mt-2 text-xs font-medium text-amber-600 hover:text-amber-800"
-                >
-                  Dismiss
-                </button>
+      if (res.data.success) {
+        toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
+        fetchUsers();
+      } else {
+        toast.error(res.data.error || 'Failed to link GitHub account');
+        
+        if (res.data.debug?.tip) {
+          toast.custom((t) => (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md shadow-lg">
+              <div className="flex items-start gap-3">
+                <div className="text-amber-500 text-xl">💡</div>
+                <div>
+                  <p className="text-sm font-semibold text-amber-800">GitHub Linking Tip</p>
+                  <p className="text-xs text-amber-700 mt-1">{res.data.debug.tip}</p>
+                  <button
+                    onClick={() => toast.dismiss(t.id)}
+                    className="mt-2 text-xs font-medium text-amber-600 hover:text-amber-800"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        ), { duration: 8000 });
+          ), { duration: 8000 });
+        }
       }
+    } catch (err) {
+      console.error('GitHub linking error:', err);
+      const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
+      toast.error(errorMessage);
+      if (err.response?.data?.debug) {
+        console.log('🔍 Debug info:', err.response.data.debug);
+      }
+    } finally {
+      setLinkingGithub(prev => ({ ...prev, [userId]: false }));
     }
-  } catch (err) {
-    console.error('GitHub linking error:', err);
-    const errorMessage = err.response?.data?.error || err.message || 'Failed to link GitHub account';
-    toast.error(errorMessage);
-    if (err.response?.data?.debug) {
-      console.log('🔍 Debug info:', err.response.data.debug);
-    }
-  } finally {
-    setLinkingGithub(prev => ({ ...prev, [userId]: false }));
-  }
-};
+  };
 
   const createNewOrganization = async () => {
     if (!newOrgData.companyName.trim()) {
@@ -313,13 +447,11 @@ const handleLinkGitHub = async (userId) => {
           department: formData.department,
           isPrimaryPOC: formData.isPrimaryPOC,
           employeeCode: formData.employeeCode || null,
-          // NEW FIELDS
           dateOfJoining: formData.dateOfJoining || null,
           dateOfBirth: formData.dateOfBirth || null,
           contactNumber: formData.contactNumber || '',
           emergencyContact: formData.emergencyContact || '',
           address: formData.address || '',
-          // SHIFT TIMING - 3 FIELDS
           shiftHour: parseInt(formData.shiftHour) || 9,
           shiftMinute: parseInt(formData.shiftMinute) || 0,
           shiftAmPm: formData.shiftAmPm || 'AM'
@@ -357,13 +489,11 @@ const handleLinkGitHub = async (userId) => {
           department: formData.department,
           isPrimaryPOC: formData.isPrimaryPOC,
           employeeCode: formData.employeeCode || null,
-          // NEW FIELDS
           dateOfJoining: formData.dateOfJoining || null,
           dateOfBirth: formData.dateOfBirth || null,
           contactNumber: formData.contactNumber || '',
           emergencyContact: formData.emergencyContact || '',
           address: formData.address || '',
-          // SHIFT TIMING - 3 FIELDS
           shiftHour: parseInt(formData.shiftHour) || 9,
           shiftMinute: parseInt(formData.shiftMinute) || 0,
           shiftAmPm: formData.shiftAmPm || 'AM'
@@ -422,13 +552,11 @@ const handleLinkGitHub = async (userId) => {
       department: 'Other',
       isPrimaryPOC: false,
       employeeCode: '',
-      // NEW FIELDS
       dateOfJoining: '',
       dateOfBirth: '',
       contactNumber: '',
       emergencyContact: '',
       address: '',
-      // SHIFT TIMING - 3 FIELDS
       shiftHour: 9,
       shiftMinute: 0,
       shiftAmPm: 'AM'
@@ -445,13 +573,11 @@ const handleLinkGitHub = async (userId) => {
       department: 'Other',
       isPrimaryPOC: false,
       employeeCode: '',
-      // NEW FIELDS
       dateOfJoining: '',
       dateOfBirth: '',
       contactNumber: '',
       emergencyContact: '',
       address: '',
-      // SHIFT TIMING - 3 FIELDS
       shiftHour: 9,
       shiftMinute: 0,
       shiftAmPm: 'AM'
@@ -472,12 +598,10 @@ const handleLinkGitHub = async (userId) => {
     setShowModal(true);
   };
 
-  // Filter organizations based on search term
   const filteredOrganizations = organizations.filter(org =>
     org.companyName?.toLowerCase().includes(searchOrgTerm.toLowerCase())
   );
 
-  // Helper to get role display name
   const getRoleDisplayName = (role) => {
     if (role === 'Client') return 'POC';
     if (role === 'Team Lead') return 'Team Lead';
@@ -486,7 +610,6 @@ const handleLinkGitHub = async (userId) => {
     return role;
   };
 
-  // Helper to get role color
   const getRoleColor = (role) => {
     switch(role) {
       case 'Admin': return 'bg-purple-100 text-purple-700';
@@ -541,7 +664,6 @@ const handleLinkGitHub = async (userId) => {
     return `${h}:${m} ${ampm || 'AM'}`;
   };
 
-  // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';
     const date = new Date(dateString);
@@ -553,7 +675,6 @@ const handleLinkGitHub = async (userId) => {
     });
   };
 
-  // Check if user has employee profile fields to show
   const hasEmployeeDetails = (user) => {
     return user.dateOfJoining || user.dateOfBirth || user.contactNumber || 
            user.emergencyContact || user.address || user.shiftHour;
@@ -837,6 +958,18 @@ const handleLinkGitHub = async (userId) => {
                             <div className="p-2 text-green-600 rounded-lg" title={`GitHub: ${user.githubUsername}`}>
                               <CheckCircle size={16}/>
                             </div>
+                          )}
+                          {/* ============================================
+                              LEAVE BALANCE MANAGEMENT BUTTON
+                              ============================================ */}
+                          {(userRole === 'Admin' || userRole === 'Super Admin' || userRole === 'HR') && (
+                            <button 
+                              onClick={() => openLeaveBalanceModal(user)} 
+                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm"
+                              title="Manage Leave Balance"
+                            >
+                              <Calendar size={16} />
+                            </button>
                           )}
                           <button onClick={() => handleEditClick(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm">
                             <Edit2 size={16}/>
@@ -1332,10 +1465,7 @@ const handleLinkGitHub = async (userId) => {
                 </div>
               )}
 
-              {/* ============================================
-                  NEW EMPLOYEE PROFILE FIELDS (in Modal)
-                  Only show for non-Client, non-Admin, non-Super Admin
-                  ============================================ */}
+              {/* Employee Profile Fields */}
               {formData.role !== 'Client' && formData.role !== 'Admin' && formData.role !== 'Super Admin' && (
                 <div className="border-t border-slate-200 pt-4 mt-2">
                   <div className="flex items-center gap-2 mb-3">
@@ -1374,14 +1504,13 @@ const handleLinkGitHub = async (userId) => {
                       />
                     </div>
                     
-                    {/* Shift Timing - 3 FIELDS */}
+                    {/* Shift Timing */}
                     <div className="md:col-span-2">
                       <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
                         <ClockIcon size={10} className="inline mr-1" />
                         Shift Timing
                       </label>
                       <div className="flex gap-2">
-                        {/* Hour - 1 to 12 */}
                         <div className="flex-1">
                           <select
                             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
@@ -1395,7 +1524,6 @@ const handleLinkGitHub = async (userId) => {
                           <p className="text-[6px] text-slate-400 text-center mt-0.5">Hour</p>
                         </div>
 
-                        {/* Minute - 00 to 59 */}
                         <div className="flex-1">
                           <select
                             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
@@ -1409,7 +1537,6 @@ const handleLinkGitHub = async (userId) => {
                           <p className="text-[6px] text-slate-400 text-center mt-0.5">Minute</p>
                         </div>
 
-                        {/* AM/PM */}
                         <div className="flex-1">
                           <select
                             className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
@@ -1514,60 +1641,6 @@ const handleLinkGitHub = async (userId) => {
                 </div>
               )}
 
-              {/* Success message for newly created developer */}
-              {!isEditing && newlyCreatedUser && newlyCreatedUser.role === 'Developer' && (
-                <div className={`rounded-xl p-3 ${newlyCreatedUser.githubLinked ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
-                  <div className="flex items-center gap-2">
-                    {newlyCreatedUser.githubLinked ? (
-                      <>
-                        <CheckCircle size={14} className="text-green-600" />
-                        <p className="text-[9px] font-black text-green-700">
-                          GitHub account linked: {newlyCreatedUser.githubUsername}
-                        </p>
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle size={14} className="text-yellow-600" />
-                        <p className="text-[9px] font-black text-yellow-700">
-                          ⚠️ No GitHub account found. You can link it manually from the user list.
-                        </p>
-                      </>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Success message for newly created POC */}
-              {!isEditing && newlyCreatedUser && newlyCreatedUser.role === 'Client' && (
-                <div className="rounded-xl p-3 bg-emerald-50 border border-emerald-200">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-emerald-600" />
-                    <p className="text-[9px] font-black text-emerald-700">
-                      ✅ POC account created successfully for {newlyCreatedUser.name}!
-                    </p>
-                  </div>
-                  {newlyCreatedUser.organizationId && (
-                    <p className="text-[8px] text-emerald-600 mt-1">
-                      Associated with: {typeof newlyCreatedUser.organizationId === 'object' 
-                        ? newlyCreatedUser.organizationId.companyName 
-                        : 'Organization'}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Success message for newly created Team Lead */}
-              {!isEditing && newlyCreatedUser && newlyCreatedUser.role === 'Team Lead' && (
-                <div className="rounded-xl p-3 bg-indigo-50 border border-indigo-200">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle size={14} className="text-indigo-600" />
-                    <p className="text-[9px] font-black text-indigo-700">
-                      ✅ Team Lead account created successfully for {newlyCreatedUser.name}!
-                    </p>
-                  </div>
-                </div>
-              )}
-
               {/* Submit Button */}
               <button 
                 type="submit" 
@@ -1586,6 +1659,222 @@ const handleLinkGitHub = async (userId) => {
                 )}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================
+          LEAVE BALANCE MANAGEMENT MODAL
+          ============================================ */}
+      {showLeaveModal && selectedUserForLeave && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[200] p-4">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                  <Calendar size={20} className="text-blue-600" />
+                  Manage Leave Balance
+                </h2>
+                <p className="text-sm text-slate-500">
+                  {selectedUserForLeave.name} • {selectedUserForLeave.email}
+                </p>
+              </div>
+              <button 
+                onClick={closeLeaveModal} 
+                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Current Balances */}
+            <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-200">
+              <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
+                <Clock size={14} />
+                Current Balances
+              </h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                {Object.entries(leaveBalances).map(([type, balance]) => (
+                  <div key={type} className="bg-white rounded-lg p-2 text-center border border-slate-100">
+                    <p className="text-[7px] font-black text-slate-400 uppercase">{type}</p>
+                    <p className="text-lg font-black text-slate-800">{balance}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Update Form */}
+            <form onSubmit={handleLeaveBalanceUpdate} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Leave Type */}
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                    Leave Type <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={leaveBalanceData.leaveType}
+                    onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, leaveType: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                  >
+                    {Object.keys(leaveBalances).map(type => (
+                      <option key={type} value={type}>
+                        {type} ({leaveBalances[type] || 0} days)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Action */}
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                    Action <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={leaveBalanceData.action}
+                    onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, action: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                  >
+                    <option value="add">➕ Add</option>
+                    <option value="deduct">➖ Deduct</option>
+                    <option value="set">📌 Set</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Amount */}
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                    Amount (days) <span className="text-red-500">*</span>
+                    <span className="font-normal text-slate-400 ml-1">(0.5 increments)</span>
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0"
+                      required
+                      value={leaveBalanceData.amount}
+                      onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                    />
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setLeaveBalanceData({ ...leaveBalanceData, amount: Math.max(0, (leaveBalanceData.amount || 0) - 0.5) })}
+                        className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                      >
+                        <Minus size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLeaveBalanceData({ ...leaveBalanceData, amount: (leaveBalanceData.amount || 0) + 0.5 })}
+                        className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                      >
+                        <Plus size={12} />
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-[7px] text-slate-400 mt-1">Half-day leave = 0.5 days</p>
+                </div>
+
+                {/* Reason */}
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                    Reason <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g., Half-day leave adjustment"
+                    value={leaveBalanceData.reason}
+                    onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, reason: e.target.value })}
+                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submittingLeave}
+                className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
+                  submittingLeave
+                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
+                }`}
+              >
+                {submittingLeave ? (
+                  <><Loader2 size={16} className="animate-spin" /> Processing...</>
+                ) : (
+                  <><CheckCircle size={16} /> Update Leave Balance</>
+                )}
+              </button>
+            </form>
+
+            {/* Leave History */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
+                  <Clock size={14} />
+                  Recent History
+                </h3>
+                <span className="text-[8px] text-slate-400">{leaveHistory.length} entries</span>
+              </div>
+              
+              {loadingLeaveHistory ? (
+                <div className="flex justify-center py-4">
+                  <Loader2 size={20} className="text-blue-500 animate-spin" />
+                </div>
+              ) : leaveHistory.length === 0 ? (
+                <p className="text-xs text-slate-400 text-center py-4">No leave balance history</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1.5">
+                  {leaveHistory.slice(0, 10).map((entry, idx) => {
+                    const isDeduct = entry.type === 'deducted' || (typeof entry.amount === 'number' && entry.amount < 0);
+                    const amountDisplay = typeof entry.amount === 'number' 
+                      ? (entry.amount > 0 ? `+${entry.amount}` : entry.amount) 
+                      : `${entry.type === 'deducted' ? '-' : '+'}${entry.amount || 0}`;
+                    
+                    return (
+                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100 text-xs">
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isDeduct ? 'bg-red-500' : 'bg-green-500'}`} />
+                          <span className="font-bold text-slate-700 min-w-[80px]">{entry.leaveType}</span>
+                          <span className={`font-black ${isDeduct ? 'text-red-600' : 'text-green-600'}`}>
+                            {amountDisplay}
+                          </span>
+                          <span className="text-slate-500 truncate max-w-[120px]">{entry.reason || '—'}</span>
+                        </div>
+                        <span className="text-[9px] text-slate-400 flex-shrink-0 ml-2">
+                          {entry.date ? new Date(entry.date).toLocaleDateString() : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-200 flex gap-3">
+              <button
+                onClick={closeLeaveModal}
+                className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+              <button
+                onClick={() => {
+                  fetchUsers();
+                  toast.success('Leave balances refreshed');
+                }}
+                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <RefreshCw size={14} />
+                Refresh Balances
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -1,5 +1,9 @@
 // backend/routes/employeeRoutes.js - COMPLETE FIXED VERSION
+// ✅ Fixed: Time is displayed as-is from the database (no timezone conversion)
 // ✅ Fixed: 10:09 AM and 10:17 AM are now correctly marked as ON TIME (not late)
+// ✅ Fixed: Half-day leave support with isHalfDay and halfDayType fields
+// ✅ Fixed: Extended date range to fetch more data
+// ✅ Fixed: Added debug logging
 
 const express = require('express');
 const router = express.Router();
@@ -13,28 +17,34 @@ const User = require('../models/User');
 const LeaveType = require('../models/LeaveType');
 
 // ============================================
-// HELPER: Get IST date string from any date
+// HELPER: Get date string from any date (preserving the original time)
+// ============================================
+const getDateString = (date) => {
+  if (!date) return null;
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return null;
+  // Use UTC methods to preserve the stored time as-is
+  const year = d.getUTCFullYear();
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+// ============================================
+// HELPER: Get IST date string (for display purposes only)
 // ============================================
 const getISTDateString = (date) => {
   if (!date) return null;
   const d = new Date(date);
   if (isNaN(d.getTime())) return null;
+  // Use toLocaleDateString with IST timezone for display
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 };
 
 // ============================================
-// HELPER: Get IST date at midnight (returns UTC date)
+// HELPER: Get start and end of day in UTC (for database queries)
 // ============================================
-const getISTMidnight = (dateStr) => {
-  if (!dateStr) return null;
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(Date.UTC(year, month - 1, day));
-};
-
-// ============================================
-// HELPER: Get start and end of day in IST (UTC boundaries)
-// ============================================
-const getISTDayRange = (dateStr) => {
+const getUTCDayRange = (dateStr) => {
   if (!dateStr) return null;
   const [year, month, day] = dateStr.split('-').map(Number);
   const start = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
@@ -43,27 +53,20 @@ const getISTDayRange = (dateStr) => {
 };
 
 // ============================================
-// HELPER: Get the current date in IST
-// ============================================
-const getTodayIST = () => {
-  const now = new Date();
-  return now.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-};
-
-// ============================================
-// ✅ CORRECTED: Check if punch is late (after 10:45 AM IST)
+// HELPER: Check if punch is late (after 10:45 AM)
+// Uses the stored time as-is (no timezone conversion)
 // ============================================
 const isLatePunch = (punchTime) => {
   if (!punchTime) return false;
   
   const punchDate = new Date(punchTime);
-  const istPunchStr = punchDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-  const istPunch = new Date(istPunchStr);
+  if (isNaN(punchDate.getTime())) return false;
   
-  const hours = istPunch.getHours();
-  const minutes = istPunch.getMinutes();
+  // Use UTC methods to read the stored time as-is
+  const hours = punchDate.getUTCHours();
+  const minutes = punchDate.getUTCMinutes();
   
-  // Office starts at 10:45 AM IST with grace period
+  // Office starts at 10:45 AM
   // Late if AFTER 10:45 AM (i.e., 10:46 or later)
   // 10:45 is ON TIME (grace period ends at 10:45)
   // 10:44, 10:45 are ON TIME
@@ -72,19 +75,20 @@ const isLatePunch = (punchTime) => {
 };
 
 // ============================================
-// ✅ CORRECTED: Get late minutes (if late)
+// HELPER: Get late minutes (if late)
+// Uses the stored time as-is (no timezone conversion)
 // ============================================
 const getLateMinutes = (punchTime) => {
   if (!punchTime) return 0;
   
   const punchDate = new Date(punchTime);
-  const istPunchStr = punchDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-  const istPunch = new Date(istPunchStr);
+  if (isNaN(punchDate.getTime())) return 0;
   
-  const hours = istPunch.getHours();
-  const minutes = istPunch.getMinutes();
+  // Use UTC methods to read the stored time as-is
+  const hours = punchDate.getUTCHours();
+  const minutes = punchDate.getUTCMinutes();
   const totalMinutes = hours * 60 + minutes;
-  const officeMinutes = 10 * 60 + 45; // 10:45 AM IST
+  const officeMinutes = 10 * 60 + 45; // 10:45 AM
   
   return Math.max(0, totalMinutes - officeMinutes);
 };
@@ -104,8 +108,8 @@ router.get('/attendance/today', async (req, res) => {
     const userId = req.user._id;
     
     // Get today's date in IST
-    const todayStr = getTodayIST();
-    const { start, end } = getISTDayRange(todayStr);
+    const todayStr = getISTDateString(new Date());
+    const { start, end } = getUTCDayRange(todayStr);
     
     const punchLogs = await EmployeePunchLog.find({
       employeeId: userId,
@@ -136,7 +140,7 @@ router.get('/attendance/today', async (req, res) => {
       punchOutTime = punchLog.punchOut;
       
       if (punchLog.punchIn) {
-        // ✅ FIX: Use corrected isLatePunch function
+        // Check if late using the stored time as-is
         isLate = isLatePunch(punchLog.punchIn);
         lateMinutes = getLateMinutes(punchLog.punchIn);
         
@@ -189,7 +193,7 @@ router.get('/attendance/monthly-stats', async (req, res) => {
       startOfMonth = new Date(Date.UTC(yearNum, monthNum, 1, 0, 0, 0));
       endOfMonth = new Date(Date.UTC(yearNum, monthNum + 1, 0, 23, 59, 59, 999));
     } else {
-      const todayStr = getTodayIST();
+      const todayStr = getISTDateString(new Date());
       const [yearNum, monthNum] = todayStr.split('-').map(Number);
       startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0));
       endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
@@ -212,16 +216,16 @@ router.get('/attendance/monthly-stats', async (req, res) => {
       ]
     });
     
-    // Create a map of punch logs by date (using IST date string)
+    // Create a map of punch logs by date (using the stored date as-is)
     const punchMap = new Map();
     punchLogs.forEach(log => {
-      const dateStr = getISTDateString(log.date);
+      const dateStr = getDateString(log.date);
       if (dateStr && !punchMap.has(dateStr)) {
         punchMap.set(dateStr, log);
       }
     });
     
-    // Create a map of leave days (using IST date string)
+    // Create a map of leave days (using IST date string for display)
     const leaveMap = new Map();
     leaves.forEach(leave => {
       const start = new Date(leave.startDate);
@@ -241,11 +245,11 @@ router.get('/attendance/monthly-stats', async (req, res) => {
     const days = [];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     
-    const todayStr = getTodayIST();
+    const todayStr = getISTDateString(new Date());
     
     const current = new Date(startOfMonth);
     while (current <= endOfMonth) {
-      const dateStr = getISTDateString(current);
+      const dateStr = getDateString(current);
       if (!dateStr) {
         current.setUTCDate(current.getUTCDate() + 1);
         continue;
@@ -290,7 +294,7 @@ router.get('/attendance/monthly-stats', async (req, res) => {
           punchOut = punchLog.punchOut;
         }
         
-        // ✅ FIX: Use corrected isLatePunch function
+        // Check if late using the stored time as-is
         if (punchIn) {
           isLate = isLatePunch(punchIn);
           lateMinutes = getLateMinutes(punchIn);
@@ -355,13 +359,14 @@ router.get('/attendance/monthly-stats', async (req, res) => {
   }
 });
 
-// GET /api/employee/attendance/timeline - Get employee's attendance timeline
 router.get('/attendance/timeline', async (req, res) => {
   try {
     const userId = req.user._id;
-    const { months = 3 } = req.query;
+    const { months = 12 } = req.query;
     
-    const todayStr = getTodayIST();
+    console.log(`📊 Fetching attendance timeline for user ${userId} with ${months} months`);
+    
+    const todayStr = getISTDateString(new Date());
     const [year, month, day] = todayStr.split('-').map(Number);
     
     const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
@@ -369,11 +374,21 @@ router.get('/attendance/timeline', async (req, res) => {
     startDate.setUTCMonth(startDate.getUTCMonth() - parseInt(months));
     startDate.setUTCHours(0, 0, 0, 0);
     
+    console.log(`📅 Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
+    
     const punchLogs = await EmployeePunchLog.find({
       employeeId: userId,
       date: { $gte: startDate, $lte: endDate }
     }).sort({ date: 1 });
     
+    console.log(`📊 Found ${punchLogs.length} punch logs for user`);
+    
+    // ✅ DEBUG: Log what's in the database
+    if (punchLogs.length > 0) {
+      console.log('📋 Sample log from DB:', JSON.stringify(punchLogs[0], null, 2));
+    }
+    
+    // ✅ Get leaves with isHalfDay and halfDayType
     const leaves = await LeaveApplication.find({
       employeeId: userId,
       status: 'approved',
@@ -384,14 +399,17 @@ router.get('/attendance/timeline', async (req, res) => {
       ]
     });
     
+    console.log(`📊 Found ${leaves.length} approved leaves`);
+    
     const punchMap = {};
     punchLogs.forEach(log => {
-      const dateStr = getISTDateString(log.date);
+      const dateStr = getDateString(log.date);
       if (dateStr) {
         punchMap[dateStr] = log;
       }
     });
     
+    // ✅ Build leave map with full leave objects
     const leaveMap = {};
     leaves.forEach(leave => {
       const start = new Date(leave.startDate);
@@ -411,7 +429,7 @@ router.get('/attendance/timeline', async (req, res) => {
     
     const current = new Date(startDate);
     while (current <= endDate) {
-      const dateStr = getISTDateString(current);
+      const dateStr = getDateString(current);
       if (!dateStr) {
         current.setUTCDate(current.getUTCDate() + 1);
         continue;
@@ -429,48 +447,43 @@ router.get('/attendance/timeline', async (req, res) => {
       let sessions = [];
       let isLate = false;
       let lateMinutes = 0;
-      
-      if (isWeekend) {
-        status = 'weekend';
-      } else if (onLeave) {
-        status = 'leave';
-      } else if (dayLog) {
-        if (dayLog.sessions && dayLog.sessions.length > 0) {
-          sessions = dayLog.sessions.map(session => ({
-            punchInUTC: session.punchIn ? session.punchIn.toISOString() : null,
-            punchOutUTC: session.punchOut ? session.punchOut.toISOString() : null
-          }));
-          
-          const firstSession = dayLog.sessions[0];
-          const lastSession = dayLog.sessions[dayLog.sessions.length - 1];
-          
-          if (firstSession && firstSession.punchIn) {
-            punchInUTC = firstSession.punchIn.toISOString();
-          }
-          if (lastSession && lastSession.punchOut) {
-            punchOutUTC = lastSession.punchOut.toISOString();
-          }
-        } else {
-          if (dayLog.punchIn) {
-            punchInUTC = dayLog.punchIn.toISOString();
-            sessions = [{ punchInUTC, punchOutUTC: dayLog.punchOut ? dayLog.punchOut.toISOString() : null }];
-          }
-        }
-        
-        // ✅ FIX: Use corrected isLatePunch function
-        if (punchInUTC) {
-          isLate = isLatePunch(punchInUTC);
-          lateMinutes = getLateMinutes(punchInUTC);
-          
-          if (isLate) {
-            status = 'late';
-          } else if (punchOutUTC) {
-            status = 'present';
-          } else {
-            status = 'partial';
-          }
-        }
-      }
+     if (isWeekend) {
+  status = 'weekend';
+} else if (dayLog) {
+  const dbSessions = dayLog.sessions || [];
+
+  if (dbSessions.length > 0) {
+    sessions = dbSessions.map(session => ({
+      punchInUTC: session.punchIn ? session.punchIn.toISOString() : null,
+      punchOutUTC: session.punchOut ? session.punchOut.toISOString() : null
+    }));
+
+    const firstSession = dbSessions[0];
+    const lastSession = dbSessions[dbSessions.length - 1];
+
+    if (firstSession && firstSession.punchIn) {
+      punchInUTC = firstSession.punchIn.toISOString();
+    }
+    if (lastSession && lastSession.punchOut) {
+      punchOutUTC = lastSession.punchOut.toISOString();
+    }
+  } else if (dayLog.punchIn) {
+    punchInUTC = dayLog.punchIn.toISOString();
+    punchOutUTC = dayLog.punchOut ? dayLog.punchOut.toISOString() : null;
+    sessions = [{ punchInUTC, punchOutUTC }];
+  }
+
+  if (onLeave) {
+    // keep leave as the headline status, but sessions/punchInUTC are now populated
+    status = 'leave';
+  } else if (punchInUTC) {
+    isLate = isLatePunch(punchInUTC);
+    lateMinutes = getLateMinutes(punchInUTC);
+    status = isLate ? 'late' : 'present';
+  }
+} else if (onLeave) {
+  status = 'leave';
+}
       
       days.push({
         date: dateStr,
@@ -481,12 +494,18 @@ router.get('/attendance/timeline', async (req, res) => {
         punchOutUTC: punchOutUTC,
         sessions: sessions,
         leaveType: onLeave?.leaveType || null,
+        isHalfDay: onLeave?.isHalfDay || false,
+        halfDayType: onLeave?.halfDayType || null,
+        leaveId: onLeave?._id || null,
         isLate: isLate,
         lateMinutes: lateMinutes
       });
       
       current.setUTCDate(current.getUTCDate() + 1);
     }
+    
+    console.log(`📊 Processed ${days.length} days for timeline`);
+    console.log(`📊 Days with punch data: ${days.filter(d => d.punchInUTC).length}`);
     
     const workingDays = days.filter(d => !d.isWeekend);
     const presentDays = workingDays.filter(d => d.status === 'present' || d.status === 'late');
@@ -512,10 +531,6 @@ router.get('/attendance/timeline', async (req, res) => {
               const outTime = new Date(session.punchOutUTC);
               effectiveHours += (outTime - inTime) / (1000 * 60 * 60);
               if (!lastOut || outTime > lastOut) lastOut = outTime;
-            } else if (day.date === getTodayIST()) {
-              const now = new Date();
-              effectiveHours += (now - inTime) / (1000 * 60 * 60);
-              lastOut = now;
             }
           }
         });
@@ -565,13 +580,64 @@ router.get('/attendance/timeline', async (req, res) => {
 });
 
 // ============================================
+// DEBUG ENDPOINT - Check what logs exist for a user
+// ============================================
+router.get('/attendance/debug', async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    console.log(`🔍 Debug: Fetching all punch logs for user ${userId}`);
+    
+    // Get all punch logs for this user (no date filter)
+    const allLogs = await EmployeePunchLog.find({ employeeId: userId })
+      .sort({ date: -1 })
+      .limit(100);
+    
+    // Get user info
+    const user = await User.findById(userId).select('name email employeeCode');
+    
+    // Get count of logs by month
+    const logsByMonth = {};
+    allLogs.forEach(log => {
+      const dateStr = getDateString(log.date);
+      if (dateStr) {
+        const monthKey = dateStr.substring(0, 7); // YYYY-MM
+        logsByMonth[monthKey] = (logsByMonth[monthKey] || 0) + 1;
+      }
+    });
+    
+    res.json({
+      success: true,
+      user: {
+        id: user?._id || userId,
+        name: user?.name || 'Unknown',
+        email: user?.email || 'Unknown',
+        employeeCode: user?.employeeCode || 'Not set'
+      },
+      logCount: allLogs.length,
+      logsByMonth: logsByMonth,
+      logs: allLogs.map(log => ({
+        date: log.date,
+        punchIn: log.punchIn,
+        punchOut: log.punchOut,
+        sessionCount: log.sessions?.length || 0,
+        isManualCorrection: log.isManualCorrection || false
+      }))
+    });
+  } catch (error) {
+    console.error('Debug error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // LEAVE MANAGEMENT (Employee)
 // ============================================
 
 // POST /api/employee/leave/apply - Apply for leave
 router.post('/leave/apply', async (req, res) => {
   try {
-    const { leaveType, startDate, endDate, isHalfDay, reason } = req.body;
+    const { leaveType, startDate, endDate, isHalfDay, halfDayType, reason } = req.body;
     const userId = req.user._id;
     
     if (!leaveType || !startDate || !endDate || !reason) {
@@ -612,12 +678,14 @@ router.post('/leave/apply', async (req, res) => {
       });
     }
     
+    // ✅ FIX: Save halfDayType properly
     const leaveApplication = new LeaveApplication({
       employeeId: userId,
       leaveType,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       isHalfDay: isHalfDay || false,
+      halfDayType: isHalfDay ? (halfDayType || 'first') : null, // ✅ Save the half day type
       reason: reason.trim(),
       status: 'pending'
     });
@@ -795,7 +863,6 @@ router.post('/timesheet/missed-punch', async (req, res) => {
 });
 
 // GET /api/employee/profile - Get employee profile
-// GET /api/employee/profile - Add dateOfJoining
 router.get('/profile', async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
@@ -834,7 +901,7 @@ router.get('/profile', async (req, res) => {
   }
 });
 
-// PUT /api/employee/profile - Add dateOfJoining
+// PUT /api/employee/profile - Update employee profile
 router.put('/profile', async (req, res) => {
   try {
     const { 

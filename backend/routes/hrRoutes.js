@@ -15,7 +15,272 @@ const attendanceSyncService = require('../services/attendanceSyncService');
 const User = require('../models/User');
 
 // ============================================
-// ALL HR ROUTES REQUIRE HR ROLE
+// HELPER FUNCTION: Get employee status for today
+// ============================================
+async function getEmployeeStatus(employeeId, dateStr) {
+    try {
+        const start = new Date(dateStr);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(dateStr);
+        end.setHours(23, 59, 59, 999);
+
+        const punchLog = await EmployeePunchLog.findOne({
+            employeeId: employeeId,
+            date: { $gte: start, $lte: end }
+        });
+
+        const onLeave = await LeaveApplication.findOne({
+            employeeId: employeeId,
+            startDate: { $lte: end },
+            endDate: { $gte: start },
+            status: 'approved'
+        });
+
+        if (onLeave) return 'leave';
+        if (punchLog && punchLog.punchIn) {
+            const punchDate = new Date(punchLog.punchIn);
+            const istPunchStr = punchDate.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+            const istPunch = new Date(istPunchStr);
+            const hours = istPunch.getHours();
+            const minutes = istPunch.getMinutes();
+            if (hours > 10 || (hours === 10 && minutes > 45)) {
+                return 'late';
+            }
+            if (punchLog.punchOut) return 'present';
+            return 'partial';
+        }
+        return 'absent';
+    } catch (error) {
+        console.error('Error getting employee status:', error);
+        return 'absent';
+    }
+}
+
+// ============================================
+// SPECIAL ROUTE: Allow Developer role for sync-logs
+// Place this BEFORE the global authorize middleware
+// ============================================
+
+// ✅ Allow Developers to sync attendance logs
+router.post('/attendance/sync-logs', protect, async (req, res) => {
+  try {
+    const { logs, source } = req.body;
+    
+    if (!logs || !Array.isArray(logs) || logs.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Logs array is required and must not be empty' 
+      });
+    }
+
+    console.log(`📥 Received ${logs.length} logs from ${source || 'external script'}`);
+
+    // Get all users with employee codes for faster lookup
+    const users = await User.find({ 
+      employeeCode: { $ne: null, $ne: '' } 
+    }).select('_id employeeCode name');
+    
+    const userMap = {};
+    users.forEach(u => {
+      userMap[String(u.employeeCode)] = u;
+    });
+
+    console.log(`👤 Found ${Object.keys(userMap).length} users with employee codes`);
+
+    const results = {
+      processed: 0,
+      created: 0,
+      updated: 0,
+      errors: [],
+      unmatchedCodes: new Set()
+    };
+
+    // Group logs by employee code
+    const logsByEmployee = {};
+    
+    for (const log of logs) {
+      const empCode = String(log.EmpCode || log.employeeCode || log.empCode);
+      if (!empCode) {
+        results.errors.push({ log, error: 'No employee code found' });
+        continue;
+      }
+      
+      if (!logsByEmployee[empCode]) {
+        logsByEmployee[empCode] = [];
+      }
+      logsByEmployee[empCode].push(log);
+    }
+
+    // Process each employee's logs
+    for (const [empCode, employeeLogs] of Object.entries(logsByEmployee)) {
+      const user = userMap[empCode];
+      
+      if (!user) {
+        results.unmatchedCodes.add(empCode);
+        results.errors.push({
+          employeeCode: empCode,
+          error: 'User not found in database',
+          logCount: employeeLogs.length
+        });
+        continue;
+      }
+
+      // Process logs for this employee
+      for (const log of employeeLogs) {
+        try {
+          // Parse the log date
+          const logDateStr = log.IOTime || log.LogDate || log.date || log.timestamp;
+          if (!logDateStr) {
+            results.errors.push({
+              employeeCode: empCode,
+              error: 'No date found in log entry'
+            });
+            continue;
+          }
+          
+          const logDate = new Date(logDateStr);
+          if (isNaN(logDate.getTime())) {
+            results.errors.push({
+              employeeCode: empCode,
+              error: `Invalid date format: ${logDateStr}`
+            });
+            continue;
+          }
+
+          // Get date in IST for consistent grouping
+          const istDateStr = logDate.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+          const [year, month, day] = istDateStr.split('-').map(Number);
+          const date = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+
+          // Determine punch direction
+          const punchDirection = (log.IOMode || log.PunchDirection || log.mode || '').toString().trim().toLowerCase();
+          const isPunchIn = punchDirection === 'in' || punchDirection === '1' || punchDirection === '';
+          const isPunchOut = punchDirection === 'out' || punchDirection === '2';
+
+          // Find or create the day's log
+          let punchLog = await EmployeePunchLog.findOne({
+            employeeId: user._id,
+            date: date
+          });
+
+          if (!punchLog) {
+            punchLog = new EmployeePunchLog({
+              employeeId: user._id,
+              date: date,
+              sessions: [],
+              isManualCorrection: false,
+              correctionNote: `Imported from ${source || 'external script'} at ${new Date().toISOString()}`,
+              createdBy: null
+            });
+          }
+
+          // Process the punch
+          if (isPunchIn) {
+            // Find if there's an existing session with no punchOut (open session)
+            const openSession = punchLog.sessions.find(s => !s.punchOut);
+            
+            if (openSession) {
+              // If there's an open session, this IN might be a correction
+              // Keep the earliest IN
+              if (logDate < openSession.punchIn) {
+                openSession.punchIn = logDate;
+              }
+            } else {
+              // Start a new session
+              punchLog.sessions.push({
+                punchIn: logDate,
+                punchOut: null
+              });
+            }
+            
+            // Also update the legacy punchIn field
+            if (!punchLog.punchIn || logDate < punchLog.punchIn) {
+              punchLog.punchIn = logDate;
+            }
+            
+          } else if (isPunchOut) {
+            // Find the most recent open session
+            const openSession = punchLog.sessions.find(s => !s.punchOut);
+            
+            if (openSession) {
+              // Close the open session with this OUT time
+              openSession.punchOut = logDate;
+              
+              // Also update legacy punchOut
+              if (!punchLog.punchOut || logDate > punchLog.punchOut) {
+                punchLog.punchOut = logDate;
+              }
+            } else {
+              // Orphan OUT log: create a closed session
+              punchLog.sessions.push({
+                punchIn: logDate,
+                punchOut: logDate
+              });
+              
+              // Update legacy punchOut
+              if (!punchLog.punchOut || logDate > punchLog.punchOut) {
+                punchLog.punchOut = logDate;
+              }
+            }
+          }
+
+          // Update correction note if not already set
+          if (!punchLog.correctionNote || punchLog.correctionNote.includes('Manual correction')) {
+            punchLog.correctionNote = `Imported from ${source || 'external script'} at ${new Date().toISOString()}`;
+          }
+
+          await punchLog.save();
+          results.processed++;
+
+          // Track if created or updated
+          if (!punchLog.createdAt || punchLog.createdAt.getTime() === punchLog.date.getTime()) {
+            results.created++;
+          } else {
+            results.updated++;
+          }
+
+        } catch (logError) {
+          console.error(`Error processing log for ${empCode}:`, logError.message);
+          results.errors.push({
+            employeeCode: empCode,
+            error: logError.message
+          });
+        }
+      }
+    }
+
+    // Prepare response
+    const response = {
+      success: true,
+      message: `Processed ${results.processed} logs from ${source || 'external script'}`,
+      data: {
+        processed: results.processed,
+        created: results.created,
+        updated: results.updated,
+        unmatchedCodes: Array.from(results.unmatchedCodes),
+        errors: results.errors.slice(0, 50)
+      }
+    };
+
+    console.log(`✅ Sync complete: ${results.processed} processed, ${results.created} created, ${results.updated} updated`);
+    if (results.unmatchedCodes.size > 0) {
+      console.log(`⚠️ Unmatched employee codes: ${Array.from(results.unmatchedCodes).join(', ')}`);
+    }
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ Sync error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync attendance logs',
+      details: error.message
+    });
+  }
+});
+
+// ============================================
+// ALL OTHER HR ROUTES - Keep HR/Admin only
 // ============================================
 router.use(protect);
 router.use(authorize('HR', 'Admin'));
@@ -76,17 +341,66 @@ router.patch('/leave/:id/approve', async (req, res) => {
             return res.status(400).json({ error: 'Leave already processed' });
         }
         
+        // Get the employee
+        const user = await User.findById(leave.employeeId);
+        if (!user) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        
+        // ============================================
+        // ✅ FIX: For Unpaid Leave, SKIP ALL BALANCE CHECKS
+        // ============================================
+        if (leave.leaveType === 'Unpaid Leave') {
+            // No balance deduction needed for Unpaid Leave
+            // Just update the leave application status
+            leave.status = 'approved';
+            leave.approvedBy = req.user._id;
+            leave.approvedAt = new Date();
+            await leave.save();
+            
+            // Create notification for employee
+            try {
+                if (!user.unreadNotifications) {
+                    user.unreadNotifications = [];
+                }
+                user.unreadNotifications.push({
+                    type: 'leave_approved',
+                    message: `Your Unpaid Leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
+                    createdAt: new Date(),
+                    read: false
+                });
+                user.notificationCount = (user.notificationCount || 0) + 1;
+                await user.save();
+            } catch (notifError) {
+                console.error('Failed to send notification:', notifError.message);
+            }
+            
+            // Emit socket notification
+            const io = req.app.get('io');
+            if (io) {
+                io.to(leave.employeeId.toString()).emit('leave_approved', {
+                    leaveId: leave._id,
+                    message: `Your Unpaid Leave request has been approved`,
+                    leaveType: leave.leaveType,
+                    dates: `${new Date(leave.startDate).toLocaleDateString()} - ${new Date(leave.endDate).toLocaleDateString()}`
+                });
+            }
+            
+            return res.json({ 
+                success: true, 
+                data: leave,
+                message: 'Unpaid Leave approved successfully'
+            });
+        }
+        
+        // ============================================
+        // For Paid, Sick, Casual Leave - check balance
+        // ============================================
         // Calculate number of days
         const start = new Date(leave.startDate);
         const end = new Date(leave.endDate);
         const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
         const daysToDeduct = leave.isHalfDay ? 0.5 : daysDiff;
-        
-        // Update user's leave balance
-        const user = await User.findById(leave.employeeId);
-        if (!user) {
-            return res.status(404).json({ error: 'Employee not found' });
-        }
         
         // Get current balance for this leave type
         const currentBalance = user.leaveBalances.get(leave.leaveType) || 0;
@@ -109,10 +423,21 @@ router.patch('/leave/:id/approve', async (req, res) => {
         await leave.save();
         
         // Create notification for employee
-        await user.addNotification({
-            type: 'leave_approved',
-            message: `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
-        });
+        try {
+            if (!user.unreadNotifications) {
+                user.unreadNotifications = [];
+            }
+            user.unreadNotifications.push({
+                type: 'leave_approved',
+                message: `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
+                createdAt: new Date(),
+                read: false
+            });
+            user.notificationCount = (user.notificationCount || 0) + 1;
+            await user.save();
+        } catch (notifError) {
+            console.error('Failed to send notification:', notifError.message);
+        }
         
         // Emit socket notification
         const io = req.app.get('io');
@@ -131,7 +456,6 @@ router.patch('/leave/:id/approve', async (req, res) => {
         res.status(500).json({ error: 'Failed to approve leave' });
     }
 });
-
 // PATCH /api/hr/leave/:id/reject - Reject a leave application
 router.patch('/leave/:id/reject', async (req, res) => {
     try {
@@ -340,7 +664,7 @@ router.post('/attendance/manual-punch', async (req, res) => {
 });
 
 // ============================================
-// BIOMETRIC ATTENDANCE SYNC ROUTES (WORKING VERSION)
+// BIOMETRIC ATTENDANCE SYNC ROUTES
 // ============================================
 
 // POST /api/hr/attendance/sync - Sync attendance logs from biometric device
@@ -567,12 +891,8 @@ router.get('/attendance/employee/:employeeCode', async (req, res) => {
   }
 });
 
-// backend/routes/hrRoutes.js - UPDATED
-
-// ============================================
 // GET /api/hr/attendance/employee-codes - Get all employee codes
 // ✅ FIX: Exclude Client role users
-// ============================================
 router.get('/attendance/employee-codes', async (req, res) => {
   try {
     console.log('📋 Fetching all employee codes...');
@@ -649,7 +969,6 @@ router.get('/attendance/device-codes', async (req, res) => {
     });
   }
 });
-// backend/routes/hrRoutes.js - UPDATED DASHBOARD STATS WITH EMPLOYEE LISTS
 
 // ============================================
 // DASHBOARD STATS (HR) - Returns employee lists for each status
@@ -774,7 +1093,6 @@ router.get('/dashboard/stats', async (req, res) => {
                 attendanceRate: totalEmployees > 0 
                     ? Math.round((presentCount / totalEmployees) * 100) 
                     : 0,
-                // ✅ ADDED: Employee lists for each category
                 presentEmployees: presentEmployees,
                 absentEmployees: absentEmployees,
                 lateEmployees: lateEmployees,
@@ -786,6 +1104,7 @@ router.get('/dashboard/stats', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch dashboard stats' });
     }
 });
+
 // ============================================
 // LEAVE TYPE MANAGEMENT (Admin/HR)
 // ============================================
@@ -802,7 +1121,7 @@ router.get('/leave-types', async (req, res) => {
 });
 
 // POST /api/hr/leave-types - Create a new leave type (Admin only)
-router.post('/leave-types', authorize('Admin'), async (req, res) => {
+router.post('/leave-types', async (req, res) => {
     try {
         const { name, code, maxDays, isActive, requiresApproval } = req.body;
         
@@ -833,7 +1152,7 @@ router.post('/leave-types', authorize('Admin'), async (req, res) => {
 });
 
 // PUT /api/hr/leave-types/:id - Update a leave type (Admin only)
-router.put('/leave-types/:id', authorize('Admin'), async (req, res) => {
+router.put('/leave-types/:id', async (req, res) => {
     try {
         const { name, code, maxDays, isActive, requiresApproval } = req.body;
         
@@ -868,7 +1187,7 @@ router.put('/leave-types/:id', authorize('Admin'), async (req, res) => {
 });
 
 // DELETE /api/hr/leave-types/:id - Delete a leave type (Admin only)
-router.delete('/leave-types/:id', authorize('Admin'), async (req, res) => {
+router.delete('/leave-types/:id', async (req, res) => {
     try {
         const leaveType = await LeaveType.findById(req.params.id);
         if (!leaveType) {
@@ -955,7 +1274,7 @@ router.get('/employee/:id/leave-balance', async (req, res) => {
 });
 
 // POST /api/hr/biometric/manual-sync - Manual trigger
-router.post('/biometric/manual-sync', authorize('Admin', 'HR'), async (req, res) => {
+router.post('/biometric/manual-sync', async (req, res) => {
   try {
     const syncService = require('../cron/biometricSync');
     await syncService.syncAttendance();
@@ -1225,7 +1544,7 @@ router.get('/attendance/employee-report', async (req, res) => {
     
     // Build employee filter - EXCLUDE Clients
     let employeeFilter = { 
-      role: { $nin: ['Admin', 'HR', 'Client'] }, // EXCLUDE Client role
+      role: { $nin: ['Admin', 'HR', 'Client'] },
       isActive: true 
     };
     
@@ -1295,6 +1614,8 @@ router.get('/attendance/employee-report', async (req, res) => {
     // Generate report data
     const reportData = [];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                         'July', 'August', 'September', 'October', 'November', 'December'];
     
     // For each employee
     for (const employee of employees) {
@@ -1438,15 +1759,7 @@ router.get('/attendance/employee-report', async (req, res) => {
   }
 });
 
-// Helper: month names
-const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                     'July', 'August', 'September', 'October', 'November', 'December'];
-
-// backend/routes/hrRoutes.js - UPDATED
-
-// ============================================
 // GET /api/hr/employees - Updated to exclude Clients
-// ============================================
 router.get('/employees', async (req, res) => {
   try {
     // EXCLUDE Clients from the employee list
@@ -1462,7 +1775,12 @@ router.get('/employees', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch employees' });
   }
 });
-router.post('/biometric/mssql/sync', authorize('HR', 'Admin'), async (req, res) => {
+
+// ============================================
+// MSSQL BIOMETRIC ROUTES
+// ============================================
+
+router.post('/biometric/mssql/sync', async (req, res) => {
     try {
         const { fromDate, toDate } = req.body;
         
@@ -1484,7 +1802,7 @@ router.post('/biometric/mssql/sync', authorize('HR', 'Admin'), async (req, res) 
 
 // GET /api/hr/biometric/mssql/logs
 // Get logs directly from MSSQL
-router.get('/biometric/mssql/logs', authorize('HR', 'Admin'), async (req, res) => {
+router.get('/biometric/mssql/logs', async (req, res) => {
     try {
         const { fromDate, toDate, employeeCode } = req.query;
         
@@ -1511,7 +1829,7 @@ router.get('/biometric/mssql/logs', authorize('HR', 'Admin'), async (req, res) =
 
 // GET /api/hr/biometric/mssql/employees
 // Get employee codes from MSSQL
-router.get('/biometric/mssql/employees', authorize('HR', 'Admin'), async (req, res) => {
+router.get('/biometric/mssql/employees', async (req, res) => {
     try {
         const { fromDate, toDate } = req.query;
         
@@ -1531,13 +1849,133 @@ router.get('/biometric/mssql/employees', authorize('HR', 'Admin'), async (req, r
     }
 });
 
-router.get('/biometric/mssql/test', authorize('HR', 'Admin'), async (req, res) => {
+router.get('/biometric/mssql/test', async (req, res) => {
     try {
         const result = await mssqlService.testConnection();
         res.json(result);
     } catch (error) {
         console.error('❌ MSSQL test error:', error);
         res.status(500).json({ error: 'MSSQL connection test failed', details: error.message });
+    }
+});
+// backend/routes/hrRoutes.js - Add these routes
+
+// ============================================
+// PROBATION MANAGEMENT (HR/Admin)
+// ============================================
+
+// GET /api/hr/employees/probation - Get all employees with probation status
+router.get('/employees/probation', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const employees = await User.find({
+            isActive: true,
+            role: { $nin: ['Admin', 'HR', 'Client'] }
+        }).select('name email employeeCode role dateOfJoining isProbationary probationEndDate');
+        
+        // Add computed probation status
+        const employeesWithStatus = employees.map(emp => {
+            const probationStatus = emp.getProbationStatus ? emp.getProbationStatus() : { isProbationary: false };
+            return {
+                ...emp.toObject(),
+                probationStatus
+            };
+        });
+        
+        res.json({
+            success: true,
+            data: employeesWithStatus
+        });
+    } catch (error) {
+        console.error('Error fetching probation employees:', error);
+        res.status(500).json({ error: 'Failed to fetch probation employees' });
+    }
+});
+
+// PATCH /api/hr/employees/:id/probation - Update probation status
+router.patch('/employees/:id/probation', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const { isProbationary, probationEndDate } = req.body;
+        const employee = await User.findById(req.params.id);
+        
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        
+        // Only allow for non-Admin, non-HR, non-Client roles
+        if (['Admin', 'HR', 'Client'].includes(employee.role)) {
+            return res.status(400).json({ error: 'This user type cannot be put on probation' });
+        }
+        
+        if (isProbationary !== undefined) {
+            employee.isProbationary = isProbationary;
+        }
+        
+        if (probationEndDate) {
+            employee.probationEndDate = new Date(probationEndDate);
+        } else if (isProbationary) {
+            // Auto-calculate probation end date (3 months from joining)
+            if (employee.dateOfJoining) {
+                const endDate = new Date(employee.dateOfJoining);
+                endDate.setMonth(endDate.getMonth() + 3);
+                employee.probationEndDate = endDate;
+            }
+        }
+        
+        await employee.save();
+        
+        // Create notification for employee
+        await employee.addNotification({
+            type: 'system',
+            message: `Your probation status has been updated. ${employee.isProbationary ? 'You are on probation until ' + new Date(employee.probationEndDate).toLocaleDateString() : 'You have completed your probation period.'}`
+        });
+        
+        res.json({
+            success: true,
+            data: {
+                isProbationary: employee.isProbationary,
+                probationEndDate: employee.probationEndDate,
+                probationStatus: employee.getProbationStatus ? employee.getProbationStatus() : { isProbationary: false }
+            }
+        });
+    } catch (error) {
+        console.error('Error updating probation status:', error);
+        res.status(500).json({ error: 'Failed to update probation status' });
+    }
+});
+
+// POST /api/hr/employees/:id/complete-probation - Manually complete probation
+router.post('/employees/:id/complete-probation', authorize('HR', 'Admin'), async (req, res) => {
+    try {
+        const employee = await User.findById(req.params.id);
+        
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        
+        if (!employee.isProbationary) {
+            return res.status(400).json({ error: 'Employee is not on probation' });
+        }
+        
+        employee.isProbationary = false;
+        await employee.save();
+        
+        // Create notification for employee
+        await employee.addNotification({
+            type: 'system',
+            message: 'Congratulations! You have successfully completed your probation period.'
+        });
+        
+        res.json({
+            success: true,
+            message: 'Probation completed successfully',
+            data: {
+                isProbationary: false,
+                probationEndDate: null
+            }
+        });
+    } catch (error) {
+        console.error('Error completing probation:', error);
+        res.status(500).json({ error: 'Failed to complete probation' });
     }
 });
 module.exports = router;

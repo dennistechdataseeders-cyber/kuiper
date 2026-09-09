@@ -1,4 +1,4 @@
-// backend/controllers/leaveController.js
+// backend/controllers/leaveController.js - COMPLETE FIXED FILE
 
 const LeaveApplication = require('../models/LeaveApplication');
 const User = require('../models/User');
@@ -73,11 +73,11 @@ exports.getLeaveHistory = async (req, res) => {
 };
 
 // ============================================
-// APPLY FOR LEAVE
+// APPLY LEAVE - WITH PROBATION SUPPORT
 // ============================================
 exports.applyLeave = async (req, res) => {
     try {
-        const { leaveType, startDate, endDate, isHalfDay, reason } = req.body;
+        const { leaveType, startDate, endDate, isHalfDay, halfDayType, reason } = req.body;
         const userId = req.user._id;
         
         // Validate inputs
@@ -87,6 +87,22 @@ exports.applyLeave = async (req, res) => {
         
         // Get user with updated balances
         const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        // CHECK PROBATION STATUS
+        const probationStatus = user.getProbationStatus ? user.getProbationStatus() : { isProbationary: false };
+        
+        // If on probation, only allow Unpaid Leave
+        if (probationStatus.isProbationary && leaveType !== 'Unpaid Leave') {
+            return res.status(403).json({
+                error: 'Employees on probation can only take Unpaid Leave',
+                probationStatus: probationStatus,
+                allowedLeaveType: 'Unpaid Leave'
+            });
+        }
+        
         await user.updateLeaveBalances();
         await user.grantAnnualLeaves();
         
@@ -102,8 +118,8 @@ exports.applyLeave = async (req, res) => {
         });
         
         if (overlapping) {
-            return res.status(400).json({ 
-                error: 'You already have a leave request overlapping with these dates' 
+            return res.status(400).json({
+                error: 'You already have a leave request overlapping with these dates'
             });
         }
         
@@ -130,27 +146,77 @@ exports.applyLeave = async (req, res) => {
             startDate: new Date(startDate),
             endDate: new Date(endDate),
             isHalfDay: isHalfDay || false,
+            halfDayType: isHalfDay ? (halfDayType || 'first') : null,
             reason: reason.trim(),
             status: 'pending'
         });
         
         await leaveApplication.save();
         
-        // ============================================
-        // NOTIFY HR, PM, TL, and Developer of the employee
-        // ============================================
-        await notifyLeaveStakeholders(leaveApplication, user);
+        // Notify HR, PM, TL, and Developer of the employee
+        try {
+            await notifyLeaveStakeholders(leaveApplication, user);
+        } catch (notifyError) {
+            console.error('Error sending leave notifications:', notifyError.message);
+        }
         
         res.status(201).json({
             success: true,
             data: leaveApplication,
-            message: 'Leave request submitted successfully'
+            message: 'Leave request submitted successfully',
+            probationStatus: probationStatus
         });
     } catch (error) {
         console.error('Error applying for leave:', error);
-        res.status(500).json({ error: 'Failed to apply for leave' });
+        res.status(500).json({ error: 'Failed to apply for leave', details: error.message });
     }
 };
+
+// ============================================
+// HELPER: Get employee ID from leave
+// ============================================
+function getEmployeeId(leave) {
+    if (!leave || !leave.employeeId) return null;
+    
+    if (typeof leave.employeeId === 'string') {
+        return leave.employeeId;
+    }
+    
+    if (typeof leave.employeeId === 'object' && leave.employeeId._id) {
+        return leave.employeeId._id;
+    }
+    
+    if (typeof leave.employeeId === 'object' && leave.employeeId.id) {
+        return leave.employeeId.id;
+    }
+    
+    if (typeof leave.employeeId === 'object' && leave.employeeId.toString) {
+        return leave.employeeId.toString();
+    }
+    
+    return null;
+}
+
+// ============================================
+// HELPER: Get employee from leave
+// ============================================
+async function getEmployee(leave) {
+    if (!leave) return null;
+    
+    if (leave.employeeId && typeof leave.employeeId === 'object' && leave.employeeId.name) {
+        return leave.employeeId;
+    }
+    
+    const employeeId = getEmployeeId(leave);
+    if (!employeeId) return null;
+    
+    try {
+        return await User.findById(employeeId);
+    } catch (error) {
+        console.error('Error fetching employee:', error);
+        return null;
+    }
+}
 
 // ============================================
 // HR: GET ALL PENDING LEAVES
@@ -172,7 +238,7 @@ exports.getPendingLeaves = async (req, res) => {
 };
 
 // ============================================
-// HR: APPROVE LEAVE
+// HR: APPROVE LEAVE - COMPLETE FIX
 // ============================================
 exports.approveLeave = async (req, res) => {
     try {
@@ -186,40 +252,108 @@ exports.approveLeave = async (req, res) => {
             return res.status(400).json({ error: 'Leave already processed' });
         }
         
+        // Get employee safely
+        let employee = leave.employeeId;
+        if (!employee || typeof employee === 'string' || (typeof employee === 'object' && !employee.name)) {
+            const empId = typeof leave.employeeId === 'string' ? leave.employeeId : leave.employeeId?._id || leave.employeeId;
+            employee = await User.findById(empId);
+        }
+        
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found' });
+        }
+        
+        // ============================================
+        // ✅ FIX: For Unpaid Leave, SKIP ALL BALANCE CHECKS
+        // ============================================
+        if (leave.leaveType === 'Unpaid Leave') {
+            // Unpaid Leave - NO balance deduction needed
+            // Just update the leave application status
+            leave.status = 'approved';
+            leave.approvedBy = req.user._id;
+            leave.approvedAt = new Date();
+            await leave.save();
+            
+            // Send approval email
+            await sendLeaveApprovalEmail(leave, employee);
+            
+            // Create notification for employee
+            try {
+                if (typeof employee.addNotification === 'function') {
+                    await employee.addNotification({
+                        type: 'leave_approved',
+                        message: `Your Unpaid Leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`
+                    });
+                } else {
+                    if (!employee.unreadNotifications) {
+                        employee.unreadNotifications = [];
+                    }
+                    employee.unreadNotifications.push({
+                        type: 'leave_approved',
+                        message: `Your Unpaid Leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
+                        createdAt: new Date(),
+                        read: false
+                    });
+                    employee.notificationCount = (employee.notificationCount || 0) + 1;
+                    await employee.save();
+                }
+            } catch (notifError) {
+                console.error('Failed to send notification:', notifError.message);
+            }
+            
+            return res.json({
+                success: true,
+                data: leave,
+                message: 'Unpaid Leave approved successfully'
+            });
+        }
+        
+        // ============================================
+        // For Paid, Sick, Casual Leave - check balance
+        // ============================================
         // Calculate days
         const start = new Date(leave.startDate);
         const end = new Date(leave.endDate);
         const daysDiff = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
         const daysToDeduct = leave.isHalfDay ? 0.5 : daysDiff;
         
-        // Update user's leave balance (skip for Unpaid Leave)
-        if (leave.leaveType !== 'Unpaid Leave') {
-            const user = await User.findById(leave.employeeId._id);
-            const currentBalance = user.leaveBalances.get(leave.leaveType) || 0;
-            
-            if (currentBalance < daysToDeduct) {
-                return res.status(400).json({ 
-                    error: 'Insufficient leave balance',
-                    balance: currentBalance,
-                    requested: daysToDeduct
-                });
-            }
-            
-            // Deduct leave days
-            user.leaveBalances.set(leave.leaveType, currentBalance - daysToDeduct);
-            
-            // Log the deduction
-            user.leaveBalanceHistory.push({
-                type: 'deducted',
-                leaveType: leave.leaveType,
-                amount: daysToDeduct,
-                previousBalance: currentBalance,
-                newBalance: currentBalance - daysToDeduct,
-                reason: `Leave approved: ${leave._id}`
+        // Check probation
+        const probationStatus = employee.getProbationStatus ? employee.getProbationStatus() : { isProbationary: false };
+        if (probationStatus.isProbationary) {
+            return res.status(400).json({ 
+                error: 'Employee is on probation. Only Unpaid Leave can be approved.',
+                probationStatus: probationStatus
             });
-            
-            await user.save();
         }
+        
+        const currentBalance = employee.leaveBalances.get(leave.leaveType) || 0;
+        
+        if (currentBalance < daysToDeduct) {
+            return res.status(400).json({ 
+                error: 'Insufficient leave balance',
+                balance: currentBalance,
+                requested: daysToDeduct
+            });
+        }
+        
+        // Deduct leave days
+        employee.leaveBalances.set(leave.leaveType, currentBalance - daysToDeduct);
+        
+        // Add to history
+        if (!employee.leaveBalanceHistory) {
+            employee.leaveBalanceHistory = [];
+        }
+        employee.leaveBalanceHistory.push({
+            type: 'deducted',
+            leaveType: leave.leaveType,
+            amount: -daysToDeduct,
+            previousBalance: currentBalance,
+            newBalance: currentBalance - daysToDeduct,
+            reason: `Leave approved: ${leave._id}`,
+            date: new Date()
+        });
+        
+        await employee.save();
         
         // Update leave application
         leave.status = 'approved';
@@ -228,25 +362,88 @@ exports.approveLeave = async (req, res) => {
         await leave.save();
         
         // Send approval email to employee
-        await sendLeaveApprovalEmail(leave);
+        await sendLeaveApprovalEmail(leave, employee);
         
         // Create notification for employee
-        const employee = await User.findById(leave.employeeId._id);
-        await employee.addNotification({
-            type: 'leave_approved',
-            message: `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`
-        });
+        try {
+            if (typeof employee.addNotification === 'function') {
+                await employee.addNotification({
+                    type: 'leave_approved',
+                    message: `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`
+                });
+            } else {
+                if (!employee.unreadNotifications) {
+                    employee.unreadNotifications = [];
+                }
+                employee.unreadNotifications.push({
+                    type: 'leave_approved',
+                    message: `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`,
+                    createdAt: new Date(),
+                    read: false
+                });
+                employee.notificationCount = (employee.notificationCount || 0) + 1;
+                await employee.save();
+            }
+        } catch (notifError) {
+            console.error('Failed to send notification:', notifError.message);
+        }
+        
+        // Emit socket event
+        const io = req.app.get('io');
+        if (io) {
+            io.to(leave.employeeId.toString()).emit('leave_approved', {
+                leaveId: leave._id,
+                message: `Your leave request has been approved`,
+                leaveType: leave.leaveType,
+                dates: `${new Date(leave.startDate).toLocaleDateString()} - ${new Date(leave.endDate).toLocaleDateString()}`
+            });
+        }
         
         res.json({
             success: true,
             data: leave,
             message: 'Leave approved successfully'
         });
+        
     } catch (error) {
         console.error('Error approving leave:', error);
         res.status(500).json({ error: 'Failed to approve leave' });
     }
 };
+
+// ============================================
+// HELPER: Create leave notification
+// ============================================
+async function createLeaveNotification(employee, leave, action) {
+    try {
+        if (!employee) return;
+        
+        const message = action === 'approved' 
+            ? `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been approved.`
+            : `Your ${leave.leaveType} leave request has been rejected. Reason: ${leave.rejectionReason || 'N/A'}`;
+        
+        if (typeof employee.addNotification === 'function') {
+            await employee.addNotification({
+                type: action === 'approved' ? 'leave_approved' : 'leave_rejected',
+                message: message
+            });
+        } else {
+            if (!employee.unreadNotifications) {
+                employee.unreadNotifications = [];
+            }
+            employee.unreadNotifications.push({
+                type: action === 'approved' ? 'leave_approved' : 'leave_rejected',
+                message: message,
+                createdAt: new Date(),
+                read: false
+            });
+            employee.notificationCount = (employee.notificationCount || 0) + 1;
+            await employee.save();
+        }
+    } catch (notifError) {
+        console.error('Failed to send notification:', notifError.message);
+    }
+}
 
 // ============================================
 // HR: REJECT LEAVE
@@ -269,6 +466,8 @@ exports.rejectLeave = async (req, res) => {
             return res.status(400).json({ error: 'Leave already processed' });
         }
         
+        const employee = await getEmployee(leave);
+        
         leave.status = 'rejected';
         leave.rejectionReason = rejectionReason.trim();
         leave.approvedBy = req.user._id;
@@ -276,20 +475,17 @@ exports.rejectLeave = async (req, res) => {
         await leave.save();
         
         // Send rejection email to employee
-        await sendLeaveRejectionEmail(leave);
-        
-        // Create notification for employee
-        const employee = await User.findById(leave.employeeId._id);
-        await employee.addNotification({
-            type: 'leave_rejected',
-            message: `Your ${leave.leaveType} leave request from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()} has been rejected. Reason: ${rejectionReason}`
-        });
+        if (employee) {
+            await sendLeaveRejectionEmail(leave, employee);
+            await createLeaveNotification(employee, leave, 'rejected');
+        }
         
         res.json({
             success: true,
             data: leave,
             message: 'Leave rejected'
         });
+        
     } catch (error) {
         console.error('Error rejecting leave:', error);
         res.status(500).json({ error: 'Failed to reject leave' });
@@ -331,69 +527,78 @@ exports.getAllLeaves = async (req, res) => {
 // HELPER: Notify stakeholders
 // ============================================
 async function notifyLeaveStakeholders(leave, employee) {
-    // Get HR users
-    const hrUsers = await User.find({ role: 'HR' });
-    
-    // Get employee's PM, TL, and any developers assigned to their projects
-    // This is a simplified version - you may want to add more logic here
-    const stakeholders = [];
-    
-    // Add HR
-    hrUsers.forEach(hr => {
-        stakeholders.push({
-            email: hr.email,
-            name: hr.name,
-            role: 'HR'
+    try {
+        const hrUsers = await User.find({ role: 'HR' });
+        const stakeholders = [];
+        
+        hrUsers.forEach(hr => {
+            stakeholders.push({
+                email: hr.email,
+                name: hr.name,
+                role: 'HR',
+                userId: hr._id
+            });
         });
-    });
-    
-    // Try to find PM and TL from projects
-    const Project = require('../models/Project');
-    const projects = await Project.find({
-        $or: [
-            { projectManager: employee._id },
-            { teamLead: employee._id },
-            { assignedDevelopers: employee._id }
-        ]
-    }).populate('projectManager teamLead');
-    
-    projects.forEach(project => {
-        if (project.projectManager) {
-            stakeholders.push({
-                email: project.projectManager.email,
-                name: project.projectManager.name,
-                role: 'Project Manager'
-            });
-        }
-        if (project.teamLead) {
-            stakeholders.push({
-                email: project.teamLead.email,
-                name: project.teamLead.name,
-                role: 'Team Lead'
-            });
-        }
-    });
-    
-    // Send emails
-    const emailPromises = stakeholders.map(stakeholder => 
-        sendLeaveNotificationEmail(leave, employee, stakeholder)
-    );
-    
-    await Promise.all(emailPromises);
-    
-    // Create notifications for stakeholders
-    const notificationPromises = stakeholders.map(stakeholder => 
-        User.findOne({ email: stakeholder.email }).then(user => {
-            if (user) {
-                return user.addNotification({
-                    type: 'leave_request',
-                    message: `${employee.name} has requested ${leave.leaveType} leave from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()}`
+        
+        const Project = require('../models/Project');
+        const projects = await Project.find({
+            $or: [
+                { projectManager: employee._id },
+                { teamLead: employee._id },
+                { assignedDevelopers: employee._id }
+            ]
+        }).populate('projectManager teamLead');
+        
+        projects.forEach(project => {
+            if (project.projectManager) {
+                stakeholders.push({
+                    email: project.projectManager.email,
+                    name: project.projectManager.name,
+                    role: 'Project Manager',
+                    userId: project.projectManager._id
                 });
             }
-        })
-    );
-    
-    await Promise.all(notificationPromises);
+            if (project.teamLead) {
+                stakeholders.push({
+                    email: project.teamLead.email,
+                    name: project.teamLead.name,
+                    role: 'Team Lead',
+                    userId: project.teamLead._id
+                });
+            }
+        });
+        
+        const emailPromises = stakeholders.map(stakeholder => 
+            sendLeaveNotificationEmail(leave, employee, stakeholder)
+        );
+        await Promise.all(emailPromises);
+        
+        for (const stakeholder of stakeholders) {
+            try {
+                if (stakeholder.userId) {
+                    const user = await User.findById(stakeholder.userId);
+                    if (user) {
+                        if (!user.unreadNotifications) {
+                            user.unreadNotifications = [];
+                        }
+                        user.unreadNotifications.push({
+                            type: 'leave_request',
+                            message: `${employee.name} has requested ${leave.leaveType} leave from ${new Date(leave.startDate).toLocaleDateString()} to ${new Date(leave.endDate).toLocaleDateString()}`,
+                            createdAt: new Date(),
+                            read: false
+                        });
+                        user.notificationCount = (user.notificationCount || 0) + 1;
+                        await user.save();
+                    }
+                }
+            } catch (notifError) {
+                console.error(`Failed to notify ${stakeholder.email}:`, notifError.message);
+            }
+        }
+    } catch (error) {
+        console.error('Error in notifyLeaveStakeholders:', error.message);
+        throw error;
+    }
 }
 
 // ============================================
@@ -442,7 +647,6 @@ async function sendLeaveNotificationEmail(leave, employee, stakeholder) {
           <tr>
             <td style="padding:32px 36px;">
               <p style="font-size:15px; margin-bottom:20px; color:#1e293b;"><strong>${employee.name}</strong> has requested leave:</p>
-              
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; border-collapse: separate; margin-bottom:24px;">
                 <tr>
                   <td width="50%" style="padding:14px 18px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
@@ -465,12 +669,10 @@ async function sendLeaveNotificationEmail(leave, employee, stakeholder) {
                   </td>
                 </tr>
               </table>
-              
               <div style="background:#f8fafc; padding:16px 20px; border-radius:12px; margin-bottom:20px;">
                 <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Reason</div>
                 <p style="margin:0; font-size:13px; line-height:1.5; color:#334155;">${leave.reason}</p>
               </div>
-              
               <a href="${leaveUrl}" style="display:block; text-align:center; background:#2563eb; color:white; text-decoration:none; padding:14px; border-radius:12px; font-weight:700; font-size:13px;">
                 Review Leave Request →
               </a>
@@ -496,8 +698,27 @@ async function sendLeaveNotificationEmail(leave, employee, stakeholder) {
     });
 }
 
-async function sendLeaveApprovalEmail(leave) {
-    const employee = await User.findById(leave.employeeId._id);
+// ============================================
+// HELPER: Send Leave Approval Email
+// ============================================
+async function sendLeaveApprovalEmail(leave, employee) {
+    if (!employee) {
+        try {
+            const empId = getEmployeeId(leave);
+            if (empId) {
+                employee = await User.findById(empId);
+            }
+        } catch (err) {
+            console.error('Could not fetch employee for approval email:', err.message);
+            return;
+        }
+    }
+    
+    if (!employee) {
+        console.error('No employee found for approval email');
+        return;
+    }
+    
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
     
     const emailHtml = `
@@ -525,7 +746,6 @@ async function sendLeaveApprovalEmail(leave) {
             <td style="padding:32px 36px;">
               <p style="font-size:15px; margin-bottom:20px; color:#1e293b;">Dear <strong>${employee.name}</strong>,</p>
               <p style="font-size:14px; color:#475569; margin-bottom:24px; line-height:1.7;">Your leave request has been approved.</p>
-              
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; border-collapse: separate; margin-bottom:24px;">
                 <tr>
                   <td width="50%" style="padding:12px 16px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
@@ -566,8 +786,26 @@ async function sendLeaveApprovalEmail(leave) {
     });
 }
 
-async function sendLeaveRejectionEmail(leave) {
-    const employee = await User.findById(leave.employeeId._id);
+// ============================================
+// HELPER: Send Leave Rejection Email
+// ============================================
+async function sendLeaveRejectionEmail(leave, employee) {
+    if (!employee) {
+        try {
+            const empId = getEmployeeId(leave);
+            if (empId) {
+                employee = await User.findById(empId);
+            }
+        } catch (err) {
+            console.error('Could not fetch employee for rejection email:', err.message);
+            return;
+        }
+    }
+    
+    if (!employee) {
+        console.error('No employee found for rejection email');
+        return;
+    }
     
     const emailHtml = `
 <!DOCTYPE html>
@@ -594,7 +832,6 @@ async function sendLeaveRejectionEmail(leave) {
             <td style="padding:32px 36px;">
               <p style="font-size:15px; margin-bottom:20px; color:#1e293b;">Dear <strong>${employee.name}</strong>,</p>
               <p style="font-size:14px; color:#475569; margin-bottom:24px; line-height:1.7;">Your leave request has been rejected.</p>
-              
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px; border-collapse: separate; margin-bottom:24px;">
                 <tr>
                   <td width="50%" style="padding:12px 16px; border-bottom:1px solid #e2e8f0; border-right:1px solid #e2e8f0;">
@@ -634,3 +871,26 @@ async function sendLeaveRejectionEmail(leave) {
         html: emailHtml
     });
 }
+exports.adjustEmployeeBalance = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { newBalance, reason } = req.body;
+
+    if (newBalance === undefined || newBalance === null || isNaN(newBalance)) {
+      return res.status(400).json({ error: 'newBalance is required and must be a number' });
+    }
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({ error: 'Reason is required for a balance adjustment' });
+    }
+
+    const result = await leaveBucketService.adjustBalance(
+      userId, parseFloat(newBalance), reason.trim(), req.user._id
+    );
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('Error adjusting balance:', error);
+    res.status(400).json({ error: error.message });
+  }
+};
+module.exports = exports;

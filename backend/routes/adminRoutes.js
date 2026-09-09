@@ -131,12 +131,31 @@ router.post('/change-password', authorize('Super Admin', 'Admin', 'Sales Manager
   }
 });
 
-// POST /users - Create new user
+// ============================================
+// ✅ UPDATED: POST /users - Create new user WITH PROBATION
+// ============================================
 router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
-    const { name, email, password, role, githubUsername, organizationId, department, isPrimaryPOC } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      role, 
+      githubUsername, 
+      organizationId, 
+      department, 
+      isPrimaryPOC,
+      dateOfJoining,
+      dateOfBirth,
+      contactNumber,
+      emergencyContact,
+      address,
+      shiftHour,
+      shiftMinute,
+      shiftAmPm
+    } = req.body;
     
-    console.log("Creating user with data:", { name, email, role, organizationId, department, isPrimaryPOC });
+    console.log("Creating user with data:", { name, email, role, organizationId, department, isPrimaryPOC, dateOfJoining });
     
     let finalRole = role;
 
@@ -158,28 +177,52 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(cleanPassword, salt);
 
-    // Create user with organization fields
+    // ============================================
+    // ✅ AUTO-SET PROBATION FOR EMPLOYEES
+    // (not Admin, Super Admin, HR, Client)
+    // ============================================
+    let isProbationary = false;
+    let probationEndDate = null;
+    
+    // Only set probation for regular employees (not Admin, Super Admin, HR, Client)
+    const shouldHaveProbation = !['Admin', 'Super Admin', 'HR', 'Client'].includes(finalRole);
+    
+    if (shouldHaveProbation) {
+      isProbationary = true;
+      
+      // Use dateOfJoining if provided, otherwise use current date
+      const startDate = dateOfJoining ? new Date(dateOfJoining) : new Date();
+      probationEndDate = new Date(startDate);
+      probationEndDate.setMonth(probationEndDate.getMonth() + 3); // 3 months probation
+      
+      console.log(`📋 Probation set for ${name}: until ${probationEndDate.toISOString().split('T')[0]}`);
+    }
+
+    // Create user with organization fields AND PROBATION
     const newUser = new User({ 
-  name, 
-  email, 
-  password: hashedPassword, 
-  role: finalRole,
-  githubUsername: githubUsername || null,
-  githubLinked: false,
-  organizationId: organizationId || null,
-  department: department || 'Other',
-  isPrimaryPOC: isPrimaryPOC || false,
-  employeeCode: null,
-  // NEW FIELDS
-  dateOfJoining: req.body.dateOfJoining || null,
-  dateOfBirth: req.body.dateOfBirth || null,
-  contactNumber: req.body.contactNumber || '',
-  emergencyContact: req.body.emergencyContact || '',
-  address: req.body.address || '',
-  shiftHour: parseInt(req.body.shiftHour) || 9,
-  shiftMinute: parseInt(req.body.shiftMinute) || 0,
-  shiftAmPm: req.body.shiftAmPm || 'AM'
-});
+      name, 
+      email, 
+      password: hashedPassword, 
+      role: finalRole,
+      githubUsername: githubUsername || null,
+      githubLinked: false,
+      organizationId: organizationId || null,
+      department: department || 'Other',
+      isPrimaryPOC: isPrimaryPOC || false,
+      employeeCode: null,
+      // NEW FIELDS
+      dateOfJoining: dateOfJoining || null,
+      dateOfBirth: dateOfBirth || null,
+      contactNumber: contactNumber || '',
+      emergencyContact: emergencyContact || '',
+      address: address || '',
+      shiftHour: parseInt(shiftHour) || 9,
+      shiftMinute: parseInt(shiftMinute) || 0,
+      shiftAmPm: shiftAmPm || 'AM',
+      // ✅ PROBATION FIELDS
+      isProbationary: isProbationary,
+      probationEndDate: probationEndDate
+    });
 
     // If role is Developer, try to link GitHub account automatically
     let gitHubLinkResult = null;
@@ -199,9 +242,26 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
     await newUser.save();
     
     console.log("User saved with organizationId:", newUser.organizationId);
+    console.log(`📊 Probation status: ${isProbationary ? 'Active' : 'None'} (ends: ${probationEndDate || 'N/A'}`);
 
-    // Send welcome email via Resend
-    const emailHtml = getWelcomeTemplate(name, email, cleanPassword, finalRole, "https://kuiperapp.co.in/login");
+    // Send welcome email via Resend with probation info
+    let probationNote = '';
+    if (isProbationary && probationEndDate) {
+      probationNote = `
+        <div style="background:#fef3c7; padding:12px 16px; border-radius:8px; margin:12px 0; border-left:4px solid #f59e0b;">
+          <p style="margin:0; font-size:13px; color:#92400e;">
+            <strong>📋 Probation Period:</strong> You are on probation for 3 months until 
+            <strong>${probationEndDate.toLocaleDateString()}</strong>. 
+            During this time, you can only apply for <strong>Unpaid Leave</strong>.
+          </p>
+        </div>
+      `;
+    }
+
+    const emailHtml = `
+      ${getWelcomeTemplate(name, email, cleanPassword, finalRole, "https://kuiperapp.co.in/login")}
+      ${probationNote}
+    `;
 
     resend.emails.send({
       from: 'Kuiper CRM <no-reply@kuiperapp.co.in>',
@@ -217,7 +277,7 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
       await Log.create({
         actionType: 'USER_CREATED',
         performerId: req.user._id,
-        details: `Created ${finalRole}: ${name} (By ${req.user.role})${gitHubLinkResult?.success ? ` - GitHub linked: ${gitHubLinkResult.githubUsername}` : ' - GitHub not linked'}${organizationId ? ` - Organization: ${organizationId}` : ''}`,
+        details: `Created ${finalRole}: ${name} (By ${req.user.role})${gitHubLinkResult?.success ? ` - GitHub linked: ${gitHubLinkResult.githubUsername}` : ' - GitHub not linked'}${organizationId ? ` - Organization: ${organizationId}` : ''}${isProbationary ? ` - Probation until ${probationEndDate.toISOString().split('T')[0]}` : ''}`,
         timestamp: new Date()
       });
     } catch (logErr) {
@@ -239,7 +299,13 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
     res.status(201).json({
       ...userResponse,
       gitHubLinked: newUser.githubLinked,
-      gitHubUsername: newUser.githubUsername
+      gitHubUsername: newUser.githubUsername,
+      probation: isProbationary ? {
+        isProbationary: true,
+        endDate: probationEndDate,
+        durationMonths: 3,
+        daysRemaining: Math.ceil((probationEndDate - new Date()) / (1000 * 60 * 60 * 24))
+      } : null
     });
   } catch (err) {
     console.error("Error creating user:", err);
@@ -259,7 +325,17 @@ router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => 
       department, 
       isPrimaryPOC, 
       password,
-      employeeCode 
+      employeeCode,
+      dateOfJoining,
+      dateOfBirth,
+      contactNumber,
+      emergencyContact,
+      address,
+      shiftHour,
+      shiftMinute,
+      shiftAmPm,
+      isProbationary,
+      probationEndDate
     } = req.body;
     
     // First, get the existing user to preserve GitHub info
@@ -269,26 +345,29 @@ router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => 
     }
     
     // Build update data - preserve GitHub info if not provided in request
-  const updateData = { 
-  name, 
-  email, 
-  role, 
-  githubUsername: githubUsername !== undefined ? githubUsername : existingUser.githubUsername,
-  githubLinked: existingUser.githubLinked,
-  organizationId: organizationId || null,
-  department: department || 'Other',
-  isPrimaryPOC: isPrimaryPOC || false,
-  employeeCode: employeeCode || null,
-  // NEW FIELDS
-  dateOfJoining: req.body.dateOfJoining || null,
-  dateOfBirth: req.body.dateOfBirth || null,
-  contactNumber: req.body.contactNumber || '',
-  emergencyContact: req.body.emergencyContact || '',
-  address: req.body.address || '',
-  shiftHour: parseInt(req.body.shiftHour) || 9,
-  shiftMinute: parseInt(req.body.shiftMinute) || 0,
-  shiftAmPm: req.body.shiftAmPm || 'AM'
-};
+    const updateData = { 
+      name, 
+      email, 
+      role, 
+      githubUsername: githubUsername !== undefined ? githubUsername : existingUser.githubUsername,
+      githubLinked: existingUser.githubLinked,
+      organizationId: organizationId || null,
+      department: department || 'Other',
+      isPrimaryPOC: isPrimaryPOC || false,
+      employeeCode: employeeCode || null,
+      // NEW FIELDS
+      dateOfJoining: dateOfJoining !== undefined ? dateOfJoining : existingUser.dateOfJoining,
+      dateOfBirth: dateOfBirth !== undefined ? dateOfBirth : existingUser.dateOfBirth,
+      contactNumber: contactNumber !== undefined ? contactNumber : existingUser.contactNumber,
+      emergencyContact: emergencyContact !== undefined ? emergencyContact : existingUser.emergencyContact,
+      address: address !== undefined ? address : existingUser.address,
+      shiftHour: shiftHour !== undefined ? parseInt(shiftHour) : existingUser.shiftHour,
+      shiftMinute: shiftMinute !== undefined ? parseInt(shiftMinute) : existingUser.shiftMinute,
+      shiftAmPm: shiftAmPm !== undefined ? shiftAmPm : existingUser.shiftAmPm,
+      // ✅ PROBATION FIELDS - allow updates
+      isProbationary: isProbationary !== undefined ? isProbationary : existingUser.isProbationary,
+      probationEndDate: probationEndDate !== undefined ? probationEndDate : existingUser.probationEndDate
+    };
     
     // Only update password if provided
     if (password && password.trim()) {
@@ -319,7 +398,69 @@ router.delete('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) 
   }
 });
 
+// ============================================
+// ✅ FIX EXISTING USERS - Run this once to set probation for existing users
+// ============================================
+router.post('/fix-probation', authorize('Super Admin', 'Admin'), async (req, res) => {
+  try {
+    // Get all employees (excluding Admin, Super Admin, HR, Client)
+    const employees = await User.find({
+      role: { $nin: ['Admin', 'Super Admin', 'HR', 'Client'] },
+      isActive: true
+    });
+    
+    let updated = 0;
+    let alreadySet = 0;
+    let completed = 0;
+    
+    for (const emp of employees) {
+      const joiningDate = emp.dateOfJoining ? new Date(emp.dateOfJoining) : emp.createdAt ? new Date(emp.createdAt) : new Date();
+      const threeMonthsLater = new Date(joiningDate);
+      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
+      const now = new Date();
+      
+      // Check if already set correctly
+      if (emp.isProbationary === true && emp.probationEndDate) {
+        alreadySet++;
+        continue;
+      }
+      
+      // Only set probation if they joined in the last 3 months
+      if (now < threeMonthsLater) {
+        emp.isProbationary = true;
+        emp.probationEndDate = threeMonthsLater;
+        await emp.save();
+        updated++;
+        console.log(`✅ ${emp.name} set on probation until ${threeMonthsLater.toLocaleDateString()}`);
+      } else {
+        // Already completed probation
+        emp.isProbationary = false;
+        emp.probationEndDate = null;
+        await emp.save();
+        completed++;
+        console.log(`✅ ${emp.name} probation already completed (joined ${joiningDate.toLocaleDateString()})`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `Probation fix complete`,
+      stats: {
+        updated: updated,
+        alreadySet: alreadySet,
+        completed: completed,
+        total: employees.length
+      }
+    });
+  } catch (error) {
+    console.error('Error fixing probation:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // POST /users/:userId/link-github - Link GitHub account for a developer
+// ============================================
 router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
   try {
     const { userId } = req.params;
@@ -513,8 +654,6 @@ router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Man
 // ============================================
 // PROJECT MANAGEMENT ROUTES
 // ============================================
-
-// backend/routes/adminRoutes.js - UPDATED GET /client-projects
 
 // GET /client-projects - Specific route for client projects
 router.get('/client-projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client'), async (req, res) => {
@@ -1473,7 +1612,7 @@ router.get('/client/projects', authorize('Super Admin', 'Client'), async (req, r
     res.status(500).json({ error: err.message });
   }
 });
-// backend/routes/adminRoutes.js
+
 // GET /projects/:projectId/feeds - Get all feeds for a project (Admin/Super Admin only)
 router.get('/projects/:projectId/feeds', authorize('Super Admin', 'Admin'), async (req, res) => {
   try {
@@ -1522,6 +1661,7 @@ router.get('/projects/:projectId/feeds', authorize('Super Admin', 'Admin'), asyn
     res.status(500).json({ error: 'Failed to fetch feeds' });
   }
 });
+
 // ============================================
 // TEAM LEAD ASSIGNMENT ROUTES
 // ============================================
@@ -1807,9 +1947,6 @@ router.get('/projects/:id/repo-folder-last-updated', authorize('Super Admin', 'A
     res.status(500).json({ error: err.message });
   }
 });
-// backend/routes/adminRoutes.js - ADD BULK FEED IMPORT ENDPOINT
-
-// Add this route after your existing feed routes (around line 500-600)
 
 // ============================================
 // BULK IMPORT FEEDS VIA EXCEL
@@ -1919,6 +2056,184 @@ router.post('/feeds/bulk', authorize('Super Admin', 'Admin', 'Project Manager','
     });
   }
 });
+
+// ============================================
+// UPDATE USER LEAVE BALANCE
+// ============================================
+router.patch('/users/:userId/leave-balance', protect, authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { leaveType, amount, action, reason } = req.body;
+    
+    if (!leaveType) {
+      return res.status(400).json({ error: 'Leave type is required' });
+    }
+    if (amount === undefined || amount === null) {
+      return res.status(400).json({ error: 'Amount is required' });
+    }
+    if (!action || !['add', 'deduct', 'set'].includes(action)) {
+      return res.status(400).json({ error: 'Action must be add, deduct, or set' });
+    }
+    
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount < 0) {
+      return res.status(400).json({ error: 'Amount must be a positive number' });
+    }
+    if (numAmount % 0.5 !== 0) {
+      return res.status(400).json({ error: 'Amount must be in increments of 0.5 (e.g., 0.5, 1.0, 1.5)' });
+    }
+    
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const currentBalance = user.leaveBalances.get(leaveType) || 0;
+    let newBalance;
+    let historyType;
+    let historyReason = reason || '';
+    
+    switch(action) {
+      case 'add':
+        newBalance = currentBalance + numAmount;
+        historyType = 'granted';
+        historyReason = historyReason || `Manual addition of ${numAmount} ${leaveType} day(s)`;
+        break;
+      case 'deduct':
+        if (currentBalance < numAmount) {
+          return res.status(400).json({ 
+            error: `Insufficient balance. Current: ${currentBalance}, Requested: ${numAmount}` 
+          });
+        }
+        newBalance = currentBalance - numAmount;
+        historyType = 'deducted';
+        historyReason = historyReason || `Manual deduction of ${numAmount} ${leaveType} day(s)`;
+        break;
+      case 'set':
+        newBalance = numAmount;
+        historyType = 'adjusted';
+        historyReason = historyReason || `Manual adjustment to ${numAmount} ${leaveType} day(s)`;
+        break;
+      default:
+        return res.status(400).json({ error: 'Invalid action' });
+    }
+    
+    user.leaveBalances.set(leaveType, newBalance);
+    user.leaveBalancesLastUpdated = new Date();
+    
+    user.leaveBalanceHistory.push({
+      type: historyType,
+      leaveType: leaveType,
+      amount: action === 'deduct' ? -numAmount : numAmount,
+      previousBalance: currentBalance,
+      newBalance: newBalance,
+      reason: historyReason,
+      date: new Date()
+    });
+    
+    await user.save();
+    
+    // ============================================
+    // MANUAL NOTIFICATION
+    // ============================================
+    try {
+      if (!user.unreadNotifications) {
+        user.unreadNotifications = [];
+      }
+      
+      const notificationMessage = `Your ${leaveType} balance has been ${action === 'deduct' ? 'reduced by' : action === 'add' ? 'increased by' : 'set to'} ${newBalance} days. Reason: ${historyReason}`;
+      
+      user.unreadNotifications.push({
+        type: 'leave_balance_updated',
+        message: notificationMessage,
+        createdAt: new Date(),
+        read: false
+      });
+      
+      user.notificationCount = (user.notificationCount || 0) + 1;
+      await user.save();
+      
+      const io = req.app.get('io');
+      if (io) {
+        io.to(user._id.toString()).emit('notification_count_update', {
+          count: user.notificationCount,
+          type: 'leave_balance_updated',
+          message: notificationMessage
+        });
+      }
+      
+      console.log(`✅ Leave balance notification sent to ${user.email}`);
+    } catch (notifError) {
+      console.error('❌ Failed to send notification:', notifError.message);
+    }
+    
+    const balances = {};
+    user.leaveBalances.forEach((value, key) => {
+      balances[key] = value;
+    });
+    
+    res.json({
+      success: true,
+      message: `Leave balance ${action}ed successfully`,
+      data: {
+        leaveType,
+        previousBalance: currentBalance,
+        newBalance,
+        action,
+        amount: numAmount,
+        reason: historyReason,
+        allBalances: balances,
+        history: user.leaveBalanceHistory.slice(-5)
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error updating leave balance:', error);
+    res.status(500).json({ error: 'Failed to update leave balance', details: error.message });
+  }
+});
+
+// ============================================
+// GET USER LEAVE BALANCE HISTORY
+// ============================================
+router.get('/users/:userId/leave-history', protect, authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const user = await User.findById(userId).select('leaveBalanceHistory leaveBalances name email');
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    
+    const balances = {};
+    if (user.leaveBalances && typeof user.leaveBalances === 'object') {
+      if (user.leaveBalances instanceof Map) {
+        user.leaveBalances.forEach((value, key) => {
+          balances[key] = value;
+        });
+      } else {
+        Object.keys(user.leaveBalances).forEach(key => {
+          balances[key] = user.leaveBalances[key];
+        });
+      }
+    }
+    
+    res.json({
+      success: true,
+      data: {
+        name: user.name,
+        email: user.email,
+        balances,
+        history: user.leaveBalanceHistory || []
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error fetching leave history:', error);
+    res.status(500).json({ error: 'Failed to fetch leave history' });
+  }
+});
+
 // ============================================
 // COUNTRY MAP
 // ============================================
@@ -1935,4 +2250,4 @@ const COUNTRY_MAP = {
   "United States": "US", "Vietnam": "VN"
 };  
 
-module.exports = router;
+module.exports = router;  

@@ -1,4 +1,4 @@
-// frontend/src/pages/EmployeeLeaveDashboard.jsx
+// frontend/src/pages/EmployeeLeaveDashboard.jsx - WITH PROBATION SUPPORT
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
@@ -31,7 +31,8 @@ import {
   Check,
   List,
   Grid,
-  RefreshCw
+  RefreshCw,
+  Info
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -50,18 +51,70 @@ const EmployeeLeaveDashboard = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
 
+  // ✅ PROBATION STATE
+  const [probationStatus, setProbationStatus] = useState(null);
+  const [fetchingProbation, setFetchingProbation] = useState(false);
+
   // Leave form state
   const [leaveForm, setLeaveForm] = useState({
     leaveType: 'Paid Leave',
     startDate: '',
     endDate: '',
     isHalfDay: false,
+    halfDayType: 'first',
     reason: ''
   });
 
   const token = localStorage.getItem('token');
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
+  };
+
+  // ✅ Fetch probation status
+  const fetchProbationStatus = async () => {
+    setFetchingProbation(true);
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/employee/profile`, authHeader);
+      if (res.data.success && res.data.data) {
+        const profile = res.data.data;
+        if (profile.probationStatus) {
+          setProbationStatus(profile.probationStatus);
+        } else {
+          const isProbationary = profile.isProbationary || false;
+          const probationEndDate = profile.probationEndDate || null;
+          
+          if (isProbationary && probationEndDate) {
+            const now = new Date();
+            const endDate = new Date(probationEndDate);
+            const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+            
+            setProbationStatus({
+              isProbationary: true,
+              status: 'On probation',
+              daysRemaining: daysRemaining > 0 ? daysRemaining : 0,
+              endDate: endDate
+            });
+          } else {
+            setProbationStatus({
+              isProbationary: false,
+              status: 'Not on probation',
+              daysRemaining: 0,
+              endDate: null
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching probation status:', error);
+      setProbationStatus({
+        isProbationary: false,
+        status: 'Not on probation',
+        daysRemaining: 0,
+        endDate: null
+      });
+    } finally {
+      setFetchingProbation(false);
+    }
   };
 
   // Fetch data
@@ -84,8 +137,21 @@ const EmployeeLeaveDashboard = () => {
     }
   };
 
+  // ✅ Get available leave types (filtered for probation)
+  const getAvailableLeaveTypes = () => {
+    const allTypes = Object.keys(balances);
+    
+    // If on probation, only allow Unpaid Leave
+    if (probationStatus?.isProbationary) {
+      return allTypes.filter(type => type === 'Unpaid Leave');
+    }
+    
+    return allTypes;
+  };
+
   useEffect(() => {
     fetchData();
+    fetchProbationStatus();
   }, [selectedYear, statusFilter]);
 
   // Apply for leave
@@ -105,6 +171,12 @@ const EmployeeLeaveDashboard = () => {
       return;
     }
 
+    // ✅ PROBATION CHECK - Only Unpaid Leave allowed during probation
+    if (probationStatus?.isProbationary && leaveForm.leaveType !== 'Unpaid Leave') {
+      toast.error('⚠️ You are on probation. Only Unpaid Leave is available.');
+      return;
+    }
+
     // Check if leave type has balance (except Unpaid Leave)
     if (leaveForm.leaveType !== 'Unpaid Leave') {
       const balance = balances[leaveForm.leaveType] || 0;
@@ -119,7 +191,11 @@ const EmployeeLeaveDashboard = () => {
 
     setSubmitting(true);
     try {
-      await axios.post(`${API_BASE_URL}/api/leaves/apply`, leaveForm, authHeader);
+      const payload = {
+        ...leaveForm,
+        halfDayType: leaveForm.isHalfDay ? leaveForm.halfDayType : undefined
+      };
+      await axios.post(`${API_BASE_URL}/api/leaves/apply`, payload, authHeader);
       toast.success('Leave request submitted successfully!');
       setShowApplyModal(false);
       setLeaveForm({
@@ -127,6 +203,7 @@ const EmployeeLeaveDashboard = () => {
         startDate: '',
         endDate: '',
         isHalfDay: false,
+        halfDayType: 'first',
         reason: ''
       });
       fetchData();
@@ -190,6 +267,31 @@ const EmployeeLeaveDashboard = () => {
     years.push(i);
   }
 
+  // ✅ PROBATION BANNER COMPONENT
+  const ProbationBanner = () => {
+    if (!probationStatus?.isProbationary) return null;
+    
+    return (
+      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-amber-100 rounded-lg flex-shrink-0">
+            <AlertCircle size={20} className="text-amber-600" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-bold text-amber-800">⚠️ Probation Period</p>
+            <p className="text-sm text-amber-700">
+              You are on probation until <strong>{probationStatus.endDate ? new Date(probationStatus.endDate).toLocaleDateString() : 'N/A'}</strong>.
+              {probationStatus.daysRemaining > 0 && ` (${probationStatus.daysRemaining} days remaining)`}
+            </p>
+            <p className="text-sm text-amber-700 mt-1">
+              During probation, you can only apply for <strong>Unpaid Leave</strong>.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -201,8 +303,14 @@ const EmployeeLeaveDashboard = () => {
     );
   }
 
+  // Get available leave types (filtered for probation)
+  const availableLeaveTypes = getAvailableLeaveTypes();
+
   return (
     <div className={`min-h-screen bg-slate-50 p-4 md:p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      {/* ✅ PROBATION BANNER */}
+      <ProbationBanner />
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
@@ -210,6 +318,12 @@ const EmployeeLeaveDashboard = () => {
             Leave Management
           </h1>
           <p className="text-slate-500 text-sm mt-1">Apply for leave and track your balance</p>
+          {probationStatus?.isProbationary && (
+            <p className="text-[10px] text-amber-600 mt-0.5 flex items-center gap-1">
+              <Info size={12} />
+              Probation: Only Unpaid Leave available
+            </p>
+          )}
         </div>
         <button
           onClick={() => setShowApplyModal(true)}
@@ -222,30 +336,50 @@ const EmployeeLeaveDashboard = () => {
 
       {/* Balance Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
-        {Object.entries(balances).map(([type, balance]) => (
-          <div key={type} className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-            <div className="flex items-center justify-between mb-1">
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{type}</p>
-              {maxLimits[type] !== null && (
-                <span className="text-[9px] font-bold text-slate-400">/ {maxLimits[type]}</span>
-              )}
-            </div>
-            <div className="flex items-end gap-2">
-              <p className="text-2xl font-bold text-slate-800">{balance}</p>
-              {maxLimits[type] !== null && (
-                <p className="text-sm text-slate-400 mb-0.5">days</p>
-              )}
-            </div>
-            {maxLimits[type] !== null && (
-              <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${balance === 0 ? 'bg-red-500' : 'bg-blue-500'}`}
-                  style={{ width: `${Math.min((balance / maxLimits[type]) * 100, 100)}%` }}
-                />
+        {Object.entries(balances).map(([type, balance]) => {
+          const isUnlimited = type === 'Unpaid Leave';
+          const isOnlyAvailable = probationStatus?.isProbationary && isUnlimited;
+          
+          return (
+            <div key={type} className={`bg-white rounded-xl border p-4 shadow-sm ${isOnlyAvailable ? 'border-amber-300 ring-1 ring-amber-200' : 'border-slate-200'}`}>
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{type}</p>
+                {maxLimits[type] !== null && (
+                  <span className="text-[9px] font-bold text-slate-400">/ {maxLimits[type]}</span>
+                )}
+                {isOnlyAvailable && (
+                  <span className="text-[7px] font-bold bg-amber-100 text-amber-700 px-1 py-0.5 rounded-full">
+                    Available
+                  </span>
+                )}
+                {probationStatus?.isProbationary && !isUnlimited && (
+                  <span className="text-[7px] font-bold bg-slate-100 text-slate-400 px-1 py-0.5 rounded-full">
+                    🔒 Locked
+                  </span>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+              <div className="flex items-end gap-2">
+                <p className="text-2xl font-bold text-slate-800">
+                  {isUnlimited ? '∞' : balance}
+                </p>
+                {maxLimits[type] !== null && (
+                  <p className="text-sm text-slate-400 mb-0.5">days</p>
+                )}
+              </div>
+              {maxLimits[type] !== null && (
+                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${balance === 0 ? 'bg-red-500' : 'bg-blue-500'}`}
+                    style={{ width: `${Math.min((balance / maxLimits[type]) * 100, 100)}%` }}
+                  />
+                </div>
+              )}
+              {probationStatus?.isProbationary && isUnlimited && (
+                <p className="text-[7px] text-amber-600 mt-1">✓ Only leave available during probation</p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Total Balance */}
@@ -262,6 +396,11 @@ const EmployeeLeaveDashboard = () => {
             </div>
           </div>
         </div>
+        {probationStatus?.isProbationary && (
+          <div className="mt-2 text-[10px] text-white/80 bg-white/10 rounded-lg px-3 py-1.5">
+            ⚠️ On probation: Only Unpaid Leave can be applied
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -341,7 +480,9 @@ const EmployeeLeaveDashboard = () => {
                           <span className="text-sm font-bold text-slate-800">{leave.leaveType}</span>
                           {getStatusBadge(leave.status)}
                           {leave.isHalfDay && (
-                            <span className="text-[8px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Half Day</span>
+                            <span className="text-[8px] font-bold bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">
+                              {leave.halfDayType === 'first' ? 'First Half' : leave.halfDayType === 'second' ? 'Second Half' : 'Half Day'}
+                            </span>
                           )}
                         </div>
                         <p className="text-sm text-slate-600 mt-0.5">
@@ -431,6 +572,12 @@ const EmployeeLeaveDashboard = () => {
               <div>
                 <h2 className="text-xl font-bold text-slate-800">Apply for Leave</h2>
                 <p className="text-xs text-slate-500 mt-0.5">Submit a leave request for approval</p>
+                {probationStatus?.isProbationary && (
+                  <p className="text-[10px] text-amber-600 mt-1 flex items-center gap-1">
+                    <AlertCircle size={12} />
+                    Probation: Only Unpaid Leave available
+                  </p>
+                )}
               </div>
               <button
                 onClick={() => setShowApplyModal(false)}
@@ -451,12 +598,27 @@ const EmployeeLeaveDashboard = () => {
                   onChange={(e) => setLeaveForm({ ...leaveForm, leaveType: e.target.value })}
                   className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-400"
                 >
-                  {Object.keys(balances).map((type) => (
-                    <option key={type} value={type}>
-                      {type} ({balances[type] || 0} days available)
-                    </option>
-                  ))}
+                  {availableLeaveTypes.length === 0 ? (
+                    <option value="">No leave types available</option>
+                  ) : (
+                    availableLeaveTypes.map((type) => {
+                      const balance = balances[type] || 0;
+                      const isUnlimited = type === 'Unpaid Leave';
+                      return (
+                        <option key={type} value={type}>
+                          {type} ({isUnlimited ? '∞' : balance} days available)
+                          {probationStatus?.isProbationary && type === 'Unpaid Leave' && ' ✓'}
+                        </option>
+                      );
+                    })
+                  )}
                 </select>
+                {probationStatus?.isProbationary && (
+                  <p className="text-[9px] text-amber-600 mt-1 flex items-center gap-1">
+                    <Info size={12} />
+                    Only Unpaid Leave is available during probation
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -501,6 +663,38 @@ const EmployeeLeaveDashboard = () => {
                 </label>
               </div>
 
+              {leaveForm.isHalfDay && (
+                <div className="animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
+                    Half Day Type *
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setLeaveForm({ ...leaveForm, halfDayType: 'first' })}
+                      className={`py-2 px-3 rounded-xl border text-sm font-bold transition-all ${
+                        leaveForm.halfDayType === 'first'
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-blue-300'
+                      }`}
+                    >
+                      First Half
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLeaveForm({ ...leaveForm, halfDayType: 'second' })}
+                      className={`py-2 px-3 rounded-xl border text-sm font-bold transition-all ${
+                        leaveForm.halfDayType === 'second'
+                          ? 'bg-blue-600 border-blue-600 text-white'
+                          : 'bg-slate-50 border-slate-200 text-slate-600 hover:border-blue-300'
+                      }`}
+                    >
+                      Second Half
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1">
                   Reason *
@@ -514,6 +708,14 @@ const EmployeeLeaveDashboard = () => {
                   className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-400 resize-none"
                 />
               </div>
+
+              {probationStatus?.isProbationary && leaveForm.leaveType !== 'Unpaid Leave' && (
+                <div className="p-2 bg-rose-50 rounded-lg border border-rose-200 text-center">
+                  <p className="text-[10px] text-rose-600 font-medium">
+                    ⚠️ Please select Unpaid Leave during probation
+                  </p>
+                </div>
+              )}
 
               <button
                 type="submit"

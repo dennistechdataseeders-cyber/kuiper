@@ -1,6 +1,10 @@
 // frontend/src/components/AttendanceCombined.jsx
-// Combined Attendance component with Monthly view + Timeline data integrated
-// FIXED: Status column now matches Arrival column logic
+// Complete updated file with half-day leave work session support
+// ✅ FIXED: Default to 12 months to ensure data appears
+// ✅ FIXED: Added debug logging
+// ✅ FIXED: Added Refresh button
+// ✅ FIXED: Half-day leave work sessions now display correctly
+// ✅ FIXED: Second half logs now appear in timeline
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -17,24 +21,36 @@ import {
   BarChart3,
   ChevronDown,
   ChevronUp,
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  CalendarDays,
-  UserCheck,
-  UserX,
-  ClockAlert,
-  RefreshCw,
-  Eye,
   Gift,
   Coffee,
-  MousePointer2,
-  Play,
-  Pause,
-  Info
+  User,
+  RefreshCw
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+
+// ─────────────────────────────────────────────────────────────
+// Shift Configuration - Fetch from user profile
+// ─────────────────────────────────────────────────────────────
+
+// Default office time (fallback if no shift set)
+const DEFAULT_SHIFT_HOUR = 10;
+const DEFAULT_SHIFT_MINUTE = 0; // 10:00 AM
+const GRACE_PERIOD_MINUTES = 15; // 15 minutes grace period
+
+const getShiftStartMinutes = (shiftHour, shiftMinute, shiftAmPm) => {
+  let hour = shiftHour || DEFAULT_SHIFT_HOUR;
+  const minute = shiftMinute || DEFAULT_SHIFT_MINUTE;
+  
+  // Convert to 24-hour format for calculation
+  if (shiftAmPm?.toUpperCase() === 'PM' && hour !== 12) {
+    hour += 12;
+  } else if (shiftAmPm?.toUpperCase() === 'AM' && hour === 12) {
+    hour = 0;
+  }
+  
+  return hour * 60 + minute;
+};
 
 // ─────────────────────────────────────────────────────────────
 // Timeline track config
@@ -42,6 +58,7 @@ import toast from 'react-hot-toast';
 const TRACK_START_HOUR = 6;
 const TRACK_END_HOUR = 21;
 const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
+const NOON_MINUTES = 720; // 12:00 PM boundary between first/second half
 
 const minutesOfDayUTC = (dateString) => {
   if (!dateString) return null;
@@ -57,48 +74,15 @@ const clampToTrack = (mins) => {
 };
 
 const STATUS_STYLES = {
-  present: {
-    bar: 'from-emerald-400 to-emerald-500',
-    text: 'text-emerald-700',
-    chip: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    bg: 'bg-emerald-50'
-  },
-  late: {
-    bar: 'from-amber-400 to-amber-500',
-    text: 'text-amber-700',
-    chip: 'bg-amber-50 text-amber-700 border-amber-200',
-    bg: 'bg-amber-50'
-  },
-  absent: {
-    bar: 'from-rose-400 to-rose-500',
-    text: 'text-rose-700',
-    chip: 'bg-rose-50 text-rose-700 border-rose-200',
-    bg: 'bg-rose-50'
-  },
-  leave: {
-    bar: 'from-indigo-400 to-indigo-500',
-    text: 'text-indigo-700',
-    chip: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    bg: 'bg-indigo-50'
-  },
-  weekend: {
-    bar: 'from-slate-300 to-slate-400',
-    text: 'text-slate-500',
-    chip: 'bg-slate-50 text-slate-500 border-slate-200',
-    bg: 'bg-slate-50'
-  },
-  holiday: {
-    bar: 'from-purple-400 to-purple-500',
-    text: 'text-purple-700',
-    chip: 'bg-purple-50 text-purple-700 border-purple-200',
-    bg: 'bg-purple-50'
-  },
-  default: {
-    bar: 'from-blue-400 to-blue-500',
-    text: 'text-slate-600',
-    chip: 'bg-slate-50 text-slate-500 border-slate-200',
-    bg: 'bg-slate-50'
-  }
+  present: { bar: 'from-emerald-400 to-emerald-500', text: 'text-emerald-700', chip: 'bg-emerald-50 text-emerald-700 border-emerald-200', bg: 'bg-emerald-50' },
+  late: { bar: 'from-amber-400 to-amber-500', text: 'text-amber-700', chip: 'bg-amber-50 text-amber-700 border-amber-200', bg: 'bg-amber-50' },
+  absent: { bar: 'from-rose-400 to-rose-500', text: 'text-rose-700', chip: 'bg-rose-50 text-rose-700 border-rose-200', bg: 'bg-rose-50' },
+  leave: { bar: 'from-indigo-400 to-indigo-500', text: 'text-indigo-700', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200', bg: 'bg-indigo-50' },
+  'leave-half-first': { bar: 'from-indigo-400 to-indigo-500', text: 'text-indigo-700', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200', bg: 'bg-indigo-50' },
+  'leave-half-second': { bar: 'from-indigo-400 to-indigo-500', text: 'text-indigo-700', chip: 'bg-indigo-50 text-indigo-700 border-indigo-200', bg: 'bg-indigo-50' },
+  weekend: { bar: 'from-slate-300 to-slate-400', text: 'text-slate-500', chip: 'bg-slate-50 text-slate-500 border-slate-200', bg: 'bg-slate-50' },
+  holiday: { bar: 'from-purple-400 to-purple-500', text: 'text-purple-700', chip: 'bg-purple-50 text-purple-700 border-purple-200', bg: 'bg-purple-50' },
+  default: { bar: 'from-blue-400 to-blue-500', text: 'text-slate-600', chip: 'bg-slate-50 text-slate-500 border-slate-200', bg: 'bg-slate-50' }
 };
 
 const formatTimeDisplay = (dateString) => {
@@ -120,25 +104,19 @@ const formatDateDisplay = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 const getDayShortName = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  return dayNames[date.getDay()];
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
 };
 
 const isToday = (dateStr) => {
   if (!dateStr) return false;
-  const today = new Date().toISOString().split('T')[0];
-  return dateStr === today;
+  return dateStr === new Date().toISOString().split('T')[0];
 };
 
 const calculateHours = (punchIn, punchOut) => {
@@ -146,26 +124,24 @@ const calculateHours = (punchIn, punchOut) => {
   const inTime = new Date(punchIn);
   const outTime = new Date(punchOut);
   if (isNaN(inTime.getTime()) || isNaN(outTime.getTime())) return 0;
-  const diffMs = outTime.getTime() - inTime.getTime();
-  return Math.max(0, diffMs / (1000 * 60 * 60));
+  return Math.max(0, (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60));
 };
 
-const formatDuration = (hours) => {
-  if (!hours || hours <= 0) return '0h';
+// Single formatter replacing the old formatDuration / formatDurationDetailed / formatHoursToHrMin trio.
+// unit: 'short' -> "1h 30m" / "45m"; 'detailed' -> "1h 0m" / "0h 45m"; 'hrmin' -> "1 hr 30 min"
+const formatHours = (hours, { unit = 'short', zero = '0h' } = {}) => {
+  if (!hours || hours <= 0) return zero;
   const hrs = Math.floor(hours);
   const mins = Math.round((hours - hrs) * 60);
+  if (unit === 'hrmin') {
+    if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
+    if (hrs > 0) return `${hrs} hr 0 min`;
+    return `0 hr ${mins} min`;
+  }
+  // 'short' (e.g. "1h 30m") and 'detailed' (e.g. "1h 0m") differ only when hrs>0 && mins===0
   if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
-  if (hrs > 0) return `${hrs}h`;
-  return `${mins}m`;
-};
-
-const formatHoursToHrMin = (hours) => {
-  if (!hours || hours <= 0) return '0 hr 0 min';
-  const hrs = Math.floor(hours);
-  const mins = Math.round((hours - hrs) * 60);
-  if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
-  if (hrs > 0) return `${hrs} hr 0 min`;
-  return `0 hr ${mins} min`;
+  if (hrs > 0) return unit === 'detailed' ? `${hrs}h 0m` : `${hrs}h`;
+  return unit === 'detailed' ? `0h ${mins}m` : `${mins}m`;
 };
 
 const formatBreakMinutes = (minutes) => {
@@ -173,59 +149,49 @@ const formatBreakMinutes = (minutes) => {
   if (minutes < 60) return `${Math.round(minutes)} min`;
   const hrs = Math.floor(minutes / 60);
   const mins = Math.round(minutes % 60);
-  if (mins > 0) return `${hrs}h ${mins}m`;
-  return `${hrs}h`;
+  return mins > 0 ? `${hrs}h ${mins}m` : `${hrs}h`;
 };
 
-const formatDurationDetailed = (hours) => {
-  if (!hours || hours <= 0) return '0h 0m';
-  const hrs = Math.floor(hours);
-  const mins = Math.round((hours - hrs) * 60);
-  if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
-  if (hrs > 0) return `${hrs}h 0m`;
-  return `0h ${mins}m`;
+const STATUS_ICONS = {
+  present: <CheckCircle size={14} className="text-emerald-600" />,
+  late: <AlertCircle size={14} className="text-amber-600" />,
+  absent: <XCircle size={14} className="text-rose-600" />,
+  leave: <CalendarIcon size={14} className="text-indigo-600" />,
+  'leave-half-first': <CalendarIcon size={14} className="text-indigo-600" />,
+  'leave-half-second': <CalendarIcon size={14} className="text-indigo-600" />,
+  weekend: <Coffee size={14} className="text-slate-400" />,
+  holiday: <Gift size={14} className="text-purple-600" />
 };
+const getStatusIcon = (status) => STATUS_ICONS[status] || <Clock size={14} className="text-slate-400" />;
 
-const getStatusIcon = (status) => {
-  switch(status) {
-    case 'present': return <CheckCircle size={14} className="text-emerald-600" />;
-    case 'late': return <AlertCircle size={14} className="text-amber-600" />;
-    case 'absent': return <XCircle size={14} className="text-rose-600" />;
-    case 'leave': return <CalendarIcon size={14} className="text-indigo-600" />;
-    case 'weekend': return <Coffee size={14} className="text-slate-400" />;
-    case 'holiday': return <Gift size={14} className="text-purple-600" />;
-    default: return <Clock size={14} className="text-slate-400" />;
-  }
+const STATUS_LABELS = {
+  present: 'Present',
+  late: 'Late',
+  absent: 'Absent',
+  leave: 'On Leave',
+  'leave-half-first': 'First Half Leave',
+  'leave-half-second': 'Second Half Leave',
+  weekend: 'Weekend',
+  holiday: 'Holiday 🎉'
 };
-
-const getStatusLabel = (status) => {
-  switch(status) {
-    case 'present': return 'Present';
-    case 'late': return 'Late';
-    case 'absent': return 'Absent';
-    case 'leave': return 'On Leave';
-    case 'weekend': return 'Weekend';
-    case 'holiday': return 'Holiday 🎉';
-    default: return '—';
-  }
-};
+const getStatusLabel = (status) => STATUS_LABELS[status] || '—';
 
 // ─────────────────────────────────────────────────────────────
-// ✅ FIXED: getArrivalStatus - determines if punch is late
+// getArrivalStatus - uses shift timing with grace period
 // ─────────────────────────────────────────────────────────────
-const getArrivalStatus = (day) => {
+const getArrivalStatus = (day, shiftStartMinutes, gracePeriodMinutes = 15) => {
   if (!day.punchInUTC) return '—';
+  const shiftStart = shiftStartMinutes || (10 * 60 + 45); // Default: 10:45 AM
   try {
     const punchIn = new Date(day.punchInUTC);
     if (isNaN(punchIn.getTime())) return '—';
-    const hour = punchIn.getUTCHours();
-    const minute = punchIn.getUTCMinutes();
-    // Late if after 10:45 AM UTC
-    if (hour > 10 || (hour === 10 && minute > 45)) {
-      const totalMinutes = hour * 60 + minute;
-      const officeMinutes = 10 * 60 + 45;
-      const diff = totalMinutes - officeMinutes;
-      return `${diff}m late`;
+    const punchMinutes = punchIn.getUTCHours() * 60 + punchIn.getUTCMinutes();
+    const threshold = shiftStart + gracePeriodMinutes;
+    if (punchMinutes > threshold) {
+      const diff = punchMinutes - threshold;
+      const diffHours = Math.floor(diff / 60);
+      const diffMins = diff % 60;
+      return diffHours > 0 ? `${diffHours}h ${diffMins}m late` : `${diffMins}m late`;
     }
     return 'On Time';
   } catch (e) {
@@ -234,45 +200,104 @@ const getArrivalStatus = (day) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// ✅ FIXED: getDisplayStatus - returns 'present' or 'late' based on the same logic
+// getDisplayStatus - returns correct status with half-day support
 // ─────────────────────────────────────────────────────────────
 const getDisplayStatus = (day) => {
-  // If it's a holiday
-  if (day.isHoliday) return 'holiday';
-  // If weekend
-  if (day.isWeekend) return 'weekend';
-  // If on leave
+  // Check for half-day leave first
+  if (day.isHalfDay && day.halfDayType) {
+    return day.halfDayType === 'first' ? 'leave-half-first' : 'leave-half-second';
+  }
+  
+  // Check for full leave
   if (day.status === 'leave') return 'leave';
   
-  // If no punch in, it's absent
-  if (!day.punchInUTC) return 'absent';
+  // Check for holiday
+  if (day.isHoliday) return 'holiday';
   
-  // Check if late based on punch time (same logic as getArrivalStatus)
-  try {
-    const punchIn = new Date(day.punchInUTC);
-    if (isNaN(punchIn.getTime())) return day.status;
-    const hour = punchIn.getUTCHours();
-    const minute = punchIn.getUTCMinutes();
-    // Late if after 10:45 AM UTC
-    if (hour > 10 || (hour === 10 && minute > 45)) {
-      return 'late';
-    }
-    return 'present';
-  } catch (e) {
-    return day.status;
+  // Check for weekend
+  if (day.isWeekend) return 'weekend';
+  
+  // ✅ FIX: Check if there's a punch-in (even without punch-out)
+  if (day.punchInUTC) {
+    // Check if late
+    if (day.isLate === true) return 'late';
+    
+    // Check if there's a punch-out
+    if (day.punchOutUTC) return 'present';
+    
+    // No punch-out yet - still working
+    return 'present'; // or 'partial' if you want to distinguish
   }
+  
+  // No punch at all
+  return 'absent';
+};
+
+// ─────────────────────────────────────────────────────────────
+// Hover tooltip shared by DayTimelineBar (session + break details)
+// ─────────────────────────────────────────────────────────────
+const HoverTooltip = ({ session, breakInfo, position }) => {
+  if (!session && !breakInfo) return null;
+  return (
+    <div
+      className="fixed z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
+      style={{ left: position.x, top: position.y, transform: 'translateY(-100%)' }}
+    >
+      {session && (
+        <>
+          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
+            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+            <span className="text-[11px] font-bold">Session {session.sessionIndex + 1} of {session.totalSessions}</span>
+          </div>
+          <div className="space-y-1 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-slate-400">In:</span>
+              <span className="font-mono font-medium">{formatTimeDisplay(session.punchIn)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Out:</span>
+              <span className="font-mono font-medium text-rose-400">{formatTimeDisplay(session.punchOut) || 'No Out Punch'}</span>
+            </div>
+            <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
+              <span className="text-slate-400">Duration:</span>
+              <span className="font-bold text-emerald-400">{session.durationFormatted}</span>
+            </div>
+          </div>
+        </>
+      )}
+      {breakInfo && (
+        <>
+          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
+            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
+            <span className="text-[11px] font-bold">Break {breakInfo.breakIndex + 1}</span>
+          </div>
+          <div className="space-y-1 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-slate-400">Started:</span>
+              <span className="font-mono font-medium">{formatTimeDisplay(breakInfo.start)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">Ended:</span>
+              <span className="font-mono font-medium">{formatTimeDisplay(breakInfo.end)}</span>
+            </div>
+            <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
+              <span className="text-slate-400">Duration:</span>
+              <span className="font-bold text-amber-400">{breakInfo.formattedDuration}</span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 };
 
 // ─────────────────────────────────────────────────────────────
 // Average Bar Chart Component
 // ─────────────────────────────────────────────────────────────
 const AverageBarChart = ({ weeklyAverages }) => {
-  if (!weeklyAverages || weeklyAverages.length === 0) {
-    return null;
-  }
+  if (!weeklyAverages || weeklyAverages.length === 0) return null;
 
   const filteredWeeks = weeklyAverages.filter(w => w.dayCount >= 2);
-
   if (filteredWeeks.length === 0) {
     return (
       <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
@@ -281,10 +306,7 @@ const AverageBarChart = ({ weeklyAverages }) => {
     );
   }
 
-  const maxAvg = Math.max(
-    ...filteredWeeks.map(w => Math.max(w.avgEff || 0, w.avgGross || 0)),
-    1
-  );
+  const maxAvg = Math.max(...filteredWeeks.map(w => Math.max(w.avgEff || 0, w.avgGross || 0)), 1);
   const maxDisplay = Math.ceil(maxAvg / 2) * 2 + 2;
 
   return (
@@ -303,36 +325,23 @@ const AverageBarChart = ({ weeklyAverages }) => {
         </div>
         <span className="text-[6px] text-slate-400 ml-auto">{maxDisplay}h max</span>
       </div>
-      
+
       <div className="space-y-1.5">
         {filteredWeeks.map((week) => {
           const effPercent = Math.min((week.avgEff / maxDisplay) * 100, 100);
           const grossPercent = Math.min((week.avgGross / maxDisplay) * 100, 100);
-          
           return (
             <div key={week.weekNumber} className="flex items-center gap-2">
-              <span className="text-[7px] font-bold text-slate-500 w-12 flex-shrink-0">
-                {week.weekDisplay}
-              </span>
+              <span className="text-[7px] font-bold text-slate-500 w-12 flex-shrink-0">{week.weekDisplay}</span>
               <div className="flex-1">
                 <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-slate-600 rounded-full transition-all duration-500"
-                    style={{ width: `${grossPercent}%` }}
-                  />
-                  <div 
-                    className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full transition-all duration-500"
-                    style={{ width: `${effPercent}%` }}
-                  />
+                  <div className="absolute inset-y-0 left-0 bg-slate-600 rounded-full transition-all duration-500" style={{ width: `${grossPercent}%` }} />
+                  <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${effPercent}%` }} />
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0 min-w-[100px]">
-                <span className="text-[8px] font-bold text-emerald-700 w-[45px] text-right">
-                  {week.avgEffFormatted}
-                </span>
-                <span className="text-[8px] font-bold text-slate-600 w-[45px] text-right">
-                  {week.avgGrossFormatted}
-                </span>
+                <span className="text-[8px] font-bold text-emerald-700 w-[45px] text-right">{week.avgEffFormatted}</span>
+                <span className="text-[8px] font-bold text-slate-600 w-[45px] text-right">{week.avgGrossFormatted}</span>
               </div>
             </div>
           );
@@ -343,66 +352,58 @@ const AverageBarChart = ({ weeklyAverages }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Day Timeline Bar Component
+// Day Timeline Bar Component - FIXED half-day leave with work session support
 // ─────────────────────────────────────────────────────────────
 const DayTimelineBar = ({ day }) => {
   const isHoliday = day.isHoliday || false;
   const holidayName = day.holidayName || null;
-  
-  const styles = isHoliday ? STATUS_STYLES.holiday : (STATUS_STYLES[day.status] || STATUS_STYLES.default);
-  const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
+  const isHalfDayLeave = !!(day.isHalfDay && day.halfDayType);
+  const halfDayType = isHalfDayLeave ? day.halfDayType : null;
+
+  const statusKey = isHalfDayLeave ? (halfDayType === 'first' ? 'leave-half-first' : 'leave-half-second') : day.status;
+  const styles = isHoliday ? STATUS_STYLES.holiday : (STATUS_STYLES[statusKey] || STATUS_STYLES.default);
+
+  const hasSessions = day.sessions && day.sessions.length > 0;
+  const hasPunchIn = day.punchInUTC || hasSessions;
   const trackStart = TRACK_START_HOUR * 60;
-  
-  const [localHoveredSession, setLocalHoveredSession] = useState(null);
-  const [localHoveredBreak, setLocalHoveredBreak] = useState(null);
-  const [localTooltipPosition, setLocalTooltipPosition] = useState({ x: 0, y: 0 });
-  
+
+  const [hoveredSession, setHoveredSession] = useState(null);
+  const [hoveredBreak, setHoveredBreak] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+
   const handleBarMouseLeave = () => {
-    setLocalHoveredSession(null);
-    setLocalHoveredBreak(null);
+    setHoveredSession(null);
+    setHoveredBreak(null);
   };
-  
+
   const handleSessionHover = (e, session, sessionIndex, totalSessions) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const tooltipX = e.clientX - 120;
-    const tooltipY = rect.top - 10;
-    
-    const duration = session.punchOutUTC 
-      ? calculateHours(session.punchInUTC, session.punchOutUTC)
-      : 0;
-    
-    setLocalHoveredSession({
+    const duration = session.punchOutUTC ? calculateHours(session.punchInUTC, session.punchOutUTC) : 0;
+    setHoveredSession({
       sessionIndex,
       totalSessions,
       punchIn: session.punchInUTC,
       punchOut: session.punchOutUTC || 'No Out Punch',
-      duration: duration,
-      durationFormatted: formatDurationDetailed(duration),
-      isOpen: false
+      durationFormatted: formatHours(duration, { unit: 'detailed' })
     });
-    setLocalHoveredBreak(null);
-    setLocalTooltipPosition({ x: tooltipX, y: tooltipY });
+    setHoveredBreak(null);
+    setTooltipPosition({ x: e.clientX - 120, y: rect.top - 10 });
   };
-  
+
   const handleBreakHover = (e, breakGap, breakIndex) => {
     e.stopPropagation();
     const rect = e.currentTarget.getBoundingClientRect();
-    const tooltipX = e.clientX - 100;
-    const tooltipY = rect.top - 10;
-    
-    setLocalHoveredBreak({
+    setHoveredBreak({
       breakIndex,
       start: breakGap.start,
       end: breakGap.end,
-      minutes: breakGap.minutes,
       formattedDuration: formatBreakMinutes(breakGap.minutes)
     });
-    setLocalHoveredSession(null);
-    setLocalTooltipPosition({ x: tooltipX, y: tooltipY });
+    setHoveredSession(null);
+    setTooltipPosition({ x: e.clientX - 100, y: rect.top - 10 });
   };
-  
-  // If it's a holiday, show a special holiday bar
+
   if (isHoliday) {
     return (
       <div className="flex items-center gap-2 h-5">
@@ -414,8 +415,168 @@ const DayTimelineBar = ({ day }) => {
       </div>
     );
   }
-  
-  if (!hasIn) {
+
+  // ─────────────────────────────────────────────────────────────
+  // HALF-DAY LEAVE SECTION - FIXED to properly show work sessions
+  // ─────────────────────────────────────────────────────────────
+  if (isHalfDayLeave) {
+    // ✅ Debug logging to help diagnose issues
+    console.log('🔍 Half-day leave debug:', {
+      date: day.date,
+      halfDayType,
+      sessionsCount: day.sessions?.length || 0,
+      sessions: day.sessions,
+      punchInUTC: day.punchInUTC,
+      punchOutUTC: day.punchOutUTC,
+      hasSessions: hasSessions
+    });
+
+    const halfDayLabel = halfDayType === 'first' ? 'First Half Leave' : 'Second Half Leave';
+    const leaveColor = halfDayType === 'first' ? 'from-indigo-400 to-indigo-500' : 'from-indigo-500 to-indigo-600';
+    
+    // The leave segment should cover the half the employee is on leave
+    const leaveLeftPct = halfDayType === 'first' ? 0 : 50;
+    const leaveWidthPct = 50;
+
+    // Work sessions should be shown in the half the employee is NOT on leave
+    // If first half leave, show work sessions that start at or after noon (12:00 PM)
+    // If second half leave, show work sessions that start before noon (12:00 PM)
+    const isInWorkingHalf = (punchMin) => {
+      if (!punchMin) return false;
+      return halfDayType === 'first' 
+        ? punchMin >= NOON_MINUTES 
+        : punchMin < NOON_MINUTES;
+    };
+
+    // ✅ FIX: Get sessions from multiple sources
+    let allSessions = [];
+    
+    // First try to get sessions from day.sessions
+    if (day.sessions && day.sessions.length > 0) {
+      allSessions = day.sessions;
+    } 
+    // If no sessions but there's a punchIn, create a virtual session
+    else if (day.punchInUTC) {
+      allSessions = [{ 
+        punchInUTC: day.punchInUTC, 
+        punchOutUTC: day.punchOutUTC || null 
+      }];
+    }
+    
+    // ✅ DEBUG: Log what we found
+    console.log('📊 Sessions for half-day:', {
+      date: day.date,
+      halfDayType,
+      allSessionsCount: allSessions.length,
+      allSessions: allSessions.map(s => ({
+        in: s.punchInUTC,
+        out: s.punchOutUTC,
+        punchMin: minutesOfDayUTC(s.punchInUTC)
+      }))
+    });
+    
+    // Filter sessions to only show those in the working half
+    const workSessions = allSessions.filter(s => {
+      if (!s.punchInUTC) return false;
+      const punchMin = minutesOfDayUTC(s.punchInUTC);
+      const inWorkingHalf = punchMin !== null && isInWorkingHalf(punchMin);
+      
+      // ✅ DEBUG: Log each session's filtering result
+      console.log(`  Session: punchMin=${punchMin}, inWorkingHalf=${inWorkingHalf}`);
+      
+      return inWorkingHalf;
+    });
+
+    // ✅ DEBUG: Log filtered results
+    console.log('📊 Work sessions after filtering:', {
+      date: day.date,
+      halfDayType,
+      workSessionsCount: workSessions.length,
+      workSessions: workSessions.map(s => ({
+        in: s.punchInUTC,
+        out: s.punchOutUTC
+      }))
+    });
+
+    // Calculate total effective hours from work sessions only
+    const totalEffectiveHours = workSessions.reduce(
+      (sum, s) => sum + (s.punchOutUTC ? calculateHours(s.punchInUTC, s.punchOutUTC) : 0), 0
+    );
+
+    // Check if there's an in-progress session (no punch out)
+    const hasInProgress = workSessions.some(s => s.punchInUTC && !s.punchOutUTC);
+
+    return (
+      <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
+        <div className="relative h-1 rounded-full bg-slate-100">
+          {/* Leave segment - colored bar for the half on leave */}
+          <div
+            className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${leaveColor}`}
+            style={{ left: `${leaveLeftPct}%`, width: `${leaveWidthPct}%` }}
+          />
+
+          {/* Work segments for the working half */}
+          {workSessions.map((session, idx) => {
+            const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
+            const endMin = session.punchOutUTC
+              ? clampToTrack(minutesOfDayUTC(session.punchOutUTC))
+              : clampToTrack(startMin + 2);
+            
+            const segLeftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
+            const segWidthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
+
+            return (
+              <div
+                key={`work-${idx}`}
+                className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200"
+                style={{ left: `${segLeftPct}%`, width: `${segWidthPct}%` }}
+                onMouseEnter={(e) => handleSessionHover(e, session, idx, workSessions.length)}
+              />
+            );
+          })}
+        </div>
+
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-[9px] font-medium text-indigo-600 flex items-center gap-1">
+            <CalendarIcon size={10} className="text-indigo-500" />
+            {halfDayLabel}
+            {(totalEffectiveHours > 0 || hasInProgress) && (
+              <span className="text-[8px] font-medium text-emerald-600 ml-1">
+                (Worked: {totalEffectiveHours > 0 ? formatHours(totalEffectiveHours) : 'In progress'})
+              </span>
+            )}
+          </span>
+          {totalEffectiveHours > 0 && (
+            <span className="text-[8px] font-medium text-emerald-600">{formatHours(totalEffectiveHours)}</span>
+          )}
+          {hasInProgress && !totalEffectiveHours && (
+            <span className="text-[8px] font-medium text-amber-600">In progress</span>
+          )}
+        </div>
+
+        <HoverTooltip session={hoveredSession} breakInfo={hoveredBreak} position={tooltipPosition} />
+      </div>
+    );
+  }
+
+  // Full day leave
+  if (day.status === 'leave') {
+    return (
+      <div className="pt-2 pb-0.5 relative">
+        <div className="relative h-1 rounded-full bg-slate-100">
+          <div className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-500" style={{ left: '0%', width: '100%' }} />
+        </div>
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-[9px] font-medium text-indigo-600 flex items-center gap-1">
+            <CalendarIcon size={10} className="text-indigo-500" />
+            Full Day Leave
+          </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasPunchIn) {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-slate-100" />
@@ -423,43 +584,28 @@ const DayTimelineBar = ({ day }) => {
       </div>
     );
   }
-  
+
   const renderSegments = () => {
     if (!day.sessions || day.sessions.length === 0) {
       const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
-      const endMin = clampToTrack(
-        minutesOfDayUTC(day.punchOutUTC) || startMin + 5
-      );
+      const endMin = clampToTrack(minutesOfDayUTC(day.punchOutUTC) || startMin + 5);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      
-      return (
-        <div 
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-        />
-      );
+      return <div className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`} style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
     }
-    
+
     const elements = [];
-    let totalSegments = day.sessions.length;
-    
+    const totalSegments = day.sessions.length;
+
     day.sessions.forEach((session, idx) => {
       if (!session.punchInUTC) return;
-      
+
       const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
       const isLast = idx === totalSegments - 1;
-      
-      let endMin;
-      if (session.punchOutUTC) {
-        endMin = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
-      } else {
-        endMin = clampToTrack(startMin + 2);
-      }
-      
+      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayUTC(session.punchOutUTC)) : clampToTrack(startMin + 2);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      
+
       elements.push(
         <div
           key={`sess-${idx}`}
@@ -468,7 +614,7 @@ const DayTimelineBar = ({ day }) => {
           onMouseEnter={(e) => handleSessionHover(e, session, idx, totalSegments)}
         />
       );
-      
+
       if (idx === 0) {
         elements.push(
           <div key={`start-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
@@ -476,135 +622,51 @@ const DayTimelineBar = ({ day }) => {
           </div>
         );
       }
-      
+
       if (isLast) {
-        let label;
-        if (!session.punchOutUTC) {
-          label = '';
-        } else {
-          label = formatTimeDisplay(session.punchOutUTC);
-        }
-        
+        const label = session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : '';
         elements.push(
           <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>
-              {label}
-            </span>
+            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>{label}</span>
           </div>
         );
       }
-      
-      if (!isLast && session.punchOutUTC && day.sessions[idx + 1] && day.sessions[idx + 1].punchInUTC) {
+
+      if (!isLast && session.punchOutUTC && day.sessions[idx + 1]?.punchInUTC) {
         const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
         const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
-        const gapMinutes = (gapEnd - gapStart);
-        
+        const gapMinutes = gapEnd - gapStart;
+
         if (gapMinutes >= 5) {
           const gLeft = ((gapStart - trackStart) / TRACK_TOTAL_MIN) * 100;
           const gWidth = Math.max(0, ((gapEnd - gapStart) / TRACK_TOTAL_MIN) * 100);
-          
-          const breakGap = day.breakGaps && day.breakGaps.find(b => 
-            Math.abs(b.minutes - gapMinutes) < 0.1
-          );
-          
+          const breakGap = day.breakGaps && day.breakGaps.find(b => Math.abs(b.minutes - gapMinutes) < 0.1);
+
           elements.push(
             <div
               key={`break-${idx}`}
               className="absolute top-0 h-1 rounded-full bg-amber-200/60 cursor-pointer hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 transition-all duration-200"
-              style={{ 
-                left: `${gLeft}%`, 
-                width: `${gWidth}%`,
-                minWidth: '4px'
-              }}
+              style={{ left: `${gLeft}%`, width: `${gWidth}%`, minWidth: '4px' }}
               onMouseEnter={(e) => breakGap && handleBreakHover(e, breakGap, idx)}
             />
           );
         }
       }
     });
-    
+
     return elements;
   };
-  
-  const LocalTooltip = () => {
-    if (!localHoveredSession && !localHoveredBreak) return null;
-    
-    return (
-      <div 
-        className="fixed z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
-        style={{ 
-          left: localTooltipPosition.x, 
-          top: localTooltipPosition.y,
-          transform: 'translateY(-100%)'
-        }}
-      >
-        {localHoveredSession && (
-          <>
-            <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-              <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-              <span className="text-[11px] font-bold">
-                Session {localHoveredSession.sessionIndex + 1} of {localHoveredSession.totalSessions}
-              </span>
-            </div>
-            <div className="space-y-1 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-slate-400">In:</span>
-                <span className="font-mono font-medium">{formatTimeDisplay(localHoveredSession.punchIn)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Out:</span>
-                <span className="font-mono font-medium text-rose-400">
-                  {localHoveredSession.punchOut || 'No Out Punch'}
-                </span>
-              </div>
-              <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
-                <span className="text-slate-400">Duration:</span>
-                <span className="font-bold text-emerald-400">{localHoveredSession.durationFormatted}</span>
-              </div>
-            </div>
-          </>
-        )}
-        
-        {localHoveredBreak && (
-          <>
-            <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-              <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-              <span className="text-[11px] font-bold">Break {localHoveredBreak.breakIndex + 1}</span>
-            </div>
-            <div className="space-y-1 text-[11px]">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Started:</span>
-                <span className="font-mono font-medium">{formatTimeDisplay(localHoveredBreak.start)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Ended:</span>
-                <span className="font-mono font-medium">{formatTimeDisplay(localHoveredBreak.end)}</span>
-              </div>
-              <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
-                <span className="text-slate-400">Duration:</span>
-                <span className="font-bold text-amber-400">{localHoveredBreak.formattedDuration}</span>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  };
-  
+
   return (
     <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
-      <div className="relative h-1 rounded-full bg-slate-100">
-        {renderSegments()}
-      </div>
+      <div className="relative h-1 rounded-full bg-slate-100">{renderSegments()}</div>
 
       <div className="flex items-center justify-between mt-1">
         <span className="text-[9px] font-medium text-slate-500">
-          Effective: <span className={styles.text}>{formatDuration(day.effectiveHours)}</span>
+          Effective: <span className={styles.text}>{formatHours(day.effectiveHours)}</span>
         </span>
         {day.grossHours > 0 && day.grossHours !== day.effectiveHours && (
-          <span className="text-[8px] font-medium text-slate-400">
-            Gross: {formatDuration(day.grossHours)}
-          </span>
+          <span className="text-[8px] font-medium text-slate-400">Gross: {formatHours(day.grossHours)}</span>
         )}
         {day.breakMinutes > 0 && (
           <span className="inline-flex items-center gap-1 text-[8px] font-medium text-slate-400">
@@ -613,8 +675,8 @@ const DayTimelineBar = ({ day }) => {
           </span>
         )}
       </div>
-      
-      <LocalTooltip />
+
+      <HoverTooltip session={hoveredSession} breakInfo={hoveredBreak} position={tooltipPosition} />
     </div>
   );
 };
@@ -624,187 +686,201 @@ const DayTimelineBar = ({ day }) => {
 // ─────────────────────────────────────────────────────────────
 const AttendanceCombined = ({ userId, token }) => {
   const { isCollapsed } = useSidebar();
-  const authHeader = {
-    headers: { Authorization: `Bearer ${token}` }
-  };
+  const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
-  // ─────────────────────────────────────────────────────────────
-  // STATE
-  // ─────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [rawAttendanceData, setRawAttendanceData] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [viewMode, setViewMode] = useState('table');
   const [expandedRows, setExpandedRows] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const DAYS_PER_PAGE = 10;
   const [stats, setStats] = useState({
-    totalDays: 0,
-    present: 0,
-    absent: 0,
-    late: 0,
-    onLeave: 0,
-    weekends: 0,
-    holidays: 0,
-    totalEffectiveHours: 0,
-    totalGrossHours: 0,
-    averageEffectiveHours: 0,
-    averageGrossHours: 0,
-    weeklyAverages: []
+    totalDays: 0, present: 0, absent: 0, late: 0, onLeave: 0, weekends: 0, holidays: 0,
+    totalEffectiveHours: 0, totalGrossHours: 0, averageEffectiveHours: 0, averageGrossHours: 0, weeklyAverages: []
   });
 
-  // ─────────────────────────────────────────────────────────────
-  // HOLIDAY STATE
-  // ─────────────────────────────────────────────────────────────
+  const [shiftConfig, setShiftConfig] = useState({
+    shiftHour: DEFAULT_SHIFT_HOUR, shiftMinute: DEFAULT_SHIFT_MINUTE, shiftAmPm: 'AM',
+    gracePeriod: GRACE_PERIOD_MINUTES, isLoading: true
+  });
   const [holidays, setHolidays] = useState([]);
-  const [holidaysLoading, setHolidaysLoading] = useState(false);
+  const [leaves, setLeaves] = useState([]);
 
-  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
-                      'July', 'August', 'September', 'October', 'November', 'December'];
-  const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const currentYear = new Date().getFullYear();
   const yearOptions = [];
-  for (let y = currentYear - 5; y <= currentYear + 1; y++) {
-    yearOptions.push(y);
-  }
+  for (let y = currentYear - 5; y <= currentYear + 1; y++) yearOptions.push(y);
 
   // ─────────────────────────────────────────────────────────────
-  // FETCH HOLIDAYS
+  // FETCH: profile/shift, holidays, leaves
   // ─────────────────────────────────────────────────────────────
-  const fetchHolidays = async () => {
-    setHolidaysLoading(true);
+  const fetchUserProfile = async () => {
     try {
-      const res = await axios.get(
-        `${API_BASE_URL}/api/holidays`,
-        authHeader
-      );
-      
+      const res = await axios.get(`${API_BASE_URL}/api/employee/profile`, authHeader);
       if (res.data.success) {
-        setHolidays(res.data.data || []);
+        const profile = res.data.data;
+        setShiftConfig({
+          shiftHour: profile.shiftHour || DEFAULT_SHIFT_HOUR,
+          shiftMinute: profile.shiftMinute || DEFAULT_SHIFT_MINUTE,
+          shiftAmPm: profile.shiftAmPm || 'AM',
+          gracePeriod: GRACE_PERIOD_MINUTES,
+          isLoading: false
+        });
       }
     } catch (error) {
-      console.error('Error fetching holidays:', error);
-      setHolidays([]);
-    } finally {
-      setHolidaysLoading(false);
+      console.error('Error fetching user profile:', error);
+      setShiftConfig({ shiftHour: DEFAULT_SHIFT_HOUR, shiftMinute: DEFAULT_SHIFT_MINUTE, shiftAmPm: 'AM', gracePeriod: GRACE_PERIOD_MINUTES, isLoading: false });
     }
   };
 
-  // ─────────────────────────────────────────────────────────────
-  // CHECK IF A DATE IS A HOLIDAY
-  // ─────────────────────────────────────────────────────────────
-  const isHoliday = useCallback((dateStr) => {
-    if (!dateStr) return null;
-    
-    const date = new Date(dateStr);
+  const fetchHolidays = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/holidays`, authHeader);
+      if (res.data.success) setHolidays(res.data.data || []);
+    } catch (error) {
+      console.error('Error fetching holidays:', error);
+      setHolidays([]);
+    }
+  };
+
+  const fetchLeaves = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/leaves/history?status=approved`, authHeader);
+      if (res.data.success) setLeaves(res.data.data || []);
+    } catch (error) {
+      console.error('Error fetching leaves:', error);
+      setLeaves([]);
+    }
+  };
+
+  // Helper: normalize any date-like value to a UTC 'YYYY-MM-DD' string
+  const toUTCDateString = (dateLike) => {
+    const date = new Date(dateLike);
     if (isNaN(date.getTime())) return null;
-    
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(date.getUTCDate()).padStart(2, '0');
-    const dateString = `${year}-${month}-${day}`;
-    
-    const holiday = holidays.find(h => {
-      const hDate = new Date(h.date);
-      if (isNaN(hDate.getTime())) return false;
-      const hYear = hDate.getUTCFullYear();
-      const hMonth = String(hDate.getUTCMonth() + 1).padStart(2, '0');
-      const hDay = String(hDate.getUTCDate()).padStart(2, '0');
-      const hDateString = `${hYear}-${hMonth}-${hDay}`;
-      return hDateString === dateString;
-    });
-    
-    return holiday || null;
+    const y = date.getUTCFullYear();
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = String(date.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
+  const isHoliday = useCallback((dateStr) => {
+    const dateString = toUTCDateString(dateStr);
+    if (!dateString) return null;
+    return holidays.find(h => toUTCDateString(h.date) === dateString) || null;
   }, [holidays]);
 
+  const getLeaveForDate = useCallback((dateStr) => {
+    const dateString = toUTCDateString(dateStr);
+    if (!dateString) return null;
+    const checkDate = new Date(dateString + 'T00:00:00.000Z');
+    return leaves.find(l => {
+      if (l.status !== 'approved') return false;
+      const start = new Date(l.startDate);
+      const end = new Date(l.endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) return false;
+      return checkDate >= start && checkDate <= end;
+    }) || null;
+  }, [leaves]);
+
+  const isLatePunchWithShift = useCallback((punchTime) => {
+    if (!punchTime || shiftConfig.isLoading) return false;
+    const punchDate = new Date(punchTime);
+    if (isNaN(punchDate.getTime())) return false;
+    const punchMinutes = punchDate.getUTCHours() * 60 + punchDate.getUTCMinutes();
+    const shiftStartMinutes = getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
+    const gracePeriod = shiftConfig.gracePeriod || 15;
+    return punchMinutes > shiftStartMinutes + gracePeriod;
+  }, [shiftConfig]);
+
   // ─────────────────────────────────────────────────────────────
-  // DERIVE attendanceData FROM rawAttendanceData + holidays
+  // DERIVE attendanceData FROM rawAttendanceData + holidays + leaves + shift
   // ─────────────────────────────────────────────────────────────
   const attendanceData = useMemo(() => {
     return rawAttendanceData.map(day => {
       const holidayData = isHoliday(day.date);
       const isHolidayDay = !!holidayData;
-      const holidayName = holidayData ? holidayData.name : null;
+      const leaveData = getLeaveForDate(day.date);
+      const isLeaveDay = !!leaveData;
+      const isLate = isLatePunchWithShift(day.punchInUTC);
+
+      let status = day.status;
+      if (isHolidayDay) status = 'holiday';
+      else if (isLeaveDay) status = 'leave';
+      else if (!day.punchInUTC) status = 'absent';
+      else if (isLate) status = 'late';
+      else status = 'present';
 
       return {
         ...day,
         isHoliday: isHolidayDay,
-        holidayName: holidayName,
-        status: isHolidayDay ? 'holiday' : day.status
+        holidayName: holidayData ? holidayData.name : null,
+        isHalfDay: leaveData ? leaveData.isHalfDay || false : false,
+        halfDayType: leaveData ? leaveData.halfDayType || null : null,
+        leaveType: leaveData ? leaveData.leaveType : null,
+        status,
+        isLate,
+        shiftConfig
       };
     });
-  }, [rawAttendanceData, isHoliday]);
+  }, [rawAttendanceData, isHoliday, getLeaveForDate, isLatePunchWithShift, shiftConfig]);
 
   // ─────────────────────────────────────────────────────────────
-  // FETCH ATTENDANCE DATA
+  // FETCH ATTENDANCE DATA - ✅ FIXED: Default to 12 months
   // ─────────────────────────────────────────────────────────────
   const fetchAttendanceData = async () => {
     setLoading(true);
     try {
-      const response = await axios.get(
-        `${API_BASE_URL}/api/employee/attendance/timeline`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { months: 3 }
-        }
-      );
+      console.log('📊 Fetching attendance data for user:', userId);
+      
+      const response = await axios.get(`${API_BASE_URL}/api/employee/attendance/timeline`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { months: 12 } // ✅ FIX: Fetch 12 months instead of 3
+      });
+
+      console.log('📊 Attendance API Response:', response.data);
+      console.log('📊 Days count:', response.data.data?.days?.length || 0);
 
       if (response.data.success) {
         const data = response.data.data;
         
+        // ✅ DEBUG: Log the first day to see structure
+        if (data.days && data.days.length > 0) {
+          console.log('📅 First day sample:', data.days[0]);
+          console.log('📅 Last day sample:', data.days[data.days.length - 1]);
+        } else {
+          console.log('⚠️ No days returned from API');
+        }
+        
         const processedDays = (data.days || []).map(day => {
-          let sessions = day.sessions || [];
-          
-          if (sessions.length === 0 && day.punchInUTC) {
-            sessions = [{
-              punchInUTC: day.punchInUTC,
-              punchOutUTC: day.punchOutUTC || null
-            }];
-          }
-          
-          let effectiveHours = 0;
-          let grossHours = 0;
-          let breakMinutes = 0;
-          let firstIn = null;
-          let lastOut = null;
-          let lastOutUTC = null;
-          
+          const sessions = (day.sessions && day.sessions.length > 0)
+            ? day.sessions
+            : (day.punchInUTC ? [{ punchInUTC: day.punchInUTC, punchOutUTC: day.punchOutUTC || null }] : []);
+
+          let effectiveHours = 0, breakMinutes = 0, firstIn = null, lastOut = null, lastOutUTC = null;
+
           sessions.forEach((session) => {
-            if (session.punchInUTC) {
-              const inTime = new Date(session.punchInUTC);
-              if (!firstIn || inTime < firstIn) firstIn = inTime;
-              
-              if (session.punchOutUTC) {
-                const outTime = new Date(session.punchOutUTC);
-                if (!lastOutUTC || outTime > new Date(lastOutUTC)) {
-                  lastOutUTC = session.punchOutUTC;
-                }
-                const hours = calculateHours(session.punchInUTC, outTime.toISOString());
-                effectiveHours += hours;
-                if (!lastOut || outTime > lastOut) lastOut = outTime;
-              }
+            if (!session.punchInUTC) return;
+            const inTime = new Date(session.punchInUTC);
+            if (!firstIn || inTime < firstIn) firstIn = inTime;
+            if (session.punchOutUTC) {
+              const outTime = new Date(session.punchOutUTC);
+              if (!lastOutUTC || outTime > new Date(lastOutUTC)) lastOutUTC = session.punchOutUTC;
+              effectiveHours += calculateHours(session.punchInUTC, outTime.toISOString());
+              if (!lastOut || outTime > lastOut) lastOut = outTime;
             }
           });
-          
-          if (!lastOutUTC && sessions.length > 0) {
-            const lastSession = sessions[sessions.length - 1];
-            if (lastSession.punchOutUTC) {
-              lastOutUTC = lastSession.punchOutUTC;
-            }
-          }
-          
+
           if (!lastOutUTC) {
-            lastOutUTC = day.punchOutUTC || null;
+            const lastSession = sessions[sessions.length - 1];
+            lastOutUTC = (lastSession && lastSession.punchOutUTC) || day.punchOutUTC || null;
           }
-          
-          if (firstIn && lastOut) {
-            grossHours = (lastOut - firstIn) / (1000 * 60 * 60);
-          } else if (sessions.length === 1 && sessions[0].punchInUTC) {
-            grossHours = effectiveHours;
-          }
-          
+
+          const grossHours = (firstIn && lastOut)
+            ? (lastOut - firstIn) / (1000 * 60 * 60)
+            : (sessions.length === 1 && sessions[0].punchInUTC ? effectiveHours : 0);
+
           const breakGaps = [];
           for (let i = 0; i < sessions.length - 1; i++) {
             const currentOut = sessions[i].punchOutUTC;
@@ -812,32 +888,43 @@ const AttendanceCombined = ({ userId, token }) => {
             if (currentOut && nextIn) {
               const gapMinutes = calculateHours(currentOut, nextIn) * 60;
               if (gapMinutes >= 5) {
-                breakGaps.push({
-                  start: currentOut,
-                  end: nextIn,
-                  minutes: gapMinutes,
-                  breakIndex: i
-                });
+                breakGaps.push({ start: currentOut, end: nextIn, minutes: gapMinutes, breakIndex: i });
                 breakMinutes += gapMinutes;
               }
             }
           }
-          
+
+          // ✅ DEBUG: Log processed day for half-day leave
+          if (day.isHalfDay) {
+            console.log(`📊 Processing half-day ${day.date}:`, {
+              isHalfDay: day.isHalfDay,
+              halfDayType: day.halfDayType,
+              sessionsCount: sessions.length,
+              sessions: sessions.map(s => ({
+                in: s.punchInUTC,
+                out: s.punchOutUTC
+              }))
+            });
+          }
+
           return {
             ...day,
-            sessions: sessions,
+            sessions,
             punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
             punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
             punchOutUTC: lastOutUTC,
-            effectiveHours: effectiveHours,
-            grossHours: grossHours,
-            breakMinutes: breakMinutes,
-            breakGaps: breakGaps,
+            effectiveHours,
+            grossHours,
+            breakMinutes,
+            breakGaps,
             totalDuration: effectiveHours
           };
         });
-        
+
+        console.log(`📊 Processed ${processedDays.length} days`);
         setRawAttendanceData(processedDays);
+      } else {
+        console.log('⚠️ API returned success: false');
       }
     } catch (error) {
       console.error('Error fetching attendance:', error);
@@ -852,117 +939,88 @@ const AttendanceCombined = ({ userId, token }) => {
   // ─────────────────────────────────────────────────────────────
   const calculateStatsForMonth = (days) => {
     const todayStr = new Date().toISOString().split('T')[0];
-    
-    const monthDays = days.filter(day => {
+    const monthDaysList = days.filter(day => {
       if (!day.date) return false;
       const date = new Date(day.date);
       return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
     });
+    const sortedDays = [...monthDaysList].sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const sortedDays = [...monthDays].sort((a, b) => new Date(a.date) - new Date(b.date));
-    
     const weeks = [];
     let currentWeek = [];
     let weekStartDate = null;
     let weekNumber = 1;
-    
+
     for (const day of sortedDays) {
-      const date = new Date(day.date);
-      const dayOfWeek = date.getDay();
-      const dateStr = day.date;
-      
+      const dayOfWeek = new Date(day.date).getDay();
       if (dayOfWeek === 1 || weekStartDate === null) {
         if (currentWeek.length > 0) {
-          weeks.push({
-            weekNumber: weekNumber,
-            days: [...currentWeek]
-          });
+          weeks.push({ weekNumber, days: [...currentWeek] });
           weekNumber++;
         }
         currentWeek = [];
-        weekStartDate = dateStr;
+        weekStartDate = day.date;
       }
-      
       currentWeek.push(day);
     }
-    
-    if (currentWeek.length > 0) {
-      weeks.push({
-        weekNumber: weekNumber,
-        days: [...currentWeek]
-      });
-    }
+    if (currentWeek.length > 0) weeks.push({ weekNumber, days: [...currentWeek] });
 
     const weeklyAverages = weeks.map((week) => {
       const daysWithoutToday = week.days.filter(day => day.date !== todayStr);
-      const daysWithoutHolidays = daysWithoutToday.filter(d => !d.isHoliday);
-      const presentDays = daysWithoutHolidays.filter(d => {
-        const displayStatus = getDisplayStatus(d);
-        return displayStatus === 'present' || displayStatus === 'late';
-      });
-      const lateDays = daysWithoutHolidays.filter(d => getDisplayStatus(d) === 'late');
-      
+      const daysWithoutLeave = daysWithoutToday.filter(d => d.status !== 'leave' && !d.isHoliday);
+      const presentDays = daysWithoutLeave.filter(d => ['present', 'late'].includes(getDisplayStatus(d)));
+      const lateDays = daysWithoutLeave.filter(d => getDisplayStatus(d) === 'late');
       const totalEff = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
       const totalGross = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
-      
       const avgEff = presentDays.length > 0 ? totalEff / presentDays.length : 0;
       const avgGross = presentDays.length > 0 ? totalGross / presentDays.length : 0;
-      
+
       return {
         weekNumber: week.weekNumber,
         weekDisplay: `Week ${week.weekNumber}`,
         avgEff,
         avgGross,
-        avgEffFormatted: formatHoursToHrMin(avgEff),
-        avgGrossFormatted: formatHoursToHrMin(avgGross),
+        avgEffFormatted: formatHours(avgEff, { unit: 'hrmin' }),
+        avgGrossFormatted: formatHours(avgGross, { unit: 'hrmin' }),
         dayCount: presentDays.length,
         lateCount: lateDays.length,
         totalDays: week.days.length,
-        holidayCount: week.days.filter(d => d.isHoliday).length
+        holidayCount: week.days.filter(d => d.isHoliday).length,
+        leaveCount: week.days.filter(d => d.status === 'leave').length
       };
     });
 
-    const workingDays = monthDays.filter(d => !d.isWeekend && !d.isHoliday);
+    const workingDays = monthDaysList.filter(d => !d.isWeekend && !d.isHoliday && d.status !== 'leave');
     const daysWithoutToday = workingDays.filter(d => d.date !== todayStr);
-    
-    const presentDays = daysWithoutToday.filter(d => {
-      const displayStatus = getDisplayStatus(d);
-      return displayStatus === 'present' || displayStatus === 'late';
-    });
+    const presentDays = daysWithoutToday.filter(d => ['present', 'late'].includes(getDisplayStatus(d)));
     const lateDays = daysWithoutToday.filter(d => getDisplayStatus(d) === 'late');
     const absentDays = daysWithoutToday.filter(d => getDisplayStatus(d) === 'absent');
-    const leaveDays = daysWithoutToday.filter(d => d.status === 'leave');
-    const weekends = monthDays.filter(d => d.isWeekend).length;
-    const holidays = monthDays.filter(d => d.isHoliday).length;
-    
+    const leaveDays = monthDaysList.filter(d => d.status === 'leave' && !d.isHoliday).length;
+    const weekends = monthDaysList.filter(d => d.isWeekend).length;
+    const holidaysCount = monthDaysList.filter(d => d.isHoliday).length;
     const totalEffectiveHours = presentDays.reduce((sum, d) => sum + (d.effectiveHours || 0), 0);
     const totalGrossHours = presentDays.reduce((sum, d) => sum + (d.grossHours || 0), 0);
-    
-    const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
-    const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
 
     setStats({
-      totalDays: workingDays.length,
-      present: presentDays.length - lateDays.length,
+      totalDays: workingDays.length + leaveDays,
+      present: presentDays.length,
       absent: absentDays.length,
       late: lateDays.length,
-      onLeave: leaveDays.length,
-      weekends: weekends,
-      holidays: holidays,
-      totalEffectiveHours: totalEffectiveHours,
-      totalGrossHours: totalGrossHours,
-      averageEffectiveHours: avgEffectiveHours,
-      averageGrossHours: avgGrossHours,
-      weeklyAverages: weeklyAverages
+      onLeave: leaveDays,
+      weekends,
+      holidays: holidaysCount,
+      totalEffectiveHours,
+      totalGrossHours,
+      averageEffectiveHours: presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0,
+      averageGrossHours: presentDays.length > 0 ? totalGrossHours / presentDays.length : 0,
+      weeklyAverages
     });
   };
 
   // ─────────────────────────────────────────────────────────────
   // EFFECTS
   // ─────────────────────────────────────────────────────────────
-  useEffect(() => {
-    fetchHolidays();
-  }, []);
+  useEffect(() => { fetchUserProfile(); fetchHolidays(); fetchLeaves(); }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -971,9 +1029,7 @@ const AttendanceCombined = ({ userId, token }) => {
   }, [selectedMonth, selectedYear]);
 
   useEffect(() => {
-    if (attendanceData.length > 0) {
-      calculateStatsForMonth(attendanceData);
-    }
+    if (attendanceData.length > 0) calculateStatsForMonth(attendanceData);
   }, [selectedMonth, selectedYear, attendanceData]);
 
   // ─────────────────────────────────────────────────────────────
@@ -981,33 +1037,17 @@ const AttendanceCombined = ({ userId, token }) => {
   // ─────────────────────────────────────────────────────────────
   const navigateMonth = (direction) => {
     if (direction === 'prev') {
-      if (selectedMonth === 0) {
-        setSelectedMonth(11);
-        setSelectedYear(selectedYear - 1);
-      } else {
-        setSelectedMonth(selectedMonth - 1);
-      }
+      if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(y => y - 1); }
+      else setSelectedMonth(m => m - 1);
     } else {
-      if (selectedMonth === 11) {
-        setSelectedMonth(0);
-        setSelectedYear(selectedYear + 1);
-      } else {
-        setSelectedMonth(selectedMonth + 1);
-      }
+      if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(y => y + 1); }
+      else setSelectedMonth(m => m + 1);
     }
     setShowMonthPicker(false);
   };
 
-  const handleMonthSelect = (monthIndex) => {
-    setSelectedMonth(monthIndex);
-    setShowMonthPicker(false);
-  };
-
-  const handleYearSelect = (year) => {
-    setSelectedYear(year);
-    setShowMonthPicker(false);
-  };
-
+  const handleMonthSelect = (monthIndex) => { setSelectedMonth(monthIndex); setShowMonthPicker(false); };
+  const handleYearSelect = (year) => { setSelectedYear(year); setShowMonthPicker(false); };
   const goToCurrentMonth = () => {
     const now = new Date();
     setSelectedMonth(now.getMonth());
@@ -1023,7 +1063,6 @@ const AttendanceCombined = ({ userId, token }) => {
     });
   }, [attendanceData, selectedMonth, selectedYear]);
 
-  // Pagination: show only 10 attendance records at a time
   const totalPages = Math.max(1, Math.ceil(monthDays.length / DAYS_PER_PAGE));
 
   const paginatedMonthDays = useMemo(() => {
@@ -1032,18 +1071,17 @@ const AttendanceCombined = ({ userId, token }) => {
     return sorted.slice(startIndex, startIndex + DAYS_PER_PAGE);
   }, [monthDays, currentPage]);
 
-  // Toggle expand/collapse for a row
-  const toggleRow = (dateStr) => {
-    setExpandedRows(prev => ({
-      ...prev,
-      [dateStr]: !prev[dateStr]
-    }));
-  };
+  const toggleRow = (dateStr) => setExpandedRows(prev => ({ ...prev, [dateStr]: !prev[dateStr] }));
 
   const goToPage = (page) => {
-    const nextPage = Math.min(Math.max(page, 1), totalPages);
-    setCurrentPage(nextPage);
+    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
     setExpandedRows({});
+  };
+
+  const getShiftDisplay = () => {
+    if (shiftConfig.isLoading) return 'Loading...';
+    const { shiftHour, shiftMinute, shiftAmPm } = shiftConfig;
+    return `${String(shiftHour).padStart(2, '0')}:${String(shiftMinute).padStart(2, '0')} ${shiftAmPm}`;
   };
 
   // ─────────────────────────────────────────────────────────────
@@ -1068,10 +1106,8 @@ const AttendanceCombined = ({ userId, token }) => {
         </div>
         <p className="text-sm font-semibold text-slate-500">No attendance data available</p>
         <p className="text-xs text-slate-400 mt-1">Try syncing your attendance data</p>
-        <button
-          onClick={fetchAttendanceData}
-          className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-all shadow-sm"
-        >
+        <button onClick={fetchAttendanceData} className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-all shadow-sm">
+          <RefreshCw size={14} className="inline mr-1" />
           Refresh Data
         </button>
       </div>
@@ -1079,413 +1115,402 @@ const AttendanceCombined = ({ userId, token }) => {
   }
 
   return (
-    <>
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        {/* Header with Month Navigation */}
-        <div className="p-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-white">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-                <BarChart3 size={16} className="text-blue-600" />
-              </div>
-              <h3 className="text-xs font-bold text-slate-700">
-                Attendance Timeline
-              </h3>
-              
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowMonthPicker(!showMonthPicker);
-                  }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-[10px] font-semibold text-slate-700 shadow-sm"
-                >
-                  <span>{monthNames[selectedMonth]} {selectedYear}</span>
-                  <ChevronDown size={12} className={`transition-transform duration-200 ${showMonthPicker ? 'rotate-180' : ''}`} />
-                </button>
-                
-                {showMonthPicker && (
-                  <div className="absolute top-full left-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-3 min-w-[220px]">
-                    <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
-                      <button
-                        onClick={() => handleYearSelect(selectedYear - 1)}
-                        className="p-1 rounded-lg hover:bg-slate-100 transition-all"
-                      >
-                        <ChevronLeft size={12} className="text-slate-500" />
-                      </button>
-                      <select
-                        value={selectedYear}
-                        onChange={(e) => handleYearSelect(Number(e.target.value))}
-                        className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                      >
-                        {yearOptions.map(year => (
-                          <option key={year} value={year}>{year}</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => handleYearSelect(selectedYear + 1)}
-                        className="p-1 rounded-lg hover:bg-slate-100 transition-all"
-                      >
-                        <ChevronRight size={12} className="text-slate-500" />
-                      </button>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-1">
-                      {monthNames.map((month, index) => (
-                        <button
-                          key={month}
-                          onClick={() => handleMonthSelect(index)}
-                          className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${selectedMonth === index ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-700'}`}
-                        >
-                          {month.substring(0, 3)}
-                        </button>
-                      ))}
-                    </div>
-                    
-                    <div className="mt-2 pt-2 border-t border-slate-100">
-                      <button
-                        onClick={goToCurrentMonth}
-                        className="w-full py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-all"
-                      >
-                        Go to Current Month
-                      </button>
-                    </div>
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Header with Month Navigation & Shift Info */}
+      <div className="p-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+              <BarChart3 size={16} className="text-blue-600" />
+            </div>
+            <h3 className="text-xs font-bold text-slate-700">Attendance Timeline</h3>
+
+            {/* ✅ Refresh Button */}
+            <button
+              onClick={() => {
+                fetchAttendanceData();
+                toast.success('Refreshing attendance data...');
+              }}
+              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
+              title="Refresh attendance data"
+            >
+              <RefreshCw size={14} />
+            </button>
+
+            <div className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowMonthPicker(!showMonthPicker); }}
+                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-[10px] font-semibold text-slate-700 shadow-sm"
+              >
+                <span>{monthNames[selectedMonth]} {selectedYear}</span>
+                <ChevronDown size={12} className={`transition-transform duration-200 ${showMonthPicker ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showMonthPicker && (
+                <div className="absolute top-full left-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-3 min-w-[220px]">
+                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
+                    <button onClick={() => handleYearSelect(selectedYear - 1)} className="p-1 rounded-lg hover:bg-slate-100 transition-all">
+                      <ChevronLeft size={12} className="text-slate-500" />
+                    </button>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => handleYearSelect(Number(e.target.value))}
+                      className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                    >
+                      {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
+                    </select>
+                    <button onClick={() => handleYearSelect(selectedYear + 1)} className="p-1 rounded-lg hover:bg-slate-100 transition-all">
+                      <ChevronRight size={12} className="text-slate-500" />
+                    </button>
                   </div>
-                )}
-              </div>
-            </div>
-          </div>
-          
-          {/* Legend */}
-          <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-[7px] font-medium text-slate-400">
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-              <span>Work</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-              <span>Break</span>
-            </span>
-            <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-purple-400"></div>
-              <span>Holiday</span>
-            </span>
-          </div>
-        </div>
 
-        {/* Stats + Weekly Averages - Single Combined Section */}
-        <div className="p-2 bg-slate-50/50 border-b border-slate-100">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-2 items-stretch">
+                  <div className="grid grid-cols-3 gap-1">
+                    {monthNames.map((month, index) => (
+                      <button
+                        key={month}
+                        onClick={() => handleMonthSelect(index)}
+                        className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${selectedMonth === index ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-700'}`}
+                      >
+                        {month.substring(0, 3)}
+                      </button>
+                    ))}
+                  </div>
 
-            {/* Left 4 Stats */}
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-slate-400 uppercase tracking-wider">Working</p>
-                <p className="text-base font-black text-slate-800">{stats.totalDays}</p>
-              </div>
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Present</p>
-                <p className="text-base font-black text-emerald-700">{stats.present}</p>
-              </div>
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-rose-600 uppercase tracking-wider">Absent</p>
-                <p className="text-base font-black text-rose-700">{stats.absent}</p>
-              </div>
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late</p>
-                <p className="text-base font-black text-amber-700">{stats.late}</p>
-              </div>
-            </div>
-
-            {/* Weekly Averages - Beside Stats */}
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2 min-w-0">
-              <div className="flex items-center justify-between gap-2 mb-1.5">
-                <div className="flex items-center gap-2 min-w-0">
-                  <BarChart3 size={11} className="text-blue-500 flex-shrink-0" />
-                  <span className="text-[8px] font-bold text-slate-600 uppercase tracking-wider">Weekly Averages</span>
-                </div>
-                <span className="text-[6px] text-slate-400 whitespace-nowrap">Excluding today & holidays</span>
-              </div>
-
-              {stats.weeklyAverages && stats.weeklyAverages.length > 0 ? (
-                <AverageBarChart weeklyAverages={stats.weeklyAverages} />
-              ) : (
-                <div className="flex items-center justify-center h-full min-h-[70px]">
-                  <span className="text-[8px] text-slate-400">No weekly data available</span>
+                  <div className="mt-2 pt-2 border-t border-slate-100">
+                    <button onClick={goToCurrentMonth} className="w-full py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-all">
+                      Go to Current Month
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
 
-            {/* Right 4 Stats */}
-            <div className="grid grid-cols-2 gap-1.5">
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-indigo-600 uppercase tracking-wider">Leave</p>
-                <p className="text-base font-black text-indigo-700">{stats.onLeave}</p>
-              </div>
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-purple-600 uppercase tracking-wider">Holidays</p>
-                <p className="text-base font-black text-purple-700">{stats.holidays}</p>
-              </div>
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Avg Eff</p>
-                <p className="text-[10px] sm:text-xs font-black text-emerald-700 mt-1 leading-tight">{formatHoursToHrMin(stats.averageEffectiveHours)}</p>
-              </div>
-              <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-                <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
-                <p className="text-[10px] sm:text-xs font-black text-slate-700 mt-1 leading-tight">{formatHoursToHrMin(stats.averageGrossHours)}</p>
-              </div>
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-200">
+              <User size={10} className="text-indigo-500" />
+              <span className="text-[7px] font-bold text-indigo-600">Shift: {getShiftDisplay()}</span>
+              <span className="text-[6px] text-indigo-400">(Grace: {shiftConfig.gracePeriod}m)</span>
             </div>
-
           </div>
         </div>
 
-        {/* Timeline Table with Expandable Rows */}
-        <div className="overflow-x-auto p-3">
-          <table className="w-full min-w-[900px]">
-            <thead>
-              <tr className="bg-slate-50/80 border-b border-slate-200">
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Date</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Day</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Status</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Timeline</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">In</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Last Out</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Eff</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Gross</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Arrival</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Sessions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {monthDays.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="px-2 py-8 text-center">
-                    <div className="flex flex-col items-center gap-1.5">
-                      <CalendarIcon size={20} className="text-slate-300" />
-                      <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                paginatedMonthDays
-                  .map((day, idx) => {
-                    const isHolidayDay = day.isHoliday || false;
-                    const holidayName = day.holidayName || null;
-                    // ✅ FIXED: Use getDisplayStatus to determine status
-                    const displayStatus = getDisplayStatus(day);
-                    const styles = isHolidayDay ? STATUS_STYLES.holiday : (STATUS_STYLES[displayStatus] || STATUS_STYLES.default);
-                    const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
-                    const today = isToday(day.date);
-                    const isWeekend = day.isWeekend || false;
-                    const isExpanded = expandedRows[day.date] || false;
-                    const sessionCount = day.sessions?.length || 0;
-                    
-                    let outDisplay = '—';
-                    if (!isWeekend && !isHolidayDay) {
-                      outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
-                    }
-                    
-                    return (
-                      <React.Fragment key={idx}>
-                        {/* Main Row */}
-                        <tr 
-                          className={`hover:bg-slate-50/50 transition-all cursor-pointer ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''}`}
-                          onClick={() => toggleRow(day.date)}
-                        >
-                          <td className="px-2 py-1.5">
-                            <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : 'text-slate-700'}`}>
-                              {formatDateDisplay(day.date)}
-                            </span>
-                            {today && (
-                              <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>
-                            )}
-                            {isHolidayDay && (
-                              <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                                <Gift size={8} />
-                                Holiday
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${styles.chip}`}>
-                              {getStatusIcon(displayStatus)}
-                              {getStatusLabel(displayStatus)}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5 min-w-[180px]">
-                            {isHolidayDay ? (
-                              <div className="flex items-center gap-2 h-5">
-                                <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-                                <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
-                                  <Gift size={10} className="text-purple-500" />
-                                  {holidayName || 'Holiday'}
-                                </span>
-                              </div>
-                            ) : hasIn ? (
-                              <DayTimelineBar day={day} />
-                            ) : (
-                              <span className="text-[9px] text-slate-400 italic">—</span>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className="text-[10px] font-mono font-medium text-slate-700">
-                              {isHolidayDay ? '—' : (day.punchInDisplay || '—')}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className={`text-[10px] font-mono font-medium ${isHolidayDay ? 'text-slate-400' : isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
-                              {isHolidayDay ? '—' : outDisplay}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className="text-[10px] font-bold text-emerald-700">
-                              {isHolidayDay ? '—' : (day.effectiveHours ? formatHoursToHrMin(day.effectiveHours) : '0 hr 0 min')}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className="text-[10px] font-bold text-slate-700">
-                              {isHolidayDay ? '—' : (day.grossHours ? formatHoursToHrMin(day.grossHours) : '0 hr 0 min')}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <span className={`text-[10px] font-medium ${displayStatus === 'late' ? 'text-amber-600' : displayStatus === 'present' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                              {isHolidayDay ? '🎉' : (isWeekend ? '—' : getArrivalStatus(day))}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5">
-                            <div className="flex items-center gap-1">
-                              <span className="text-[9px] font-bold text-slate-600">{sessionCount}</span>
-                              <span className="text-[7px] text-slate-400">
-                                {isExpanded ? <ChevronUp size={12} className="text-blue-500" /> : <ChevronDown size={12} className="text-slate-400" />}
-                              </span>
-                            </div>
-                          </td>
-                        </tr>
-
-                        {/* Expanded Session Details Row */}
-                        {isExpanded && day.sessions && day.sessions.length > 0 && (
-                          <tr className="bg-blue-50/20">
-                            <td colSpan={10} className="px-4 py-3">
-                              <div className="bg-white rounded-lg border border-blue-100 p-3">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <div className="p-1 bg-blue-100 rounded-lg">
-                                    <Clock size={12} className="text-blue-600" />
-                                  </div>
-                                  <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">
-                                    Session Details ({day.sessions.length} sessions)
-                                  </p>
-                                  {day.breakMinutes > 0 && (
-                                    <span className="text-[8px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                      <Coffee size={10} />
-                                      Total Break: {formatBreakMinutes(day.breakMinutes)}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                                  {day.sessions.map((session, sIdx) => {
-                                    const duration = session.punchOutUTC 
-                                      ? calculateHours(session.punchInUTC, session.punchOutUTC)
-                                      : 0;
-                                    return (
-                                      <div key={sIdx} className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                        <div className="flex items-center justify-between mb-1">
-                                          <span className="text-[8px] font-bold text-blue-600">
-                                            Session {sIdx + 1}
-                                          </span>
-                                          <span className="text-[7px] font-medium text-emerald-600">
-                                            {duration > 0 ? formatDuration(duration) : 'In progress'}
-                                          </span>
-                                        </div>
-                                        <div className="space-y-0.5 text-[8px] text-slate-600">
-                                          <div className="flex justify-between">
-                                            <span className="text-slate-400">In:</span>
-                                            <span className="font-mono font-medium">
-                                              {session.punchInUTC ? formatTimeDisplay(session.punchInUTC) : '—'}
-                                            </span>
-                                          </div>
-                                          <div className="flex justify-between">
-                                            <span className="text-slate-400">Out:</span>
-                                            <span className={`font-mono font-medium ${!session.punchOutUTC ? 'text-rose-500' : ''}`}>
-                                              {session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : 'No Out Punch'}
-                                            </span>
-                                          </div>
-                                          {sIdx < day.sessions.length - 1 && day.breakGaps && day.breakGaps[sIdx] && (
-                                            <div className="mt-1 pt-1 border-t border-slate-200 flex justify-between text-amber-600">
-                                              <span className="text-slate-400">Break:</span>
-                                              <span className="font-medium">{formatBreakMinutes(day.breakGaps[sIdx].minutes)}</span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })
-              )}
-            </tbody>
-          </table>
+        {/* Legend */}
+        <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-[7px] font-medium text-slate-400">
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400"></div><span>On Time</span></span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"></div><span>Late</span></span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-200/60"></div><span>Break</span></span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-purple-400"></div><span>Holiday</span></span>
+          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-400"></div><span>Leave</span></span>
         </div>
-
-        {/* Pagination - 10 days per page */}
-        {monthDays.length > DAYS_PER_PAGE && (
-          <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <p className="text-[8px] text-slate-400">
-              Showing <span className="font-semibold text-slate-600">
-                {((currentPage - 1) * DAYS_PER_PAGE) + 1}
-              </span>–<span className="font-semibold text-slate-600">
-                {Math.min(currentPage * DAYS_PER_PAGE, monthDays.length)}
-              </span> of <span className="font-semibold text-slate-600">{monthDays.length}</span> days
-            </p>
-
-            <div className="flex items-center justify-center gap-1">
-              <button
-                type="button"
-                onClick={() => goToPage(currentPage - 1)}
-                disabled={currentPage === 1}
-                className="w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                aria-label="Previous page"
-              >
-                <ChevronLeft size={11} className="text-slate-600" />
-              </button>
-
-              {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
-                <button
-                  type="button"
-                  key={page}
-                  onClick={() => goToPage(page)}
-                  className={`min-w-6 h-6 px-1 rounded-md text-[8px] font-bold transition-all ${
-                    currentPage === page
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  {page}
-                </button>
-              ))}
-
-              <button
-                type="button"
-                onClick={() => goToPage(currentPage + 1)}
-                disabled={currentPage === totalPages}
-                className="w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed"
-                aria-label="Next page"
-              >
-                <ChevronRight size={11} className="text-slate-600" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
-    </>
+
+      {/* Stats + Weekly Averages */}
+      <div className="p-2 bg-slate-50/50 border-b border-slate-100">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-2 items-stretch">
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-slate-400 uppercase tracking-wider">Working</p>
+              <p className="text-base font-black text-slate-800">{stats.totalDays}</p>
+            </div>
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">On Time</p>
+              <p className="text-base font-black text-emerald-700">{stats.present}</p>
+            </div>
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-rose-600 uppercase tracking-wider">Absent</p>
+              <p className="text-base font-black text-rose-700">{stats.absent}</p>
+            </div>
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late</p>
+              <p className="text-base font-black text-amber-700">{stats.late}</p>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2 min-w-0">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <div className="flex items-center gap-2 min-w-0">
+                <BarChart3 size={11} className="text-blue-500 flex-shrink-0" />
+                <span className="text-[8px] font-bold text-slate-600 uppercase tracking-wider">Weekly Averages</span>
+              </div>
+              <span className="text-[6px] text-slate-400 whitespace-nowrap">Excluding today & holidays/leaves</span>
+            </div>
+            {stats.weeklyAverages && stats.weeklyAverages.length > 0 ? (
+              <AverageBarChart weeklyAverages={stats.weeklyAverages} />
+            ) : (
+              <div className="flex items-center justify-center h-full min-h-[70px]">
+                <span className="text-[8px] text-slate-400">No weekly data available</span>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-1.5">
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-indigo-600 uppercase tracking-wider">Leave</p>
+              <p className="text-base font-black text-indigo-700">{stats.onLeave}</p>
+            </div>
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-purple-600 uppercase tracking-wider">Holidays</p>
+              <p className="text-base font-black text-purple-700">{stats.holidays}</p>
+            </div>
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Avg Eff</p>
+              <p className="text-[10px] sm:text-xs font-black text-emerald-700 mt-1 leading-tight">{formatHours(stats.averageEffectiveHours, { unit: 'hrmin' })}</p>
+            </div>
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+              <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
+              <p className="text-[10px] sm:text-xs font-black text-slate-700 mt-1 leading-tight">{formatHours(stats.averageGrossHours, { unit: 'hrmin' })}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Timeline Table with Expandable Rows */}
+      <div className="overflow-x-auto p-3">
+        <table className="w-full min-w-[900px]">
+          <thead>
+            <tr className="bg-slate-50/80 border-b border-slate-200">
+              {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Eff', 'Gross', 'Arrival', 'Sessions'].map(h => (
+                <th key={h} className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {monthDays.length === 0 ? (
+              <tr>
+                <td colSpan={10} className="px-2 py-8 text-center">
+                  <div className="flex flex-col items-center gap-1.5">
+                    <CalendarIcon size={20} className="text-slate-300" />
+                    <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              paginatedMonthDays.map((day, idx) => {
+                const isHolidayDay = day.isHoliday || false;
+                const holidayName = day.holidayName || null;
+                const isLeaveDay = day.status === 'leave';
+                const isHalfDayLeave = isLeaveDay && day.isHalfDay && !!day.halfDayType;
+                // ✅ Only a genuine FULL-day leave hides real punch/work data.
+                // A half-day leave can have real sessions in its working half, so it must not be treated the same way.
+                const isFullDayLeaveOnly = isLeaveDay && !isHalfDayLeave;
+                const halfDayLabel = isHalfDayLeave ? (day.halfDayType === 'first' ? 'First Half' : 'Second Half') : null;
+                const displayStatus = getDisplayStatus(day);
+                const styles = isHolidayDay ? STATUS_STYLES.holiday : (STATUS_STYLES[displayStatus] || STATUS_STYLES.default);
+                const hasIn = !!(day.punchInUTC || (day.sessions && day.sessions.length > 0));
+                const today = isToday(day.date);
+                const isWeekend = day.isWeekend || false;
+                const isExpanded = expandedRows[day.date] || false;
+                const sessionCount = day.sessions?.length || 0;
+
+                const shiftStartMinutes = shiftConfig.isLoading ? null : getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
+                const arrivalStatus = getArrivalStatus(day, shiftStartMinutes, shiftConfig.gracePeriod);
+
+                let outDisplay = '—';
+                if (!isWeekend && !isHolidayDay && !isFullDayLeaveOnly && hasIn) {
+                  outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
+                }
+                const hideWorkData = isHolidayDay || isFullDayLeaveOnly;
+
+                return (
+                  <React.Fragment key={idx}>
+                    {/* Main Row */}
+                    <tr
+                      className={`hover:bg-slate-50/50 transition-all cursor-pointer ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''} ${isLeaveDay ? 'bg-indigo-50/20' : ''}`}
+                      onClick={() => toggleRow(day.date)}
+                    >
+                      <td className="px-2 py-1.5">
+                        <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : isLeaveDay ? 'text-indigo-600' : 'text-slate-700'}`}>
+                          {formatDateDisplay(day.date)}
+                        </span>
+                        {today && <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>}
+                        {isHolidayDay && (
+                          <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                            <Gift size={8} />Holiday
+                          </span>
+                        )}
+                        {isLeaveDay && (
+                          <span className="ml-1 text-[7px] font-bold bg-indigo-100 text-indigo-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                            <CalendarIcon size={8} />
+                            {isHalfDayLeave ? `${halfDayLabel} Leave` : 'Leave'}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5"><span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span></td>
+                      <td className="px-2 py-1.5">
+                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${styles.chip}`}>
+                          {getStatusIcon(displayStatus)}
+                          {getStatusLabel(displayStatus)}
+                          {displayStatus === 'late' && <span className="text-[6px] text-amber-500 ml-0.5">(Grace: {shiftConfig.gracePeriod}m)</span>}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5 min-w-[180px]">
+                        {isHolidayDay ? (
+                          <div className="flex items-center gap-2 h-5">
+                            <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
+                            <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
+                              <Gift size={10} className="text-purple-500" />
+                              {holidayName || 'Holiday'}
+                            </span>
+                          </div>
+                        ) : (isLeaveDay || hasIn) ? (
+                          <DayTimelineBar day={day} />
+                        ) : (
+                          <span className="text-[9px] text-slate-400 italic">—</span>
+                        )}
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="text-[10px] font-mono font-medium text-slate-700">
+                          {hideWorkData ? '—' : (day.punchInDisplay || '—')}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className={`text-[10px] font-mono font-medium ${hideWorkData || isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
+                          {hideWorkData ? '—' : outDisplay}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="text-[10px] font-bold text-emerald-700">
+                          {hideWorkData ? '—' : (day.effectiveHours ? formatHours(day.effectiveHours, { unit: 'hrmin' }) : '0 hr 0 min')}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className="text-[10px] font-bold text-slate-700">
+                          {hideWorkData ? '—' : (day.grossHours ? formatHours(day.grossHours, { unit: 'hrmin' }) : '0 hr 0 min')}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <span className={`text-[10px] font-medium ${isFullDayLeaveOnly ? 'text-indigo-600' : displayStatus === 'late' ? 'text-amber-600' : displayStatus === 'present' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                          {isHolidayDay ? '🎉' : (isWeekend || isFullDayLeaveOnly ? '—' : arrivalStatus)}
+                        </span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] font-bold text-slate-600">{sessionCount}</span>
+                          <span className="text-[7px] text-slate-400">
+                            {isExpanded ? <ChevronUp size={12} className="text-blue-500" /> : <ChevronDown size={12} className="text-slate-400" />}
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Expanded Session Details Row - shown whenever real sessions exist (incl. half-day leave working half) */}
+                    {isExpanded && sessionCount > 0 && !isFullDayLeaveOnly && !isHolidayDay && (
+                      <tr className="bg-blue-50/20">
+                        <td colSpan={10} className="px-4 py-3">
+                          <div className="bg-white rounded-lg border border-blue-100 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="p-1 bg-blue-100 rounded-lg"><Clock size={12} className="text-blue-600" /></div>
+                              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Session Details ({sessionCount} sessions)</p>
+                              {day.breakMinutes > 0 && (
+                                <span className="text-[8px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1">
+                                  <Coffee size={10} />Total Break: {formatBreakMinutes(day.breakMinutes)}
+                                </span>
+                              )}
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+                              {day.sessions.map((session, sIdx) => {
+                                const duration = session.punchOutUTC ? calculateHours(session.punchInUTC, session.punchOutUTC) : 0;
+                                return (
+                                  <div key={sIdx} className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-[8px] font-bold text-blue-600">Session {sIdx + 1}</span>
+                                      <span className="text-[7px] font-medium text-emerald-600">{duration > 0 ? formatHours(duration) : 'In progress'}</span>
+                                    </div>
+                                    <div className="space-y-0.5 text-[8px] text-slate-600">
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">In:</span>
+                                        <span className="font-mono font-medium">{session.punchInUTC ? formatTimeDisplay(session.punchInUTC) : '—'}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-slate-400">Out:</span>
+                                        <span className={`font-mono font-medium ${!session.punchOutUTC ? 'text-rose-500' : ''}`}>
+                                          {session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : 'No Out Punch'}
+                                        </span>
+                                      </div>
+                                      {sIdx < day.sessions.length - 1 && day.breakGaps?.[sIdx] && (
+                                        <div className="mt-1 pt-1 border-t border-slate-200 flex justify-between text-amber-600">
+                                          <span className="text-slate-400">Break:</span>
+                                          <span className="font-medium">{formatBreakMinutes(day.breakGaps[sIdx].minutes)}</span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+
+                    {/* Expanded Leave Details Row - shown for any leave day (full or half) */}
+                    {isExpanded && isLeaveDay && (
+                      <tr className="bg-indigo-50/20">
+                        <td colSpan={10} className="px-4 py-3">
+                          <div className="bg-white rounded-lg border border-indigo-100 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="p-1 bg-indigo-100 rounded-lg"><CalendarIcon size={12} className="text-indigo-600" /></div>
+                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Leave Details</p>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
+                                <p className="text-[7px] font-bold text-slate-400 uppercase">Leave Type</p>
+                                <p className="text-sm font-bold text-indigo-700">{day.leaveType || 'Leave'}</p>
+                              </div>
+                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
+                                <p className="text-[7px] font-bold text-slate-400 uppercase">Duration</p>
+                                <p className="text-sm font-bold text-indigo-700">{isHalfDayLeave ? halfDayLabel : 'Full Day'}</p>
+                              </div>
+                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
+                                <p className="text-[7px] font-bold text-slate-400 uppercase">Work Hours</p>
+                                <p className="text-sm font-bold text-emerald-700">{day.effectiveHours > 0 ? formatHours(day.effectiveHours, { unit: 'hrmin' }) : '0 hr 0 min'}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Pagination - 10 days per page */}
+      {monthDays.length > DAYS_PER_PAGE && (
+        <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <p className="text-[8px] text-slate-400">
+            Showing <span className="font-semibold text-slate-600">{((currentPage - 1) * DAYS_PER_PAGE) + 1}</span>–
+            <span className="font-semibold text-slate-600">{Math.min(currentPage * DAYS_PER_PAGE, monthDays.length)}</span> of{' '}
+            <span className="font-semibold text-slate-600">{monthDays.length}</span> days
+          </p>
+
+          <div className="flex items-center justify-center gap-1">
+            <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}
+              className="w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Previous page">
+              <ChevronLeft size={11} className="text-slate-600" />
+            </button>
+
+            {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
+              <button
+                type="button"
+                key={page}
+                onClick={() => goToPage(page)}
+                className={`min-w-6 h-6 px-1 rounded-md text-[8px] font-bold transition-all ${currentPage === page ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}
+              >
+                {page}
+              </button>
+            ))}
+
+            <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}
+              className="w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Next page">
+              <ChevronRight size={11} className="text-slate-600" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 };
 

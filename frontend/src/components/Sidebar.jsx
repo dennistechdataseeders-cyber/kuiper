@@ -393,49 +393,80 @@ const Sidebar = () => {
   // ============================================
   const menuItems = {
     'Super Admin': [
-      { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
-      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
-      { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
-      { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' },
-      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
-      { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
-      { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
-      { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
-      { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
-      { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dev Dashboard' },
-      { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
-      { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
-      { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
-      { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Team Lead' },
-      { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
-      { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
-      { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Sales' },
-      { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Sales Manager' },
-      { path: '/client', icon: <Activity size={18} />, label: 'Client View' },
-      { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
-      { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'PM Feasibility' },
-      { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'PM Dashboard' },
-      { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
-      { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/profile', icon: <User size={18} />, label: 'Profile' },
-      { path: '/notifications', icon: <Bell size={18} />, label: 'Notification Settings' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-    ],
+  // ============================================
+  // DASHBOARDS & OVERVIEW
+  // ============================================
+  { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+  { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+  
+  // ============================================
+  // PROJECTS & FEEDS
+  // ============================================
+  { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+  { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' },
+  { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Management' },
+  { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+  { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
+  
+  // ============================================
+  // SALES & LEAD MANAGEMENT
+  // ============================================
+  { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Sales Dashboard' },
+  { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Sales Manager' },
+  { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
+  { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
+  { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
+  
+  // ============================================
+  // FEASIBILITY
+  // ============================================
+  { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
+  { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'PM Feasibility' },
+  
+  // ============================================
+  // HR & LEAVE MANAGEMENT
+  // ============================================
+  { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
+  { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
+  { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
+  { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
+  { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
+  { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
+  
+  // ============================================
+  // TICKETS
+  // ============================================
+  { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
+  { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
+  
+  // ============================================
+  // DEVELOPER
+  // ============================================
+  { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dev Dashboard' },
+  { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
+  { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
+  { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
+  { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
+  
+  
+  // ============================================
+  // PROJECT MANAGER
+  // ============================================
+  { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'PM Dashboard' },
+  { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
+  
+  // ============================================
+  // CLIENT
+  // ============================================
+  { path: '/client', icon: <Activity size={18} />, label: 'Client View' },
+    
+  // ============================================
+  // KNOWLEDGE & COMMUNICATION
+  // ============================================
+  { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
+  { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
+  
+],
 
     Admin: [
       { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },

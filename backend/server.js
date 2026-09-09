@@ -1,4 +1,4 @@
-// backend/server.js - UPDATED with announcements directory
+// backend/server.js - UPDATED with leaveBucketRoutes
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -63,6 +63,17 @@ try {
 } catch (err) {
   console.log('⚠️ Notice: Holiday Reminder not loaded:', err.message);
 }
+
+// =========================================================
+// ✅ LEAVE BUCKET ACCRUAL CRON
+// =========================================================
+try {
+  require(path.join(__dirname, 'cron', 'leaveBucketAccrual'));
+  console.log('⏰ Leave Bucket Accrual initialized (1st of every month)');
+} catch (err) {
+  console.log('⚠️ Notice: Leave Bucket Accrual not loaded:', err.message);
+}
+
 // =========================================================
 // CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
 // =========================================================
@@ -75,7 +86,7 @@ const createUploadsDirectory = () => {
     path.join(__dirname, 'uploads/temp'),
     path.join(__dirname, 'uploads/leads'),
     path.join(__dirname, 'uploads/knowledge'),
-    path.join(__dirname, 'uploads/announcements') // ✅ ADDED
+    path.join(__dirname, 'uploads/announcements')
   ];
   
   uploadDirs.forEach(dir => {
@@ -122,6 +133,16 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const holidayRoutes = require('./routes/holidayRoutes');
+
+// ✅ IMPORT THE LEAVE BUCKET ROUTES
+let leaveBucketRoutes;
+try {
+  leaveBucketRoutes = require('./routes/leaveBucketRoutes');
+  console.log('✅ Leave Bucket Routes loaded successfully');
+} catch (err) {
+  console.error('❌ Failed to load Leave Bucket Routes:', err.message);
+  leaveBucketRoutes = null;
+}
 
 const app = express();
 
@@ -379,9 +400,24 @@ app.use('/api/client', protect, clientRoutes);
 app.use('/api/knowledge', protect, knowledgeBaseRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
-app.use('/api/leaves', leaveRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/holidays', holidayRoutes);
+
+// =========================================================
+// ✅ LEAVE ROUTES - Both old and new systems
+// =========================================================
+
+// Old leave routes (for backward compatibility)
+app.use('/api/leaves', leaveRoutes);
+
+// New leave bucket routes
+if (leaveBucketRoutes) {
+  // Use a different path to avoid conflict with old routes
+  app.use('/api/leave-bucket', leaveBucketRoutes);
+  console.log('✅ Leave Bucket Routes mounted at /api/leave-bucket');
+} else {
+  console.log('⚠️ Leave Bucket Routes not available');
+}
 
 /* =========================================================
    ROOT PIN TEST DIRECTIVE
@@ -421,6 +457,8 @@ mongoose.connect(MONGO_URI)
       console.log('  ✅ Daily Productivity Report');
       console.log('  ✅ Biometric Sync (every 15 minutes)');
       console.log('  ✅ Announcement Automation');
+      console.log('  ✅ Holiday Reminder');
+      console.log('  ✅ Leave Bucket Accrual');
       console.log('  ✅ Socket.IO Server');
       console.log('  ✅ REST API Routes');
       console.log('  ✅ File Upload Service');
