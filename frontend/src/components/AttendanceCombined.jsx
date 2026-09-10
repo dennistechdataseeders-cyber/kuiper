@@ -746,69 +746,107 @@ const AttendanceCombined = ({ userId, token }) => {
       });
 
       if (response.data.success) {
-        const data = response.data.data;
+  const data = response.data.data;
 
-        const processedDays = (data.days || []).map(day => {
-          // ✅ FIX: Only use real sessions from backend. Don't fabricate one.
-          const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
+  const processedDays = (data.days || []).map(day => {
+    const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
 
-          let effectiveHours = 0;
-          let breakMinutes = 0;
-          let firstIn = null;
-          let lastOut = null;
-          let lastOutUTC = null;
+    // ─────────────────────────────────────────────
+    // ✅ EFFECTIVE = sum of each session's actual duration
+    // ✅ GROSS     = wall-clock span between earliest In and latest Out
+    //               (includes any gaps between sessions + any mid-session break time)
+    // Both use raw millisecond timestamps so cross-midnight days work correctly.
+    // ─────────────────────────────────────────────
+    let effectiveMs = 0;          // sum of closed session durations
+    let firstInMs = null;         // earliest punch-in across all sessions
+    let lastOutMs = null;         // latest punch-out across all sessions
+    let lastOutUTC = null;        // latest punch-out as ISO string for display
 
-          sessions.forEach((session) => {
-            if (!session.punchInUTC) return;
-            const inTime = new Date(session.punchInUTC);
-            if (!firstIn || inTime < firstIn) firstIn = inTime;
-            if (session.punchOutUTC) {
-              const outTime = new Date(session.punchOutUTC);
-              if (!lastOutUTC || outTime > new Date(lastOutUTC)) lastOutUTC = session.punchOutUTC;
-              effectiveHours += calculateHours(session.punchInUTC, outTime.toISOString());
-              if (!lastOut || outTime > lastOut) lastOut = outTime;
-            }
-          });
+    sessions.forEach((session) => {
+      if (!session.punchInUTC) return;
 
-          // Fallback for legacy single-punch days without sessions array
-          if (sessions.length === 0 && day.punchInUTC) {
-            const inTime = new Date(day.punchInUTC);
-            firstIn = inTime;
-            if (day.punchOutUTC) {
-              const outTime = new Date(day.punchOutUTC);
-              lastOut = outTime;
-              lastOutUTC = day.punchOutUTC;
-              effectiveHours = calculateHours(day.punchInUTC, day.punchOutUTC);
-            }
-          }
+      const inMs = new Date(session.punchInUTC).getTime();
+      if (isNaN(inMs)) return;
 
-          // ✅ FIX: Gross = lastOut - firstIn (includes break time)
-          //          Effective = sum of session durations (excludes break time)
-          const grossHours = (firstIn && lastOut)
-            ? (lastOut - firstIn) / (1000 * 60 * 60)
-            : effectiveHours; // if no punchOut, gross = effective (in progress)
+      if (firstInMs === null || inMs < firstInMs) firstInMs = inMs;
 
-          // Break time = gross - effective (only if we have a proper gross)
-          if (grossHours > effectiveHours) {
-            breakMinutes = (grossHours - effectiveHours) * 60;
-          }
+      if (session.punchOutUTC) {
+        const outMs = new Date(session.punchOutUTC).getTime();
+        if (isNaN(outMs)) return;
 
-          return {
-            ...day,
-            sessions,
-            punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-            punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
-            punchOutUTC: lastOutUTC,
-            effectiveHours,
-            grossHours,
-            breakMinutes,
-            breakGaps: [],
-            totalDuration: effectiveHours
-          };
-        });
+        // Add the closed session's duration to effective
+        const sessionMs = outMs - inMs;
+        if (sessionMs > 0) effectiveMs += sessionMs;
 
-        setRawAttendanceData(processedDays);
+        // Track the latest punch-out
+        if (lastOutMs === null || outMs > lastOutMs) {
+          lastOutMs = outMs;
+          lastOutUTC = session.punchOutUTC;
+        }
       }
+    });
+
+    // Fallback for legacy single-punch days without a sessions array
+    if (sessions.length === 0 && day.punchInUTC) {
+      const inMs = new Date(day.punchInUTC).getTime();
+      if (!isNaN(inMs)) {
+        firstInMs = inMs;
+        if (day.punchOutUTC) {
+          const outMs = new Date(day.punchOutUTC).getTime();
+          if (!isNaN(outMs) && outMs > inMs) {
+            effectiveMs = outMs - inMs;
+            lastOutMs = outMs;
+            lastOutUTC = day.punchOutUTC;
+          }
+        }
+      }
+    }
+
+    const effectiveHours = effectiveMs / (1000 * 60 * 60);
+
+    const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
+      ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
+      : effectiveHours; // still in progress → no gap yet, gross == effective
+
+    // Break = the time NOT counted as effective (gaps between sessions + mid-session break)
+    const breakMinutes = grossHours > effectiveHours
+      ? (grossHours - effectiveHours) * 60
+      : 0;
+
+    // Rebuild breakGaps so the timeline can render amber segments
+    const breakGaps = [];
+    for (let i = 0; i < sessions.length - 1; i++) {
+      const currentOut = sessions[i].punchOutUTC;
+      const nextIn = sessions[i + 1]?.punchInUTC;
+      if (!currentOut || !nextIn) continue;
+
+      const gapMs = new Date(nextIn).getTime() - new Date(currentOut).getTime();
+      if (gapMs > 0 && gapMs / 60000 >= 5) {
+        breakGaps.push({
+          start: currentOut,
+          end: nextIn,
+          minutes: gapMs / 60000,
+          breakIndex: i
+        });
+      }
+    }
+
+    return {
+      ...day,
+      sessions,
+      punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
+      punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
+      punchOutUTC: lastOutUTC,
+      effectiveHours,
+      grossHours,
+      breakMinutes,
+      breakGaps,
+      totalDuration: effectiveHours
+    };
+  });
+
+  setRawAttendanceData(processedDays);
+}
     } catch (error) {
       console.error('Error fetching attendance:', error);
       toast.error('Failed to load attendance data');
