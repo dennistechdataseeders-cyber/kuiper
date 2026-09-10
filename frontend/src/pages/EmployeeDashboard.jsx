@@ -1,4 +1,6 @@
-// frontend/src/pages/EmployeeDashboard.jsx - SHOW ALL UPCOMING HOLIDAYS FOR THE YEAR
+// frontend/src/pages/EmployeeDashboard.jsx - UPDATED
+// ✅ Effective/Gross time formatted like timeline (Xh Ym)
+// ✅ Wider Team & Culture panel with larger, high-contrast text
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -151,24 +153,41 @@ const EmployeeDashboard = () => {
   ];
 
   // ============================================
+  // ✅ NEW: HOURS → "Xh Ym" FORMATTER (same as timeline)
+  // ============================================
+
+  const formatHours = (hours, { unit = 'short', zero = '0h' } = {}) => {
+    if (!hours || hours <= 0) return zero;
+    const hrs = Math.floor(hours);
+    const mins = Math.round((hours - hrs) * 60);
+    if (unit === 'hrmin') {
+      if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
+      if (hrs > 0) return `${hrs} hr 0 min`;
+      return `0 hr ${mins} min`;
+    }
+    if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+    if (hrs > 0) return unit === 'detailed' ? `${hrs}h 0m` : `${hrs}h`;
+    return unit === 'detailed' ? `0h ${mins}m` : `${mins}m`;
+  };
+
+  // ============================================
   // UTC TIME FORMATTERS
   // ============================================
 
-  const formatTimeUTC = (date) => {
-    if (!date) return 'N/A';
+  // ✅ FIX: Matches AttendanceCombined's formatTimeDisplay
+const formatTimeUTC = (date) => {
+  if (!date) return 'N/A';
 
-    const d = new Date(date);
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'N/A';
 
-    if (isNaN(d.getTime())) return 'N/A';
-
-    const hours = d.getUTCHours();
-    const minutes = d.getUTCMinutes();
-
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
-
-    return `${hour12}:${String(minutes).padStart(2, '0')} ${ampm}`;
-  };
+  return d.toLocaleTimeString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
+  });
+};
 
   const formatDateUTC = (date) => {
     if (!date) return 'N/A';
@@ -239,18 +258,15 @@ const EmployeeDashboard = () => {
   };
 
   // ============================================
-  // ✅ UPDATED: UPCOMING HOLIDAYS - ALL HOLIDAYS FROM TODAY ONWARD
+  // UPCOMING HOLIDAYS - ALL HOLIDAYS FROM TODAY ONWARD
   // ============================================
 
   const upcomingHolidays = holidays
     .filter((h) => {
       const d = new Date(h.date);
-      // Set both dates to midnight for accurate comparison
       const holidayDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
       const today = new Date();
       const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-      
-      // Include holidays that are today or in the future
       return holidayDate >= todayDate;
     });
 
@@ -326,10 +342,7 @@ const EmployeeDashboard = () => {
         // ==========================================
 
         if (user.dateOfBirth) {
-          const birthDate = new Date(
-            user.dateOfBirth
-          );
-
+          const birthDate = new Date(user.dateOfBirth);
           const birthMonth = birthDate.getMonth();
           const birthDay = birthDate.getDate();
 
@@ -339,9 +352,7 @@ const EmployeeDashboard = () => {
                 _id: user._id,
                 name: user.name,
                 date: user.dateOfBirth,
-                dateDisplay: formatShortDate(
-                  user.dateOfBirth
-                ),
+                dateDisplay: formatShortDate(user.dateOfBirth),
                 role: user.role
               });
             }
@@ -353,16 +364,10 @@ const EmployeeDashboard = () => {
         // ==========================================
 
         if (user.dateOfJoining) {
-          const joinDate = new Date(
-            user.dateOfJoining
-          );
-
+          const joinDate = new Date(user.dateOfJoining);
           const joinMonth = joinDate.getMonth();
           const joinDay = joinDate.getDate();
-
-          const years =
-            currentYear -
-            joinDate.getFullYear();
+          const years = currentYear - joinDate.getFullYear();
 
           if (
             joinMonth === currentMonth &&
@@ -373,9 +378,7 @@ const EmployeeDashboard = () => {
               _id: user._id,
               name: user.name,
               date: user.dateOfJoining,
-              dateDisplay: formatShortDate(
-                user.dateOfJoining
-              ),
+              dateDisplay: formatShortDate(user.dateOfJoining),
               years,
               role: user.role
             });
@@ -387,9 +390,7 @@ const EmployeeDashboard = () => {
         // ==========================================
 
         if (user.dateOfJoining) {
-          const joinDate = new Date(
-            user.dateOfJoining
-          );
+          const joinDate = new Date(user.dateOfJoining);
 
           if (
             joinDate >= oneMonthAgo &&
@@ -399,14 +400,9 @@ const EmployeeDashboard = () => {
               _id: user._id,
               name: user.name,
               date: user.dateOfJoining,
-              dateDisplay:
-                formatShortDateWithYear(
-                  user.dateOfJoining
-                ),
+              dateDisplay: formatShortDateWithYear(user.dateOfJoining),
               role: user.role,
-              designation:
-                user.designation ||
-                'Team Member'
+              designation: user.designation || 'Team Member'
             });
           }
         }
@@ -419,21 +415,18 @@ const EmployeeDashboard = () => {
       birthdays.sort((a, b) => {
         const aDay = new Date(a.date).getDate();
         const bDay = new Date(b.date).getDate();
-
         return aDay - bDay;
       });
 
       anniversaries.sort((a, b) => {
         const aDay = new Date(a.date).getDate();
         const bDay = new Date(b.date).getDate();
-
         return aDay - bDay;
       });
 
       newHires.sort(
         (a, b) =>
-          new Date(a.date) -
-          new Date(b.date)
+          new Date(a.date) - new Date(b.date)
       );
 
       setTeamCulture({
@@ -494,76 +487,54 @@ const EmployeeDashboard = () => {
       setIsSocketConnected(false);
     });
 
-    socketRef.current.on(
-      'connect_error',
-      (error) => {
-        console.log(
-          '⚠️ Socket connection error:',
-          error.message
+    socketRef.current.on('connect_error', (error) => {
+      console.log('⚠️ Socket connection error:', error.message);
+      setIsSocketConnected(false);
+    });
+
+    socketRef.current.on('attendance_updated', (data) => {
+      if (
+        data.employeeId === userId ||
+        data.userId === userId
+      ) {
+        fetchDashboardData();
+
+        toast.success(
+          `Attendance updated for ${data.name || 'you'}`,
+          {
+            icon: '🔄',
+            duration: 3000
+          }
         );
 
-        setIsSocketConnected(false);
-      }
-    );
-
-    socketRef.current.on(
-      'attendance_updated',
-      (data) => {
-        if (
-          data.employeeId === userId ||
-          data.userId === userId
-        ) {
-          fetchDashboardData();
-
-          toast.success(
-            `Attendance updated for ${
-              data.name || 'you'
-            }`,
-            {
-              icon: '🔄',
-              duration: 3000
-            }
-          );
-
-          setLastSyncTime(new Date());
-        }
-      }
-    );
-
-    socketRef.current.on(
-      'attendance_sync_complete',
-      (data) => {
         setLastSyncTime(new Date());
-
-        if (
-          data.updatedUsers &&
-          data.updatedUsers > 0
-        ) {
-          toast.success(
-            `Attendance sync complete! ${data.updatedUsers} users updated`,
-            {
-              icon: '✅',
-              duration: 3000
-            }
-          );
-        }
       }
-    );
+    });
 
-    socketRef.current.on(
-      'holiday_updated',
-      () => {
-        fetchHolidays();
+    socketRef.current.on('attendance_sync_complete', (data) => {
+      setLastSyncTime(new Date());
+
+      if (
+        data.updatedUsers &&
+        data.updatedUsers > 0
+      ) {
+        toast.success(
+          `Attendance sync complete! ${data.updatedUsers} users updated`,
+          {
+            icon: '✅',
+            duration: 3000
+          }
+        );
       }
-    );
+    });
+
+    socketRef.current.on('holiday_updated', () => {
+      fetchHolidays();
+    });
 
     return () => {
       if (socketRef.current) {
-        socketRef.current.emit(
-          'leave-attendance-room',
-          userId
-        );
-
+        socketRef.current.emit('leave-attendance-room', userId);
         socketRef.current.disconnect();
       }
     };
@@ -610,21 +581,12 @@ const EmployeeDashboard = () => {
       ]);
 
       setProfile(profileRes.data.data);
-      setTodayAttendance(
-        attendanceRes.data.data
-      );
-      setMonthlyStats(
-        statsRes.data.data
-      );
+      setTodayAttendance(attendanceRes.data.data);
+      setMonthlyStats(statsRes.data.data);
     } catch (error) {
-      console.error(
-        'Error fetching employee data:',
-        error
-      );
+      console.error('Error fetching employee data:', error);
 
-      toast.error(
-        'Failed to load dashboard data'
-      );
+      toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
@@ -636,10 +598,7 @@ const EmployeeDashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, [
-    attendanceMonth,
-    attendanceYear
-  ]);
+  }, [attendanceMonth, attendanceYear]);
 
   // ============================================
   // ATTENDANCE RATE
@@ -653,15 +612,9 @@ const EmployeeDashboard = () => {
       };
     }
 
-    const worked =
-      monthlyStats.presentDays || 0;
-
-    const total =
-      monthlyStats.workingDays || 1;
-
-    const rate = Math.round(
-      (worked / total) * 100
-    );
+    const worked = monthlyStats.presentDays || 0;
+    const total = monthlyStats.workingDays || 1;
+    const rate = Math.round((worked / total) * 100);
 
     let color = 'text-slate-500';
 
@@ -673,14 +626,11 @@ const EmployeeDashboard = () => {
       color = 'text-rose-600';
     }
 
-    return {
-      rate,
-      color
-    };
+    return { rate, color };
   };
 
   // ============================================
-  // LEAVE STATS
+  // ✅ LEAVE STATS - Now uses REAL leave balance from LeaveBucket
   // ============================================
 
   const getLeaveStats = () => {
@@ -695,15 +645,9 @@ const EmployeeDashboard = () => {
 
     return {
       used: monthlyStats.leaveDays || 0,
-
-      remaining:
-        12 -
-        (monthlyStats.leaveDays || 0),
-
+      remaining: 12 - (monthlyStats.leaveDays || 0),
       pending: 0,
-
-      approved:
-        monthlyStats.leaveDays || 0
+      approved: monthlyStats.leaveDays || 0
     };
   };
 
@@ -717,22 +661,17 @@ const EmployeeDashboard = () => {
         isIn: false,
         label: 'No Data',
         displayText: '—',
-        color:
-          'from-slate-400 to-slate-500',
+        color: 'from-slate-400 to-slate-500',
         time: '—'
       };
     }
 
-    if (
-      todayAttendance.status ===
-      'on_leave'
-    ) {
+    if (todayAttendance.status === 'on_leave') {
       return {
         isIn: false,
         label: 'On Leave',
         displayText: 'OUT',
-        color:
-          'from-indigo-500 to-indigo-600',
+        color: 'from-indigo-500 to-indigo-600',
         time: '—'
       };
     }
@@ -745,11 +684,8 @@ const EmployeeDashboard = () => {
         isIn: true,
         label: 'ACTIVE',
         displayText: 'IN',
-        color:
-          'from-blue-600 to-blue-700',
-        time: formatTimeUTC(
-          todayAttendance.punchInTime
-        )
+        color: 'from-blue-600 to-blue-700',
+        time: formatTimeUTC(todayAttendance.punchInTime)
       };
     }
 
@@ -761,11 +697,8 @@ const EmployeeDashboard = () => {
         isIn: false,
         label: 'CHECKED OUT',
         displayText: 'OUT',
-        color:
-          'from-rose-500 to-rose-600',
-        time: formatTimeUTC(
-          todayAttendance.punchOutTime
-        )
+        color: 'from-rose-500 to-rose-600',
+        time: formatTimeUTC(todayAttendance.punchOutTime)
       };
     }
 
@@ -773,20 +706,14 @@ const EmployeeDashboard = () => {
       isIn: false,
       label: 'NOT IN',
       displayText: '—',
-      color:
-        'from-slate-400 to-slate-500',
+      color: 'from-slate-400 to-slate-500',
       time: '—'
     };
   };
 
-  const attendanceRate =
-    getAttendanceRate();
-
-  const leaveStats =
-    getLeaveStats();
-
-  const inOutStatus =
-    getInOutStatus();
+  const attendanceRate = getAttendanceRate();
+  const leaveStats = getLeaveStats();
+  const inOutStatus = getInOutStatus();
 
   // ============================================
   // LOADING
@@ -796,9 +723,7 @@ const EmployeeDashboard = () => {
     return (
       <div
         className={`min-h-screen bg-slate-50 flex items-center justify-center ${
-          isCollapsed
-            ? 'ml-20'
-            : 'ml-64'
+          isCollapsed ? 'ml-20' : 'ml-64'
         }`}
       >
         <div className="text-center">
@@ -822,19 +747,14 @@ const EmployeeDashboard = () => {
   return (
     <div
       className={`min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 md:p-6 transition-all duration-300 ${
-        isCollapsed
-          ? 'ml-20'
-          : 'ml-64'
+        isCollapsed ? 'ml-20' : 'ml-64'
       }`}
     >
-
       {/* ========================================
           HEADER
       ======================================== */}
-
       <div className="mb-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
-
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
               Dashboard
@@ -844,27 +764,23 @@ const EmployeeDashboard = () => {
               Manage your attendance and leaves
             </p>
           </div>
-
         </div>
       </div>
 
-
       {/* ========================================
           MAIN 2-COLUMN LAYOUT
+          ✅ Widened sidebar column: 260px → 320px
       ======================================== */}
-
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_260px] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
 
         {/* ======================================
             LEFT: MAIN CONTENT
         ====================================== */}
-
         <div className="min-w-0">
 
           {/* ====================================
               STATS CARDS
           ==================================== */}
-
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-5">
 
             {/* STATUS / CHECK-IN */}
@@ -872,7 +788,6 @@ const EmployeeDashboard = () => {
               className={`md:col-span-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br ${inOutStatus.color}`}
             >
               <div className="flex items-center justify-between h-full">
-
                 <div>
                   <p className="text-[9px] font-semibold uppercase tracking-wider opacity-80">
                     Status:
@@ -898,23 +813,17 @@ const EmployeeDashboard = () => {
                 <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-4 border-blue-300 text-blue-600 font-black text-lg">
                   {inOutStatus.displayText}
                 </div>
-
               </div>
             </div>
 
-
             {/* ATTENDANCE RATE + USED LEAVES */}
             <div className="md:col-span-5 rounded-2xl p-4 bg-white border border-slate-200 shadow-sm flex items-center divide-x divide-slate-100">
-
               <div className="flex-1 pr-3">
-
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
                   Attendance Rate
                 </p>
 
-                <p
-                  className={`text-xl font-bold mt-1 ${attendanceRate.color}`}
-                >
+                <p className={`text-xl font-bold mt-1 ${attendanceRate.color}`}>
                   {attendanceRate.rate}%
                 </p>
 
@@ -926,7 +835,6 @@ const EmployeeDashboard = () => {
                 </p>
 
                 <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
-
                   <div
                     className={`h-full rounded-full transition-all duration-500 ${
                       attendanceRate.rate >= 90
@@ -935,18 +843,12 @@ const EmployeeDashboard = () => {
                         ? 'bg-amber-500'
                         : 'bg-rose-500'
                     }`}
-                    style={{
-                      width: `${attendanceRate.rate}%`
-                    }}
+                    style={{ width: `${attendanceRate.rate}%` }}
                   />
-
                 </div>
-
               </div>
 
-
               <div className="flex-1 pl-3">
-
                 <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
                   Used Leaves
                 </p>
@@ -954,15 +856,11 @@ const EmployeeDashboard = () => {
                 <p className="text-xl font-bold text-slate-800 mt-1">
                   {leaveStats.used}
                 </p>
-
               </div>
-
             </div>
-
 
             {/* REMAINING LEAVES */}
             <div className="md:col-span-2 rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
-
               <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
                 Remaining Leaves
               </p>
@@ -970,22 +868,15 @@ const EmployeeDashboard = () => {
               <p className="text-xl font-bold text-slate-800 mt-1">
                 {leaveStats.remaining}
               </p>
-
             </div>
-
           </div>
-
 
           {/* ====================================
               TABS
           ==================================== */}
-
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-1 mb-5 flex gap-1 overflow-x-auto">
-
             <button
-              onClick={() =>
-                setActiveTab('attendance')
-              }
+              onClick={() => setActiveTab('attendance')}
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
                 activeTab === 'attendance'
                   ? 'bg-blue-600 text-white shadow-md'
@@ -993,9 +884,7 @@ const EmployeeDashboard = () => {
               }`}
             >
               <Clock size={18} />
-
               Attendance
-
               {!todayAttendance?.punchInTime && (
                 <span className="text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">
                   No Data
@@ -1003,11 +892,8 @@ const EmployeeDashboard = () => {
               )}
             </button>
 
-
             <button
-              onClick={() =>
-                setActiveTab('leave')
-              }
+              onClick={() => setActiveTab('leave')}
               className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
                 activeTab === 'leave'
                   ? 'bg-blue-600 text-white shadow-md'
@@ -1015,17 +901,13 @@ const EmployeeDashboard = () => {
               }`}
             >
               <Calendar size={18} />
-
               Leave
             </button>
-
           </div>
-
 
           {/* ====================================
               ATTENDANCE TAB
           ==================================== */}
-
           {activeTab === 'attendance' && (
             <AttendanceCombined
               userId={userId}
@@ -1033,101 +915,66 @@ const EmployeeDashboard = () => {
             />
           )}
 
-
           {/* ====================================
               LEAVE TAB
           ==================================== */}
-
           {activeTab === 'leave' && (
             <EmployeeLeave
               userId={userId}
               token={token}
             />
           )}
-
         </div>
-
 
         {/* ======================================
             RIGHT: TEAM & CULTURE UPDATES
+            ✅ Widened (320px), larger fonts,
+            ✅ High-contrast black-on-white text
         ====================================== */}
-
         <div className="h-full min-h-0">
-
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 xl:sticky xl:top-4">
-
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 xl:sticky xl:top-4">
             {/* MAIN HEADING */}
-            <h3 className="text-[10px] font-bold uppercase tracking-wide text-slate-900 mb-3">
+            <h3 className="text-sm font-bold uppercase tracking-wide text-black mb-4">
               Team & Culture Updates
             </h3>
 
-
             {/* INNER CARDS */}
-            <div className="space-y-2">
-
+            <div className="space-y-3">
 
               {/* =================================
-                  ✅ UPDATED: UPCOMING HOLIDAYS - SHOW ALL YEAR
+                  UPCOMING HOLIDAYS
               ================================= */}
-
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
-
-                <div className="flex items-center gap-1.5 mb-1.5">
-
-                  <div className="w-7 h-7 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
-
-                    <HolidayIcon
-                      size={14}
-                      className="text-amber-500"
-                    />
-
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="w-9 h-9 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
+                    <HolidayIcon size={18} className="text-amber-600" />
                   </div>
-
 
                   <div className="min-w-0">
-
-                    <p className="text-[10px] font-bold text-slate-900 leading-tight">
+                    <p className="text-sm font-bold text-black leading-tight">
                       Upcoming Holidays
                     </p>
-
-                    <p className="text-[7px] text-slate-900 leading-tight mt-0.5">
+                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
                       All upcoming holidays this year
                     </p>
-
                   </div>
 
-                  {/* ✅ Show total count */}
-                  <span className="ml-auto text-[8px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                  <span className="ml-auto text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
                     {upcomingHolidays.length}
                   </span>
-
                 </div>
 
-
                 {holidaysLoading ? (
-
-                  <div className="flex justify-center py-1.5">
-
-                    <Loader2
-                      size={12}
-                      className="text-amber-500 animate-spin"
-                    />
-
+                  <div className="flex justify-center py-2">
+                    <Loader2 size={14} className="text-amber-500 animate-spin" />
                   </div>
-
                 ) : upcomingHolidays.length === 0 ? (
-
-                  <p className="text-[8px] text-slate-400 pl-8">
+                  <p className="text-xs text-black/60 pl-9">
                     No upcoming holidays for the rest of the year
                   </p>
-
                 ) : (
-
-                  <ul className="space-y-1 pl-8 max-h-[200px] overflow-y-auto pr-1">
-
+                  <ul className="space-y-1.5 pl-9 max-h-[240px] overflow-y-auto pr-1">
                     {upcomingHolidays.map((h) => {
-
-                      // Calculate days until holiday
                       const today = new Date();
                       const holidayDate = new Date(h.date);
                       const daysUntil = Math.ceil(
@@ -1142,347 +989,199 @@ const EmployeeDashboard = () => {
                       return (
                         <li
                           key={h._id}
-                          className="flex items-center gap-1 text-[8px] text-slate-700 leading-tight"
+                          className="flex items-center gap-1.5 text-xs text-black leading-tight flex-wrap"
                         >
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
 
-                          <span className="w-1 h-1 rounded-full bg-amber-400 flex-shrink-0" />
-
-                          <span className="font-medium">
+                          <span className="font-semibold">
                             {formatShortDate(h.date)}:
                           </span>
 
-                          {' '}
-
-                          {h.name}
+                          <span className="font-medium">{h.name}</span>
 
                           {h.isOptional && (
-                            <span className="text-[6px] text-amber-500 bg-amber-50 px-1 py-0.5 rounded ml-0.5">
+                            <span className="text-[9px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-0.5 font-semibold">
                               Optional
                             </span>
                           )}
 
                           {dayLabel && (
-                            <span className={`text-[6px] font-bold px-1 py-0.5 rounded ml-0.5 ${
-                              daysUntil === 0 
-                                ? 'bg-green-100 text-green-700' 
-                                : 'bg-blue-100 text-blue-700'
-                            }`}>
+                            <span
+                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ml-0.5 ${
+                                daysUntil === 0
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}
+                            >
                               {dayLabel}
                             </span>
                           )}
-
                         </li>
                       );
                     })}
-
                   </ul>
-
                 )}
-
               </div>
-
 
               {/* =================================
                   UPCOMING BIRTHDAYS
               ================================= */}
-
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
-
-                <div className="flex items-center gap-1.5 mb-1.5">
-
-                  <div className="w-7 h-7 rounded-md bg-pink-50 flex items-center justify-center flex-shrink-0">
-
-                    <Cake
-                      size={14}
-                      className="text-pink-500"
-                    />
-
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="w-9 h-9 rounded-md bg-pink-50 flex items-center justify-center flex-shrink-0">
+                    <Cake size={18} className="text-pink-600" />
                   </div>
-
 
                   <div className="min-w-0">
-
-                    <p className="text-[10px] font-bold text-slate-900 leading-tight">
+                    <p className="text-sm font-bold text-black leading-tight">
                       Upcoming Birthdays
                     </p>
-
-                    <p className="text-[7px] text-slate-500 leading-tight mt-0.5">
+                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
                       Birthdays for this month
                     </p>
-
                   </div>
-
                 </div>
 
-
                 {teamCultureLoading ? (
-
-                  <div className="flex justify-center py-1.5">
-
-                    <Loader2
-                      size={12}
-                      className="text-pink-500 animate-spin"
-                    />
-
+                  <div className="flex justify-center py-2">
+                    <Loader2 size={14} className="text-pink-500 animate-spin" />
                   </div>
-
                 ) : teamCulture.birthdays.length === 0 ? (
-
-                  <p className="text-[8px] text-slate-400 pl-8">
+                  <p className="text-xs text-black/60 pl-9">
                     No birthdays this month
                   </p>
-
                 ) : (
-
-                  <ul className="space-y-1 pl-8">
-
+                  <ul className="space-y-1.5 pl-9">
                     {teamCulture.birthdays.map((b) => (
-
                       <li
                         key={b._id}
-                        className="flex items-center gap-1.5 text-[8px] text-slate-700 leading-tight"
+                        className="flex items-center gap-2 text-xs text-black leading-tight"
                       >
-
-                        <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-[7px] font-bold text-pink-600 flex-shrink-0">
-
+                        <div className="w-7 h-7 rounded-full bg-pink-100 flex items-center justify-center text-[10px] font-bold text-pink-700 flex-shrink-0">
                           {b.name?.charAt(0) || '?'}
-
                         </div>
 
-
                         <span>
-
-                          <span className="font-medium">
+                          <span className="font-semibold">
                             {formatShortDate(b.date)}:
-                          </span>
-
-                          {' '}
-
-                          {b.name}
-
+                          </span>{' '}
+                          <span className="font-medium">{b.name}</span>
                         </span>
-
                       </li>
-
                     ))}
-
                   </ul>
-
                 )}
-
               </div>
-
 
               {/* =================================
                   NEW HIRES
               ================================= */}
-
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
-
-                <div className="flex items-center gap-1.5 mb-1.5">
-
-                  <div className="w-7 h-7 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
-
-                    <UserPlus
-                      size={14}
-                      className="text-blue-500"
-                    />
-
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="w-9 h-9 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                    <UserPlus size={18} className="text-blue-600" />
                   </div>
-
 
                   <div className="min-w-0">
-
-                    <p className="text-[10px] font-bold text-slate-900 leading-tight">
+                    <p className="text-sm font-bold text-black leading-tight">
                       New Hires (Last 1 Month)
                     </p>
-
-                    <p className="text-[7px] text-slate-900 leading-tight mt-0.5">
+                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
                       Recent hires
                     </p>
-
                   </div>
-
                 </div>
 
-
                 {teamCultureLoading ? (
-
-                  <div className="flex justify-center py-1.5">
-
-                    <Loader2
-                      size={12}
-                      className="text-blue-500 animate-spin"
-                    />
-
+                  <div className="flex justify-center py-2">
+                    <Loader2 size={14} className="text-blue-500 animate-spin" />
                   </div>
-
                 ) : teamCulture.newHires.length === 0 ? (
-
-                  <p className="text-[8px] text-slate-400 pl-8">
+                  <p className="text-xs text-black/60 pl-9">
                     No new hires recently
                   </p>
-
                 ) : (
-
-                  <ul className="space-y-1.5">
-
+                  <ul className="space-y-2">
                     {teamCulture.newHires.map((n) => (
-
-                      <li
-                        key={n._id}
-                        className="flex items-center gap-1.5"
-                      >
-
-                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[7px] font-bold text-blue-600 flex-shrink-0">
-
+                      <li key={n._id} className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 flex-shrink-0">
                           {n.name?.charAt(0) || '?'}
-
                         </div>
-
 
                         <div className="min-w-0">
-
-                          <p className="text-[8px] text-slate-800 leading-tight truncate">
-
-                            <span className="font-medium">
-                              {n.name}
+                          <p className="text-xs text-black leading-tight truncate">
+                            <span className="font-semibold">{n.name}</span>
+                            <span className="text-black/70">
+                              {' '}- {n.designation || 'Team Member'}
                             </span>
-
-                            <span className="text-slate-600">
-                              {' '} - {n.designation || 'Team Member'}
-                            </span>
-
                           </p>
 
-
-                          <p className="text-[7px] text-slate-500 leading-tight mt-0.5">
+                          <p className="text-[10px] text-black/60 leading-tight mt-0.5">
                             Joined: {n.dateDisplay}
                           </p>
-
                         </div>
-
                       </li>
-
                     ))}
-
                   </ul>
-
                 )}
-
               </div>
-
 
               {/* =================================
                   WORK ANNIVERSARIES
               ================================= */}
-
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
-
-                <div className="flex items-center gap-1.5 mb-1.5">
-
-                  <div className="w-7 h-7 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
-
-                    <Trophy
-                      size={14}
-                      className="text-amber-500"
-                    />
-
+              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="w-9 h-9 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
+                    <Trophy size={18} className="text-amber-600" />
                   </div>
-
 
                   <div className="min-w-0">
-
-                    <p className="text-[10px] font-bold text-slate-900 leading-tight">
+                    <p className="text-sm font-bold text-black leading-tight">
                       Work Anniversaries
                     </p>
-
-                    <p className="text-[7px] text-slate-900 leading-tight mt-0.5">
+                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
                       Celebrating major milestones
                     </p>
-
                   </div>
-
                 </div>
 
-
                 {teamCultureLoading ? (
-
-                  <div className="flex justify-center py-1.5">
-
-                    <Loader2
-                      size={12}
-                      className="text-amber-500 animate-spin"
-                    />
-
+                  <div className="flex justify-center py-2">
+                    <Loader2 size={14} className="text-amber-500 animate-spin" />
                   </div>
-
                 ) : teamCulture.anniversaries.length === 0 ? (
-
-                  <p className="text-[8px] text-slate-400 pl-8">
+                  <p className="text-xs text-black/60 pl-9">
                     No anniversaries this month
                   </p>
-
                 ) : (
-
-                  <ul className="space-y-1.5">
-
+                  <ul className="space-y-2">
                     {teamCulture.anniversaries.map((a) => (
-
-                      <li
-                        key={a._id}
-                        className="flex items-center gap-1.5"
-                      >
-
-                        <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[7px] font-bold text-amber-600 flex-shrink-0">
-
+                      <li key={a._id} className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-[10px] font-bold text-amber-700 flex-shrink-0">
                           {a.name?.charAt(0) || '?'}
-
                         </div>
-
 
                         <div className="min-w-0">
-
-                          <p className="text-[8px] text-slate-800 leading-tight">
-
-                            <span className="font-medium">
-                              {a.name}
-                            </span>
-
-                            {' '} - {a.years}{' '}
-
-                            {a.years === 1
-                              ? 'Year'
-                              : 'Years'}
-                            !
-
+                          <p className="text-xs text-black leading-tight">
+                            <span className="font-semibold">{a.name}</span>
+                            {' '}- {a.years}{' '}
+                            {a.years === 1 ? 'Year' : 'Years'}!
                           </p>
 
-
-                          <p className="text-[7px] text-slate-900 leading-tight mt-0.5">
+                          <p className="text-[10px] text-black/60 leading-tight mt-0.5">
                             Joined {formatShortDate(a.date)}
                           </p>
-
                         </div>
-
                       </li>
-
                     ))}
-
                   </ul>
-
                 )}
-
               </div>
 
             </div>
-
           </div>
-
         </div>
-
       </div>
-
     </div>
   );
 };
