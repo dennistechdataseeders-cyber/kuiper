@@ -3,6 +3,9 @@
 // ✅ Wider Team & Culture panel with larger, high-contrast text
 // ✅ Time handling now uses UTC components everywhere for consistency
 //    across local (Windows) and VPS (Ubuntu) environments
+// ✅ Keka-style top row: Paid Leave (left) + Status (center) + Tabs (right), one row
+// ✅ Attendance Rate card removed, "Remaining Leaves" renamed to "Paid Leave"
+// ✅ ADDED: Yearly Holiday List button and modal
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -124,6 +127,12 @@ const EmployeeDashboard = () => {
   });
 
   const [teamCultureLoading, setTeamCultureLoading] = useState(false);
+  const [showActivityModal, setShowActivityModal] = useState(false);
+
+  // ============================================
+  // NEW: YEARLY HOLIDAY LIST MODAL STATE
+  // ============================================
+  const [showYearlyHolidayModal, setShowYearlyHolidayModal] = useState(false);
 
   // ============================================
   // AUTH HEADER
@@ -275,6 +284,46 @@ const formatTimeUTC = (date) => {
       const todayDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
       return holidayDate >= todayDate;
     });
+
+  // ============================================
+  // ✅ NEW: ALL HOLIDAYS FOR THE CURRENT YEAR
+  // ============================================
+  const currentYear = new Date().getFullYear();
+
+  const holidaysForCurrentYear = holidays.filter((h) => {
+    const d = new Date(h.date);
+    return !isNaN(d.getTime()) && d.getUTCFullYear() === currentYear;
+  });
+
+  // ============================================
+  // ALL ACTIVITIES (for the calendar modal)
+  // Holidays + Upcoming Birthdays + Work Anniversaries,
+  // merged and sorted chronologically.
+  // ============================================
+
+  const allActivities = [
+    ...upcomingHolidays.map((h) => ({
+      id: `holiday-${h._id}`,
+      type: 'holiday',
+      date: h.date,
+      title: h.name,
+      subtitle: h.isOptional ? 'Optional holiday' : 'Holiday'
+    })),
+    ...teamCulture.birthdays.map((b) => ({
+      id: `birthday-${b._id}`,
+      type: 'birthday',
+      date: b.date,
+      title: b.name,
+      subtitle: 'Birthday'
+    })),
+    ...teamCulture.anniversaries.map((a) => ({
+      id: `anniversary-${a._id}`,
+      type: 'anniversary',
+      date: a.date,
+      title: a.name,
+      subtitle: `${a.years} ${a.years === 1 ? 'Year' : 'Years'} work anniversary`
+    }))
+  ].sort((a, b) => new Date(a.date) - new Date(b.date));
 
   // ============================================
   // FETCH TEAM & CULTURE DATA
@@ -608,35 +657,6 @@ const formatTimeUTC = (date) => {
   }, [attendanceMonth, attendanceYear]);
 
   // ============================================
-  // ATTENDANCE RATE
-  // ============================================
-
-  const getAttendanceRate = () => {
-    if (!monthlyStats) {
-      return {
-        rate: 0,
-        color: 'text-slate-500'
-      };
-    }
-
-    const worked = monthlyStats.presentDays || 0;
-    const total = monthlyStats.workingDays || 1;
-    const rate = Math.round((worked / total) * 100);
-
-    let color = 'text-slate-500';
-
-    if (rate >= 90) {
-      color = 'text-emerald-600';
-    } else if (rate >= 70) {
-      color = 'text-amber-600';
-    } else {
-      color = 'text-rose-600';
-    }
-
-    return { rate, color };
-  };
-
-  // ============================================
   // ✅ LEAVE STATS - Now uses REAL leave balance from LeaveBucket
   // ============================================
 
@@ -718,7 +738,6 @@ const formatTimeUTC = (date) => {
     };
   };
 
-  const attendanceRate = getAttendanceRate();
   const leaveStats = getLeaveStats();
   const inOutStatus = getInOutStatus();
 
@@ -753,7 +772,7 @@ const formatTimeUTC = (date) => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 md:p-6 transition-all duration-300 ${
+      className={`min-h-screen bg-slate-50 p-4 md:p-6 transition-all duration-300 ${
         isCollapsed ? 'ml-20' : 'ml-64'
       }`}
     >
@@ -776,9 +795,8 @@ const formatTimeUTC = (date) => {
 
       {/* ========================================
           MAIN 2-COLUMN LAYOUT
-          ✅ Widened sidebar column: 260px → 320px
       ======================================== */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_256px] gap-4 items-start">
 
         {/* ======================================
             LEFT: MAIN CONTENT
@@ -786,13 +804,13 @@ const formatTimeUTC = (date) => {
         <div className="min-w-0">
 
           {/* ====================================
-              STATS CARDS
+              TOP ROW: Status (left) · Tabs (right) — same row
           ==================================== */}
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-5">
+          <div className="flex flex-col md:flex-row gap-3 mb-5 items-stretch">
 
             {/* STATUS / CHECK-IN */}
             <div
-              className={`md:col-span-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br ${inOutStatus.color}`}
+              className={`flex-1 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br ${inOutStatus.color}`}
             >
               <div className="flex items-center justify-between h-full">
                 <div>
@@ -823,93 +841,37 @@ const formatTimeUTC = (date) => {
               </div>
             </div>
 
-            {/* ATTENDANCE RATE + USED LEAVES */}
-            <div className="md:col-span-5 rounded-2xl p-4 bg-white border border-slate-200 shadow-sm flex items-center divide-x divide-slate-100">
-              <div className="flex-1 pr-3">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                  Attendance Rate
-                </p>
+            {/* ATTENDANCE / LEAVE TOGGLE — now same row as Status */}
+            <div className="md:w-64 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm p-1 flex gap-1">
+              <button
+                onClick={() => setActiveTab('attendance')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                  activeTab === 'attendance'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <Clock size={16} />
+                Attendance
+                {!todayAttendance?.punchInTime && (
+                  <span className="text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">
+                    No Data
+                  </span>
+                )}
+              </button>
 
-                <p className={`text-xl font-bold mt-1 ${attendanceRate.color}`}>
-                  {attendanceRate.rate}%
-                </p>
-
-                <p className="text-[10px] text-slate-500 mt-1">
-                  {monthlyStats?.presentDays || 0}
-                  {' / '}
-                  {monthlyStats?.workingDays || 0}
-                  {' '}days
-                </p>
-
-                <div className="w-full h-1.5 bg-slate-100 rounded-full mt-2 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-500 ${
-                      attendanceRate.rate >= 90
-                        ? 'bg-emerald-500'
-                        : attendanceRate.rate >= 70
-                        ? 'bg-amber-500'
-                        : 'bg-rose-500'
-                    }`}
-                    style={{ width: `${attendanceRate.rate}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="flex-1 pl-3">
-                <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                  Used Leaves
-                </p>
-
-                <p className="text-xl font-bold text-slate-800 mt-1">
-                  {leaveStats.used}
-                </p>
-              </div>
+              <button
+                onClick={() => setActiveTab('leave')}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                  activeTab === 'leave'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-slate-500 hover:bg-slate-50'
+                }`}
+              >
+                <Calendar size={16} />
+                Leave
+              </button>
             </div>
-
-            {/* REMAINING LEAVES */}
-            <div className="md:col-span-2 rounded-2xl p-4 bg-white border border-slate-200 shadow-sm">
-              <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-400">
-                Remaining Leaves
-              </p>
-
-              <p className="text-xl font-bold text-slate-800 mt-1">
-                {leaveStats.remaining}
-              </p>
-            </div>
-          </div>
-
-          {/* ====================================
-              TABS
-          ==================================== */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-1 mb-5 flex gap-1 overflow-x-auto">
-            <button
-              onClick={() => setActiveTab('attendance')}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
-                activeTab === 'attendance'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              <Clock size={18} />
-              Attendance
-              {!todayAttendance?.punchInTime && (
-                <span className="text-[8px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded-full">
-                  No Data
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => setActiveTab('leave')}
-              className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
-                activeTab === 'leave'
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'text-slate-500 hover:bg-slate-50'
-              }`}
-            >
-              <Calendar size={18} />
-              Leave
-            </button>
           </div>
 
           {/* ====================================
@@ -932,263 +894,549 @@ const formatTimeUTC = (date) => {
             />
           )}
         </div>
+{/* ======================================
+    RIGHT: TEAM & CULTURE UPDATES
+====================================== */}
+<div className="h-full min-h-0">
+  <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 xl:sticky xl:top-4">
+    {/* MAIN HEADING */}
+    <div className="flex items-center justify-between mb-3">
+      <h3 className="text-sm font-black uppercase tracking-wide text-black">
+        Team &amp; Culture
+      </h3>
 
-        {/* ======================================
-            RIGHT: TEAM & CULTURE UPDATES
-            ✅ Widened (320px), larger fonts,
-            ✅ High-contrast black-on-white text
-        ====================================== */}
-        <div className="h-full min-h-0">
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 xl:sticky xl:top-4">
-            {/* MAIN HEADING */}
-            <h3 className="text-sm font-bold uppercase tracking-wide text-black mb-4">
-              Team & Culture Updates
-            </h3>
+      <div className="flex items-center gap-1.5">
+        <button
+          onClick={() => setShowYearlyHolidayModal(true)}
+          title="View yearly holiday list"
+          className="h-6 px-2 rounded-md bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1 flex-shrink-0 transition-colors"
+        >
+          <CalendarDays size={12} className="text-indigo-600" />
+          <span className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide">
+            Holiday List
+          </span>
+        </button>
 
-            {/* INNER CARDS */}
-            <div className="space-y-3">
+        <button
+          onClick={() => setShowActivityModal(true)}
+          title="View all activities"
+          className="w-6 h-6 rounded-md bg-blue-50 hover:bg-blue-100 flex items-center justify-center flex-shrink-0 transition-colors"
+        >
+          <Calendar size={13} className="text-blue-600" />
+        </button>
+      </div>
+    </div>
 
-              {/* =================================
-                  UPCOMING HOLIDAYS
-              ================================= */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <div className="w-9 h-9 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
-                    <HolidayIcon size={18} className="text-amber-600" />
-                  </div>
+    {/* INNER CARDS */}
+    <div className="space-y-2.5">
 
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-black leading-tight">
-                      Upcoming Holidays
-                    </p>
-                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
-                      All upcoming holidays this year
-                    </p>
-                  </div>
+      {/* =================================
+          UPCOMING HOLIDAYS
+      ================================= */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-7 h-7 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
+            <HolidayIcon size={14} className="text-amber-600" />
+          </div>
 
-                  <span className="ml-auto text-xs font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">
-                    {upcomingHolidays.length}
+          <div className="min-w-0">
+            <p className="text-sm font-black text-black leading-tight">
+              Upcoming Holidays
+            </p>
+            <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">
+              All upcoming holidays this year
+            </p>
+          </div>
+
+          <span className="ml-auto text-[11px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full">
+            {upcomingHolidays.length}
+          </span>
+        </div>
+
+        {holidaysLoading ? (
+          <div className="flex justify-center py-2">
+            <Loader2 size={14} className="text-amber-500 animate-spin" />
+          </div>
+        ) : upcomingHolidays.length === 0 ? (
+          <p className="text-[11px] font-medium text-black/70 pl-8">
+            No upcoming holidays for the rest of the year
+          </p>
+        ) : (
+          <ul className="space-y-1.5 pl-8 max-h-[220px] overflow-y-auto pr-1">
+            {upcomingHolidays.map((h) => {
+              const today = new Date();
+              const holidayDate = new Date(h.date);
+              const daysUntil = Math.ceil(
+                (holidayDate - today) / (1000 * 60 * 60 * 24)
+              );
+
+              let dayLabel = '';
+              if (daysUntil === 0) dayLabel = 'Today';
+              else if (daysUntil === 1) dayLabel = 'Tomorrow';
+              else if (daysUntil <= 7) dayLabel = `${daysUntil} days`;
+
+              return (
+                <li
+                  key={h._id}
+                  className="flex items-center gap-1.5 text-[11px] text-black leading-tight flex-wrap"
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+
+                  <span className="font-semibold">
+                    {formatShortDate(h.date)}:
                   </span>
+
+                  <span className="font-medium">{h.name}</span>
+
+                  {h.isOptional && (
+                    <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded ml-0.5 font-semibold">
+                      Optional
+                    </span>
+                  )}
+
+                  {dayLabel && (
+                    <span
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ml-0.5 ${
+                        daysUntil === 0
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
+                    >
+                      {dayLabel}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+
+      {/* =================================
+          UPCOMING BIRTHDAYS
+      ================================= */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-7 h-7 rounded-md bg-pink-50 flex items-center justify-center flex-shrink-0">
+            <Cake size={14} className="text-pink-600" />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-sm font-black text-black leading-tight">
+              Upcoming Birthdays
+            </p>
+            <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">
+              Birthdays for this month
+            </p>
+          </div>
+        </div>
+
+        {teamCultureLoading ? (
+          <div className="flex justify-center py-2">
+            <Loader2 size={14} className="text-pink-500 animate-spin" />
+          </div>
+        ) : teamCulture.birthdays.length === 0 ? (
+          <p className="text-[11px] font-medium text-black/70 pl-8">
+            No birthdays this month
+          </p>
+        ) : (
+          <ul className="space-y-1.5 pl-8">
+            {teamCulture.birthdays.map((b) => (
+              <li
+                key={b._id}
+                className="flex items-center gap-1.5 text-[11px] text-black leading-tight"
+              >
+                <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-[10px] font-bold text-pink-700 flex-shrink-0">
+                  {b.name?.charAt(0) || '?'}
                 </div>
 
-                {holidaysLoading ? (
-                  <div className="flex justify-center py-2">
-                    <Loader2 size={14} className="text-amber-500 animate-spin" />
-                  </div>
-                ) : upcomingHolidays.length === 0 ? (
-                  <p className="text-xs text-black/60 pl-9">
-                    No upcoming holidays for the rest of the year
+                <span>
+                  <span className="font-semibold">
+                    {formatShortDate(b.date)}:
+                  </span>{' '}
+                  <span className="font-medium">{b.name}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* =================================
+          NEW HIRES
+      ================================= */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-7 h-7 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+            <UserPlus size={14} className="text-blue-600" />
+          </div>
+
+          <div className="min-w-0">
+            <p className="text-sm font-black text-black leading-tight">
+              New Hires (Last 1 Month)
+            </p>
+            <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">
+              Recent hires
+            </p>
+          </div>
+        </div>
+
+        {teamCultureLoading ? (
+          <div className="flex justify-center py-2">
+            <Loader2 size={14} className="text-blue-500 animate-spin" />
+          </div>
+        ) : teamCulture.newHires.length === 0 ? (
+          <p className="text-[11px] font-medium text-black/70 pl-8">
+            No new hires recently
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {teamCulture.newHires.map((n) => (
+              <li key={n._id} className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 flex-shrink-0">
+                  {n.name?.charAt(0) || '?'}
+                </div>
+
+                <div className="min-w-0">
+                  <p className="text-[11px] text-black leading-tight truncate">
+                    <span className="font-semibold">{n.name}</span>
+                    <span className="font-medium text-black/80">
+                      {' '}- {n.designation || 'Team Member'}
+                    </span>
                   </p>
-                ) : (
-                  <ul className="space-y-1.5 pl-9 max-h-[240px] overflow-y-auto pr-1">
-                    {upcomingHolidays.map((h) => {
-                      const today = new Date();
-                      const holidayDate = new Date(h.date);
-                      const daysUntil = Math.ceil(
-                        (holidayDate - today) / (1000 * 60 * 60 * 24)
-                      );
 
-                      let dayLabel = '';
-                      if (daysUntil === 0) dayLabel = 'Today';
-                      else if (daysUntil === 1) dayLabel = 'Tomorrow';
-                      else if (daysUntil <= 7) dayLabel = `${daysUntil} days`;
+                  <p className="text-[10px] font-medium text-black/70 leading-tight mt-0.5">
+                    Joined: {n.dateDisplay}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-                      return (
-                        <li
-                          key={h._id}
-                          className="flex items-center gap-1.5 text-xs text-black leading-tight flex-wrap"
-                        >
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+      {/* =================================
+          WORK ANNIVERSARIES
+      ================================= */}
+      <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2.5">
+        <div className="flex items-center gap-1.5 mb-2">
+          <div className="w-7 h-7 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
+            <Trophy size={14} className="text-amber-600" />
+          </div>
 
-                          <span className="font-semibold">
-                            {formatShortDate(h.date)}:
-                          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-black text-black leading-tight">
+              Work Anniversaries
+            </p>
+            <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">
+              Celebrating major milestones
+            </p>
+          </div>
+        </div>
 
-                          <span className="font-medium">{h.name}</span>
+        {teamCultureLoading ? (
+          <div className="flex justify-center py-2">
+            <Loader2 size={14} className="text-amber-500 animate-spin" />
+          </div>
+        ) : teamCulture.anniversaries.length === 0 ? (
+          <p className="text-[11px] font-medium text-black/70 pl-8">
+            No anniversaries this month
+          </p>
+        ) : (
+          <ul className="space-y-1.5">
+            {teamCulture.anniversaries.map((a) => (
+              <li key={a._id} className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] font-bold text-amber-700 flex-shrink-0">
+                  {a.name?.charAt(0) || '?'}
+                </div>
 
-                          {h.isOptional && (
-                            <span className="text-[9px] text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded ml-0.5 font-semibold">
-                              Optional
-                            </span>
-                          )}
+                <div className="min-w-0">
+                  <p className="text-[11px] text-black leading-tight">
+                    <span className="font-semibold">{a.name}</span>
+                    <span className="font-medium"> - {a.years}{' '}
+                      {a.years === 1 ? 'Year' : 'Years'}!</span>
+                  </p>
 
-                          {dayLabel && (
-                            <span
-                              className={`text-[9px] font-bold px-1.5 py-0.5 rounded ml-0.5 ${
-                                daysUntil === 0
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-blue-100 text-blue-800'
-                              }`}
-                            >
-                              {dayLabel}
-                            </span>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+                  <p className="text-[10px] font-medium text-black/70 leading-tight mt-0.5">
+                    Joined {formatShortDate(a.date)}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+    </div>
+  </div>
+</div>
+      </div>
+
+      {/* ========================================
+          ALL ACTIVITIES MODAL
+          Holidays + Upcoming Birthdays + Work Anniversaries
+      ======================================== */}
+      {showActivityModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowActivityModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                  <Calendar size={16} className="text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                    All Activities
+                  </h3>
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    Holidays, birthdays &amp; work anniversaries
+                  </p>
+                </div>
               </div>
 
-              {/* =================================
-                  UPCOMING BIRTHDAYS
-              ================================= */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <div className="w-9 h-9 rounded-md bg-pink-50 flex items-center justify-center flex-shrink-0">
-                    <Cake size={18} className="text-pink-600" />
-                  </div>
+              <button
+                onClick={() => setShowActivityModal(false)}
+                className="w-7 h-7 rounded-md hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
+              >
+                <X size={16} className="text-slate-500" />
+              </button>
+            </div>
 
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-black leading-tight">
-                      Upcoming Birthdays
-                    </p>
-                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
-                      Birthdays for this month
-                    </p>
-                  </div>
-                </div>
+            {/* MODAL BODY */}
+            <div className="overflow-y-auto px-4 py-3 flex-1">
+              {allActivities.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6">
+                  No upcoming activities right now
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {allActivities.map((item) => {
+                    const iconMap = {
+                      holiday: {
+                        Icon: HolidayIcon,
+                        bg: 'bg-amber-50',
+                        text: 'text-amber-600',
+                        dot: 'bg-amber-500'
+                      },
+                      birthday: {
+                        Icon: Cake,
+                        bg: 'bg-pink-50',
+                        text: 'text-pink-600',
+                        dot: 'bg-pink-500'
+                      },
+                      anniversary: {
+                        Icon: Trophy,
+                        bg: 'bg-blue-50',
+                        text: 'text-blue-600',
+                        dot: 'bg-blue-500'
+                      }
+                    };
 
-                {teamCultureLoading ? (
-                  <div className="flex justify-center py-2">
-                    <Loader2 size={14} className="text-pink-500 animate-spin" />
-                  </div>
-                ) : teamCulture.birthdays.length === 0 ? (
-                  <p className="text-xs text-black/60 pl-9">
-                    No birthdays this month
-                  </p>
-                ) : (
-                  <ul className="space-y-1.5 pl-9">
-                    {teamCulture.birthdays.map((b) => (
+                    const style = iconMap[item.type];
+                    const { Icon } = style;
+
+                    return (
                       <li
-                        key={b._id}
-                        className="flex items-center gap-2 text-xs text-black leading-tight"
+                        key={item.id}
+                        className="flex items-center gap-3 p-2 rounded-lg border border-slate-100"
                       >
-                        <div className="w-7 h-7 rounded-full bg-pink-100 flex items-center justify-center text-[10px] font-bold text-pink-700 flex-shrink-0">
-                          {b.name?.charAt(0) || '?'}
+                        <div
+                          className={`w-9 h-9 rounded-md ${style.bg} flex items-center justify-center flex-shrink-0`}
+                        >
+                          <Icon size={16} className={style.text} />
                         </div>
 
-                        <span>
-                          <span className="font-semibold">
-                            {formatShortDate(b.date)}:
-                          </span>{' '}
-                          <span className="font-medium">{b.name}</span>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-900 leading-tight truncate">
+                            {item.title}
+                          </p>
+                          <p className="text-[10px] text-slate-500 leading-tight mt-0.5">
+                            {item.subtitle}
+                          </p>
+                        </div>
+
+                        <span className="text-[10px] font-semibold text-slate-600 flex-shrink-0">
+                          {formatShortDate(item.date)}
                         </span>
                       </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* =================================
-                  NEW HIRES
-              ================================= */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <div className="w-9 h-9 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <UserPlus size={18} className="text-blue-600" />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-black leading-tight">
-                      New Hires (Last 1 Month)
-                    </p>
-                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
-                      Recent hires
-                    </p>
-                  </div>
-                </div>
-
-                {teamCultureLoading ? (
-                  <div className="flex justify-center py-2">
-                    <Loader2 size={14} className="text-blue-500 animate-spin" />
-                  </div>
-                ) : teamCulture.newHires.length === 0 ? (
-                  <p className="text-xs text-black/60 pl-9">
-                    No new hires recently
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {teamCulture.newHires.map((n) => (
-                      <li key={n._id} className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-[10px] font-bold text-blue-700 flex-shrink-0">
-                          {n.name?.charAt(0) || '?'}
-                        </div>
-
-                        <div className="min-w-0">
-                          <p className="text-xs text-black leading-tight truncate">
-                            <span className="font-semibold">{n.name}</span>
-                            <span className="text-black/70">
-                              {' '}- {n.designation || 'Team Member'}
-                            </span>
-                          </p>
-
-                          <p className="text-[10px] text-black/60 leading-tight mt-0.5">
-                            Joined: {n.dateDisplay}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
-              {/* =================================
-                  WORK ANNIVERSARIES
-              ================================= */}
-              <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-3">
-                <div className="flex items-center gap-2 mb-2.5">
-                  <div className="w-9 h-9 rounded-md bg-amber-50 flex items-center justify-center flex-shrink-0">
-                    <Trophy size={18} className="text-amber-600" />
-                  </div>
-
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-black leading-tight">
-                      Work Anniversaries
-                    </p>
-                    <p className="text-[10px] text-black/70 leading-tight mt-0.5">
-                      Celebrating major milestones
-                    </p>
-                  </div>
-                </div>
-
-                {teamCultureLoading ? (
-                  <div className="flex justify-center py-2">
-                    <Loader2 size={14} className="text-amber-500 animate-spin" />
-                  </div>
-                ) : teamCulture.anniversaries.length === 0 ? (
-                  <p className="text-xs text-black/60 pl-9">
-                    No anniversaries this month
-                  </p>
-                ) : (
-                  <ul className="space-y-2">
-                    {teamCulture.anniversaries.map((a) => (
-                      <li key={a._id} className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-[10px] font-bold text-amber-700 flex-shrink-0">
-                          {a.name?.charAt(0) || '?'}
-                        </div>
-
-                        <div className="min-w-0">
-                          <p className="text-xs text-black leading-tight">
-                            <span className="font-semibold">{a.name}</span>
-                            {' '}- {a.years}{' '}
-                            {a.years === 1 ? 'Year' : 'Years'}!
-                          </p>
-
-                          <p className="text-[10px] text-black/60 leading-tight mt-0.5">
-                            Joined {formatShortDate(a.date)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* ========================================
+          NEW: YEARLY HOLIDAY LIST MODAL
+      ======================================== */}
+      {showYearlyHolidayModal && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setShowYearlyHolidayModal(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                  <CalendarDays size={16} className="text-indigo-600" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                    Yearly Holiday List — {currentYear}
+                  </h3>
+                  <p className="text-[10px] text-slate-500 leading-tight">
+                    All holidays for the current year
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                  {holidaysForCurrentYear.length} holidays
+                </span>
+                <button
+                  onClick={() => setShowYearlyHolidayModal(false)}
+                  className="w-7 h-7 rounded-md hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
+                >
+                  <X size={16} className="text-slate-500" />
+                </button>
+              </div>
+            </div>
+
+            {/* MODAL BODY */}
+            <div className="overflow-y-auto px-4 py-3 flex-1">
+              {holidaysLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 size={24} className="text-indigo-500 animate-spin" />
+                </div>
+              ) : holidaysForCurrentYear.length === 0 ? (
+                <div className="text-center py-8">
+                  <CalendarDays size={32} className="text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs text-slate-500">
+                    No holidays found for {currentYear}
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-1.5">
+                  {holidaysForCurrentYear.map((holiday) => {
+                    const today = new Date();
+                    const holidayDate = new Date(holiday.date);
+
+                    const isPast =
+                      holidayDate <
+                      new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+
+                    const isToday =
+                      holidayDate.toISOString().split('T')[0] ===
+                      today.toISOString().split('T')[0];
+
+                    return (
+                      <li
+                        key={holiday._id}
+                        className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+                          isToday
+                            ? 'border-amber-300 bg-amber-50'
+                            : isPast
+                            ? 'border-slate-100 bg-slate-50 opacity-60'
+                            : 'border-slate-100 hover:bg-slate-50'
+                        }`}
+                      >
+                        {/* Date block */}
+                        <div className="w-14 flex-shrink-0 text-center">
+                          <p
+                            className={`text-[9px] font-bold uppercase tracking-wide ${
+                              isToday
+                                ? 'text-amber-600'
+                                : isPast
+                                ? 'text-slate-400'
+                                : 'text-indigo-600'
+                            }`}
+                          >
+                            {monthNames[holidayDate.getUTCMonth()].substring(0, 3)}
+                          </p>
+                          <p
+                            className={`text-lg font-black leading-none ${
+                              isToday
+                                ? 'text-amber-700'
+                                : isPast
+                                ? 'text-slate-400'
+                                : 'text-slate-800'
+                            }`}
+                          >
+                            {holidayDate.getUTCDate()}
+                          </p>
+                          <p className="text-[8px] font-bold text-slate-400 uppercase">
+                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][
+                              holidayDate.getUTCDay()
+                            ]}
+                          </p>
+                        </div>
+
+                        {/* Holiday details */}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="text-sm font-bold text-slate-800 leading-tight">
+                              {holiday.name}
+                            </p>
+
+                            {holiday.isOptional && (
+                              <span className="text-[8px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                                Optional
+                              </span>
+                            )}
+
+                            {isToday && (
+                              <span className="text-[8px] font-bold text-amber-800 bg-amber-200 px-1.5 py-0.5 rounded-full">
+                                Today
+                              </span>
+                            )}
+                          </div>
+
+                          {holiday.description && (
+                            <p className="text-[10px] text-slate-500 leading-tight mt-1">
+                              {holiday.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Status indicator */}
+                        <div className="flex-shrink-0">
+                          {isPast ? (
+                            <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                              Past
+                            </span>
+                          ) : isToday ? (
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-200 px-2 py-0.5 rounded-full">
+                              Today
+                            </span>
+                          ) : (
+                            <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full">
+                              Upcoming
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

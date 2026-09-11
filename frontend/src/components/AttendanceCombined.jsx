@@ -1,15 +1,14 @@
 // frontend/src/components/AttendanceCombined.jsx
-// ✅ Effective/Gross calculation
-// ✅ Half-day leave no longer shows duplicate sessions
-// ✅ Weekend/Absent rows no longer show "0 hr 0 min"
-// ✅ Removed "Sessions" column from table
-// ✅ REMOVED: Row-click session details expansion
-// ✅ Effective hours now falls back to Gross if no session breakdown available
-// ✅ GUARANTEED CONSISTENT local vs VPS: uses fixed IST offset (UTC+5:30)
-//    instead of toLocaleTimeString or getHours. Never touches OS timezone.
-// ✅ REMOVED: "Eff" column from table
-// ✅ REMOVED: "Avg Eff" stat card
-// ✅ REMOVED: "Eff" bar/legend/label from Weekly Averages chart
+// ✅ FIXED: Effective/Gross calculation
+// ✅ FIXED: Half-day leave no longer shows duplicate sessions
+// ✅ FIXED: Weekend/Absent rows no longer show "0 hr 0 min"
+// ✅ REMOVED: Weekly Averages, Leave, Holidays stat sections
+// ✅ IMPROVED: Table text contrast (black) + larger, bolder table content
+// ✅ Effective Hrs column is now neutral (no color coding)
+// ✅ Larger stat cards
+// ✅ Header row (legend + title + month + shift) spread full width
+// ✅ REDUCED: Table text to 90% of previous size, kept plain/black for contrast
+// ✅ REDUCED BOLDNESS: Table body content is lighter; table header stays font-black
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -34,15 +33,6 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 // ─────────────────────────────────────────────────────────────
-// IST OFFSET
-// ─────────────────────────────────────────────────────────────
-// IST is UTC+5:30 with no DST. We add this offset manually instead
-// of relying on the OS timezone. This makes the output IDENTICAL on
-// Windows dev, Ubuntu VPS, or any Docker container regardless of the
-// TZ environment variable.
-const IST_OFFSET_MINUTES = 5 * 60 + 30; // 330
-
-// ─────────────────────────────────────────────────────────────
 // Shift Configuration
 // ─────────────────────────────────────────────────────────────
 const DEFAULT_SHIFT_HOUR = 10;
@@ -65,24 +55,11 @@ const TRACK_END_HOUR = 21;
 const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
 const NOON_MINUTES = 720;
 
-/**
- * Convert a stored UTC timestamp to IST minutes-of-day.
- *
- * MongoDB stores the biometric wall-clock time as if it were UTC
- * (e.g. a punch at 5:53 AM local is stored as "T05:53:27.000Z").
- * To display it as IST we add the fixed +5:30 offset.
- *
- * This function NEVER uses getHours(), getMinutes(), or
- * toLocaleString({ timeZone }), so the output is identical on
- * every server regardless of the OS timezone setting.
- */
-const minutesOfDayIST = (dateString) => {
+const minutesOfDayUTC = (dateString) => {
   if (!dateString) return null;
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return null;
-  let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
-  total = ((total % 1440) + 1440) % 1440; // wrap across midnight
-  return total;
+  return d.getUTCHours() * 60 + d.getUTCMinutes();
 };
 
 const clampToTrack = (mins) => {
@@ -105,43 +82,32 @@ const STATUS_STYLES = {
 
 const formatTimeDisplay = (dateString) => {
   if (!dateString) return '—';
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return '—';
-
-  // Convert UTC -> IST by adding the fixed offset. No OS timezone involved.
-  let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
-  total = ((total % 1440) + 1440) % 1440;
-
-  let hours24 = Math.floor(total / 60);
-  const minutes = String(total % 60).padStart(2, '0');
-  const ampm = hours24 >= 12 ? 'PM' : 'AM';
-  let hours12 = hours24 % 12 || 12;
-  return `${hours12}:${minutes} ${ampm}`;
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '—';
+    return date.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch (e) {
+    return '—';
+  }
 };
 
 const formatDateDisplay = (dateStr) => {
   if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '—';
-
-  // Shift to IST, then read the calendar day from the shifted value.
-  const istMs = d.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
-  const ist = new Date(istMs);
-  const day = String(ist.getUTCDate()).padStart(2, '0');
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = monthNames[ist.getUTCMonth()];
-  const year = ist.getUTCFullYear();
-  return `${day} ${month} ${year}`;
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
 };
 
 const getDayShortName = (dateStr) => {
   if (!dateStr) return '—';
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return '—';
-  const istMs = d.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
-  const ist = new Date(istMs);
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][ist.getUTCDay()];
+  const date = new Date(dateStr);
+  if (isNaN(date.getTime())) return '—';
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
 };
 
 const isToday = (dateStr) => {
@@ -154,7 +120,6 @@ const calculateHours = (punchIn, punchOut) => {
   const inTime = new Date(punchIn);
   const outTime = new Date(punchOut);
   if (isNaN(inTime.getTime()) || isNaN(outTime.getTime())) return 0;
-  // getTime() is timezone-agnostic; the difference is the true duration.
   return Math.max(0, (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60));
 };
 
@@ -166,7 +131,7 @@ const formatHours = (hours, { unit = 'short', zero = '0h' } = {}) => {
   if (unit === 'hrmin') {
     if (hrs > 0 && mins > 0) return `${hrs} hr ${mins} min`;
     if (hrs > 0) return `${hrs} hr 0 min`;
-    return `0 hr ${mins} min`;
+    return `0 HR ${mins} min`;
   }
   if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
   if (hrs > 0) return unit === 'detailed' ? `${hrs}h 0m` : `${hrs}h`;
@@ -198,23 +163,20 @@ const STATUS_LABELS = {
   late: 'Late',
   absent: 'Absent',
   leave: 'On Leave',
-  'leave-half-first': 'First Half Leave',
-  'leave-half-second': 'Second Half Leave',
+  'leave-half-first': 'Leave(FH)',
+  'leave-half-second': 'Leave(SH)',
   weekend: 'Weekend',
   holiday: 'Holiday 🎉'
 };
 const getStatusLabel = (status) => STATUS_LABELS[status] || '—';
 
-/**
- * Arrival status uses the SAME IST conversion as formatTimeDisplay,
- * so the "Arrival" column always agrees with the "In" column.
- */
 const getArrivalStatus = (day, shiftStartMinutes, gracePeriodMinutes = 15) => {
   if (!day.punchInUTC) return '—';
   const shiftStart = shiftStartMinutes || (10 * 60 + 45);
   try {
-    const punchMinutes = minutesOfDayIST(day.punchInUTC);
-    if (punchMinutes === null) return '—';
+    const punchIn = new Date(day.punchInUTC);
+    if (isNaN(punchIn.getTime())) return '—';
+    const punchMinutes = punchIn.getUTCHours() * 60 + punchIn.getUTCMinutes();
     const threshold = shiftStart + gracePeriodMinutes;
     if (punchMinutes > threshold) {
       const diff = punchMinutes - threshold;
@@ -255,7 +217,10 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
     >
       {session && (
         <>
-         
+          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
+            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
+            <span className="text-[11px] font-semibold">Session {session.sessionIndex + 1} of {session.totalSessions}</span>
+          </div>
           <div className="space-y-1 text-[11px]">
             <div className="flex justify-between">
               <span className="text-slate-400">In:</span>
@@ -267,7 +232,7 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
             </div>
             <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
               <span className="text-slate-400">Duration:</span>
-              <span className="font-bold text-emerald-400">{session.durationFormatted}</span>
+              <span className="font-semibold text-emerald-400">{session.durationFormatted}</span>
             </div>
           </div>
         </>
@@ -276,7 +241,7 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
         <>
           <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
             <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span className="text-[11px] font-bold">Break</span>
+            <span className="text-[11px] font-semibold">Break {breakInfo.breakIndex + 1}</span>
           </div>
           <div className="space-y-1 text-[11px]">
             <div className="flex justify-between">
@@ -289,64 +254,11 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
             </div>
             <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
               <span className="text-slate-400">Duration:</span>
-              <span className="font-bold text-amber-400">{breakInfo.formattedDuration}</span>
+              <span className="font-semibold text-amber-400">{breakInfo.formattedDuration}</span>
             </div>
           </div>
         </>
       )}
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────
-// Average Bar Chart (Gross only)
-// ─────────────────────────────────────────────────────────────
-const AverageBarChart = ({ weeklyAverages }) => {
-  if (!weeklyAverages || weeklyAverages.length === 0) return null;
-
-  const filteredWeeks = weeklyAverages.filter(w => w.dayCount >= 2);
-  if (filteredWeeks.length === 0) {
-    return (
-      <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
-        <span className="text-[8px] font-medium text-slate-400">No weeks with sufficient data</span>
-      </div>
-    );
-  }
-
-  const maxAvg = Math.max(...filteredWeeks.map(w => w.avgGross || 0), 1);
-  const maxDisplay = Math.ceil(maxAvg / 2) * 2 + 2;
-
-  return (
-    <div className="mt-2 p-2 bg-white rounded-lg border border-slate-200">
-      <div className="flex items-center gap-4 mb-2">
-        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Avg Hours by Week</span>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-2 rounded-sm bg-slate-600"></div>
-            <span className="text-[7px] font-bold text-slate-500">Gross</span>
-          </div>
-        </div>
-        <span className="text-[6px] text-slate-400 ml-auto">{maxDisplay}h max</span>
-      </div>
-
-      <div className="space-y-1.5">
-        {filteredWeeks.map((week) => {
-          const grossPercent = Math.min((week.avgGross / maxDisplay) * 100, 100);
-          return (
-            <div key={week.weekNumber} className="flex items-center gap-2">
-              <span className="text-[7px] font-bold text-slate-500 w-12 flex-shrink-0">{week.weekDisplay}</span>
-              <div className="flex-1">
-                <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="absolute inset-y-0 left-0 bg-slate-600 rounded-full transition-all duration-500" style={{ width: `${grossPercent}%` }} />
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0 min-w-[100px]">
-                <span className="text-[8px] font-bold text-slate-600 w-[45px] text-right">{week.avgGrossFormatted}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
     </div>
   );
 };
@@ -408,8 +320,8 @@ const DayTimelineBar = ({ day }) => {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-        <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
-          <Gift size={10} className="text-purple-500" />
+        <span className="text-[9px] font-semibold text-purple-700 whitespace-nowrap flex items-center gap-1">
+          <Gift size={9} className="text-purple-500" />
           {holidayName || 'Holiday'}
         </span>
       </div>
@@ -427,8 +339,8 @@ const DayTimelineBar = ({ day }) => {
 
     const isInWorkingHalf = (punchMin) => {
       if (!punchMin) return false;
-      return halfDayType === 'first'
-        ? punchMin >= NOON_MINUTES
+      return halfDayType === 'first' 
+        ? punchMin >= NOON_MINUTES 
         : punchMin < NOON_MINUTES;
     };
 
@@ -441,7 +353,7 @@ const DayTimelineBar = ({ day }) => {
 
     const workSessions = allSessions.filter(s => {
       if (!s.punchInUTC) return false;
-      const punchMin = minutesOfDayIST(s.punchInUTC);
+      const punchMin = minutesOfDayUTC(s.punchInUTC);
       return punchMin !== null && isInWorkingHalf(punchMin);
     });
 
@@ -460,11 +372,11 @@ const DayTimelineBar = ({ day }) => {
           />
 
           {workSessions.map((session, idx) => {
-            const startMin = clampToTrack(minutesOfDayIST(session.punchInUTC));
+            const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
             const endMin = session.punchOutUTC
-              ? clampToTrack(minutesOfDayIST(session.punchOutUTC))
+              ? clampToTrack(minutesOfDayUTC(session.punchOutUTC))
               : clampToTrack(startMin + 2);
-
+            
             const segLeftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
             const segWidthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
 
@@ -480,20 +392,20 @@ const DayTimelineBar = ({ day }) => {
         </div>
 
         <div className="flex items-center justify-between mt-1">
-          <span className="text-[9px] font-medium text-indigo-600 flex items-center gap-1">
-            <CalendarIcon size={10} className="text-indigo-500" />
+          <span className="text-[9px] font-semibold text-indigo-700 flex items-center gap-1">
+            <CalendarIcon size={9} className="text-indigo-500" />
             {halfDayLabel}
             {(totalEffectiveHours > 0 || hasInProgress) && (
-              <span className="text-[8px] font-medium text-emerald-600 ml-1">
+              <span className="text-[8px] font-medium text-emerald-700 ml-1">
                 (Worked: {totalEffectiveHours > 0 ? formatHours(totalEffectiveHours) : 'In progress'})
               </span>
             )}
           </span>
           {totalEffectiveHours > 0 && (
-            <span className="text-[8px] font-medium text-emerald-600">{formatHours(totalEffectiveHours)}</span>
+            <span className="text-[8px] font-semibold text-emerald-700">{formatHours(totalEffectiveHours)}</span>
           )}
           {hasInProgress && !totalEffectiveHours && (
-            <span className="text-[8px] font-medium text-amber-600">In progress</span>
+            <span className="text-[8px] font-semibold text-amber-600">In progress</span>
           )}
         </div>
 
@@ -510,8 +422,8 @@ const DayTimelineBar = ({ day }) => {
           <div className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-500" style={{ left: '0%', width: '100%' }} />
         </div>
         <div className="flex items-center justify-between mt-1">
-          <span className="text-[9px] font-medium text-indigo-600 flex items-center gap-1">
-            <CalendarIcon size={10} className="text-indigo-500" />
+          <span className="text-[9px] font-semibold text-indigo-700 flex items-center gap-1">
+            <CalendarIcon size={9} className="text-indigo-500" />
             Full Day Leave
           </span>
         </div>
@@ -523,15 +435,15 @@ const DayTimelineBar = ({ day }) => {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-slate-100" />
-        <span className="text-[8px] font-medium text-slate-300 whitespace-nowrap">No punch data</span>
+        <span className="text-[8px] font-medium text-slate-400 whitespace-nowrap">No punch data</span>
       </div>
     );
   }
 
   const renderSegments = () => {
     if (!day.sessions || day.sessions.length === 0) {
-      const startMin = clampToTrack(minutesOfDayIST(day.punchInUTC));
-      const endMin = clampToTrack(minutesOfDayIST(day.punchOutUTC) || startMin + 5);
+      const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
+      const endMin = clampToTrack(minutesOfDayUTC(day.punchOutUTC) || startMin + 5);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
       return <div className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`} style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
@@ -543,9 +455,9 @@ const DayTimelineBar = ({ day }) => {
     day.sessions.forEach((session, idx) => {
       if (!session.punchInUTC) return;
 
-      const startMin = clampToTrack(minutesOfDayIST(session.punchInUTC));
+      const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
       const isLast = idx === totalSegments - 1;
-      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayIST(session.punchOutUTC)) : clampToTrack(startMin + 2);
+      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayUTC(session.punchOutUTC)) : clampToTrack(startMin + 2);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
 
@@ -561,7 +473,7 @@ const DayTimelineBar = ({ day }) => {
       if (idx === 0) {
         elements.push(
           <div key={`start-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
-            <span className="text-[7px] font-semibold text-slate-500 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
+            <span className="text-[7px] font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
           </div>
         );
       }
@@ -570,14 +482,14 @@ const DayTimelineBar = ({ day }) => {
         const label = session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : '';
         elements.push(
           <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>{label}</span>
+            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-700'} whitespace-nowrap`}>{label}</span>
           </div>
         );
       }
 
       if (!isLast && session.punchOutUTC && day.sessions[idx + 1]?.punchInUTC) {
-        const gapStart = clampToTrack(minutesOfDayIST(session.punchOutUTC));
-        const gapEnd = clampToTrack(minutesOfDayIST(day.sessions[idx + 1].punchInUTC));
+        const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
+        const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
         const gapMinutes = gapEnd - gapStart;
 
         if (gapMinutes >= 5) {
@@ -605,13 +517,15 @@ const DayTimelineBar = ({ day }) => {
       <div className="relative h-1 rounded-full bg-slate-100">{renderSegments()}</div>
 
       <div className="flex items-center justify-between mt-1">
-        
+        <span className="text-[9px] font-semibold text-black">
+          Effective: <span className="text-black">{formatHours(day.effectiveHours)}</span>
+        </span>
         {day.grossHours > 0 && day.grossHours !== day.effectiveHours && (
-          <span className="text-[8px] font-medium text-slate-400">Gross: {formatHours(day.grossHours)}</span>
+          <span className="text-[8px] font-medium text-black">Gross: {formatHours(day.grossHours)}</span>
         )}
         {day.breakMinutes > 0 && (
-          <span className="inline-flex items-center gap-1 text-[8px] font-medium text-slate-400">
-            <Coffee size={10} className="text-amber-500" />
+          <span className="inline-flex items-center gap-1 text-[8px] font-medium text-black">
+            <Coffee size={9} className="text-amber-500" />
             {formatBreakMinutes(day.breakMinutes)}
           </span>
         )}
@@ -725,8 +639,9 @@ const AttendanceCombined = ({ userId, token }) => {
 
   const isLatePunchWithShift = useCallback((punchTime) => {
     if (!punchTime || shiftConfig.isLoading) return false;
-    const punchMinutes = minutesOfDayIST(punchTime);
-    if (punchMinutes === null) return false;
+    const punchDate = new Date(punchTime);
+    if (isNaN(punchDate.getTime())) return false;
+    const punchMinutes = punchDate.getUTCHours() * 60 + punchDate.getUTCMinutes();
     const shiftStartMinutes = getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
     const gracePeriod = shiftConfig.gracePeriod || 15;
     return punchMinutes > shiftStartMinutes + gracePeriod;
@@ -827,15 +742,9 @@ const AttendanceCombined = ({ userId, token }) => {
             ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
             : (effectiveMs / (1000 * 60 * 60));
 
-          let effectiveHours = effectiveMs / (1000 * 60 * 60);
-          if (effectiveHours <= 0 && grossHours > 0) {
-            effectiveHours = grossHours;
-          }
-
-          const safeEffectiveHours = Math.min(effectiveHours, grossHours);
-
-          const breakMinutes = grossHours > safeEffectiveHours
-            ? (grossHours - safeEffectiveHours) * 60
+          const effectiveHours = Math.min(effectiveMs / (1000 * 60 * 60), grossHours);
+          const breakMinutes = grossHours > effectiveHours
+            ? (grossHours - effectiveHours) * 60
             : 0;
 
           const breakGaps = [];
@@ -861,11 +770,11 @@ const AttendanceCombined = ({ userId, token }) => {
             punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
             punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
             punchOutUTC: lastOutUTC,
-            effectiveHours: safeEffectiveHours,
+            effectiveHours,
             grossHours,
             breakMinutes,
             breakGaps,
-            totalDuration: safeEffectiveHours
+            totalDuration: effectiveHours
           };
         });
 
@@ -887,7 +796,7 @@ const AttendanceCombined = ({ userId, token }) => {
     const monthDaysList = days.filter(day => {
       if (!day.date) return false;
       const date = new Date(day.date);
-      return date.getUTCMonth() === selectedMonth && date.getUTCFullYear() === selectedYear;
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
     });
     const sortedDays = [...monthDaysList].sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -897,7 +806,7 @@ const AttendanceCombined = ({ userId, token }) => {
     let weekNumber = 1;
 
     for (const day of sortedDays) {
-      const dayOfWeek = new Date(day.date).getUTCDay();
+      const dayOfWeek = new Date(day.date).getDay();
       if (dayOfWeek === 1 || weekStartDate === null) {
         if (currentWeek.length > 0) {
           weeks.push({ weekNumber, days: [...currentWeek] });
@@ -979,6 +888,17 @@ const AttendanceCombined = ({ userId, token }) => {
   // ─────────────────────────────────────────────────────────────
   // Navigation
   // ─────────────────────────────────────────────────────────────
+  const navigateMonth = (direction) => {
+    if (direction === 'prev') {
+      if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(y => y - 1); }
+      else setSelectedMonth(m => m - 1);
+    } else {
+      if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(y => y + 1); }
+      else setSelectedMonth(m => m + 1);
+    }
+    setShowMonthPicker(false);
+  };
+
   const handleMonthSelect = (monthIndex) => { setSelectedMonth(monthIndex); setShowMonthPicker(false); };
   const handleYearSelect = (year) => { setSelectedYear(year); setShowMonthPicker(false); };
   const goToCurrentMonth = () => {
@@ -992,7 +912,7 @@ const AttendanceCombined = ({ userId, token }) => {
     return attendanceData.filter(day => {
       if (!day.date) return false;
       const date = new Date(day.date);
-      return date.getUTCMonth() === selectedMonth && date.getUTCFullYear() === selectedYear;
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
     });
   }, [attendanceData, selectedMonth, selectedYear]);
 
@@ -1046,161 +966,191 @@ const AttendanceCombined = ({ userId, token }) => {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
-      <div className="p-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-white">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
-              <BarChart3 size={16} className="text-blue-600" />
-            </div>
-            <h3 className="text-xs font-bold text-slate-700">Attendance Timeline</h3>
+      {/* Header - split into 2 rows, row 2 spreads full table width */}
+      <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50/70 to-white">
+        {/* Row 1: title + refresh + month + shift */}
+        <div className="flex items-center gap-2.5 flex-wrap w-full mb-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <BarChart3 size={18} className="text-blue-700" />
+          </div>
+          <h3 className="text-sm font-bold text-slate-900">Attendance Timeline</h3>
 
+          <button
+            onClick={() => {
+              fetchAttendanceData();
+              toast.success('Refreshing attendance data...');
+            }}
+            className="p-1.5 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-all"
+            title="Refresh attendance data"
+          >
+            <RefreshCw size={15} />
+          </button>
+
+          <div className="relative">
             <button
-              onClick={() => {
-                fetchAttendanceData();
-                toast.success('Refreshing attendance data...');
-              }}
-              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 transition-all"
-              title="Refresh attendance data"
+              onClick={(e) => { e.stopPropagation(); setShowMonthPicker(!showMonthPicker); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all text-xs font-bold text-slate-900 shadow-sm"
             >
-              <RefreshCw size={14} />
+              <span>{monthNames[selectedMonth]} {selectedYear}</span>
+              <ChevronDown size={14} className={`text-slate-600 transition-transform duration-200 ${showMonthPicker ? 'rotate-180' : ''}`} />
             </button>
 
-            <div className="relative">
-              <button
-                onClick={(e) => { e.stopPropagation(); setShowMonthPicker(!showMonthPicker); }}
-                className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-[10px] font-semibold text-slate-700 shadow-sm"
-              >
-                <span>{monthNames[selectedMonth]} {selectedYear}</span>
-                <ChevronDown size={12} className={`transition-transform duration-200 ${showMonthPicker ? 'rotate-180' : ''}`} />
-              </button>
-
-              {showMonthPicker && (
-                <div className="absolute top-full left-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-3 min-w-[220px]">
-                  <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
-                    <button onClick={() => handleYearSelect(selectedYear - 1)} className="p-1 rounded-lg hover:bg-slate-100 transition-all">
-                      <ChevronLeft size={12} className="text-slate-500" />
-                    </button>
-                    <select
-                      value={selectedYear}
-                      onChange={(e) => handleYearSelect(Number(e.target.value))}
-                      className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
-                    >
-                      {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
-                    </select>
-                    <button onClick={() => handleYearSelect(selectedYear + 1)} className="p-1 rounded-lg hover:bg-slate-100 transition-all">
-                      <ChevronRight size={12} className="text-slate-500" />
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-1">
-                    {monthNames.map((month, index) => (
-                      <button
-                        key={month}
-                        onClick={() => handleMonthSelect(index)}
-                        className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${selectedMonth === index ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-700'}`}
-                      >
-                        {month.substring(0, 3)}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-2 pt-2 border-t border-slate-100">
-                    <button onClick={goToCurrentMonth} className="w-full py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-all">
-                      Go to Current Month
-                    </button>
-                  </div>
+            {showMonthPicker && (
+              <div className="absolute top-full left-0 mt-1.5 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-3 min-w-[240px]">
+                <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-200">
+                  <button onClick={() => handleYearSelect(selectedYear - 1)} className="p-1 rounded-md hover:bg-slate-100 transition-all">
+                    <ChevronLeft size={14} className="text-slate-700" />
+                  </button>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => handleYearSelect(Number(e.target.value))}
+                    className="flex-1 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  >
+                    {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
+                  </select>
+                  <button onClick={() => handleYearSelect(selectedYear + 1)} className="p-1 rounded-md hover:bg-slate-100 transition-all">
+                    <ChevronRight size={14} className="text-slate-700" />
+                  </button>
                 </div>
-              )}
-            </div>
 
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-200">
-              <User size={10} className="text-blue-500" />
-              <span className="text-[7px] font-bold text-blue-600">Shift: {getShiftDisplay()}</span>
-            
-            </div>
-          </div>
-        </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {monthNames.map((month, index) => (
+                    <button
+                      key={month}
+                      onClick={() => handleMonthSelect(index)}
+                      className={`px-2 py-1.5 rounded-md text-xs font-bold transition-all ${
+                        selectedMonth === index
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'hover:bg-slate-100 text-slate-800'
+                      }`}
+                    >
+                      {month.substring(0, 3)}
+                    </button>
+                  ))}
+                </div>
 
-        <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-[7px] font-medium text-slate-400">
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400"></div><span>On Time</span></span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"></div><span>Late</span></span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-200/60"></div><span>Break</span></span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-purple-400"></div><span>Holiday</span></span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-400"></div><span>Leave</span></span>
-        </div>
-      </div>
-
-      {/* Stats */}
-      <div className="p-2 bg-slate-50/50 border-b border-slate-100">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr_1fr] gap-2 items-stretch">
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-slate-400 uppercase tracking-wider">Working</p>
-              <p className="text-base font-black text-slate-800">{stats.totalDays}</p>
-            </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">On Time</p>
-              <p className="text-base font-black text-emerald-700">{stats.present}</p>
-            </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-rose-600 uppercase tracking-wider">Absent</p>
-              <p className="text-base font-black text-rose-700">{stats.absent}</p>
-            </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late</p>
-              <p className="text-base font-black text-amber-700">{stats.late}</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg border border-slate-200 shadow-sm p-2 min-w-0">
-            <div className="flex items-center justify-between gap-2 mb-1.5">
-              <div className="flex items-center gap-2 min-w-0">
-                <BarChart3 size={11} className="text-blue-500 flex-shrink-0" />
-                <span className="text-[8px] font-bold text-slate-600 uppercase tracking-wider">Weekly Averages</span>
-              </div>
-              <span className="text-[6px] text-slate-400 whitespace-nowrap">Excluding today & holidays/leaves</span>
-            </div>
-            {stats.weeklyAverages && stats.weeklyAverages.length > 0 ? (
-              <AverageBarChart weeklyAverages={stats.weeklyAverages} />
-            ) : (
-              <div className="flex items-center justify-center h-full min-h-[70px]">
-                <span className="text-[8px] text-slate-400">No weekly data available</span>
+                <div className="mt-2 pt-2 border-t border-slate-200">
+                  <button onClick={goToCurrentMonth} className="w-full py-1.5 bg-blue-100 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-200 transition-all">
+                    Go to Current Month
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-indigo-600 uppercase tracking-wider">Leave</p>
-              <p className="text-base font-black text-indigo-700">{stats.onLeave}</p>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 rounded-lg border border-indigo-300">
+            <User size={12} className="text-indigo-700" />
+            <span className="text-[10px] font-bold text-indigo-800">Shift: {getShiftDisplay()}</span>
+          </div>
+        </div>
+
+        {/* Row 2: legend spread full width */}
+        <div className="flex items-center justify-between gap-4 w-full text-[10px] font-bold text-slate-700">
+          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span>On Time</span></span>
+          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div><span>Late</span></span>
+          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-300"></div><span>Break</span></span>
+          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span>Holiday</span></span>
+          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div><span>Leave</span></span>
+        </div>
+      </div>
+
+      {/* Stats - larger, full width spread */}
+      <div className="px-3 py-3 bg-slate-50/50 border-b border-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 w-full">
+          {/* Working */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+              <CalendarIcon size={14} className="text-slate-700" />
             </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-purple-600 uppercase tracking-wider">Holidays</p>
-              <p className="text-base font-black text-purple-700">{stats.holidays}</p>
+            <div className="min-w-0">
+              <p className="text-[7px] font-bold text-slate-500 uppercase tracking-wider">Working</p>
+              <p className="text-base font-black text-slate-900 leading-tight">{stats.totalDays}</p>
             </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100 col-span-2">
-              <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
-              <p className="text-[10px] sm:text-xs font-black text-slate-700 mt-1 leading-tight">{formatHours(stats.averageGrossHours, { unit: 'hrmin' })}</p>
+          </div>
+
+          {/* On Time */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
+              <CheckCircle size={14} className="text-emerald-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[7px] font-bold text-emerald-600 uppercase tracking-wider">On Time</p>
+              <p className="text-base font-black text-emerald-700 leading-tight">{stats.present}</p>
+            </div>
+          </div>
+
+          {/* Absent */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
+            <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+              <XCircle size={14} className="text-rose-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[7px] font-bold text-rose-600 uppercase tracking-wider">Absent</p>
+              <p className="text-base font-black text-rose-700 leading-tight">{stats.absent}</p>
+            </div>
+          </div>
+
+          {/* Late */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
+            <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
+              <AlertCircle size={14} className="text-amber-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[7px] font-bold text-amber-600 uppercase tracking-wider">Late</p>
+              <p className="text-base font-black text-amber-700 leading-tight">{stats.late}</p>
+            </div>
+          </div>
+
+          {/* Avg Eff */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
+              <Clock size={14} className="text-indigo-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[7px] font-bold text-indigo-600 uppercase tracking-wider">Avg Eff</p>
+              <p className="text-xs font-black text-indigo-700 leading-tight">
+                {(() => {
+                  const h = Math.floor(stats.averageEffectiveHours || 0);
+                  const m = Math.round(((stats.averageEffectiveHours || 0) - h) * 60);
+                  return `${h} H ${m} M`;
+                })()}
+              </p>
+            </div>
+          </div>
+
+          {/* Avg Gross */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
+            <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
+              <BarChart3 size={14} className="text-slate-700" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[7px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
+              <p className="text-xs font-black text-slate-800 leading-tight">
+                {(() => {
+                  const h = Math.floor(stats.averageGrossHours || 0);
+                  const m = Math.round(((stats.averageGrossHours || 0) - h) * 60);
+                  return `${h} H ${m} M`;
+                })()}
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table - header stays bold; body content lighter */}
       <div className="overflow-x-auto p-3">
         <table className="w-full min-w-[900px]">
           <thead>
-            <tr className="bg-slate-50/80 border-b border-slate-200">
-              {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Gross', 'Arrival'].map(h => (
-                <th key={h} className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">{h}</th>
+            <tr className="bg-slate-100/80 border-b border-slate-200">
+              {['Date', 'Day', 'Status', 'Timeline', 'Gross', 'Effective Hrs', 'Arrival'].map(h => (
+                <th key={h} className="px-3 py-2 text-left text-[10px] font-black uppercase text-slate-800 tracking-wider">{h}</th>
               ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
             {monthDays.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-2 py-8 text-center">
+                <td colSpan={9} className="px-2 py-8 text-center">
                   <div className="flex flex-col items-center gap-1.5">
                     <CalendarIcon size={20} className="text-slate-300" />
                     <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
@@ -1214,7 +1164,6 @@ const AttendanceCombined = ({ userId, token }) => {
                 const isLeaveDay = day.status === 'leave';
                 const isHalfDayLeave = isLeaveDay && day.isHalfDay && !!day.halfDayType;
                 const isFullDayLeaveOnly = isLeaveDay && !isHalfDayLeave;
-                const halfDayLabel = isHalfDayLeave ? (day.halfDayType === 'first' ? 'First Half' : 'Second Half') : null;
                 const displayStatus = getDisplayStatus(day);
                 const styles = isHolidayDay ? STATUS_STYLES.holiday : (STATUS_STYLES[displayStatus] || STATUS_STYLES.default);
                 const hasIn = !!(day.punchInUTC || (day.sessions && day.sessions.length > 0));
@@ -1235,58 +1184,41 @@ const AttendanceCombined = ({ userId, token }) => {
                     key={idx}
                     className={`transition-all ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''} ${isLeaveDay ? 'bg-indigo-50/20' : ''}`}
                   >
-                    <td className="px-2 py-1.5">
-                      <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : isLeaveDay ? 'text-indigo-600' : 'text-slate-700'}`}>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-[13px] font-semibold ${today ? 'text-blue-700' : isHolidayDay ? 'text-purple-700' : isLeaveDay ? 'text-indigo-700' : 'text-black'}`}>
                         {formatDateDisplay(day.date)}
                       </span>
-                      {today && <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>}
+                      {today && <span className="ml-1.5 text-[8px] font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Today</span>}
                       {isHolidayDay && (
-                        <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                        <span className="ml-1.5 text-[8px] font-semibold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
                           <Gift size={8} />Holiday
                         </span>
                       )}
-                      {isLeaveDay && (
-                        <span className="ml-1 text-[7px] font-bold bg-indigo-100 text-indigo-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                          <CalendarIcon size={8} />
-                          {isHalfDayLeave ? `${halfDayLabel} Leave` : 'Leave'}
-                        </span>
-                      )}
                     </td>
-                    <td className="px-2 py-1.5"><span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span></td>
-                    <td className="px-2 py-1.5">
-                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${styles.chip}`}>
+                    <td className="px-3 py-2.5"><span className="text-[13px] font-semibold text-black">{getDayShortName(day.date)}</span></td>
+                    <td className="px-3 py-2.5">
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold border ${styles.chip}`}>
                         {getStatusIcon(displayStatus)}
                         {getStatusLabel(displayStatus)}
-                        {displayStatus === 'late' && <span className="text-[6px] text-amber-500 ml-0.5">(Grace: {shiftConfig.gracePeriod}m)</span>}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5 min-w-[180px]">
+                    <td className="px-3 py-2.5 min-w-[180px]">
                       {isHolidayDay ? (
                         <div className="flex items-center gap-2 h-5">
                           <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-                          <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
-                            <Gift size={10} className="text-purple-500" />
+                          <span className="text-[9px] font-semibold text-purple-700 whitespace-nowrap flex items-center gap-1">
+                            <Gift size={9} className="text-purple-500" />
                             {holidayName || 'Holiday'}
                           </span>
                         </div>
                       ) : (isLeaveDay || hasIn) ? (
                         <DayTimelineBar day={day} />
                       ) : (
-                        <span className="text-[9px] text-slate-400 italic">—</span>
+                        <span className="text-[10px] text-slate-500 italic font-medium">—</span>
                       )}
                     </td>
-                    <td className="px-2 py-1.5">
-                      <span className="text-[10px] font-mono font-medium text-slate-700">
-                        {hideWorkData ? '—' : (day.punchInDisplay || '—')}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className={`text-[10px] font-mono font-medium ${hideWorkData || isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
-                        {hideWorkData ? '—' : outDisplay}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className="text-[10px] font-bold text-slate-700">
+                    <td className="px-3 py-2.5">
+                      <span className="text-[13px] font-semibold text-black">
                         {isWeekend || hideWorkData
                           ? '—'
                           : (day.grossHours > 0
@@ -1294,8 +1226,27 @@ const AttendanceCombined = ({ userId, token }) => {
                               : '0 hr 0 min')}
                       </span>
                     </td>
-                    <td className="px-2 py-1.5">
-                      <span className={`text-[10px] font-medium ${isFullDayLeaveOnly ? 'text-indigo-600' : displayStatus === 'late' ? 'text-amber-600' : displayStatus === 'present' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                    <td className="px-3 py-2.5">
+                      {isWeekend || hideWorkData ? (
+                        <span className="text-[13px] font-semibold text-slate-400">—</span>
+                      ) : (
+                        <div className="flex flex-col gap-0.5">
+                          <span className="inline-flex w-fit items-center gap-1 px-2 py-1 rounded-md text-[13px] font-semibold border bg-slate-50 text-black border-slate-200">
+                            {day.effectiveHours > 0
+                              ? formatHours(day.effectiveHours, { unit: 'hrmin' })
+                              : '0 hr 0 min'}
+                          </span>
+                          {day.breakMinutes > 0 && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-orange-600">
+                              <Coffee size={8} />
+                              −{formatBreakMinutes(day.breakMinutes)} break
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`text-[13px] font-semibold ${isFullDayLeaveOnly ? 'text-indigo-700' : displayStatus === 'late' ? 'text-amber-700' : displayStatus === 'present' ? 'text-emerald-700' : 'text-slate-500'}`}>
                         {isHolidayDay ? '🎉' : (isWeekend || isFullDayLeaveOnly ? '—' : arrivalStatus)}
                       </span>
                     </td>
@@ -1310,16 +1261,16 @@ const AttendanceCombined = ({ userId, token }) => {
       {/* Pagination */}
       {monthDays.length > DAYS_PER_PAGE && (
         <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <p className="text-[8px] text-slate-400">
-            Showing <span className="font-semibold text-slate-600">{((currentPage - 1) * DAYS_PER_PAGE) + 1}</span>–
-            <span className="font-semibold text-slate-600">{Math.min(currentPage * DAYS_PER_PAGE, monthDays.length)}</span> of{' '}
-            <span className="font-semibold text-slate-600">{monthDays.length}</span> days
+          <p className="text-[10px] font-medium text-slate-600">
+            Showing <span className="font-semibold text-slate-800">{((currentPage - 1) * DAYS_PER_PAGE) + 1}</span>–
+            <span className="font-semibold text-slate-800">{Math.min(currentPage * DAYS_PER_PAGE, monthDays.length)}</span> of{' '}
+            <span className="font-semibold text-slate-800">{monthDays.length}</span> days
           </p>
 
           <div className="flex items-center justify-center gap-1">
             <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}
-              className="w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Previous page">
-              <ChevronLeft size={11} className="text-slate-600" />
+              className="w-7 h-7 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Previous page">
+              <ChevronLeft size={12} className="text-slate-600" />
             </button>
 
             {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
@@ -1327,15 +1278,15 @@ const AttendanceCombined = ({ userId, token }) => {
                 type="button"
                 key={page}
                 onClick={() => goToPage(page)}
-                className={`min-w-6 h-6 px-1 rounded-md text-[8px] font-bold transition-all ${currentPage === page ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-500 border border-slate-200 hover:bg-slate-100'}`}
+                className={`min-w-7 h-7 px-1.5 rounded-md text-[10px] font-semibold transition-all ${currentPage === page ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
               >
                 {page}
               </button>
             ))}
 
             <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}
-              className="w-6 h-6 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Next page">
-              <ChevronRight size={11} className="text-slate-600" />
+              className="w-7 h-7 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Next page">
+              <ChevronRight size={12} className="text-slate-600" />
             </button>
           </div>
         </div>
