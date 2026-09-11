@@ -608,9 +608,7 @@ const DayTimelineBar = ({ day }) => {
       <div className="relative h-1 rounded-full bg-slate-100">{renderSegments()}</div>
 
       <div className="flex items-center justify-between mt-1">
-        <span className="text-[9px] font-medium text-slate-500">
-          Effective: <span className={styles.text}>{formatHours(day.effectiveHours)}</span>
-        </span>
+        
         {day.grossHours > 0 && day.grossHours !== day.effectiveHours && (
           <span className="text-[8px] font-medium text-slate-400">Gross: {formatHours(day.grossHours)}</span>
         )}

@@ -967,5 +967,105 @@ router.put('/profile', async (req, res) => {
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
+// ... (existing imports)
+
+// ============================================
+// TEAM & CULTURE ENDPOINT
+// ============================================
+
+// GET /api/employee/team-culture - Get upcoming birthdays, new hires, and anniversaries
+router.get('/team-culture', async (req, res) => {
+  try {
+    const now = new Date();
+    const currentMonth = now.getUTCMonth();
+    const currentYear = now.getUTCFullYear();
+    const currentDate = now.getUTCDate();
+
+    const oneMonthAgo = new Date(now);
+    oneMonthAgo.setUTCMonth(oneMonthAgo.getUTCMonth() - 1);
+
+    // Fetch all active users, excluding clients
+    const users = await User.find({
+      isActive: true,
+      role: { $ne: 'Client' }
+    }).select('name dateOfBirth dateOfJoining role designation');
+
+    const birthdays = [];
+    const anniversaries = [];
+    const newHires = [];
+
+    users.forEach((user) => {
+      // --- Check for Birthdays ---
+      if (user.dateOfBirth) {
+        const birthDate = new Date(user.dateOfBirth);
+        if (
+          birthDate.getUTCMonth() === currentMonth &&
+          birthDate.getUTCDate() >= currentDate
+        ) {
+          birthdays.push({
+            _id: user._id,
+            name: user.name,
+            date: user.dateOfBirth,
+            dateDisplay: birthDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+            role: user.role
+          });
+        }
+      }
+
+      // --- Check for Work Anniversaries ---
+      if (user.dateOfJoining) {
+        const joinDate = new Date(user.dateOfJoining);
+        const years = currentYear - joinDate.getUTCFullYear();
+        if (
+          joinDate.getUTCMonth() === currentMonth &&
+          joinDate.getUTCDate() >= currentDate &&
+          years >= 1
+        ) {
+          anniversaries.push({
+            _id: user._id,
+            name: user.name,
+            date: user.dateOfJoining,
+            dateDisplay: joinDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' }),
+            years,
+            role: user.role
+          });
+        }
+      }
+
+      // --- Check for New Hires ---
+      if (user.dateOfJoining) {
+        const joinDate = new Date(user.dateOfJoining);
+        if (joinDate >= oneMonthAgo && joinDate <= now) {
+          newHires.push({
+            _id: user._id,
+            name: user.name,
+            date: user.dateOfJoining,
+            dateDisplay: joinDate.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+            role: user.role,
+            designation: user.designation || 'Team Member'
+          });
+        }
+      }
+    });
+
+    // Sort results
+    birthdays.sort((a, b) => new Date(a.date).getUTCDate() - new Date(b.date).getUTCDate());
+    anniversaries.sort((a, b) => new Date(a.date).getUTCDate() - new Date(b.date).getUTCDate());
+    newHires.sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
+
+    res.json({
+      success: true,
+      data: {
+        birthdays: birthdays.slice(0, 5),
+        anniversaries: anniversaries.slice(0, 5),
+        newHires: newHires.slice(0, 5)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching team culture data:', error);
+    res.status(500).json({ error: 'Failed to fetch team culture data' });
+  }
+});
 
 module.exports = router;
