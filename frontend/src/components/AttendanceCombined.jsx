@@ -1,7 +1,8 @@
 // frontend/src/components/AttendanceCombined.jsx
-// ✅ FIXED: Effective/Gross calculation
+// ✅ FIXED: Effective/Gross calculation (both now overlap-safe / union-based)
 // ✅ FIXED: Half-day leave no longer shows duplicate sessions
 // ✅ FIXED: Weekend/Absent rows no longer show "0 hr 0 min"
+// ✅ REMOVED: Sessions column and session details row
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -17,7 +18,6 @@ import {
   ChevronRight,
   BarChart3,
   ChevronDown,
-  ChevronUp,
   Gift,
   Coffee,
   User,
@@ -200,64 +200,6 @@ const getDisplayStatus = (day) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Hover tooltip
-// ─────────────────────────────────────────────────────────────
-const HoverTooltip = ({ session, breakInfo, position }) => {
-  if (!session && !breakInfo) return null;
-  return (
-    <div
-      className="fixed z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
-      style={{ left: position.x, top: position.y, transform: 'translateY(-100%)' }}
-    >
-      {session && (
-        <>
-          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            <span className="text-[11px] font-bold">Session {session.sessionIndex + 1} of {session.totalSessions}</span>
-          </div>
-          <div className="space-y-1 text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-slate-400">In:</span>
-              <span className="font-mono font-medium">{formatTimeDisplay(session.punchIn)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Out:</span>
-              <span className="font-mono font-medium text-rose-400">{formatTimeDisplay(session.punchOut) || 'No Out Punch'}</span>
-            </div>
-            <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
-              <span className="text-slate-400">Duration:</span>
-              <span className="font-bold text-emerald-400">{session.durationFormatted}</span>
-            </div>
-          </div>
-        </>
-      )}
-      {breakInfo && (
-        <>
-          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-            <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span className="text-[11px] font-bold">Break {breakInfo.breakIndex + 1}</span>
-          </div>
-          <div className="space-y-1 text-[11px]">
-            <div className="flex justify-between">
-              <span className="text-slate-400">Started:</span>
-              <span className="font-mono font-medium">{formatTimeDisplay(breakInfo.start)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-slate-400">Ended:</span>
-              <span className="font-mono font-medium">{formatTimeDisplay(breakInfo.end)}</span>
-            </div>
-            <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
-              <span className="text-slate-400">Duration:</span>
-              <span className="font-bold text-amber-400">{breakInfo.formattedDuration}</span>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-// ─────────────────────────────────────────────────────────────
 // Average Bar Chart
 // ─────────────────────────────────────────────────────────────
 const AverageBarChart = ({ weeklyAverages }) => {
@@ -318,7 +260,7 @@ const AverageBarChart = ({ weeklyAverages }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Day Timeline Bar
+// Day Timeline Bar (Sessions removed - uses only punchIn/punchOut)
 // ─────────────────────────────────────────────────────────────
 const DayTimelineBar = ({ day }) => {
   const isHoliday = day.isHoliday || false;
@@ -329,46 +271,8 @@ const DayTimelineBar = ({ day }) => {
   const statusKey = isHalfDayLeave ? (halfDayType === 'first' ? 'leave-half-first' : 'leave-half-second') : day.status;
   const styles = isHoliday ? STATUS_STYLES.holiday : (STATUS_STYLES[statusKey] || STATUS_STYLES.default);
 
-  const hasSessions = day.sessions && day.sessions.length > 0;
-  const hasPunchIn = day.punchInUTC || hasSessions;
+  const hasPunchIn = !!day.punchInUTC;
   const trackStart = TRACK_START_HOUR * 60;
-
-  const [hoveredSession, setHoveredSession] = useState(null);
-  const [hoveredBreak, setHoveredBreak] = useState(null);
-  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
-
-  const handleBarMouseLeave = () => {
-    setHoveredSession(null);
-    setHoveredBreak(null);
-  };
-
-  const handleSessionHover = (e, session, sessionIndex, totalSessions) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    const duration = session.punchOutUTC ? calculateHours(session.punchInUTC, session.punchOutUTC) : 0;
-    setHoveredSession({
-      sessionIndex,
-      totalSessions,
-      punchIn: session.punchInUTC,
-      punchOut: session.punchOutUTC || 'No Out Punch',
-      durationFormatted: formatHours(duration, { unit: 'detailed' })
-    });
-    setHoveredBreak(null);
-    setTooltipPosition({ x: e.clientX - 120, y: rect.top - 10 });
-  };
-
-  const handleBreakHover = (e, breakGap, breakIndex) => {
-    e.stopPropagation();
-    const rect = e.currentTarget.getBoundingClientRect();
-    setHoveredBreak({
-      breakIndex,
-      start: breakGap.start,
-      end: breakGap.end,
-      formattedDuration: formatBreakMinutes(breakGap.minutes)
-    });
-    setHoveredSession(null);
-    setTooltipPosition({ x: e.clientX - 100, y: rect.top - 10 });
-  };
 
   if (isHoliday) {
     return (
@@ -393,77 +297,56 @@ const DayTimelineBar = ({ day }) => {
 
     const isInWorkingHalf = (punchMin) => {
       if (!punchMin) return false;
-      return halfDayType === 'first' 
-        ? punchMin >= NOON_MINUTES 
+      return halfDayType === 'first'
+        ? punchMin >= NOON_MINUTES
         : punchMin < NOON_MINUTES;
     };
 
-    let allSessions = [];
-    if (day.sessions && day.sessions.length > 0) {
-      allSessions = day.sessions;
-    } else if (day.punchInUTC) {
-      allSessions = [{ punchInUTC: day.punchInUTC, punchOutUTC: day.punchOutUTC || null }];
-    }
+    const punchInMin = day.punchInUTC ? minutesOfDayUTC(day.punchInUTC) : null;
+    const punchOutMin = day.punchOutUTC ? minutesOfDayUTC(day.punchOutUTC) : null;
 
-    const workSessions = allSessions.filter(s => {
-      if (!s.punchInUTC) return false;
-      const punchMin = minutesOfDayUTC(s.punchInUTC);
-      return punchMin !== null && isInWorkingHalf(punchMin);
-    });
-
-    const totalEffectiveHours = workSessions.reduce(
-      (sum, s) => sum + (s.punchOutUTC ? calculateHours(s.punchInUTC, s.punchOutUTC) : 0), 0
-    );
-
-    const hasInProgress = workSessions.some(s => s.punchInUTC && !s.punchOutUTC);
+    const worksInActiveHalf = isInWorkingHalf(punchInMin);
+    const workHours = worksInActiveHalf && day.punchInUTC
+      ? (day.punchOutUTC ? calculateHours(day.punchInUTC, day.punchOutUTC) : 0)
+      : 0;
+    const hasInProgress = worksInActiveHalf && day.punchInUTC && !day.punchOutUTC;
 
     return (
-      <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
+      <div className="pt-2 pb-0.5 relative">
         <div className="relative h-1 rounded-full bg-slate-100">
           <div
             className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${leaveColor}`}
             style={{ left: `${leaveLeftPct}%`, width: `${leaveWidthPct}%` }}
           />
 
-          {workSessions.map((session, idx) => {
-            const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
-            const endMin = session.punchOutUTC
-              ? clampToTrack(minutesOfDayUTC(session.punchOutUTC))
-              : clampToTrack(startMin + 2);
-            
-            const segLeftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
-            const segWidthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-
-            return (
-              <div
-                key={`work-${idx}`}
-                className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200"
-                style={{ left: `${segLeftPct}%`, width: `${segWidthPct}%` }}
-                onMouseEnter={(e) => handleSessionHover(e, session, idx, workSessions.length)}
-              />
-            );
-          })}
+          {worksInActiveHalf && punchInMin !== null && (
+            <div
+              className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500"
+              style={{
+                left: `${((clampToTrack(punchInMin) - trackStart) / TRACK_TOTAL_MIN) * 100}%`,
+                width: `${Math.max(1, ((clampToTrack(punchOutMin ?? punchInMin + 2) - clampToTrack(punchInMin)) / TRACK_TOTAL_MIN) * 100)}%`
+              }}
+            />
+          )}
         </div>
 
         <div className="flex items-center justify-between mt-1">
           <span className="text-[9px] font-medium text-indigo-600 flex items-center gap-1">
             <CalendarIcon size={10} className="text-indigo-500" />
             {halfDayLabel}
-            {(totalEffectiveHours > 0 || hasInProgress) && (
+            {(workHours > 0 || hasInProgress) && (
               <span className="text-[8px] font-medium text-emerald-600 ml-1">
-                (Worked: {totalEffectiveHours > 0 ? formatHours(totalEffectiveHours) : 'In progress'})
+                (Worked: {workHours > 0 ? formatHours(workHours) : 'In progress'})
               </span>
             )}
           </span>
-          {totalEffectiveHours > 0 && (
-            <span className="text-[8px] font-medium text-emerald-600">{formatHours(totalEffectiveHours)}</span>
+          {workHours > 0 && (
+            <span className="text-[8px] font-medium text-emerald-600">{formatHours(workHours)}</span>
           )}
-          {hasInProgress && !totalEffectiveHours && (
+          {hasInProgress && !workHours && (
             <span className="text-[8px] font-medium text-amber-600">In progress</span>
           )}
         </div>
-
-        <HoverTooltip session={hoveredSession} breakInfo={hoveredBreak} position={tooltipPosition} />
       </div>
     );
   }
@@ -494,81 +377,28 @@ const DayTimelineBar = ({ day }) => {
     );
   }
 
-  const renderSegments = () => {
-    if (!day.sessions || day.sessions.length === 0) {
-      const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
-      const endMin = clampToTrack(minutesOfDayUTC(day.punchOutUTC) || startMin + 5);
-      const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
-      const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-      return <div className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`} style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
-    }
-
-    const elements = [];
-    const totalSegments = day.sessions.length;
-
-    day.sessions.forEach((session, idx) => {
-      if (!session.punchInUTC) return;
-
-      const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
-      const isLast = idx === totalSegments - 1;
-      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayUTC(session.punchOutUTC)) : clampToTrack(startMin + 2);
-      const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
-      const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
-
-      elements.push(
-        <div
-          key={`sess-${idx}`}
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
-          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
-          onMouseEnter={(e) => handleSessionHover(e, session, idx, totalSegments)}
-        />
-      );
-
-      if (idx === 0) {
-        elements.push(
-          <div key={`start-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
-            <span className="text-[7px] font-semibold text-slate-500 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
-          </div>
-        );
-      }
-
-      if (isLast) {
-        const label = session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : '';
-        elements.push(
-          <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>{label}</span>
-          </div>
-        );
-      }
-
-      if (!isLast && session.punchOutUTC && day.sessions[idx + 1]?.punchInUTC) {
-        const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
-        const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
-        const gapMinutes = gapEnd - gapStart;
-
-        if (gapMinutes >= 5) {
-          const gLeft = ((gapStart - trackStart) / TRACK_TOTAL_MIN) * 100;
-          const gWidth = Math.max(0, ((gapEnd - gapStart) / TRACK_TOTAL_MIN) * 100);
-          const breakGap = day.breakGaps && day.breakGaps.find(b => Math.abs(b.minutes - gapMinutes) < 0.1);
-
-          elements.push(
-            <div
-              key={`break-${idx}`}
-              className="absolute top-0 h-1 rounded-full bg-amber-200/60 cursor-pointer hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 transition-all duration-200"
-              style={{ left: `${gLeft}%`, width: `${gWidth}%`, minWidth: '4px' }}
-              onMouseEnter={(e) => breakGap && handleBreakHover(e, breakGap, idx)}
-            />
-          );
-        }
-      }
-    });
-
-    return elements;
-  };
+  // Standard single-bar rendering (from punchIn to punchOut)
+  const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
+  const endMin = clampToTrack(minutesOfDayUTC(day.punchOutUTC) || startMin + 5);
+  const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
+  const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
 
   return (
-    <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
-      <div className="relative h-1 rounded-full bg-slate-100">{renderSegments()}</div>
+    <div className="pt-2 pb-0.5 relative">
+      <div className="relative h-1 rounded-full bg-slate-100">
+        <div
+          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`}
+          style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
+        />
+        <div className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
+          <span className="text-[7px] font-semibold text-slate-500 whitespace-nowrap">{formatTimeDisplay(day.punchInUTC)}</span>
+        </div>
+        {day.punchOutUTC && (
+          <div className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
+            <span className="text-[7px] font-semibold text-slate-500 whitespace-nowrap">{formatTimeDisplay(day.punchOutUTC)}</span>
+          </div>
+        )}
+      </div>
 
       <div className="flex items-center justify-between mt-1">
         <span className="text-[9px] font-medium text-slate-500">
@@ -584,8 +414,6 @@ const DayTimelineBar = ({ day }) => {
           </span>
         )}
       </div>
-
-      <HoverTooltip session={hoveredSession} breakInfo={hoveredBreak} position={tooltipPosition} />
     </div>
   );
 };
@@ -746,107 +574,106 @@ const AttendanceCombined = ({ userId, token }) => {
       });
 
       if (response.data.success) {
-  const data = response.data.data;
+        const data = response.data.data;
 
-  const processedDays = (data.days || []).map(day => {
-    const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
+        const processedDays = (data.days || []).map(day => {
+          const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
 
-    // ─────────────────────────────────────────────
-    // ✅ EFFECTIVE = sum of each session's actual duration
-    // ✅ GROSS     = wall-clock span between earliest In and latest Out
-    //               (includes any gaps between sessions + any mid-session break time)
-    // Both use raw millisecond timestamps so cross-midnight days work correctly.
-    // ─────────────────────────────────────────────
-    let effectiveMs = 0;          // sum of closed session durations
-    let firstInMs = null;         // earliest punch-in across all sessions
-    let lastOutMs = null;         // latest punch-out across all sessions
-    let lastOutUTC = null;        // latest punch-out as ISO string for display
+          // ─────────────────────────────────────────────
+          // Build intervals from raw sessions (fallback to legacy punchIn/Out)
+          // ─────────────────────────────────────────────
+          const intervals = [];
 
-    sessions.forEach((session) => {
-      if (!session.punchInUTC) return;
+          sessions.forEach((session) => {
+            if (!session.punchInUTC) return;
+            const inMs = new Date(session.punchInUTC).getTime();
+            if (isNaN(inMs)) return;
 
-      const inMs = new Date(session.punchInUTC).getTime();
-      if (isNaN(inMs)) return;
+            if (session.punchOutUTC) {
+              const outMs = new Date(session.punchOutUTC).getTime();
+              if (!isNaN(outMs) && outMs > inMs) {
+                intervals.push({ start: inMs, end: outMs });
+              }
+            } else if (!day.isWeekend) {
+              intervals.push({ start: inMs, end: Date.now() });
+            }
+          });
 
-      if (firstInMs === null || inMs < firstInMs) firstInMs = inMs;
-
-      if (session.punchOutUTC) {
-        const outMs = new Date(session.punchOutUTC).getTime();
-        if (isNaN(outMs)) return;
-
-        // Add the closed session's duration to effective
-        const sessionMs = outMs - inMs;
-        if (sessionMs > 0) effectiveMs += sessionMs;
-
-        // Track the latest punch-out
-        if (lastOutMs === null || outMs > lastOutMs) {
-          lastOutMs = outMs;
-          lastOutUTC = session.punchOutUTC;
-        }
-      }
-    });
-
-    // Fallback for legacy single-punch days without a sessions array
-    if (sessions.length === 0 && day.punchInUTC) {
-      const inMs = new Date(day.punchInUTC).getTime();
-      if (!isNaN(inMs)) {
-        firstInMs = inMs;
-        if (day.punchOutUTC) {
-          const outMs = new Date(day.punchOutUTC).getTime();
-          if (!isNaN(outMs) && outMs > inMs) {
-            effectiveMs = outMs - inMs;
-            lastOutMs = outMs;
-            lastOutUTC = day.punchOutUTC;
+          // Legacy fallback for days without sessions
+          if (intervals.length === 0 && day.punchInUTC) {
+            const inMs = new Date(day.punchInUTC).getTime();
+            if (!isNaN(inMs)) {
+              if (day.punchOutUTC) {
+                const outMs = new Date(day.punchOutUTC).getTime();
+                if (!isNaN(outMs) && outMs > inMs) {
+                  intervals.push({ start: inMs, end: outMs });
+                }
+              } else if (!day.isWeekend) {
+                intervals.push({ start: inMs, end: Date.now() });
+              }
+            }
           }
-        }
-      }
-    }
 
-    const effectiveHours = effectiveMs / (1000 * 60 * 60);
+          // ─────────────────────────────────────────────
+          // ✅ EFFECTIVE = union of all intervals (overlap-safe)
+          // ✅ GROSS     = wall-clock span between earliest In and latest Out
+          // These are now computed the same way so duplicate/overlapping
+          // sessions can no longer inflate the effective total.
+          // ─────────────────────────────────────────────
+          let effectiveMs = 0;
+          let firstInMs = null;
+          let lastOutMs = null;
 
-    const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
-      ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
-      : effectiveHours; // still in progress → no gap yet, gross == effective
+          if (intervals.length > 0) {
+            const sorted = [...intervals].sort((a, b) => a.start - b.start);
+            const merged = [{ ...sorted[0] }];
+            for (let i = 1; i < sorted.length; i++) {
+              const cur = sorted[i];
+              const last = merged[merged.length - 1];
+              if (cur.start <= last.end) {
+                last.end = Math.max(last.end, cur.end);
+              } else {
+                merged.push({ ...cur });
+              }
+            }
+            effectiveMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
+            firstInMs = merged[0].start;
+            lastOutMs = merged[merged.length - 1].end;
+          }
 
-    // Break = the time NOT counted as effective (gaps between sessions + mid-session break)
-    const breakMinutes = grossHours > effectiveHours
-      ? (grossHours - effectiveHours) * 60
-      : 0;
+          // Preserve original display times
+          let lastOutUTC = day.punchOutUTC || null;
+          if (sessions.length > 0) {
+            const lastSession = sessions[sessions.length - 1];
+            if (lastSession.punchOutUTC) lastOutUTC = lastSession.punchOutUTC;
+          }
 
-    // Rebuild breakGaps so the timeline can render amber segments
-    const breakGaps = [];
-    for (let i = 0; i < sessions.length - 1; i++) {
-      const currentOut = sessions[i].punchOutUTC;
-      const nextIn = sessions[i + 1]?.punchInUTC;
-      if (!currentOut || !nextIn) continue;
+          const effectiveHours = effectiveMs / (1000 * 60 * 60);
 
-      const gapMs = new Date(nextIn).getTime() - new Date(currentOut).getTime();
-      if (gapMs > 0 && gapMs / 60000 >= 5) {
-        breakGaps.push({
-          start: currentOut,
-          end: nextIn,
-          minutes: gapMs / 60000,
-          breakIndex: i
+          const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
+            ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
+            : effectiveHours;
+
+          const breakMinutes = grossHours > effectiveHours
+            ? (grossHours - effectiveHours) * 60
+            : 0;
+
+          return {
+            ...day,
+            sessions: [], // Sessions removed from UI
+            punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
+            punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
+            punchOutUTC: lastOutUTC,
+            effectiveHours,
+            grossHours,
+            breakMinutes,
+            breakGaps: [],
+            totalDuration: effectiveHours
+          };
         });
+
+        setRawAttendanceData(processedDays);
       }
-    }
-
-    return {
-      ...day,
-      sessions,
-      punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-      punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
-      punchOutUTC: lastOutUTC,
-      effectiveHours,
-      grossHours,
-      breakMinutes,
-      breakGaps,
-      totalDuration: effectiveHours
-    };
-  });
-
-  setRawAttendanceData(processedDays);
-}
     } catch (error) {
       console.error('Error fetching attendance:', error);
       toast.error('Failed to load attendance data');
@@ -1106,9 +933,8 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
 
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-200">
-              <User size={10} className="text-indigo-500" />
-              <span className="text-[7px] font-bold text-indigo-600">Shift: {getShiftDisplay()}</span>
-              <span className="text-[6px] text-indigo-400">(Grace: {shiftConfig.gracePeriod}m)</span>
+              <User size={10} className="text-blue-500" />
+              <span className="text-[7px] font-bold text-blue-600">Shift: {getShiftDisplay()}</span>
             </div>
           </div>
         </div>
@@ -1116,7 +942,6 @@ const AttendanceCombined = ({ userId, token }) => {
         <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-[7px] font-medium text-slate-400">
           <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-400"></div><span>On Time</span></span>
           <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-400"></div><span>Late</span></span>
-          <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-amber-200/60"></div><span>Break</span></span>
           <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-purple-400"></div><span>Holiday</span></span>
           <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-indigo-400"></div><span>Leave</span></span>
         </div>
@@ -1184,10 +1009,10 @@ const AttendanceCombined = ({ userId, token }) => {
 
       {/* Table */}
       <div className="overflow-x-auto p-3">
-        <table className="w-full min-w-[900px]">
+        <table className="w-full min-w-[800px]">
           <thead>
             <tr className="bg-slate-50/80 border-b border-slate-200">
-              {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Eff', 'Gross', 'Arrival', 'Sessions'].map(h => (
+              {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Eff', 'Gross', 'Arrival'].map(h => (
                 <th key={h} className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">{h}</th>
               ))}
             </tr>
@@ -1195,7 +1020,7 @@ const AttendanceCombined = ({ userId, token }) => {
           <tbody className="divide-y divide-slate-100">
             {monthDays.length === 0 ? (
               <tr>
-                <td colSpan={10} className="px-2 py-8 text-center">
+                <td colSpan={9} className="px-2 py-8 text-center">
                   <div className="flex flex-col items-center gap-1.5">
                     <CalendarIcon size={20} className="text-slate-300" />
                     <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
@@ -1212,11 +1037,10 @@ const AttendanceCombined = ({ userId, token }) => {
                 const halfDayLabel = isHalfDayLeave ? (day.halfDayType === 'first' ? 'First Half' : 'Second Half') : null;
                 const displayStatus = getDisplayStatus(day);
                 const styles = isHolidayDay ? STATUS_STYLES.holiday : (STATUS_STYLES[displayStatus] || STATUS_STYLES.default);
-                const hasIn = !!(day.punchInUTC || (day.sessions && day.sessions.length > 0));
+                const hasIn = !!day.punchInUTC;
                 const today = isToday(day.date);
                 const isWeekend = day.isWeekend || false;
                 const isExpanded = expandedRows[day.date] || false;
-                const sessionCount = day.sessions?.length || 0;
 
                 const shiftStartMinutes = shiftConfig.isLoading ? null : getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
                 const arrivalStatus = getArrivalStatus(day, shiftStartMinutes, shiftConfig.gracePeriod);
@@ -1226,12 +1050,9 @@ const AttendanceCombined = ({ userId, token }) => {
                   outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
                 }
                 const hideWorkData = isHolidayDay || isFullDayLeaveOnly;
-                // ✅ Only show session details if there are real sessions AND the day is NOT a full-day leave/holiday
-                const showSessionDetails = isExpanded && sessionCount > 0 && !hideWorkData;
-                // ✅ Only show leave details if it's a leave day AND NOT a half-day leave with sessions already shown
-                const showLeaveDetails = isExpanded && isLeaveDay && !showSessionDetails;
-                // ✅ For half-day leave with sessions, show the leave details BELOW the sessions
-                const showHalfDayLeaveDetails = isExpanded && isHalfDayLeave && sessionCount > 0;
+
+                // Leave details row shows when a leave day is expanded
+                const showLeaveDetails = isExpanded && isLeaveDay;
 
                 return (
                   <React.Fragment key={idx}>
@@ -1291,7 +1112,6 @@ const AttendanceCombined = ({ userId, token }) => {
                       </td>
                       <td className="px-2 py-1.5">
                         <span className="text-[10px] font-bold text-emerald-700">
-                          {/* ✅ FIX: Show — for weekend/holiday/full-day leave, else formatted hours (or 0) */}
                           {isWeekend || hideWorkData
                             ? '—'
                             : (day.effectiveHours > 0
@@ -1313,74 +1133,12 @@ const AttendanceCombined = ({ userId, token }) => {
                           {isHolidayDay ? '🎉' : (isWeekend || isFullDayLeaveOnly ? '—' : arrivalStatus)}
                         </span>
                       </td>
-                      <td className="px-2 py-1.5">
-                        <div className="flex items-center gap-1">
-                          <span className="text-[9px] font-bold text-slate-600">{sessionCount}</span>
-                          <span className="text-[7px] text-slate-400">
-                            {isExpanded ? <ChevronUp size={12} className="text-blue-500" /> : <ChevronDown size={12} className="text-slate-400" />}
-                          </span>
-                        </div>
-                      </td>
                     </tr>
 
-                    {/* ✅ FIXED: Session details row - only shows REAL sessions (not fabricated ones)
-                        and only when the day isn't a full-day leave/holiday */}
-                    {showSessionDetails && (
-                      <tr className="bg-blue-50/20">
-                        <td colSpan={10} className="px-4 py-3">
-                          <div className="bg-white rounded-lg border border-blue-100 p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="p-1 bg-blue-100 rounded-lg"><Clock size={12} className="text-blue-600" /></div>
-                              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Session Details ({sessionCount} sessions)</p>
-                              {day.breakMinutes > 0 && (
-                                <span className="text-[8px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Coffee size={10} />Total Break: {formatBreakMinutes(day.breakMinutes)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                              {day.sessions.map((session, sIdx) => {
-                                const duration = session.punchOutUTC ? calculateHours(session.punchInUTC, session.punchOutUTC) : 0;
-                                return (
-                                  <div key={sIdx} className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[8px] font-bold text-blue-600">Session {sIdx + 1}</span>
-                                      <span className="text-[7px] font-medium text-emerald-600">{duration > 0 ? formatHours(duration) : 'In progress'}</span>
-                                    </div>
-                                    <div className="space-y-0.5 text-[8px] text-slate-600">
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">In:</span>
-                                        <span className="font-mono font-medium">{session.punchInUTC ? formatTimeDisplay(session.punchInUTC) : '—'}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Out:</span>
-                                        <span className={`font-mono font-medium ${!session.punchOutUTC ? 'text-rose-500' : ''}`}>
-                                          {session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : 'No Out Punch'}
-                                        </span>
-                                      </div>
-                                      {sIdx < day.sessions.length - 1 && day.breakGaps?.[sIdx] && (
-                                        <div className="mt-1 pt-1 border-t border-slate-200 flex justify-between text-amber-600">
-                                          <span className="text-slate-400">Break:</span>
-                                          <span className="font-medium">{formatBreakMinutes(day.breakGaps[sIdx].minutes)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* ✅ FIXED: Leave details - only show ONCE.
-                        - For FULL day leave → show leave details
-                        - For HALF day leave WITH sessions → show leave details BELOW sessions
-                        - For HALF day leave WITHOUT sessions → show leave details */}
+                    {/* Leave details row - only for leave days */}
                     {showLeaveDetails && (
                       <tr className="bg-indigo-50/20">
-                        <td colSpan={10} className="px-4 py-3">
+                        <td colSpan={9} className="px-4 py-3">
                           <div className="bg-white rounded-lg border border-indigo-100 p-3">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="p-1 bg-indigo-100 rounded-lg"><CalendarIcon size={12} className="text-indigo-600" /></div>
@@ -1394,34 +1152,6 @@ const AttendanceCombined = ({ userId, token }) => {
                               <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
                                 <p className="text-[7px] font-bold text-slate-400 uppercase">Duration</p>
                                 <p className="text-sm font-bold text-indigo-700">{isHalfDayLeave ? halfDayLabel : 'Full Day'}</p>
-                              </div>
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Work Hours</p>
-                                <p className="text-sm font-bold text-emerald-700">{day.effectiveHours > 0 ? formatHours(day.effectiveHours, { unit: 'hrmin' }) : '0 hr 0 min'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* ✅ FIXED: For half-day leave WITH sessions, show leave details AFTER sessions */}
-                    {showHalfDayLeaveDetails && (
-                      <tr className="bg-indigo-50/20">
-                        <td colSpan={10} className="px-4 py-3">
-                          <div className="bg-white rounded-lg border border-indigo-100 p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="p-1 bg-indigo-100 rounded-lg"><CalendarIcon size={12} className="text-indigo-600" /></div>
-                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Leave Details</p>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Leave Type</p>
-                                <p className="text-sm font-bold text-indigo-700">{day.leaveType || 'Leave'}</p>
-                              </div>
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Duration</p>
-                                <p className="text-sm font-bold text-indigo-700">{halfDayLabel}</p>
                               </div>
                               <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
                                 <p className="text-[7px] font-bold text-slate-400 uppercase">Work Hours</p>
