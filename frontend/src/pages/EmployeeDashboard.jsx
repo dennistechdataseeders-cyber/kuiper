@@ -172,29 +172,22 @@ const EmployeeDashboard = () => {
     return unit === 'detailed' ? `0h ${mins}m` : `${mins}m`;
   };
 
-  // ============================================
-  // ✅ FIXED: UTC TIME FORMATTER
-  // ============================================
-  // Reads the RAW wall-clock time stored in the timestamp using
-  // getUTCHours()/getUTCMinutes(). This matches AttendanceCombined's
-  // formatTimeDisplay exactly, so the Check-In time in the header
-  // and the "In" column in the timeline always agree — on both
-  // Windows dev machines and the Ubuntu VPS.
-  //
-  // NEVER use toLocaleTimeString({ timeZone: 'Asia/Kolkata' }) here:
-  // that shifts the value and produces different output per server TZ.
-  const formatTimeUTC = (date) => {
-    if (!date) return 'N/A';
+const IST_OFFSET_MINUTES = 5 * 60 + 30;
 
-    const d = new Date(date);
-    if (isNaN(d.getTime())) return 'N/A';
+const formatTimeUTC = (date) => {
+  if (!date) return 'N/A';
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return 'N/A';
 
-    let hours = d.getUTCHours();
-    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12;
-    return `${hours}:${minutes} ${ampm}`;
-  };
+  let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
+  total = ((total % 1440) + 1440) % 1440;
+
+  let hours24 = Math.floor(total / 60);
+  const minutes = String(total % 60).padStart(2, '0');
+  const ampm = hours24 >= 12 ? 'PM' : 'AM';
+  let hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes} ${ampm}`;
+};
 
   const formatDateUTC = (date) => {
     if (!date) return 'N/A';

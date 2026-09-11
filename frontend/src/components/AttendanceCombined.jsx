@@ -1,12 +1,12 @@
 // frontend/src/components/AttendanceCombined.jsx
-// ✅ FIXED: Effective/Gross calculation
-// ✅ FIXED: Half-day leave no longer shows duplicate sessions
-// ✅ FIXED: Weekend/Absent rows no longer show "0 hr 0 min"
-// ✅ FIXED: Removed "Sessions" column from table
-// ✅ FIXED: Time handling now uses UTC components everywhere for consistency
-//          across local (Windows) and VPS (Ubuntu) environments
-// ✅ REMOVED: Row-click session details expansion (no session panel anymore)
-// ✅ FIXED: Effective hours now falls back to Gross if no session breakdown available
+// ✅ Effective/Gross calculation
+// ✅ Half-day leave no longer shows duplicate sessions
+// ✅ Weekend/Absent rows no longer show "0 hr 0 min"
+// ✅ Removed "Sessions" column from table
+// ✅ REMOVED: Row-click session details expansion
+// ✅ Effective hours now falls back to Gross if no session breakdown available
+// ✅ GUARANTEED CONSISTENT local vs VPS: uses fixed IST offset (UTC+5:30)
+//    instead of toLocaleTimeString or getHours. Never touches OS timezone.
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -29,6 +29,15 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+
+// ─────────────────────────────────────────────────────────────
+// IST OFFSET
+// ─────────────────────────────────────────────────────────────
+// IST is UTC+5:30 with no DST. We add this offset manually instead
+// of relying on the OS timezone. This makes the output IDENTICAL on
+// Windows dev, Ubuntu VPS, or any Docker container regardless of the
+// TZ environment variable.
+const IST_OFFSET_MINUTES = 5 * 60 + 30; // 330
 
 // ─────────────────────────────────────────────────────────────
 // Shift Configuration
@@ -54,27 +63,24 @@ const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
 const NOON_MINUTES = 720;
 
 /**
- * Extract minutes-of-day from the RAW stored clock time.
+ * Convert a stored UTC timestamp to IST minutes-of-day.
  *
- * IMPORTANT: We use getUTCHours()/getUTCMinutes() because MongoDB stores
- * the biometric device's wall-clock time as if it were UTC (e.g. a punch
- * at 5:53 AM is stored as "2026-09-11T05:53:27.000Z"). Using these
- * accessors returns the SAME numeric values regardless of the server's
- * local timezone, so behavior is identical on Windows dev machines
- * (India Standard Time) and on the Ubuntu VPS (Asia/Kolkata).
+ * MongoDB stores the biometric wall-clock time as if it were UTC
+ * (e.g. a punch at 5:53 AM local is stored as "T05:53:27.000Z").
+ * To display it as IST we add the fixed +5:30 offset.
  *
- * Never use getHours()/getMinutes() or toLocaleString({timeZone}) here —
- * those shift the value and cause local vs VPS discrepancies.
+ * This function NEVER uses getHours(), getMinutes(), or
+ * toLocaleString({ timeZone }), so the output is identical on
+ * every server regardless of the OS timezone setting.
  */
-const minutesOfDayWallClock = (dateString) => {
+const minutesOfDayIST = (dateString) => {
   if (!dateString) return null;
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return null;
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
+  let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
+  total = ((total % 1440) + 1440) % 1440; // wrap across midnight
+  return total;
 };
-
-// Legacy alias kept so existing call sites in DayTimelineBar continue to work.
-const minutesOfDayUTC = minutesOfDayWallClock;
 
 const clampToTrack = (mins) => {
   const start = TRACK_START_HOUR * 60;
@@ -98,35 +104,41 @@ const formatTimeDisplay = (dateString) => {
   if (!dateString) return '—';
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return '—';
-  // Read the raw clock time stored in the timestamp. Do NOT apply
-  // a timezone shift — the value IS the wall-clock time the user
-  // physically saw on the biometric device.
-  let hours = d.getUTCHours();
-  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  hours = hours % 12 || 12;
-  return `${hours}:${minutes} ${ampm}`;
+
+  // Convert UTC -> IST by adding the fixed offset. No OS timezone involved.
+  let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
+  total = ((total % 1440) + 1440) % 1440;
+
+  let hours24 = Math.floor(total / 60);
+  const minutes = String(total % 60).padStart(2, '0');
+  const ampm = hours24 >= 12 ? 'PM' : 'AM';
+  let hours12 = hours24 % 12 || 12;
+  return `${hours12}:${minutes} ${ampm}`;
 };
 
 const formatDateDisplay = (dateStr) => {
   if (!dateStr) return '—';
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return '—';
-  // Use UTC components so date strings don't shift across timezones.
-  // day/month names are read from the UTC calendar.
-  const day = String(date.getUTCDate()).padStart(2, '0');
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const month = monthNames[date.getUTCMonth()];
-  const year = date.getUTCFullYear();
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+
+  // Shift to IST, then read the calendar day from the shifted value.
+  const istMs = d.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
+  const ist = new Date(istMs);
+  const day = String(ist.getUTCDate()).padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthNames[ist.getUTCMonth()];
+  const year = ist.getUTCFullYear();
   return `${day} ${month} ${year}`;
 };
 
 const getDayShortName = (dateStr) => {
   if (!dateStr) return '—';
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return '—';
-  // Use getUTCDay() to keep the weekday stable regardless of server TZ.
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getUTCDay()];
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const istMs = d.getTime() + IST_OFFSET_MINUTES * 60 * 1000;
+  const ist = new Date(istMs);
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][ist.getUTCDay()];
 };
 
 const isToday = (dateStr) => {
@@ -139,6 +151,7 @@ const calculateHours = (punchIn, punchOut) => {
   const inTime = new Date(punchIn);
   const outTime = new Date(punchOut);
   if (isNaN(inTime.getTime()) || isNaN(outTime.getTime())) return 0;
+  // getTime() is timezone-agnostic; the difference is the true duration.
   return Math.max(0, (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60));
 };
 
@@ -190,15 +203,14 @@ const STATUS_LABELS = {
 const getStatusLabel = (status) => STATUS_LABELS[status] || '—';
 
 /**
- * Compute arrival status using the RAW wall-clock time from the punch.
- * This matches exactly what formatTimeDisplay shows in the "In" column,
- * so the "Arrival" column is always consistent with the displayed time.
+ * Arrival status uses the SAME IST conversion as formatTimeDisplay,
+ * so the "Arrival" column always agrees with the "In" column.
  */
 const getArrivalStatus = (day, shiftStartMinutes, gracePeriodMinutes = 15) => {
   if (!day.punchInUTC) return '—';
   const shiftStart = shiftStartMinutes || (10 * 60 + 45);
   try {
-    const punchMinutes = minutesOfDayWallClock(day.punchInUTC);
+    const punchMinutes = minutesOfDayIST(day.punchInUTC);
     if (punchMinutes === null) return '—';
     const threshold = shiftStart + gracePeriodMinutes;
     if (punchMinutes > threshold) {
@@ -436,7 +448,7 @@ const DayTimelineBar = ({ day }) => {
 
     const workSessions = allSessions.filter(s => {
       if (!s.punchInUTC) return false;
-      const punchMin = minutesOfDayUTC(s.punchInUTC);
+      const punchMin = minutesOfDayIST(s.punchInUTC);
       return punchMin !== null && isInWorkingHalf(punchMin);
     });
 
@@ -455,9 +467,9 @@ const DayTimelineBar = ({ day }) => {
           />
 
           {workSessions.map((session, idx) => {
-            const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
+            const startMin = clampToTrack(minutesOfDayIST(session.punchInUTC));
             const endMin = session.punchOutUTC
-              ? clampToTrack(minutesOfDayUTC(session.punchOutUTC))
+              ? clampToTrack(minutesOfDayIST(session.punchOutUTC))
               : clampToTrack(startMin + 2);
 
             const segLeftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
@@ -525,8 +537,8 @@ const DayTimelineBar = ({ day }) => {
 
   const renderSegments = () => {
     if (!day.sessions || day.sessions.length === 0) {
-      const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
-      const endMin = clampToTrack(minutesOfDayUTC(day.punchOutUTC) || startMin + 5);
+      const startMin = clampToTrack(minutesOfDayIST(day.punchInUTC));
+      const endMin = clampToTrack(minutesOfDayIST(day.punchOutUTC) || startMin + 5);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
       return <div className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`} style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
@@ -538,9 +550,9 @@ const DayTimelineBar = ({ day }) => {
     day.sessions.forEach((session, idx) => {
       if (!session.punchInUTC) return;
 
-      const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
+      const startMin = clampToTrack(minutesOfDayIST(session.punchInUTC));
       const isLast = idx === totalSegments - 1;
-      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayUTC(session.punchOutUTC)) : clampToTrack(startMin + 2);
+      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayIST(session.punchOutUTC)) : clampToTrack(startMin + 2);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
 
@@ -571,8 +583,8 @@ const DayTimelineBar = ({ day }) => {
       }
 
       if (!isLast && session.punchOutUTC && day.sessions[idx + 1]?.punchInUTC) {
-        const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
-        const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
+        const gapStart = clampToTrack(minutesOfDayIST(session.punchOutUTC));
+        const gapEnd = clampToTrack(minutesOfDayIST(day.sessions[idx + 1].punchInUTC));
         const gapMinutes = gapEnd - gapStart;
 
         if (gapMinutes >= 5) {
@@ -720,13 +732,9 @@ const AttendanceCombined = ({ userId, token }) => {
     }) || null;
   }, [leaves]);
 
-  /**
-   * Late check uses the RAW stored clock time (via minutesOfDayWallClock),
-   * so lateness always matches the time shown in the "In" column.
-   */
   const isLatePunchWithShift = useCallback((punchTime) => {
     if (!punchTime || shiftConfig.isLoading) return false;
-    const punchMinutes = minutesOfDayWallClock(punchTime);
+    const punchMinutes = minutesOfDayIST(punchTime);
     if (punchMinutes === null) return false;
     const shiftStartMinutes = getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
     const gracePeriod = shiftConfig.gracePeriod || 15;
@@ -782,10 +790,6 @@ const AttendanceCombined = ({ userId, token }) => {
         const processedDays = (data.days || []).map(day => {
           const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
 
-          // ─────────────────────────────────────────────
-          // EFFECTIVE = sum of each session's actual duration
-          // GROSS     = wall-clock span between earliest In and latest Out
-          // ─────────────────────────────────────────────
           let effectiveMs = 0;
           let firstInMs = null;
           let lastOutMs = null;
@@ -813,7 +817,6 @@ const AttendanceCombined = ({ userId, token }) => {
             }
           });
 
-          // Fallback for legacy single-punch days without a sessions array
           if (sessions.length === 0 && day.punchInUTC) {
             const inMs = new Date(day.punchInUTC).getTime();
             if (!isNaN(inMs)) {
@@ -833,22 +836,17 @@ const AttendanceCombined = ({ userId, token }) => {
             ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
             : (effectiveMs / (1000 * 60 * 60));
 
-          // ✅ If effectiveMs somehow came out 0 but we have a valid gross span,
-          // fall back to using grossHours as effective (single-session day
-          // where the backend didn't populate session durations correctly).
           let effectiveHours = effectiveMs / (1000 * 60 * 60);
           if (effectiveHours <= 0 && grossHours > 0) {
             effectiveHours = grossHours;
           }
 
-          // ✅ SAFETY: Effective can never exceed Gross.
           const safeEffectiveHours = Math.min(effectiveHours, grossHours);
 
           const breakMinutes = grossHours > safeEffectiveHours
             ? (grossHours - safeEffectiveHours) * 60
             : 0;
 
-          // Rebuild breakGaps
           const breakGaps = [];
           for (let i = 0; i < sessions.length - 1; i++) {
             const currentOut = sessions[i].punchOutUTC;
