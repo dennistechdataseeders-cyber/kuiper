@@ -7,6 +7,9 @@
 // ✅ Effective hours now falls back to Gross if no session breakdown available
 // ✅ GUARANTEED CONSISTENT local vs VPS: uses fixed IST offset (UTC+5:30)
 //    instead of toLocaleTimeString or getHours. Never touches OS timezone.
+// ✅ REMOVED: "Eff" column from table
+// ✅ REMOVED: "Avg Eff" stat card
+// ✅ REMOVED: "Eff" bar/legend/label from Weekly Averages chart
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -299,7 +302,7 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Average Bar Chart
+// Average Bar Chart (Gross only)
 // ─────────────────────────────────────────────────────────────
 const AverageBarChart = ({ weeklyAverages }) => {
   if (!weeklyAverages || weeklyAverages.length === 0) return null;
@@ -313,7 +316,7 @@ const AverageBarChart = ({ weeklyAverages }) => {
     );
   }
 
-  const maxAvg = Math.max(...filteredWeeks.map(w => Math.max(w.avgEff || 0, w.avgGross || 0)), 1);
+  const maxAvg = Math.max(...filteredWeeks.map(w => w.avgGross || 0), 1);
   const maxDisplay = Math.ceil(maxAvg / 2) * 2 + 2;
 
   return (
@@ -321,10 +324,6 @@ const AverageBarChart = ({ weeklyAverages }) => {
       <div className="flex items-center gap-4 mb-2">
         <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Avg Hours by Week</span>
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-2 rounded-sm bg-emerald-500"></div>
-            <span className="text-[7px] font-bold text-slate-500">Eff</span>
-          </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-2 rounded-sm bg-slate-600"></div>
             <span className="text-[7px] font-bold text-slate-500">Gross</span>
@@ -335,7 +334,6 @@ const AverageBarChart = ({ weeklyAverages }) => {
 
       <div className="space-y-1.5">
         {filteredWeeks.map((week) => {
-          const effPercent = Math.min((week.avgEff / maxDisplay) * 100, 100);
           const grossPercent = Math.min((week.avgGross / maxDisplay) * 100, 100);
           return (
             <div key={week.weekNumber} className="flex items-center gap-2">
@@ -343,11 +341,9 @@ const AverageBarChart = ({ weeklyAverages }) => {
               <div className="flex-1">
                 <div className="relative h-3 bg-slate-100 rounded-full overflow-hidden">
                   <div className="absolute inset-y-0 left-0 bg-slate-600 rounded-full transition-all duration-500" style={{ width: `${grossPercent}%` }} />
-                  <div className="absolute inset-y-0 left-0 bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${effPercent}%` }} />
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0 min-w-[100px]">
-                <span className="text-[8px] font-bold text-emerald-700 w-[45px] text-right">{week.avgEffFormatted}</span>
                 <span className="text-[8px] font-bold text-slate-600 w-[45px] text-right">{week.avgGrossFormatted}</span>
               </div>
             </div>
@@ -1188,11 +1184,7 @@ const AttendanceCombined = ({ userId, token }) => {
               <p className="text-[6px] font-bold text-purple-600 uppercase tracking-wider">Holidays</p>
               <p className="text-base font-black text-purple-700">{stats.holidays}</p>
             </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
-              <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Avg Eff</p>
-              <p className="text-[10px] sm:text-xs font-black text-emerald-700 mt-1 leading-tight">{formatHours(stats.averageEffectiveHours, { unit: 'hrmin' })}</p>
-            </div>
-            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100">
+            <div className="text-center bg-white rounded-lg py-2 px-1.5 shadow-sm border border-slate-100 col-span-2">
               <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
               <p className="text-[10px] sm:text-xs font-black text-slate-700 mt-1 leading-tight">{formatHours(stats.averageGrossHours, { unit: 'hrmin' })}</p>
             </div>
@@ -1205,7 +1197,7 @@ const AttendanceCombined = ({ userId, token }) => {
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-slate-50/80 border-b border-slate-200">
-              {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Eff', 'Gross', 'Arrival'].map(h => (
+              {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Gross', 'Arrival'].map(h => (
                 <th key={h} className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">{h}</th>
               ))}
             </tr>
@@ -1213,7 +1205,7 @@ const AttendanceCombined = ({ userId, token }) => {
           <tbody className="divide-y divide-slate-100">
             {monthDays.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-2 py-8 text-center">
+                <td colSpan={8} className="px-2 py-8 text-center">
                   <div className="flex flex-col items-center gap-1.5">
                     <CalendarIcon size={20} className="text-slate-300" />
                     <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
@@ -1296,15 +1288,6 @@ const AttendanceCombined = ({ userId, token }) => {
                     <td className="px-2 py-1.5">
                       <span className={`text-[10px] font-mono font-medium ${hideWorkData || isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
                         {hideWorkData ? '—' : outDisplay}
-                      </span>
-                    </td>
-                    <td className="px-2 py-1.5">
-                      <span className="text-[10px] font-bold text-emerald-700">
-                        {isWeekend || hideWorkData
-                          ? '—'
-                          : (day.effectiveHours > 0
-                              ? formatHours(day.effectiveHours, { unit: 'hrmin' })
-                              : '0 hr 0 min')}
                       </span>
                     </td>
                     <td className="px-2 py-1.5">
