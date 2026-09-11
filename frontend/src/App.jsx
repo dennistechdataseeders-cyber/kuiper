@@ -581,11 +581,11 @@ function AppContent() {
                         ============================================ */}
                     {/* This page contains both Leave and Attendance management */}
                     <Route path="/employee" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer', 'Team Lead', 'Sales', 'Project Manager', 'Client', 'Finance']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer', 'Team Lead', 'Sales','Sales Manager', 'Project Manager', 'Client', 'Finance']}>
                         <EmployeeDashboard />
                       </ProtectedRoute>
                     } />
-              
+      
                     {/* ============================================
                         SHARED ROUTES
                         ============================================ */}

@@ -276,7 +276,7 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
         <>
           <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
             <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span className="text-[11px] font-bold">Break {breakInfo.breakIndex + 1}</span>
+            <span className="text-[11px] font-bold">Break</span>
           </div>
           <div className="space-y-1 text-[11px]">
             <div className="flex justify-between">
@@ -1115,9 +1115,9 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
 
             <div className="flex items-center gap-1.5 px-2 py-0.5 bg-indigo-50 rounded-lg border border-indigo-200">
-              <User size={10} className="text-indigo-500" />
-              <span className="text-[7px] font-bold text-indigo-600">Shift: {getShiftDisplay()}</span>
-              <span className="text-[6px] text-indigo-400">(Grace: {shiftConfig.gracePeriod}m)</span>
+              <User size={10} className="text-blue-500" />
+              <span className="text-[7px] font-bold text-blue-600">Shift: {getShiftDisplay()}</span>
+            
             </div>
           </div>
         </div>
