@@ -3,7 +3,8 @@
 // ✅ FIXED: Half-day leave no longer shows duplicate sessions
 // ✅ FIXED: Weekend/Absent rows no longer show "0 hr 0 min"
 // ✅ FIXED: Removed "Sessions" column from table
-// ✅ FIXED: On-Time/Late calculation now uses IST conversion (matches displayed times)
+// ✅ FIXED: Time handling now uses UTC components everywhere for consistency
+//          across local (Windows) and VPS (Ubuntu) environments
 // ✅ REMOVED: Row-click session details expansion (no session panel anymore)
 // ✅ FIXED: Effective hours now falls back to Gross if no session breakdown available
 
@@ -52,32 +53,33 @@ const TRACK_END_HOUR = 21;
 const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
 const NOON_MINUTES = 720;
 
-const minutesOfDayUTC = (dateString) => {
+/**
+ * Extract minutes-of-day from the RAW stored clock time.
+ *
+ * IMPORTANT: We use getUTCHours()/getUTCMinutes() because MongoDB stores
+ * the biometric device's wall-clock time as if it were UTC (e.g. a punch
+ * at 5:53 AM is stored as "2026-09-11T05:53:27.000Z"). Using these
+ * accessors returns the SAME numeric values regardless of the server's
+ * local timezone, so behavior is identical on Windows dev machines
+ * (India Standard Time) and on the Ubuntu VPS (Asia/Kolkata).
+ *
+ * Never use getHours()/getMinutes() or toLocaleString({timeZone}) here —
+ * those shift the value and cause local vs VPS discrepancies.
+ */
+const minutesOfDayWallClock = (dateString) => {
   if (!dateString) return null;
   const d = new Date(dateString);
   if (isNaN(d.getTime())) return null;
   return d.getUTCHours() * 60 + d.getUTCMinutes();
 };
 
+// Legacy alias kept so existing call sites in DayTimelineBar continue to work.
+const minutesOfDayUTC = minutesOfDayWallClock;
+
 const clampToTrack = (mins) => {
   const start = TRACK_START_HOUR * 60;
   const end = TRACK_END_HOUR * 60;
   return Math.min(end, Math.max(start, mins));
-};
-
-/**
- * ✅ Convert a UTC timestamp to IST minutes-of-day.
- * Used for all "late" checks so the comparison matches
- * what the user actually sees on screen (IST times).
- */
-const minutesOfDayIST = (dateString) => {
-  if (!dateString) return null;
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return null;
-  const istStr = d.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-  const istDate = new Date(istStr);
-  if (isNaN(istDate.getTime())) return null;
-  return istDate.getHours() * 60 + istDate.getMinutes();
 };
 
 const STATUS_STYLES = {
@@ -110,14 +112,21 @@ const formatDateDisplay = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  // Use UTC components so date strings don't shift across timezones.
+  // day/month names are read from the UTC calendar.
+  const day = String(date.getUTCDate()).padStart(2, '0');
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = monthNames[date.getUTCMonth()];
+  const year = date.getUTCFullYear();
+  return `${day} ${month} ${year}`;
 };
 
 const getDayShortName = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+  // Use getUTCDay() to keep the weekday stable regardless of server TZ.
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getUTCDay()];
 };
 
 const isToday = (dateStr) => {
@@ -181,14 +190,15 @@ const STATUS_LABELS = {
 const getStatusLabel = (status) => STATUS_LABELS[status] || '—';
 
 /**
- * ✅ getArrivalStatus converts the punch time to IST
- * before comparing against the shift start + grace period.
+ * Compute arrival status using the RAW wall-clock time from the punch.
+ * This matches exactly what formatTimeDisplay shows in the "In" column,
+ * so the "Arrival" column is always consistent with the displayed time.
  */
 const getArrivalStatus = (day, shiftStartMinutes, gracePeriodMinutes = 15) => {
   if (!day.punchInUTC) return '—';
   const shiftStart = shiftStartMinutes || (10 * 60 + 45);
   try {
-    const punchMinutes = minutesOfDayIST(day.punchInUTC);
+    const punchMinutes = minutesOfDayWallClock(day.punchInUTC);
     if (punchMinutes === null) return '—';
     const threshold = shiftStart + gracePeriodMinutes;
     if (punchMinutes > threshold) {
@@ -711,15 +721,16 @@ const AttendanceCombined = ({ userId, token }) => {
   }, [leaves]);
 
   /**
-   * ✅ Late check converts punch time to IST first.
+   * Late check uses the RAW stored clock time (via minutesOfDayWallClock),
+   * so lateness always matches the time shown in the "In" column.
    */
   const isLatePunchWithShift = useCallback((punchTime) => {
     if (!punchTime || shiftConfig.isLoading) return false;
-    const punchMinutesIST = minutesOfDayIST(punchTime);
-    if (punchMinutesIST === null) return false;
+    const punchMinutes = minutesOfDayWallClock(punchTime);
+    if (punchMinutes === null) return false;
     const shiftStartMinutes = getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
     const gracePeriod = shiftConfig.gracePeriod || 15;
-    return punchMinutesIST > shiftStartMinutes + gracePeriod;
+    return punchMinutes > shiftStartMinutes + gracePeriod;
   }, [shiftConfig]);
 
   // ─────────────────────────────────────────────────────────────
@@ -887,7 +898,7 @@ const AttendanceCombined = ({ userId, token }) => {
     const monthDaysList = days.filter(day => {
       if (!day.date) return false;
       const date = new Date(day.date);
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+      return date.getUTCMonth() === selectedMonth && date.getUTCFullYear() === selectedYear;
     });
     const sortedDays = [...monthDaysList].sort((a, b) => new Date(a.date) - new Date(b.date));
 
@@ -897,7 +908,7 @@ const AttendanceCombined = ({ userId, token }) => {
     let weekNumber = 1;
 
     for (const day of sortedDays) {
-      const dayOfWeek = new Date(day.date).getDay();
+      const dayOfWeek = new Date(day.date).getUTCDay();
       if (dayOfWeek === 1 || weekStartDate === null) {
         if (currentWeek.length > 0) {
           weeks.push({ weekNumber, days: [...currentWeek] });
@@ -992,7 +1003,7 @@ const AttendanceCombined = ({ userId, token }) => {
     return attendanceData.filter(day => {
       if (!day.date) return false;
       const date = new Date(day.date);
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+      return date.getUTCMonth() === selectedMonth && date.getUTCFullYear() === selectedYear;
     });
   }, [attendanceData, selectedMonth, selectedYear]);
 

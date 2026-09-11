@@ -1,6 +1,8 @@
 // frontend/src/pages/EmployeeDashboard.jsx - UPDATED
 // ✅ Effective/Gross time formatted like timeline (Xh Ym)
 // ✅ Wider Team & Culture panel with larger, high-contrast text
+// ✅ Time handling now uses UTC components everywhere for consistency
+//    across local (Windows) and VPS (Ubuntu) environments
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -171,23 +173,28 @@ const EmployeeDashboard = () => {
   };
 
   // ============================================
-  // UTC TIME FORMATTERS
+  // ✅ FIXED: UTC TIME FORMATTER
   // ============================================
+  // Reads the RAW wall-clock time stored in the timestamp using
+  // getUTCHours()/getUTCMinutes(). This matches AttendanceCombined's
+  // formatTimeDisplay exactly, so the Check-In time in the header
+  // and the "In" column in the timeline always agree — on both
+  // Windows dev machines and the Ubuntu VPS.
+  //
+  // NEVER use toLocaleTimeString({ timeZone: 'Asia/Kolkata' }) here:
+  // that shifts the value and produces different output per server TZ.
+  const formatTimeUTC = (date) => {
+    if (!date) return 'N/A';
 
-  // ✅ FIX: Matches AttendanceCombined's formatTimeDisplay
-const formatTimeUTC = (date) => {
-  if (!date) return 'N/A';
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return 'N/A';
 
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return 'N/A';
-
-  return d.toLocaleTimeString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
-  });
-};
+    let hours = d.getUTCHours();
+    const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${hours}:${minutes} ${ampm}`;
+  };
 
   const formatDateUTC = (date) => {
     if (!date) return 'N/A';
@@ -202,16 +209,19 @@ const formatTimeUTC = (date) => {
   // ============================================
   // DATE FORMATTERS
   // ============================================
+  // Use UTC components so calendar labels do not shift across
+  // timezones when a date is stored at midnight UTC.
 
   const formatShortDate = (dateStr) => {
     const d = new Date(dateStr);
 
     if (isNaN(d.getTime())) return '';
 
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric'
-    });
+    const day = d.getUTCDate();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[d.getUTCMonth()];
+    return `${month} ${day}`;
   };
 
   const formatShortDateWithYear = (dateStr) => {
@@ -219,11 +229,12 @@ const formatTimeUTC = (date) => {
 
     if (isNaN(d.getTime())) return '';
 
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+    const day = d.getUTCDate();
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = monthNames[d.getUTCMonth()];
+    const year = d.getUTCFullYear();
+    return `${month} ${day}, ${year}`;
   };
 
   // ============================================
@@ -260,13 +271,15 @@ const formatTimeUTC = (date) => {
   // ============================================
   // UPCOMING HOLIDAYS - ALL HOLIDAYS FROM TODAY ONWARD
   // ============================================
+  // Compare using UTC calendar day so "today" is stable across
+  // servers with different timezones.
 
   const upcomingHolidays = holidays
     .filter((h) => {
       const d = new Date(h.date);
-      const holidayDate = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+      const holidayDate = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
       const today = new Date();
-      const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const todayDate = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
       return holidayDate >= todayDate;
     });
 
@@ -306,6 +319,7 @@ const formatTimeUTC = (date) => {
   // ============================================
   // CALCULATE TEAM CULTURE FROM USER DATA
   // ============================================
+  // Uses UTC calendar components for consistency across servers.
 
   const calculateTeamCultureFromUsers = async () => {
     try {
@@ -318,14 +332,14 @@ const formatTimeUTC = (date) => {
 
       const today = new Date();
 
-      const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
-      const currentDate = today.getDate();
+      const currentMonth = today.getUTCMonth();
+      const currentYear = today.getUTCFullYear();
+      const currentDate = today.getUTCDate();
 
       const oneMonthAgo = new Date(today);
 
-      oneMonthAgo.setMonth(
-        oneMonthAgo.getMonth() - 1
+      oneMonthAgo.setUTCMonth(
+        oneMonthAgo.getUTCMonth() - 1
       );
 
       const birthdays = [];
@@ -343,8 +357,8 @@ const formatTimeUTC = (date) => {
 
         if (user.dateOfBirth) {
           const birthDate = new Date(user.dateOfBirth);
-          const birthMonth = birthDate.getMonth();
-          const birthDay = birthDate.getDate();
+          const birthMonth = birthDate.getUTCMonth();
+          const birthDay = birthDate.getUTCDate();
 
           if (birthMonth === currentMonth) {
             if (birthDay >= currentDate) {
@@ -365,9 +379,9 @@ const formatTimeUTC = (date) => {
 
         if (user.dateOfJoining) {
           const joinDate = new Date(user.dateOfJoining);
-          const joinMonth = joinDate.getMonth();
-          const joinDay = joinDate.getDate();
-          const years = currentYear - joinDate.getFullYear();
+          const joinMonth = joinDate.getUTCMonth();
+          const joinDay = joinDate.getUTCDate();
+          const years = currentYear - joinDate.getUTCFullYear();
 
           if (
             joinMonth === currentMonth &&
@@ -413,14 +427,14 @@ const formatTimeUTC = (date) => {
       // ==========================================
 
       birthdays.sort((a, b) => {
-        const aDay = new Date(a.date).getDate();
-        const bDay = new Date(b.date).getDate();
+        const aDay = new Date(a.date).getUTCDate();
+        const bDay = new Date(b.date).getUTCDate();
         return aDay - bDay;
       });
 
       anniversaries.sort((a, b) => {
-        const aDay = new Date(a.date).getDate();
-        const bDay = new Date(b.date).getDate();
+        const aDay = new Date(a.date).getUTCDate();
+        const bDay = new Date(b.date).getUTCDate();
         return aDay - bDay;
       });
 
