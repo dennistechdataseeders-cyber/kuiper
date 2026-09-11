@@ -773,101 +773,158 @@ const AttendanceCombined = ({ userId, token }) => {
         const data = response.data.data;
 
         const processedDays = (data.days || []).map(day => {
-          const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
+  // ─────────────────────────────────────────────
+  // ✅ SANITIZE SESSIONS:
+  // Discard any session whose timestamps don't fall on the same
+  // calendar day as the parent day row, or whose duration is
+  // implausibly large (> 24h). These come from stale/corrupted
+  // backend data and would poison the Eff/Gross math.
+  // ─────────────────────────────────────────────
+  const MAX_PLAUSIBLE_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const dayDateStr = (() => {
+    if (!day.date) return null;
+    const d = new Date(day.date);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().split('T')[0];
+  })();
 
-          // ─────────────────────────────────────────────
-          // ✅ FIXED: EFFECTIVE = sum of each session's actual duration
-          // ✅ GROSS     = wall-clock span between earliest In and latest Out
-          // Both use raw millisecond timestamps so cross-midnight days work correctly.
-          // ─────────────────────────────────────────────
-          let effectiveMs = 0;          // sum of closed session durations
-          let firstInMs = null;         // earliest punch-in across all sessions
-          let lastOutMs = null;         // latest punch-out across all sessions
-          let lastOutUTC = null;        // latest punch-out as ISO string for display
+  const rawSessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
 
-          sessions.forEach((session) => {
-            if (!session.punchInUTC) return;
+  const sessions = rawSessions.filter(session => {
+    if (!session || !session.punchInUTC) return false;
 
-            const inMs = new Date(session.punchInUTC).getTime();
-            if (isNaN(inMs)) return;
+    const inMs = new Date(session.punchInUTC).getTime();
+    if (isNaN(inMs)) return false;
 
-            if (firstInMs === null || inMs < firstInMs) firstInMs = inMs;
+    // If this session has a punch-out, validate it strictly
+    if (session.punchOutUTC) {
+      const outMs = new Date(session.punchOutUTC).getTime();
+      if (isNaN(outMs)) return false;
 
-            if (session.punchOutUTC) {
-              const outMs = new Date(session.punchOutUTC).getTime();
-              if (isNaN(outMs)) return;
+      const sessionMs = outMs - inMs;
+      if (sessionMs < 0) return false;              // out before in
+      if (sessionMs > MAX_PLAUSIBLE_MS) return false; // > 24h — corrupt
 
-              // Add the closed session's duration to effective
-              const sessionMs = outMs - inMs;
-              if (sessionMs > 0) effectiveMs += sessionMs;
+      // If the session's IN date doesn't match the day row's date,
+      // this session belongs to a different day — discard it.
+      if (dayDateStr) {
+        const sessionDateStr = new Date(session.punchInUTC)
+          .toISOString()
+          .split('T')[0];
+        if (sessionDateStr !== dayDateStr) return false;
+      }
+    } else {
+      // Open session (no punch-out yet) — still validate IN date matches
+      if (dayDateStr) {
+        const sessionDateStr = new Date(session.punchInUTC)
+          .toISOString()
+          .split('T')[0];
+        // Allow a 1-day slack for overnight shifts starting the previous day
+        const dayMs = new Date(dayDateStr + 'T00:00:00.000Z').getTime();
+        const diffDays = Math.abs(inMs - dayMs) / (1000 * 60 * 60 * 24);
+        if (diffDays > 1) return false;
+      }
+    }
 
-              // Track the latest punch-out
-              if (lastOutMs === null || outMs > lastOutMs) {
-                lastOutMs = outMs;
-                lastOutUTC = session.punchOutUTC;
-              }
-            }
-          });
+    return true;
+  });
 
-          // Fallback for legacy single-punch days without a sessions array
-          if (sessions.length === 0 && day.punchInUTC) {
-            const inMs = new Date(day.punchInUTC).getTime();
-            if (!isNaN(inMs)) {
-              firstInMs = inMs;
-              if (day.punchOutUTC) {
-                const outMs = new Date(day.punchOutUTC).getTime();
-                if (!isNaN(outMs) && outMs > inMs) {
-                  effectiveMs = outMs - inMs;
-                  lastOutMs = outMs;
-                  lastOutUTC = day.punchOutUTC;
-                }
-              }
-            }
-          }
+  // ─────────────────────────────────────────────
+  // ✅ EFFECTIVE = sum of each closed session's actual duration
+  // ✅ GROSS     = wall-clock span between earliest In and latest Out
+  // Both use raw millisecond timestamps so cross-midnight days work correctly.
+  // ─────────────────────────────────────────────
+  let effectiveMs = 0;          // sum of closed session durations
+  let firstInMs = null;         // earliest punch-in across all sessions
+  let lastOutMs = null;         // latest punch-out across all sessions
+  let lastOutUTC = null;        // latest punch-out as ISO string for display
 
-          const effectiveHours = effectiveMs / (1000 * 60 * 60);
+  sessions.forEach((session) => {
+    if (!session.punchInUTC) return;
 
-          const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
-            ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
-            : effectiveHours; // still in progress → no gap yet, gross == effective
+    const inMs = new Date(session.punchInUTC).getTime();
+    if (isNaN(inMs)) return;
 
-          // Break = the time NOT counted as effective (gaps between sessions + mid-session break)
-          const breakMinutes = grossHours > effectiveHours
-            ? (grossHours - effectiveHours) * 60
-            : 0;
+    if (firstInMs === null || inMs < firstInMs) firstInMs = inMs;
 
-          // Rebuild breakGaps so the timeline can render amber segments
-          const breakGaps = [];
-          for (let i = 0; i < sessions.length - 1; i++) {
-            const currentOut = sessions[i].punchOutUTC;
-            const nextIn = sessions[i + 1]?.punchInUTC;
-            if (!currentOut || !nextIn) continue;
+    if (session.punchOutUTC) {
+      const outMs = new Date(session.punchOutUTC).getTime();
+      if (isNaN(outMs)) return;
 
-            const gapMs = new Date(nextIn).getTime() - new Date(currentOut).getTime();
-            if (gapMs > 0 && gapMs / 60000 >= 5) {
-              breakGaps.push({
-                start: currentOut,
-                end: nextIn,
-                minutes: gapMs / 60000,
-                breakIndex: i
-              });
-            }
-          }
+      // Add the closed session's duration to effective
+      const sessionMs = outMs - inMs;
+      if (sessionMs > 0) effectiveMs += sessionMs;
 
-          return {
-            ...day,
-            sessions,
-            punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-            punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
-            punchOutUTC: lastOutUTC,
-            effectiveHours,
-            grossHours,
-            breakMinutes,
-            breakGaps,
-            totalDuration: effectiveHours
-          };
-        });
+      // Track the latest punch-out
+      if (lastOutMs === null || outMs > lastOutMs) {
+        lastOutMs = outMs;
+        lastOutUTC = session.punchOutUTC;
+      }
+    }
+  });
 
+  // Fallback for legacy single-punch days without a sessions array
+  if (sessions.length === 0 && day.punchInUTC) {
+    const inMs = new Date(day.punchInUTC).getTime();
+    if (!isNaN(inMs)) {
+      firstInMs = inMs;
+      if (day.punchOutUTC) {
+        const outMs = new Date(day.punchOutUTC).getTime();
+        if (!isNaN(outMs) && outMs > inMs) {
+          effectiveMs = outMs - inMs;
+          lastOutMs = outMs;
+          lastOutUTC = day.punchOutUTC;
+        }
+      }
+    }
+  }
+
+  const effectiveHours = effectiveMs / (1000 * 60 * 60);
+
+  const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
+    ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
+    : effectiveHours; // still in progress → no gap yet, gross == effective
+
+  // ✅ SAFETY: Effective can never exceed Gross.
+  // If it somehow does (corrupt data slipped through), clamp it.
+  const safeEffectiveHours = Math.min(effectiveHours, grossHours);
+
+  // Break = the time NOT counted as effective (gaps between sessions + mid-session break)
+  const breakMinutes = grossHours > safeEffectiveHours
+    ? (grossHours - safeEffectiveHours) * 60
+    : 0;
+
+  // Rebuild breakGaps so the timeline can render amber segments
+  const breakGaps = [];
+  for (let i = 0; i < sessions.length - 1; i++) {
+    const currentOut = sessions[i].punchOutUTC;
+    const nextIn = sessions[i + 1]?.punchInUTC;
+    if (!currentOut || !nextIn) continue;
+
+    const gapMs = new Date(nextIn).getTime() - new Date(currentOut).getTime();
+    if (gapMs > 0 && gapMs / 60000 >= 5 && gapMs <= MAX_PLAUSIBLE_MS) {
+      breakGaps.push({
+        start: currentOut,
+        end: nextIn,
+        minutes: gapMs / 60000,
+        breakIndex: i
+      });
+    }
+  }
+
+  return {
+    ...day,
+    sessions,
+    punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
+    punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
+    punchOutUTC: lastOutUTC,
+    effectiveHours: safeEffectiveHours,
+    grossHours,
+    breakMinutes,
+    breakGaps,
+    totalDuration: safeEffectiveHours
+  };
+});
         setRawAttendanceData(processedDays);
       }
     } catch (error) {
