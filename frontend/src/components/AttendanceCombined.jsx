@@ -255,10 +255,7 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
     >
       {session && (
         <>
-          <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
-            <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            <span className="text-[11px] font-bold">Session {session.sessionIndex + 1} of {session.totalSessions}</span>
-          </div>
+         
           <div className="space-y-1 text-[11px]">
             <div className="flex justify-between">
               <span className="text-slate-400">In:</span>
