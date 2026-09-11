@@ -94,18 +94,16 @@ const STATUS_STYLES = {
 
 const formatTimeDisplay = (dateString) => {
   if (!dateString) return '—';
-  try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '—';
-    return date.toLocaleTimeString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true
-    });
-  } catch (e) {
-    return '—';
-  }
+  const d = new Date(dateString);
+  if (isNaN(d.getTime())) return '—';
+  // Read the raw clock time stored in the timestamp. Do NOT apply
+  // a timezone shift — the value IS the wall-clock time the user
+  // physically saw on the biometric device.
+  let hours = d.getUTCHours();
+  const minutes = String(d.getUTCMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12 || 12;
+  return `${hours}:${minutes} ${ampm}`;
 };
 
 const formatDateDisplay = (dateStr) => {
