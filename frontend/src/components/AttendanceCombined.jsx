@@ -9,6 +9,19 @@
 // ✅ Header row (legend + title + month + shift) spread full width
 // ✅ REDUCED: Table text to 90% of previous size, kept plain/black for contrast
 // ✅ REDUCED BOLDNESS: Table body content is lighter; table header stays font-black
+//
+// ✅ 2026-09-11 — TIMEZONE + HALF-DAY FIX
+//   * All logic that reads a punch time (lateness, arrival, timeline position,
+//     break position) goes through a single IST helper. Previously the code
+//     mixed UTC reads (getUTCHours) with IST display reads, which silently
+//     broke on a UTC VPS.
+//   * Half-day leave rows now render BOTH halves:
+//       - the leave half in indigo
+//       - the worked half's sessions in emerald, WITH in/out labels
+//     Previously a half-day leave with a work session either showed nothing
+//     or showed duplicated/misplaced bars.
+//   * Gross hours for half-day leave now show worked time (was hidden).
+//   * Today's badge uses IST calendar day, not the browser's local day.
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -48,23 +61,75 @@ const getShiftStartMinutes = (shiftHour, shiftMinute, shiftAmPm) => {
 };
 
 // ─────────────────────────────────────────────────────────────
-// Timeline config
+// IST helpers — single source of truth
+// ─────────────────────────────────────────────────────────────
+const IST_TZ = 'Asia/Kolkata';
+
+/** Return {hour, minute, second, totalMinutes} in IST, or null. */
+const getISTParts = (dateLike) => {
+  if (!dateLike) return null;
+  const d = new Date(dateLike);
+  if (isNaN(d.getTime())) return null;
+
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: IST_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false
+  }).formatToParts(d);
+
+  const hour = Number(parts.find(p => p.type === 'hour')?.value ?? 0);
+  const minute = Number(parts.find(p => p.type === 'minute')?.value ?? 0);
+  const second = Number(parts.find(p => p.type === 'second')?.value ?? 0);
+
+  return {
+    hour,
+    minute,
+    second,
+    totalMinutes: hour * 60 + minute,
+    totalSeconds: hour * 3600 + minute * 60 + second
+  };
+};
+
+/** Minutes since midnight IST. */
+const minutesOfDayIST = (dateLike) => {
+  const p = getISTParts(dateLike);
+  return p ? p.totalMinutes : null;
+};
+
+/** IST calendar date string (YYYY-MM-DD). */
+const toISTDateString = (dateLike) => {
+  if (!dateLike) return null;
+  const d = new Date(dateLike);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-CA', { timeZone: IST_TZ });
+};
+
+/** The stored `date` field is UTC midnight of the IST calendar day.
+ *  Reading it with UTC getters gives us back the calendar day. */
+const toStoredDateString = (dateLike) => {
+  if (!dateLike) return null;
+  const d = new Date(dateLike);
+  if (isNaN(d.getTime())) return null;
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+// ─────────────────────────────────────────────────────────────
+// Timeline config (positions are in IST-minutes since midnight)
 // ─────────────────────────────────────────────────────────────
 const TRACK_START_HOUR = 6;
 const TRACK_END_HOUR = 21;
 const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
 const NOON_MINUTES = 720;
 
-const minutesOfDayUTC = (dateString) => {
-  if (!dateString) return null;
-  const d = new Date(dateString);
-  if (isNaN(d.getTime())) return null;
-  return d.getUTCHours() * 60 + d.getUTCMinutes();
-};
-
 const clampToTrack = (mins) => {
   const start = TRACK_START_HOUR * 60;
   const end = TRACK_END_HOUR * 60;
+  if (mins == null) return start;
   return Math.min(end, Math.max(start, mins));
 };
 
@@ -80,18 +145,21 @@ const STATUS_STYLES = {
   default: { bar: 'from-blue-400 to-blue-500', text: 'text-slate-600', chip: 'bg-slate-50 text-slate-500 border-slate-200', bg: 'bg-slate-50' }
 };
 
+// ─────────────────────────────────────────────────────────────
+// Display formatters — all IST
+// ─────────────────────────────────────────────────────────────
 const formatTimeDisplay = (dateString) => {
   if (!dateString) return '—';
   try {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '—';
     return date.toLocaleTimeString('en-IN', {
-      timeZone: 'Asia/Kolkata',
+      timeZone: IST_TZ,
       hour: 'numeric',
       minute: '2-digit',
       hour12: true
     });
-  } catch (e) {
+  } catch {
     return '—';
   }
 };
@@ -100,19 +168,25 @@ const formatDateDisplay = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  return date.toLocaleDateString('en-IN', {
+    timeZone: 'UTC', // stored at UTC midnight of the IST day
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
 };
 
 const getDayShortName = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return '—';
-  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getDay()];
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][date.getUTCDay()];
 };
 
 const isToday = (dateStr) => {
   if (!dateStr) return false;
-  return dateStr === new Date().toISOString().split('T')[0];
+  const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: IST_TZ });
+  return toStoredDateString(dateStr) === todayIST;
 };
 
 const calculateHours = (punchIn, punchOut) => {
@@ -123,7 +197,6 @@ const calculateHours = (punchIn, punchOut) => {
   return Math.max(0, (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60));
 };
 
-// ✅ SINGLE FORMATTER - used everywhere for consistency
 const formatHours = (hours, { unit = 'short', zero = '0h' } = {}) => {
   if (!hours || hours <= 0) return zero;
   const hrs = Math.floor(hours);
@@ -163,31 +236,31 @@ const STATUS_LABELS = {
   late: 'Late',
   absent: 'Absent',
   leave: 'On Leave',
-  'leave-half-first': 'Leave(FH)',
-  'leave-half-second': 'Leave(SH)',
+  'leave-half-first': 'Leave (1st Half)',
+  'leave-half-second': 'Leave (2nd Half)',
   weekend: 'Weekend',
   holiday: 'Holiday 🎉'
 };
 const getStatusLabel = (status) => STATUS_LABELS[status] || '—';
 
+// ─────────────────────────────────────────────────────────────
+// Arrival — IST-based
+// ─────────────────────────────────────────────────────────────
 const getArrivalStatus = (day, shiftStartMinutes, gracePeriodMinutes = 15) => {
   if (!day.punchInUTC) return '—';
-  const shiftStart = shiftStartMinutes || (10 * 60 + 45);
-  try {
-    const punchIn = new Date(day.punchInUTC);
-    if (isNaN(punchIn.getTime())) return '—';
-    const punchMinutes = punchIn.getUTCHours() * 60 + punchIn.getUTCMinutes();
-    const threshold = shiftStart + gracePeriodMinutes;
-    if (punchMinutes > threshold) {
-      const diff = punchMinutes - threshold;
-      const diffHours = Math.floor(diff / 60);
-      const diffMins = diff % 60;
-      return diffHours > 0 ? `${diffHours}h ${diffMins}m late` : `${diffMins}m late`;
-    }
-    return 'On Time';
-  } catch (e) {
-    return '—';
+  const ist = getISTParts(day.punchInUTC);
+  if (!ist) return '—';
+
+  const shiftStart = shiftStartMinutes != null ? shiftStartMinutes : (10 * 60 + 45);
+  const threshold = shiftStart + gracePeriodMinutes;
+
+  if (ist.totalMinutes > threshold) {
+    const diff = ist.totalMinutes - threshold;
+    const h = Math.floor(diff / 60);
+    const m = diff % 60;
+    return h > 0 ? `${h}h ${m}m late` : `${m}m late`;
   }
+  return 'On Time';
 };
 
 const getDisplayStatus = (day) => {
@@ -199,7 +272,6 @@ const getDisplayStatus = (day) => {
   if (day.isWeekend) return 'weekend';
   if (day.punchInUTC) {
     if (day.isLate === true) return 'late';
-    if (day.punchOutUTC) return 'present';
     return 'present';
   }
   return 'absent';
@@ -228,7 +300,7 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
             </div>
             <div className="flex justify-between">
               <span className="text-slate-400">Out:</span>
-              <span className="font-mono font-medium text-rose-400">{formatTimeDisplay(session.punchOut) || 'No Out Punch'}</span>
+              <span className="font-mono font-medium text-rose-400">{session.punchOut ? formatTimeDisplay(session.punchOut) : 'No Out Punch'}</span>
             </div>
             <div className="flex justify-between pt-1 mt-1 border-t border-white/10">
               <span className="text-slate-400">Duration:</span>
@@ -296,7 +368,7 @@ const DayTimelineBar = ({ day }) => {
       sessionIndex,
       totalSessions,
       punchIn: session.punchInUTC,
-      punchOut: session.punchOutUTC || 'No Out Punch',
+      punchOut: session.punchOutUTC || null,
       durationFormatted: formatHours(duration, { unit: 'detailed' })
     });
     setHoveredBreak(null);
@@ -329,21 +401,28 @@ const DayTimelineBar = ({ day }) => {
   }
 
   // ─────────────────────────────────────────────────────────────
-  // HALF-DAY LEAVE
+  // HALF-DAY LEAVE — always show BOTH halves
   // ─────────────────────────────────────────────────────────────
   if (isHalfDayLeave) {
-    const halfDayLabel = halfDayType === 'first' ? 'First Half Leave' : 'Second Half Leave';
-    const leaveColor = halfDayType === 'first' ? 'from-indigo-400 to-indigo-500' : 'from-indigo-500 to-indigo-600';
-    const leaveLeftPct = halfDayType === 'first' ? 0 : 50;
+    const isFirstHalfLeave = halfDayType === 'first';
+    const halfDayLabel = isFirstHalfLeave ? 'Leave: 1st Half' : 'Leave: 2nd Half';
+    const leaveColor = isFirstHalfLeave
+      ? 'from-indigo-400 to-indigo-500'
+      : 'from-indigo-500 to-indigo-600';
+    const leaveLeftPct = isFirstHalfLeave ? 0 : 50;
     const leaveWidthPct = 50;
 
+    // Which half does this leave block occupy? (in IST minutes)
+    // First half leave  => leave spans 00:00–12:00 IST
+    // Second half leave => leave spans 12:00–24:00 IST
     const isInWorkingHalf = (punchMin) => {
-      if (!punchMin) return false;
-      return halfDayType === 'first' 
-        ? punchMin >= NOON_MINUTES 
-        : punchMin < NOON_MINUTES;
+      if (punchMin == null) return false;
+      return isFirstHalfLeave
+        ? punchMin >= NOON_MINUTES      // first half is leave → work in afternoon
+        : punchMin < NOON_MINUTES;      // second half is leave → work in morning
     };
 
+    // Sessions that fall within the *working* half (in IST).
     let allSessions = [];
     if (day.sessions && day.sessions.length > 0) {
       allSessions = day.sessions;
@@ -351,32 +430,58 @@ const DayTimelineBar = ({ day }) => {
       allSessions = [{ punchInUTC: day.punchInUTC, punchOutUTC: day.punchOutUTC || null }];
     }
 
-    const workSessions = allSessions.filter(s => {
-      if (!s.punchInUTC) return false;
-      const punchMin = minutesOfDayUTC(s.punchInUTC);
-      return punchMin !== null && isInWorkingHalf(punchMin);
+    // Also track sessions that fall in the leave half, so we don't hide data.
+    const workSessions = [];
+    const leaveHalfSessions = [];
+    allSessions.forEach((s, originalIdx) => {
+      if (!s.punchInUTC) return;
+      const punchMin = minutesOfDayIST(s.punchInUTC);
+      if (punchMin == null) return;
+      if (isInWorkingHalf(punchMin)) {
+        workSessions.push({ ...s, __idx: originalIdx });
+      } else {
+        leaveHalfSessions.push({ ...s, __idx: originalIdx });
+      }
     });
 
     const totalEffectiveHours = workSessions.reduce(
-      (sum, s) => sum + (s.punchOutUTC ? calculateHours(s.punchInUTC, s.punchOutUTC) : 0), 0
+      (sum, s) => sum + (s.punchOutUTC ? calculateHours(s.punchInUTC, s.punchOutUTC) : 0),
+      0
     );
-
+    const totalLeaveHalfHours = leaveHalfSessions.reduce(
+      (sum, s) => sum + (s.punchOutUTC ? calculateHours(s.punchInUTC, s.punchOutUTC) : 0),
+      0
+    );
     const hasInProgress = workSessions.some(s => s.punchInUTC && !s.punchOutUTC);
+
+    // In/out labels for the working sessions
+    const workInTime = workSessions.length > 0 ? workSessions[0].punchInUTC : null;
+    const workOutTime = (() => {
+      const withOut = workSessions.filter(s => s.punchOutUTC);
+      if (withOut.length === 0) return null;
+      // latest out
+      return withOut.reduce((acc, s) => {
+        if (!acc) return s.punchOutUTC;
+        return new Date(s.punchOutUTC) > new Date(acc) ? s.punchOutUTC : acc;
+      }, null);
+    })();
 
     return (
       <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
         <div className="relative h-1 rounded-full bg-slate-100">
+          {/* The leave half (always drawn, full 50%) */}
           <div
             className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${leaveColor}`}
             style={{ left: `${leaveLeftPct}%`, width: `${leaveWidthPct}%` }}
           />
 
+          {/* Worked sessions in the working half */}
           {workSessions.map((session, idx) => {
-            const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
+            const startMin = clampToTrack(minutesOfDayIST(session.punchInUTC));
             const endMin = session.punchOutUTC
-              ? clampToTrack(minutesOfDayUTC(session.punchOutUTC))
+              ? clampToTrack(minutesOfDayIST(session.punchOutUTC))
               : clampToTrack(startMin + 2);
-            
+
             const segLeftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
             const segWidthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
 
@@ -389,24 +494,52 @@ const DayTimelineBar = ({ day }) => {
               />
             );
           })}
+
+          {/* In/out labels for the work half */}
+          {workInTime && (
+            <div
+              className="absolute -top-3 flex flex-col items-center z-10"
+              style={{
+                left: `${((clampToTrack(minutesOfDayIST(workInTime)) - trackStart) / TRACK_TOTAL_MIN) * 100}%`,
+                transform: 'translateX(-2px)'
+              }}
+            >
+              <span className="text-[7px] font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(workInTime)}</span>
+            </div>
+          )}
+          {workOutTime && (
+            <div
+              className="absolute -top-3 flex flex-col items-center z-10"
+              style={{
+                left: `${((clampToTrack(minutesOfDayIST(workOutTime)) - trackStart) / TRACK_TOTAL_MIN) * 100}%`,
+                transform: 'translateX(-90%)'
+              }}
+            >
+              <span className="text-[7px] font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(workOutTime)}</span>
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center justify-between mt-1">
-          <span className="text-[9px] font-semibold text-indigo-700 flex items-center gap-1">
+        <div className="flex items-center justify-between mt-1 gap-2">
+          <span className="text-[9px] font-semibold text-indigo-700 flex items-center gap-1 flex-shrink-0">
             <CalendarIcon size={9} className="text-indigo-500" />
             {halfDayLabel}
-            {(totalEffectiveHours > 0 || hasInProgress) && (
-              <span className="text-[8px] font-medium text-emerald-700 ml-1">
-                (Worked: {totalEffectiveHours > 0 ? formatHours(totalEffectiveHours) : 'In progress'})
+          </span>
+          <span className="flex items-center gap-1.5 flex-shrink-0">
+            {totalEffectiveHours > 0 && (
+              <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                Worked: {formatHours(totalEffectiveHours)}
+              </span>
+            )}
+            {hasInProgress && (
+              <span className="text-[8px] font-semibold text-amber-600">In progress</span>
+            )}
+            {totalLeaveHalfHours > 0 && (
+              <span className="text-[8px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                Leave hrs: {formatHours(totalLeaveHalfHours)}
               </span>
             )}
           </span>
-          {totalEffectiveHours > 0 && (
-            <span className="text-[8px] font-semibold text-emerald-700">{formatHours(totalEffectiveHours)}</span>
-          )}
-          {hasInProgress && !totalEffectiveHours && (
-            <span className="text-[8px] font-semibold text-amber-600">In progress</span>
-          )}
         </div>
 
         <HoverTooltip session={hoveredSession} breakInfo={hoveredBreak} position={tooltipPosition} />
@@ -442,8 +575,8 @@ const DayTimelineBar = ({ day }) => {
 
   const renderSegments = () => {
     if (!day.sessions || day.sessions.length === 0) {
-      const startMin = clampToTrack(minutesOfDayUTC(day.punchInUTC));
-      const endMin = clampToTrack(minutesOfDayUTC(day.punchOutUTC) || startMin + 5);
+      const startMin = clampToTrack(minutesOfDayIST(day.punchInUTC));
+      const endMin = clampToTrack(minutesOfDayIST(day.punchOutUTC) || startMin + 5);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
       return <div className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar}`} style={{ left: `${leftPct}%`, width: `${widthPct}%` }} />;
@@ -455,9 +588,9 @@ const DayTimelineBar = ({ day }) => {
     day.sessions.forEach((session, idx) => {
       if (!session.punchInUTC) return;
 
-      const startMin = clampToTrack(minutesOfDayUTC(session.punchInUTC));
+      const startMin = clampToTrack(minutesOfDayIST(session.punchInUTC));
       const isLast = idx === totalSegments - 1;
-      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayUTC(session.punchOutUTC)) : clampToTrack(startMin + 2);
+      const endMin = session.punchOutUTC ? clampToTrack(minutesOfDayIST(session.punchOutUTC)) : clampToTrack(startMin + 2);
       const leftPct = ((startMin - trackStart) / TRACK_TOTAL_MIN) * 100;
       const widthPct = Math.max(1, ((endMin - startMin) / TRACK_TOTAL_MIN) * 100);
 
@@ -488,8 +621,8 @@ const DayTimelineBar = ({ day }) => {
       }
 
       if (!isLast && session.punchOutUTC && day.sessions[idx + 1]?.punchInUTC) {
-        const gapStart = clampToTrack(minutesOfDayUTC(session.punchOutUTC));
-        const gapEnd = clampToTrack(minutesOfDayUTC(day.sessions[idx + 1].punchInUTC));
+        const gapStart = clampToTrack(minutesOfDayIST(session.punchOutUTC));
+        const gapEnd = clampToTrack(minutesOfDayIST(day.sessions[idx + 1].punchInUTC));
         const gapMinutes = gapEnd - gapStart;
 
         if (gapMinutes >= 5) {
@@ -609,23 +742,14 @@ const AttendanceCombined = ({ userId, token }) => {
     }
   };
 
-  const toUTCDateString = (dateLike) => {
-    const date = new Date(dateLike);
-    if (isNaN(date.getTime())) return null;
-    const y = date.getUTCFullYear();
-    const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-    const d = String(date.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  };
-
   const isHoliday = useCallback((dateStr) => {
-    const dateString = toUTCDateString(dateStr);
+    const dateString = toStoredDateString(dateStr);
     if (!dateString) return null;
-    return holidays.find(h => toUTCDateString(h.date) === dateString) || null;
+    return holidays.find(h => toStoredDateString(h.date) === dateString) || null;
   }, [holidays]);
 
   const getLeaveForDate = useCallback((dateStr) => {
-    const dateString = toUTCDateString(dateStr);
+    const dateString = toStoredDateString(dateStr);
     if (!dateString) return null;
     const checkDate = new Date(dateString + 'T00:00:00.000Z');
     return leaves.find(l => {
@@ -639,12 +763,11 @@ const AttendanceCombined = ({ userId, token }) => {
 
   const isLatePunchWithShift = useCallback((punchTime) => {
     if (!punchTime || shiftConfig.isLoading) return false;
-    const punchDate = new Date(punchTime);
-    if (isNaN(punchDate.getTime())) return false;
-    const punchMinutes = punchDate.getUTCHours() * 60 + punchDate.getUTCMinutes();
+    const ist = getISTParts(punchTime);
+    if (!ist) return false;
     const shiftStartMinutes = getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
     const gracePeriod = shiftConfig.gracePeriod || 15;
-    return punchMinutes > shiftStartMinutes + gracePeriod;
+    return ist.totalMinutes > shiftStartMinutes + gracePeriod;
   }, [shiftConfig]);
 
   // ─────────────────────────────────────────────────────────────
@@ -792,12 +915,16 @@ const AttendanceCombined = ({ userId, token }) => {
   // Stats
   // ─────────────────────────────────────────────────────────────
   const calculateStatsForMonth = (days) => {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayIST = new Date().toLocaleDateString('en-CA', { timeZone: IST_TZ });
+
     const monthDaysList = days.filter(day => {
       if (!day.date) return false;
-      const date = new Date(day.date);
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+      const stored = toStoredDateString(day.date);
+      if (!stored) return false;
+      const [y, m] = stored.split('-').map(Number);
+      return (m - 1) === selectedMonth && y === selectedYear;
     });
+
     const sortedDays = [...monthDaysList].sort((a, b) => new Date(a.date) - new Date(b.date));
 
     const weeks = [];
@@ -806,7 +933,7 @@ const AttendanceCombined = ({ userId, token }) => {
     let weekNumber = 1;
 
     for (const day of sortedDays) {
-      const dayOfWeek = new Date(day.date).getDay();
+      const dayOfWeek = new Date(day.date).getUTCDay();
       if (dayOfWeek === 1 || weekStartDate === null) {
         if (currentWeek.length > 0) {
           weeks.push({ weekNumber, days: [...currentWeek] });
@@ -820,7 +947,7 @@ const AttendanceCombined = ({ userId, token }) => {
     if (currentWeek.length > 0) weeks.push({ weekNumber, days: [...currentWeek] });
 
     const weeklyAverages = weeks.map((week) => {
-      const daysWithoutToday = week.days.filter(day => day.date !== todayStr);
+      const daysWithoutToday = week.days.filter(day => toStoredDateString(day.date) !== todayIST);
       const daysWithoutLeave = daysWithoutToday.filter(d => d.status !== 'leave' && !d.isHoliday);
       const presentDays = daysWithoutLeave.filter(d => ['present', 'late'].includes(getDisplayStatus(d)));
       const lateDays = daysWithoutLeave.filter(d => getDisplayStatus(d) === 'late');
@@ -845,7 +972,7 @@ const AttendanceCombined = ({ userId, token }) => {
     });
 
     const workingDays = monthDaysList.filter(d => !d.isWeekend && !d.isHoliday && d.status !== 'leave');
-    const daysWithoutToday = workingDays.filter(d => d.date !== todayStr);
+    const daysWithoutToday = workingDays.filter(d => toStoredDateString(d.date) !== todayIST);
     const presentDays = daysWithoutToday.filter(d => ['present', 'late'].includes(getDisplayStatus(d)));
     const lateDays = daysWithoutToday.filter(d => getDisplayStatus(d) === 'late');
     const absentDays = daysWithoutToday.filter(d => getDisplayStatus(d) === 'absent');
@@ -911,8 +1038,10 @@ const AttendanceCombined = ({ userId, token }) => {
   const monthDays = useMemo(() => {
     return attendanceData.filter(day => {
       if (!day.date) return false;
-      const date = new Date(day.date);
-      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
+      const stored = toStoredDateString(day.date);
+      if (!stored) return false;
+      const [y, m] = stored.split('-').map(Number);
+      return (m - 1) === selectedMonth && y === selectedYear;
     });
   }, [attendanceData, selectedMonth, selectedYear]);
 
@@ -966,9 +1095,8 @@ const AttendanceCombined = ({ userId, token }) => {
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header - split into 2 rows, row 2 spreads full table width */}
+      {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50/70 to-white">
-        {/* Row 1: title + refresh + month + shift */}
         <div className="flex items-center gap-2.5 flex-wrap w-full mb-3">
           <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
             <BarChart3 size={18} className="text-blue-700" />
@@ -1044,7 +1172,6 @@ const AttendanceCombined = ({ userId, token }) => {
           </div>
         </div>
 
-        {/* Row 2: legend spread full width */}
         <div className="flex items-center justify-between gap-4 w-full text-[10px] font-bold text-slate-700">
           <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span>On Time</span></span>
           <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div><span>Late</span></span>
@@ -1054,10 +1181,9 @@ const AttendanceCombined = ({ userId, token }) => {
         </div>
       </div>
 
-      {/* Stats - larger, full width spread */}
+      {/* Stats */}
       <div className="px-3 py-3 bg-slate-50/50 border-b border-slate-100">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 w-full">
-          {/* Working */}
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
               <CalendarIcon size={14} className="text-slate-700" />
@@ -1068,7 +1194,6 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
           </div>
 
-          {/* On Time */}
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center flex-shrink-0">
               <CheckCircle size={14} className="text-emerald-600" />
@@ -1079,7 +1204,6 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
           </div>
 
-          {/* Absent */}
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
               <XCircle size={14} className="text-rose-600" />
@@ -1090,7 +1214,6 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
           </div>
 
-          {/* Late */}
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center flex-shrink-0">
               <AlertCircle size={14} className="text-amber-600" />
@@ -1101,7 +1224,6 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
           </div>
 
-          {/* Avg Eff */}
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center flex-shrink-0">
               <Clock size={14} className="text-indigo-600" />
@@ -1118,7 +1240,6 @@ const AttendanceCombined = ({ userId, token }) => {
             </div>
           </div>
 
-          {/* Avg Gross */}
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
               <BarChart3 size={14} className="text-slate-700" />
@@ -1137,7 +1258,7 @@ const AttendanceCombined = ({ userId, token }) => {
         </div>
       </div>
 
-      {/* Table - header stays bold; body content lighter */}
+      {/* Table */}
       <div className="overflow-x-auto p-3">
         <table className="w-full min-w-[900px]">
           <thead>
@@ -1150,7 +1271,7 @@ const AttendanceCombined = ({ userId, token }) => {
           <tbody className="divide-y divide-slate-100">
             {monthDays.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-2 py-8 text-center">
+                <td colSpan={7} className="px-2 py-8 text-center">
                   <div className="flex flex-col items-center gap-1.5">
                     <CalendarIcon size={20} className="text-slate-300" />
                     <p className="text-xs font-medium text-slate-500">No attendance data for {monthNames[selectedMonth]} {selectedYear}</p>
@@ -1173,10 +1294,7 @@ const AttendanceCombined = ({ userId, token }) => {
                 const shiftStartMinutes = shiftConfig.isLoading ? null : getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
                 const arrivalStatus = getArrivalStatus(day, shiftStartMinutes, shiftConfig.gracePeriod);
 
-                let outDisplay = '—';
-                if (!isWeekend && !isHolidayDay && !isFullDayLeaveOnly && hasIn) {
-                  outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
-                }
+                // For half-day leave rows, DON'T hide work data.
                 const hideWorkData = isHolidayDay || isFullDayLeaveOnly;
 
                 return (
