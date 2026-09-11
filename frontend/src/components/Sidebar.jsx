@@ -493,6 +493,7 @@ const Sidebar = () => {
       { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
       { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
+      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
     ],
 
