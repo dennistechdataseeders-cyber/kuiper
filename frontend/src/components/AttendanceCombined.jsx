@@ -4,6 +4,8 @@
 // ✅ FIXED: Weekend/Absent rows no longer show "0 hr 0 min"
 // ✅ FIXED: Removed "Sessions" column from table
 // ✅ FIXED: On-Time/Late calculation now uses IST conversion (matches displayed times)
+// ✅ REMOVED: Row-click session details expansion (no session panel anymore)
+// ✅ FIXED: Effective hours now falls back to Gross if no session breakdown available
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
@@ -19,7 +21,6 @@ import {
   ChevronRight,
   BarChart3,
   ChevronDown,
-  ChevronUp,
   Gift,
   Coffee,
   User,
@@ -65,7 +66,7 @@ const clampToTrack = (mins) => {
 };
 
 /**
- * ✅ NEW: Convert a UTC timestamp to IST minutes-of-day.
+ * ✅ Convert a UTC timestamp to IST minutes-of-day.
  * Used for all "late" checks so the comparison matches
  * what the user actually sees on screen (IST times).
  */
@@ -182,9 +183,8 @@ const STATUS_LABELS = {
 const getStatusLabel = (status) => STATUS_LABELS[status] || '—';
 
 /**
- * ✅ FIXED: getArrivalStatus now converts the punch time to IST
- * before comparing against the shift start + grace period, so the
- * "On Time" / "Xm late" label matches the IST times shown in the table.
+ * ✅ getArrivalStatus converts the punch time to IST
+ * before comparing against the shift start + grace period.
  */
 const getArrivalStatus = (day, shiftStartMinutes, gracePeriodMinutes = 15) => {
   if (!day.punchInUTC) return '—';
@@ -623,7 +623,6 @@ const AttendanceCombined = ({ userId, token }) => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [expandedRows, setExpandedRows] = useState({});
   const [currentPage, setCurrentPage] = useState(1);
   const DAYS_PER_PAGE = 10;
   const [stats, setStats] = useState({
@@ -714,8 +713,7 @@ const AttendanceCombined = ({ userId, token }) => {
   }, [leaves]);
 
   /**
-   * ✅ FIXED: Late check now converts punch time to IST first.
-   * This makes it consistent with the IST times shown on screen.
+   * ✅ Late check converts punch time to IST first.
    */
   const isLatePunchWithShift = useCallback((punchTime) => {
     if (!punchTime || shiftConfig.isLoading) return false;
@@ -773,158 +771,106 @@ const AttendanceCombined = ({ userId, token }) => {
         const data = response.data.data;
 
         const processedDays = (data.days || []).map(day => {
-  // ─────────────────────────────────────────────
-  // ✅ SANITIZE SESSIONS:
-  // Discard any session whose timestamps don't fall on the same
-  // calendar day as the parent day row, or whose duration is
-  // implausibly large (> 24h). These come from stale/corrupted
-  // backend data and would poison the Eff/Gross math.
-  // ─────────────────────────────────────────────
-  const MAX_PLAUSIBLE_MS = 24 * 60 * 60 * 1000; // 24 hours
-  const dayDateStr = (() => {
-    if (!day.date) return null;
-    const d = new Date(day.date);
-    if (isNaN(d.getTime())) return null;
-    return d.toISOString().split('T')[0];
-  })();
+          const sessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
 
-  const rawSessions = (day.sessions && day.sessions.length > 0) ? day.sessions : [];
+          // ─────────────────────────────────────────────
+          // EFFECTIVE = sum of each session's actual duration
+          // GROSS     = wall-clock span between earliest In and latest Out
+          // ─────────────────────────────────────────────
+          let effectiveMs = 0;
+          let firstInMs = null;
+          let lastOutMs = null;
+          let lastOutUTC = null;
 
-  const sessions = rawSessions.filter(session => {
-    if (!session || !session.punchInUTC) return false;
+          sessions.forEach((session) => {
+            if (!session.punchInUTC) return;
 
-    const inMs = new Date(session.punchInUTC).getTime();
-    if (isNaN(inMs)) return false;
+            const inMs = new Date(session.punchInUTC).getTime();
+            if (isNaN(inMs)) return;
 
-    // If this session has a punch-out, validate it strictly
-    if (session.punchOutUTC) {
-      const outMs = new Date(session.punchOutUTC).getTime();
-      if (isNaN(outMs)) return false;
+            if (firstInMs === null || inMs < firstInMs) firstInMs = inMs;
 
-      const sessionMs = outMs - inMs;
-      if (sessionMs < 0) return false;              // out before in
-      if (sessionMs > MAX_PLAUSIBLE_MS) return false; // > 24h — corrupt
+            if (session.punchOutUTC) {
+              const outMs = new Date(session.punchOutUTC).getTime();
+              if (isNaN(outMs)) return;
 
-      // If the session's IN date doesn't match the day row's date,
-      // this session belongs to a different day — discard it.
-      if (dayDateStr) {
-        const sessionDateStr = new Date(session.punchInUTC)
-          .toISOString()
-          .split('T')[0];
-        if (sessionDateStr !== dayDateStr) return false;
-      }
-    } else {
-      // Open session (no punch-out yet) — still validate IN date matches
-      if (dayDateStr) {
-        const sessionDateStr = new Date(session.punchInUTC)
-          .toISOString()
-          .split('T')[0];
-        // Allow a 1-day slack for overnight shifts starting the previous day
-        const dayMs = new Date(dayDateStr + 'T00:00:00.000Z').getTime();
-        const diffDays = Math.abs(inMs - dayMs) / (1000 * 60 * 60 * 24);
-        if (diffDays > 1) return false;
-      }
-    }
+              const sessionMs = outMs - inMs;
+              if (sessionMs > 0) effectiveMs += sessionMs;
 
-    return true;
-  });
+              if (lastOutMs === null || outMs > lastOutMs) {
+                lastOutMs = outMs;
+                lastOutUTC = session.punchOutUTC;
+              }
+            }
+          });
 
-  // ─────────────────────────────────────────────
-  // ✅ EFFECTIVE = sum of each closed session's actual duration
-  // ✅ GROSS     = wall-clock span between earliest In and latest Out
-  // Both use raw millisecond timestamps so cross-midnight days work correctly.
-  // ─────────────────────────────────────────────
-  let effectiveMs = 0;          // sum of closed session durations
-  let firstInMs = null;         // earliest punch-in across all sessions
-  let lastOutMs = null;         // latest punch-out across all sessions
-  let lastOutUTC = null;        // latest punch-out as ISO string for display
+          // Fallback for legacy single-punch days without a sessions array
+          if (sessions.length === 0 && day.punchInUTC) {
+            const inMs = new Date(day.punchInUTC).getTime();
+            if (!isNaN(inMs)) {
+              firstInMs = inMs;
+              if (day.punchOutUTC) {
+                const outMs = new Date(day.punchOutUTC).getTime();
+                if (!isNaN(outMs) && outMs > inMs) {
+                  effectiveMs = outMs - inMs;
+                  lastOutMs = outMs;
+                  lastOutUTC = day.punchOutUTC;
+                }
+              }
+            }
+          }
 
-  sessions.forEach((session) => {
-    if (!session.punchInUTC) return;
+          const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
+            ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
+            : (effectiveMs / (1000 * 60 * 60));
 
-    const inMs = new Date(session.punchInUTC).getTime();
-    if (isNaN(inMs)) return;
+          // ✅ If effectiveMs somehow came out 0 but we have a valid gross span,
+          // fall back to using grossHours as effective (single-session day
+          // where the backend didn't populate session durations correctly).
+          let effectiveHours = effectiveMs / (1000 * 60 * 60);
+          if (effectiveHours <= 0 && grossHours > 0) {
+            effectiveHours = grossHours;
+          }
 
-    if (firstInMs === null || inMs < firstInMs) firstInMs = inMs;
+          // ✅ SAFETY: Effective can never exceed Gross.
+          const safeEffectiveHours = Math.min(effectiveHours, grossHours);
 
-    if (session.punchOutUTC) {
-      const outMs = new Date(session.punchOutUTC).getTime();
-      if (isNaN(outMs)) return;
+          const breakMinutes = grossHours > safeEffectiveHours
+            ? (grossHours - safeEffectiveHours) * 60
+            : 0;
 
-      // Add the closed session's duration to effective
-      const sessionMs = outMs - inMs;
-      if (sessionMs > 0) effectiveMs += sessionMs;
+          // Rebuild breakGaps
+          const breakGaps = [];
+          for (let i = 0; i < sessions.length - 1; i++) {
+            const currentOut = sessions[i].punchOutUTC;
+            const nextIn = sessions[i + 1]?.punchInUTC;
+            if (!currentOut || !nextIn) continue;
 
-      // Track the latest punch-out
-      if (lastOutMs === null || outMs > lastOutMs) {
-        lastOutMs = outMs;
-        lastOutUTC = session.punchOutUTC;
-      }
-    }
-  });
+            const gapMs = new Date(nextIn).getTime() - new Date(currentOut).getTime();
+            if (gapMs > 0 && gapMs / 60000 >= 5) {
+              breakGaps.push({
+                start: currentOut,
+                end: nextIn,
+                minutes: gapMs / 60000,
+                breakIndex: i
+              });
+            }
+          }
 
-  // Fallback for legacy single-punch days without a sessions array
-  if (sessions.length === 0 && day.punchInUTC) {
-    const inMs = new Date(day.punchInUTC).getTime();
-    if (!isNaN(inMs)) {
-      firstInMs = inMs;
-      if (day.punchOutUTC) {
-        const outMs = new Date(day.punchOutUTC).getTime();
-        if (!isNaN(outMs) && outMs > inMs) {
-          effectiveMs = outMs - inMs;
-          lastOutMs = outMs;
-          lastOutUTC = day.punchOutUTC;
-        }
-      }
-    }
-  }
+          return {
+            ...day,
+            sessions,
+            punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
+            punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
+            punchOutUTC: lastOutUTC,
+            effectiveHours: safeEffectiveHours,
+            grossHours,
+            breakMinutes,
+            breakGaps,
+            totalDuration: safeEffectiveHours
+          };
+        });
 
-  const effectiveHours = effectiveMs / (1000 * 60 * 60);
-
-  const grossHours = (firstInMs !== null && lastOutMs !== null && lastOutMs > firstInMs)
-    ? (lastOutMs - firstInMs) / (1000 * 60 * 60)
-    : effectiveHours; // still in progress → no gap yet, gross == effective
-
-  // ✅ SAFETY: Effective can never exceed Gross.
-  // If it somehow does (corrupt data slipped through), clamp it.
-  const safeEffectiveHours = Math.min(effectiveHours, grossHours);
-
-  // Break = the time NOT counted as effective (gaps between sessions + mid-session break)
-  const breakMinutes = grossHours > safeEffectiveHours
-    ? (grossHours - safeEffectiveHours) * 60
-    : 0;
-
-  // Rebuild breakGaps so the timeline can render amber segments
-  const breakGaps = [];
-  for (let i = 0; i < sessions.length - 1; i++) {
-    const currentOut = sessions[i].punchOutUTC;
-    const nextIn = sessions[i + 1]?.punchInUTC;
-    if (!currentOut || !nextIn) continue;
-
-    const gapMs = new Date(nextIn).getTime() - new Date(currentOut).getTime();
-    if (gapMs > 0 && gapMs / 60000 >= 5 && gapMs <= MAX_PLAUSIBLE_MS) {
-      breakGaps.push({
-        start: currentOut,
-        end: nextIn,
-        minutes: gapMs / 60000,
-        breakIndex: i
-      });
-    }
-  }
-
-  return {
-    ...day,
-    sessions,
-    punchInDisplay: day.punchInUTC ? formatTimeDisplay(day.punchInUTC) : null,
-    punchOutDisplay: lastOutUTC ? formatTimeDisplay(lastOutUTC) : null,
-    punchOutUTC: lastOutUTC,
-    effectiveHours: safeEffectiveHours,
-    grossHours,
-    breakMinutes,
-    breakGaps,
-    totalDuration: safeEffectiveHours
-  };
-});
         setRawAttendanceData(processedDays);
       }
     } catch (error) {
@@ -1025,7 +971,6 @@ const AttendanceCombined = ({ userId, token }) => {
 
   useEffect(() => {
     setCurrentPage(1);
-    setExpandedRows({});
     fetchAttendanceData();
   }, [selectedMonth, selectedYear]);
 
@@ -1036,17 +981,6 @@ const AttendanceCombined = ({ userId, token }) => {
   // ─────────────────────────────────────────────────────────────
   // Navigation
   // ─────────────────────────────────────────────────────────────
-  const navigateMonth = (direction) => {
-    if (direction === 'prev') {
-      if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(y => y - 1); }
-      else setSelectedMonth(m => m - 1);
-    } else {
-      if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(y => y + 1); }
-      else setSelectedMonth(m => m + 1);
-    }
-    setShowMonthPicker(false);
-  };
-
   const handleMonthSelect = (monthIndex) => { setSelectedMonth(monthIndex); setShowMonthPicker(false); };
   const handleYearSelect = (year) => { setSelectedYear(year); setShowMonthPicker(false); };
   const goToCurrentMonth = () => {
@@ -1072,11 +1006,8 @@ const AttendanceCombined = ({ userId, token }) => {
     return sorted.slice(startIndex, startIndex + DAYS_PER_PAGE);
   }, [monthDays, currentPage]);
 
-  const toggleRow = (dateStr) => setExpandedRows(prev => ({ ...prev, [dateStr]: !prev[dateStr] }));
-
   const goToPage = (page) => {
     setCurrentPage(Math.min(Math.max(page, 1), totalPages));
-    setExpandedRows({});
   };
 
   const getShiftDisplay = () => {
@@ -1267,7 +1198,6 @@ const AttendanceCombined = ({ userId, token }) => {
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-slate-50/80 border-b border-slate-200">
-              {/* ✅ REMOVED "Sessions" column */}
               {['Date', 'Day', 'Status', 'Timeline', 'In', 'Last Out', 'Eff', 'Gross', 'Arrival'].map(h => (
                 <th key={h} className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">{h}</th>
               ))}
@@ -1296,8 +1226,6 @@ const AttendanceCombined = ({ userId, token }) => {
                 const hasIn = !!(day.punchInUTC || (day.sessions && day.sessions.length > 0));
                 const today = isToday(day.date);
                 const isWeekend = day.isWeekend || false;
-                const isExpanded = expandedRows[day.date] || false;
-                const sessionCount = day.sessions?.length || 0;
 
                 const shiftStartMinutes = shiftConfig.isLoading ? null : getShiftStartMinutes(shiftConfig.shiftHour, shiftConfig.shiftMinute, shiftConfig.shiftAmPm);
                 const arrivalStatus = getArrivalStatus(day, shiftStartMinutes, shiftConfig.gracePeriod);
@@ -1307,197 +1235,86 @@ const AttendanceCombined = ({ userId, token }) => {
                   outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
                 }
                 const hideWorkData = isHolidayDay || isFullDayLeaveOnly;
-                const showSessionDetails = isExpanded && sessionCount > 0 && !hideWorkData;
-                const showLeaveDetails = isExpanded && isLeaveDay && !showSessionDetails;
-                const showHalfDayLeaveDetails = isExpanded && isHalfDayLeave && sessionCount > 0;
 
                 return (
-                  <React.Fragment key={idx}>
-                    <tr
-                      className={`hover:bg-slate-50/50 transition-all cursor-pointer ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''} ${isLeaveDay ? 'bg-indigo-50/20' : ''}`}
-                      onClick={() => toggleRow(day.date)}
-                    >
-                      <td className="px-2 py-1.5">
-                        <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : isLeaveDay ? 'text-indigo-600' : 'text-slate-700'}`}>
-                          {formatDateDisplay(day.date)}
+                  <tr
+                    key={idx}
+                    className={`transition-all ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''} ${isLeaveDay ? 'bg-indigo-50/20' : ''}`}
+                  >
+                    <td className="px-2 py-1.5">
+                      <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : isLeaveDay ? 'text-indigo-600' : 'text-slate-700'}`}>
+                        {formatDateDisplay(day.date)}
+                      </span>
+                      {today && <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>}
+                      {isHolidayDay && (
+                        <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                          <Gift size={8} />Holiday
                         </span>
-                        {today && <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>}
-                        {isHolidayDay && (
-                          <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                            <Gift size={8} />Holiday
+                      )}
+                      {isLeaveDay && (
+                        <span className="ml-1 text-[7px] font-bold bg-indigo-100 text-indigo-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
+                          <CalendarIcon size={8} />
+                          {isHalfDayLeave ? `${halfDayLabel} Leave` : 'Leave'}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5"><span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span></td>
+                    <td className="px-2 py-1.5">
+                      <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${styles.chip}`}>
+                        {getStatusIcon(displayStatus)}
+                        {getStatusLabel(displayStatus)}
+                        {displayStatus === 'late' && <span className="text-[6px] text-amber-500 ml-0.5">(Grace: {shiftConfig.gracePeriod}m)</span>}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5 min-w-[180px]">
+                      {isHolidayDay ? (
+                        <div className="flex items-center gap-2 h-5">
+                          <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
+                          <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
+                            <Gift size={10} className="text-purple-500" />
+                            {holidayName || 'Holiday'}
                           </span>
-                        )}
-                        {isLeaveDay && (
-                          <span className="ml-1 text-[7px] font-bold bg-indigo-100 text-indigo-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                            <CalendarIcon size={8} />
-                            {isHalfDayLeave ? `${halfDayLabel} Leave` : 'Leave'}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5"><span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span></td>
-                      <td className="px-2 py-1.5">
-                        <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[7px] font-bold border ${styles.chip}`}>
-                          {getStatusIcon(displayStatus)}
-                          {getStatusLabel(displayStatus)}
-                          {displayStatus === 'late' && <span className="text-[6px] text-amber-500 ml-0.5">(Grace: {shiftConfig.gracePeriod}m)</span>}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5 min-w-[180px]">
-                        {isHolidayDay ? (
-                          <div className="flex items-center gap-2 h-5">
-                            <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-                            <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
-                              <Gift size={10} className="text-purple-500" />
-                              {holidayName || 'Holiday'}
-                            </span>
-                          </div>
-                        ) : (isLeaveDay || hasIn) ? (
-                          <DayTimelineBar day={day} />
-                        ) : (
-                          <span className="text-[9px] text-slate-400 italic">—</span>
-                        )}
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className="text-[10px] font-mono font-medium text-slate-700">
-                          {hideWorkData ? '—' : (day.punchInDisplay || '—')}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className={`text-[10px] font-mono font-medium ${hideWorkData || isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
-                          {hideWorkData ? '—' : outDisplay}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className="text-[10px] font-bold text-emerald-700">
-                          {isWeekend || hideWorkData
-                            ? '—'
-                            : (day.effectiveHours > 0
-                                ? formatHours(day.effectiveHours, { unit: 'hrmin' })
-                                : '0 hr 0 min')}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className="text-[10px] font-bold text-slate-700">
-                          {isWeekend || hideWorkData
-                            ? '—'
-                            : (day.grossHours > 0
-                                ? formatHours(day.grossHours, { unit: 'hrmin' })
-                                : '0 hr 0 min')}
-                        </span>
-                      </td>
-                      <td className="px-2 py-1.5">
-                        <span className={`text-[10px] font-medium ${isFullDayLeaveOnly ? 'text-indigo-600' : displayStatus === 'late' ? 'text-amber-600' : displayStatus === 'present' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                          {isHolidayDay ? '🎉' : (isWeekend || isFullDayLeaveOnly ? '—' : arrivalStatus)}
-                        </span>
-                      </td>
-                    </tr>
-
-                    {/* Session details row */}
-                    {showSessionDetails && (
-                      <tr className="bg-blue-50/20">
-                        <td colSpan={9} className="px-4 py-3">
-                          <div className="bg-white rounded-lg border border-blue-100 p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="p-1 bg-blue-100 rounded-lg"><Clock size={12} className="text-blue-600" /></div>
-                              <p className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">Session Details ({sessionCount} sessions)</p>
-                              {day.breakMinutes > 0 && (
-                                <span className="text-[8px] font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                  <Coffee size={10} />Total Break: {formatBreakMinutes(day.breakMinutes)}
-                                </span>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                              {day.sessions.map((session, sIdx) => {
-                                const duration = session.punchOutUTC ? calculateHours(session.punchInUTC, session.punchOutUTC) : 0;
-                                return (
-                                  <div key={sIdx} className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                    <div className="flex items-center justify-between mb-1">
-                                      <span className="text-[8px] font-bold text-blue-600">Session {sIdx + 1}</span>
-                                      <span className="text-[7px] font-medium text-emerald-600">{duration > 0 ? formatHours(duration) : 'In progress'}</span>
-                                    </div>
-                                    <div className="space-y-0.5 text-[8px] text-slate-600">
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">In:</span>
-                                        <span className="font-mono font-medium">{session.punchInUTC ? formatTimeDisplay(session.punchInUTC) : '—'}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-slate-400">Out:</span>
-                                        <span className={`font-mono font-medium ${!session.punchOutUTC ? 'text-rose-500' : ''}`}>
-                                          {session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : 'No Out Punch'}
-                                        </span>
-                                      </div>
-                                      {sIdx < day.sessions.length - 1 && day.breakGaps?.[sIdx] && (
-                                        <div className="mt-1 pt-1 border-t border-slate-200 flex justify-between text-amber-600">
-                                          <span className="text-slate-400">Break:</span>
-                                          <span className="font-medium">{formatBreakMinutes(day.breakGaps[sIdx].minutes)}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Leave details row */}
-                    {showLeaveDetails && (
-                      <tr className="bg-indigo-50/20">
-                        <td colSpan={9} className="px-4 py-3">
-                          <div className="bg-white rounded-lg border border-indigo-100 p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="p-1 bg-indigo-100 rounded-lg"><CalendarIcon size={12} className="text-indigo-600" /></div>
-                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Leave Details</p>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Leave Type</p>
-                                <p className="text-sm font-bold text-indigo-700">{day.leaveType || 'Leave'}</p>
-                              </div>
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Duration</p>
-                                <p className="text-sm font-bold text-indigo-700">{isHalfDayLeave ? halfDayLabel : 'Full Day'}</p>
-                              </div>
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Work Hours</p>
-                                <p className="text-sm font-bold text-emerald-700">{day.effectiveHours > 0 ? formatHours(day.effectiveHours, { unit: 'hrmin' }) : '0 hr 0 min'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-
-                    {/* Half-day leave details after sessions */}
-                    {showHalfDayLeaveDetails && (
-                      <tr className="bg-indigo-50/20">
-                        <td colSpan={9} className="px-4 py-3">
-                          <div className="bg-white rounded-lg border border-indigo-100 p-3">
-                            <div className="flex items-center gap-2 mb-2">
-                              <div className="p-1 bg-indigo-100 rounded-lg"><CalendarIcon size={12} className="text-indigo-600" /></div>
-                              <p className="text-[9px] font-bold text-indigo-600 uppercase tracking-wider">Leave Details</p>
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Leave Type</p>
-                                <p className="text-sm font-bold text-indigo-700">{day.leaveType || 'Leave'}</p>
-                              </div>
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Duration</p>
-                                <p className="text-sm font-bold text-indigo-700">{halfDayLabel}</p>
-                              </div>
-                              <div className="border border-slate-200 rounded-lg p-2 bg-slate-50/50">
-                                <p className="text-[7px] font-bold text-slate-400 uppercase">Work Hours</p>
-                                <p className="text-sm font-bold text-emerald-700">{day.effectiveHours > 0 ? formatHours(day.effectiveHours, { unit: 'hrmin' }) : '0 hr 0 min'}</p>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                        </div>
+                      ) : (isLeaveDay || hasIn) ? (
+                        <DayTimelineBar day={day} />
+                      ) : (
+                        <span className="text-[9px] text-slate-400 italic">—</span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className="text-[10px] font-mono font-medium text-slate-700">
+                        {hideWorkData ? '—' : (day.punchInDisplay || '—')}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className={`text-[10px] font-mono font-medium ${hideWorkData || isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
+                        {hideWorkData ? '—' : outDisplay}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className="text-[10px] font-bold text-emerald-700">
+                        {isWeekend || hideWorkData
+                          ? '—'
+                          : (day.effectiveHours > 0
+                              ? formatHours(day.effectiveHours, { unit: 'hrmin' })
+                              : '0 hr 0 min')}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className="text-[10px] font-bold text-slate-700">
+                        {isWeekend || hideWorkData
+                          ? '—'
+                          : (day.grossHours > 0
+                              ? formatHours(day.grossHours, { unit: 'hrmin' })
+                              : '0 hr 0 min')}
+                      </span>
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <span className={`text-[10px] font-medium ${isFullDayLeaveOnly ? 'text-indigo-600' : displayStatus === 'late' ? 'text-amber-600' : displayStatus === 'present' ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {isHolidayDay ? '🎉' : (isWeekend || isFullDayLeaveOnly ? '—' : arrivalStatus)}
+                      </span>
+                    </td>
+                  </tr>
                 );
               })
             )}
