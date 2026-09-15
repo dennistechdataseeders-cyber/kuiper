@@ -245,7 +245,7 @@ const Sidebar = () => {
   // DOWNLOAD GUIDE
   const handleDownloadGuide = () => {
     window.open(
-      'https://res.cloudinary.com/dhcwcyqke/image/upload/v1778510161/Future_Feature_Office_File_bhznye.pdf',
+      'https://res.cloudinary.com/dhcwcyqke/image/upload/v1789479854/KUIPER_Client_User_Guide_cmyt08.pdf',
       '_blank'
     );
   };
@@ -794,7 +794,7 @@ const Sidebar = () => {
               {/* ============================================
                   UPDATE PROFILE BUTTON - ADDED
                   ============================================ */}
-              <button
+              {/* <button
                 onClick={() => {
                   setShowProfileModal(true);
                   setShowUserMenu(false);
@@ -803,7 +803,7 @@ const Sidebar = () => {
               >
                 <Pencil size={13} className="text-emerald-400" />
                 <span>Update Profile</span>
-              </button>
+              </button> */}
 
               <div className="h-px bg-white/5 my-1 mx-1" />
 
