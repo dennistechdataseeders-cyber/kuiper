@@ -1,5 +1,6 @@
 // backend/controllers/ticketController.js - COMPLETE UPDATED FILE
 
+const mongoose = require('mongoose');
 const Ticket = require('../models/Ticket');
 const Project = require('../models/Project');
 const Feed = require('../models/Feed');
@@ -925,34 +926,51 @@ exports.createTicket = async (req, res) => {
     
     // ============================================
     // Process watchers - EXCLUDE Admin AND Client users
+    // Uses a Set of string ids so ObjectId/string mixing can't create duplicates
     // ============================================
-    let finalWatchers = [];
+    const watcherIdSet = new Set();
+    const addWatcher = (id) => {
+      if (id) watcherIdSet.add(id.toString());
+    };
+    
+    // 1. Watchers explicitly picked in the Create Ticket form
     if (watchers && Array.isArray(watchers) && watchers.length > 0) {
       const validWatchers = await User.find({
         _id: { $in: watchers },
         isActive: true,
         role: { $nin: ['Admin', 'Client'] } // EXCLUDE Admin AND Client
       }).select('_id');
-      finalWatchers = validWatchers.map(u => u._id);
+      validWatchers.forEach(u => addWatcher(u._id));
     }
     
-    // Add creator as watcher automatically (if not Admin or Client)
+    // 2. NEW: every developer assigned to the feed becomes a watcher,
+    //    so the ticket lands in ALL of their buckets - not just the assignee's
+    if (finalFeedId) {
+      const feedForWatchers = await Feed.findById(finalFeedId).populate({
+        path: 'assignedDevelopers',
+        select: '_id',
+        match: { isActive: true, role: { $nin: ['Admin', 'Client'] } }
+      });
+      (feedForWatchers?.assignedDevelopers || [])
+        .filter(Boolean)
+        .forEach(dev => addWatcher(dev._id));
+    }
+    
+    // 3. Add creator as watcher automatically (if not Admin or Client)
     const creatorRole = req.user.role;
     if (creatorRole !== 'Admin' && creatorRole !== 'Client') {
-      if (!finalWatchers.includes(req.user.id)) {
-        finalWatchers.push(req.user.id);
-      }
+      addWatcher(req.user.id);
     }
     
-    // Add assignee as watcher automatically if assigned (if not Admin or Client)
+    // 4. Add assignee as watcher automatically if assigned (if not Admin or Client)
     if (finalAssignedTo) {
       const assigneeUser = await User.findById(finalAssignedTo).select('role');
       if (assigneeUser && assigneeUser.role !== 'Admin' && assigneeUser.role !== 'Client') {
-        if (!finalWatchers.includes(finalAssignedTo)) {
-          finalWatchers.push(finalAssignedTo);
-        }
+        addWatcher(finalAssignedTo);
       }
     }
+    
+    const finalWatchers = [...watcherIdSet].map(id => new mongoose.Types.ObjectId(id));
     
     const ticket = new Ticket({
       title,
@@ -1395,12 +1413,18 @@ exports.getTickets = async (req, res) => {
         ]
       };
     } else if (userRole === 'Developer') {
+      // Feeds this developer is assigned to - every ticket raised on those
+      // feeds belongs in their bucket, even if someone else is the assignee
+      const devFeeds = await Feed.find({ assignedDevelopers: userId }).select('_id');
+      const devFeedIds = devFeeds.map(f => f._id);
+
       filter = {
         $or: [
           { assignedTo: userId },
           { createdBy: userId },
           { assignedTo: null },
-          { watchers: userId } // ✅ ADD THIS - Developers see tickets they're watching
+          { watchers: userId },
+          { feedId: { $in: devFeedIds } } // ✅ NEW - feed-based visibility
         ]
       };
     } else if (userRole === 'Project Manager') {

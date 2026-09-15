@@ -108,6 +108,12 @@ const getTicketCreatedTemplate = (ticket, creatorName, recipientsList, frontendU
           </tr>
 
           <tr>
+            <td style="padding:0 40px 36px 40px; text-align:center;">
+              <a href="${ticketUrl}" style="display:inline-block; background:#2563eb; color:white; text-decoration:none; padding:14px 32px; border-radius:40px; font-weight:700; font-size:14px;">View Ticket &rarr;</a>
+            </td>
+          </tr>
+
+          <tr>
             <td style="padding:0 40px 32px 40px; text-align:center;">
               <img src="https://res.cloudinary.com/dhcwcyqke/image/upload/q_auto/f_auto/v1779973871/image_1_1_c60r0l.png" alt="KUIPER Footer" style="width:160px; max-width:60%; display:inline-block;">
             </td>
