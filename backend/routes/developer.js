@@ -1,4 +1,4 @@
-// backend/routes/developer.js - COMPLETE FIXED VERSION
+// backend/routes/developer.js - COMPLETE FIXED VERSION (v2: hardened main-only push)
 
 const express = require('express');
 const router = express.Router();
@@ -76,8 +76,8 @@ router.get('/my-projects', protect, authorize('Developer'), async (req, res) => 
 router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
-    const feeds = await Feed.find({ 
+
+    const feeds = await Feed.find({
       assignedDevelopers: req.user._id
     })
       .populate({
@@ -93,14 +93,14 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
     const enhancedFeeds = feeds.map(feed => {
       const project = feed.projectId;
       let gitPath = null;
-      
+
       if (project && project.gitRepoName && project.gitRepoUrl) {
         const feedFolderName = feed.name
           .toLowerCase()
           .replace(/[^a-z0-9-]/g, '-')
           .replace(/-+/g, '-')
           .replace(/^-|-$/g, '');
-        
+
         gitPath = {
           repoName: project.gitRepoName,
           repoUrl: project.gitRepoUrl,
@@ -114,7 +114,7 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
           displayPath: `${feedFolderName}/src`
         };
       }
-      
+
       return {
         ...feed,
         gitPath,
@@ -134,6 +134,9 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
 /**
  * @route   GET /api/dev/feeds/:feedId/generate-script
  * @desc    Generate secure deployment script
+ *          - Clones the existing repo (preserves all history / other feeds' folders)
+ *          - Touches ONLY <feedFolder>/src
+ *          - Always targets the 'main' branch — no 'master' fallback, no force push
  * @access  Private (Developer)
  */
 router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), async (req, res) => {
@@ -149,7 +152,7 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
     }
 
     const project = feed.projectId;
-    
+
     if (!project || !project.gitRepoUrl) {
       return res.status(400).json({ error: 'No Git repository linked to this feed' });
     }
@@ -157,7 +160,7 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
     const isAssigned = feed.assignedDevelopers.some(
       devId => devId.toString() === req.user._id.toString()
     );
-    
+
     if (!isAssigned) {
       return res.status(403).json({ error: 'Not authorized to access this feed' });
     }
@@ -170,7 +173,7 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
 
     let writeToken = process.env.GITHUB_WRITE_TOKEN;
     let authenticatedUrl = null;
-    
+
     if (writeToken && writeToken.startsWith('ghp_')) {
       const repoOwner = project.gitRepoOwner || process.env.GITHUB_OWNER;
       authenticatedUrl = `https://${writeToken}@github.com/${repoOwner}/${project.gitRepoName}.git`;
@@ -179,9 +182,10 @@ router.get('/feeds/:feedId/generate-script', protect, authorize('Developer'), as
     const pythonScript = `#!/usr/bin/env python3
 """
 DEPLOYMENT SCRIPT for ${feed.name}
-- Uploads files to GitHub repository
+- Clones the existing repository (full history + all other feed folders preserved)
+- Updates ONLY the folder for this feed (${feedFolderName}/src)
+- Pushes directly to the 'main' branch on GitHub — no 'master' fallback, never force-pushed
 ${authenticatedUrl ? '- Uses secure token authentication' : '- Manual authentication required'}
-- Only pushes files with extensions: .py, .txt, .exe, .bat
 """
 
 import os
@@ -194,290 +198,180 @@ from datetime import datetime
 # ============================================
 # CONFIGURATION
 # ============================================
-REPO_URL = "${project.gitRepoUrl}"
 REPO_NAME = "${project.gitRepoName}"
 FEED_FOLDER = "${feedFolderName}"
-TARGET_PATH = f"{FEED_FOLDER}/src"
+TARGET_PATH = f"{FEED_FOLDER}/src"  # The ONLY folder this script is allowed to touch
+TARGET_BRANCH = "main"              # Hardcoded. Every push goes to 'main'. No master fallback.
 
-# Allowed file extensions
+# Allowed file extensions to be pushed
 ALLOWED_EXTENSIONS = {'.py', '.txt', '.exe', '.bat'}
 
 # Get current directory (where deploy.py is located)
 CURRENT_DIR = Path(__file__).parent.absolute()
 
 print("=" * 70)
-print("📦 DEPLOYMENT SCRIPT")
+print("📦 DEPLOYMENT SCRIPT (Incremental Update — main branch only)")
 print("📦 Feed: ${feed.name}")
 print(f"👤 Developer: ${req.user.name}")
 print(f"⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 print("=" * 70)
-print(f"📁 Source: {CURRENT_DIR}")
-print(f"🎯 Target: ${feed.name}/src")
+print(f"📁 Local Source: {CURRENT_DIR}")
+print(f"🎯 Remote Target: ${project.gitRepoName}/{TARGET_PATH}")
+print(f"🌿 Target Branch: {TARGET_BRANCH}")
 print(f"📋 Allowed extensions: {', '.join(ALLOWED_EXTENSIONS)}")
 print()
 
 ${authenticatedUrl ? `
-# With token authentication
 AUTH_REPO_URL = "${authenticatedUrl}"
+` : `
+AUTH_REPO_URL = "${project.gitRepoUrl}"
+`}
 
 def run_command(cmd, cwd=None, capture=False):
     """Run shell command and return result"""
     try:
         if capture:
-            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True)
+            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, check=False)
             return result.returncode == 0, result.stdout, result.stderr
         else:
             subprocess.run(cmd, shell=True, cwd=cwd, check=True)
             return True, "", ""
     except subprocess.CalledProcessError as e:
         return False, "", str(e)
-` : `
-def run_command(cmd, cwd=None, capture=False, env=None):
-    """Run shell command and return result"""
-    try:
-        if capture:
-            result = subprocess.run(cmd, shell=True, cwd=cwd, capture_output=True, text=True, env=env)
-            return result.returncode == 0, result.stdout, result.stderr
-        else:
-            subprocess.run(cmd, shell=True, cwd=cwd, check=True, env=env)
-            return True, "", ""
-    except subprocess.CalledProcessError as e:
-        return False, "", str(e)
 
-def check_git_credentials():
-    """Check if git credentials are available"""
-    success, stdout, _ = run_command("git config user.name", capture=True)
-    has_name = success and stdout.strip()
-    success, stdout, _ = run_command("git config user.email", capture=True)
-    has_email = success and stdout.strip()
-    
-    if not has_name or not has_email:
-        print("⚠️ Git user not configured. Please run:")
-        print('  git config --global user.name "Your Name"')
-        print('  git config --global user.email "your.email@example.com"')
-        return False
-    return True
-`}
-
-def is_allowed_file(file_path):
-    """Check if file has an allowed extension"""
-    extension = file_path.suffix.lower()
-    return extension in ALLOWED_EXTENSIONS
-
-def create_temp_repo():
-    """Create a temporary repository for pushing"""
-    temp_dir = Path(tempfile.mkdtemp()) / REPO_NAME
-    temp_dir.mkdir(parents=True, exist_ok=True)
-    
-    print("🔧 Setting up temporary workspace...")
-    
-    # Initialize git repo
-    run_command("git init", cwd=temp_dir)
-    
-${authenticatedUrl ? `
-    # Set up remote with token
-    run_command(f"git remote add origin {AUTH_REPO_URL}", cwd=temp_dir)
-` : `
-    # Set up remote
-    run_command(f"git remote add origin {REPO_URL}", cwd=temp_dir)
-    
-    print("⚠️ You will need to enter your GitHub credentials when pushing")
-`}
-    
-    # Configure git
-    run_command('git config user.name "KUIPER Deployment"', cwd=temp_dir)
-    run_command('git config user.email "deploy@kuiper.com"', cwd=temp_dir)
-    
-    return temp_dir
-
-def create_initial_structure(repo_path):
-    """Create the complete folder structure"""
+def update_feed_folder(repo_path):
+    """Clears ONLY this feed's src folder and copies new files into it.
+    Every other folder in the repo (other feeds, docs, tests, config, README) is left untouched."""
     target_folder = repo_path / TARGET_PATH
+    print(f"🗑️  Clearing previous files in '{TARGET_PATH}'...")
+    if target_folder.exists():
+        shutil.rmtree(target_folder)
     target_folder.mkdir(parents=True, exist_ok=True)
-    
-    readme_content = f"""# ${feed.name} Feed
+    print("✓ Previous files cleared")
 
-## Deployment Information
-- **Feed ID**: ${feed._id}
-- **Last Deployed**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-- **Deployed By**: ${req.user.name}
-
-## Structure
-- \`/src\` - Source code files
-- This folder is automatically updated on each deployment
-
-## Allowed File Extensions
-- .py - Python files
-- .txt - Text files
-- .exe - Executable files
-- .bat - Batch files
-
-## Auto-generated by KUIPER CRM
-"""
-    readme_path = target_folder / "README.md"
-    readme_path.write_text(readme_content)
-    print(f"  📄 Created: README.md")
-    
-    return target_folder
-
-def clear_previous_files(folder_path):
-    """Clear all previous files in the target folder"""
-    if folder_path.exists():
-        print("🗑️  Clearing previous files...")
-        for item in folder_path.iterdir():
-            if item.name == 'README.md':
-                continue
-            if item.is_file():
-                item.unlink()
-            elif item.is_dir():
-                shutil.rmtree(item)
-        print("✓ Previous files cleared")
-
-def get_allowed_files(source_dir):
-    """Get all files with allowed extensions from source directory"""
-    allowed_files = []
-    for item in source_dir.rglob('*'):
-        if item.is_file() and is_allowed_file(item):
-            allowed_files.append(item)
-    return allowed_files
-
-def copy_new_files(source_dir, target_folder):
-    """Copy only allowed files to the target folder, preserving folder structure"""
-    print("📤 Uploading allowed files...")
+    print("📤 Copying new allowed files...")
     copied = 0
-    
-    # Exclude patterns
     exclude = {'.git', 'deploy.py', '__pycache__', '.DS_Store', 'venv', '.venv', 'node_modules'}
-    
-    # Get all allowed files
-    allowed_files = []
-    for item in source_dir.rglob('*'):
-        # Skip excluded directories
+
+    for item in CURRENT_DIR.rglob('*'):
         if any(excl in str(item) for excl in exclude):
             continue
-        
-        if item.is_file() and is_allowed_file(item):
-            allowed_files.append(item)
-    
-    if not allowed_files:
-        print("⚠️ No allowed files found in source directory")
-        print(f"   Allowed extensions: {', '.join(ALLOWED_EXTENSIONS)}")
-        return 0
-    
-    # Copy each allowed file preserving directory structure
-    for source_file in allowed_files:
-        relative_path = source_file.relative_to(source_dir)
-        dest_file = target_folder / relative_path
-        
-        # Create parent directories if needed
-        dest_file.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Copy file
-        shutil.copy2(source_file, dest_file)
-        print(f"  📄 Uploaded: {relative_path}")
-        copied += 1
-    
-    print(f"✓ Uploaded {copied} allowed file(s)")
+        if item.is_file() and item.suffix.lower() in ALLOWED_EXTENSIONS:
+            relative_path = item.relative_to(CURRENT_DIR)
+            dest_file = target_folder / relative_path
+            dest_file.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(item, dest_file)
+            print(f"  📄 Copied: {relative_path}")
+            copied += 1
+
+    print(f"✓ Copied {copied} allowed file(s)")
     return copied
 
-def commit_and_push(repo_path):
-    """Commit and push changes"""
-    print("📦 Committing changes...")
-    
-    # Add all files
-    success, _, stderr = run_command("git add .", cwd=repo_path, capture=True)
-    if not success:
-        print(f"❌ Failed to add files: {stderr}")
-        return False
-    
-    # Check if there are changes
-    success, stdout, _ = run_command("git diff --cached --quiet", cwd=repo_path, capture=True)
-    if success:
-        print("✓ No changes to commit")
-        return True
-    
-    # Commit
-    commit_msg = f"Deploy to ${feed.name} feed - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    success, _, stderr = run_command(f'git commit -m "{commit_msg}"', cwd=repo_path, capture=True)
-    if not success:
-        print(f"❌ Commit failed: {stderr}")
-        return False
-    
-    print("✓ Committed successfully")
-    
-    # Push to GitHub
-    print("🚀 Pushing to GitHub...")
-    
-    # Try main branch first, then master
-    for branch in ['main', 'master']:
-        success, stdout, stderr = run_command(f"git push -f origin {branch}", cwd=repo_path, capture=True)
+def ensure_main_branch_exists(repo_path):
+    """Make sure we're on a local 'main' branch that tracks origin/main whenever possible.
+    - If origin/main exists, always base off it (this is what keeps deploys safe/non-destructive).
+    - Only if 'main' truly doesn't exist anywhere is a brand new one created from HEAD."""
+    success_remote, _, _ = run_command(
+        f"git show-ref --verify --quiet refs/remotes/origin/{TARGET_BRANCH}", cwd=repo_path, capture=True
+    )
+
+    if success_remote:
+        print(f"🌿 Checking out '{TARGET_BRANCH}' tracking origin/{TARGET_BRANCH}...")
+        # -B resets/creates the local branch to match origin/main exactly, avoiding any
+        # stale local branch from a previous run interfering with the sync.
+        run_command(f"git checkout -B {TARGET_BRANCH} origin/{TARGET_BRANCH}", cwd=repo_path)
+        return
+
+    success_local, _, _ = run_command(
+        f"git show-ref --verify --quiet refs/heads/{TARGET_BRANCH}", cwd=repo_path, capture=True
+    )
+    if success_local:
+        print(f"🌿 Checking out existing local branch '{TARGET_BRANCH}'...")
+        run_command(f"git checkout {TARGET_BRANCH}", cwd=repo_path)
+        return
+
+    # No 'main' branch anywhere yet — create it from the current HEAD (repo's default branch)
+    print(f"⚠️  Branch '{TARGET_BRANCH}' not found on origin. Creating it from current HEAD...")
+    run_command(f"git checkout -b {TARGET_BRANCH}", cwd=repo_path)
+
+def push_with_retry(repo_path, max_attempts=3):
+    """Push to origin/main. If it's rejected because someone else pushed in the meantime,
+    pull --rebase and retry instead of ever force-pushing."""
+    for attempt in range(1, max_attempts + 1):
+        success, out, err = run_command(f"git push -u origin {TARGET_BRANCH}", cwd=repo_path, capture=True)
         if success:
-            print(f"✓ Successfully pushed to GitHub ({branch} branch)")
-            return True
-    
-    print(f"❌ Push failed: {stderr}")
-    return False
+            return True, err
+        if 'rejected' in (err or '').lower() or 'non-fast-forward' in (err or '').lower():
+            print(f"↻ Remote has new commits (attempt {attempt}/{max_attempts}). Rebasing and retrying...")
+            run_command(f"git pull --rebase origin {TARGET_BRANCH}", cwd=repo_path, capture=True)
+            continue
+        # Some other failure — no point retrying blindly
+        return False, err
+    return False, err
 
-def cleanup_temp_repo(repo_path):
-    """Clean up temporary repository"""
+def main():
+    if not any(CURRENT_DIR.glob("*")):
+        print("⚠️ Source directory is empty. Nothing to deploy.")
+        return
+
+    temp_dir = Path(tempfile.mkdtemp())
+    repo_path = temp_dir / REPO_NAME
+
     try:
-        shutil.rmtree(repo_path.parent)
-        print("🧹 Cleaned up temporary files")
-    except:
-        pass
+        # 1. Clone the existing repository (full history, ALL feed folders intact)
+        print(f"📡 Cloning repository '{REPO_NAME}'...")
+        success, _, err = run_command(f"git clone {AUTH_REPO_URL} {repo_path}", capture=True)
+        if not success:
+            print(f"❌ Failed to clone repository: {err}")
+            return
+        print("✅ Repository cloned successfully.")
 
-# ============================================
-# MAIN DEPLOYMENT PROCESS
-# ============================================
+        # 2. Ensure we are on 'main', synced with origin/main
+        ensure_main_branch_exists(repo_path)
 
-try:
-${authenticatedUrl ? '' : `
-    # Check git credentials
-    if not check_git_credentials():
-        print("❌ Please configure git credentials first")
-        exit(1)
-`}
-    
-    # Step 1: Create temporary repository
-    temp_repo = create_temp_repo()
-    print(f"✓ Temporary workspace: {temp_repo}")
-    
-    # Step 2: Create folder structure
-    target_folder = create_initial_structure(temp_repo)
-    
-    # Step 3: Clear previous files
-    clear_previous_files(target_folder)
-    
-    # Step 4: Copy allowed files
-    files_copied = copy_new_files(CURRENT_DIR, target_folder)
-    
-    if files_copied == 0:
-        print("⚠️ No files were uploaded. Check your source directory.")
-        print("   Only files with these extensions are allowed:", ', '.join(ALLOWED_EXTENSIONS))
-    else:
-        # Step 5: Commit and push
-        if commit_and_push(temp_repo):
-            print()
-            print("=" * 70)
-            print("✅ DEPLOYMENT COMPLETE!")
-            print(f"📍 Files deployed to: ${feed.name}/src")
-            print(f"📋 Allowed extensions: {', '.join(ALLOWED_EXTENSIONS)}")
-            print("=" * 70)
-        else:
-            print()
-            print("=" * 70)
-            print("❌ DEPLOYMENT FAILED!")
-            print("=" * 70)
-    
-    # Step 6: Cleanup
-    cleanup_temp_repo(temp_repo)
-    
-except Exception as e:
-    print(f"❌ Deployment error: {str(e)}")
-    print("=" * 70)
-    print("Please contact your system administrator")
-    print("=" * 70)
-    exit(1)
+        # 3. Update ONLY this feed's folder
+        files_copied = update_feed_folder(repo_path)
+        if files_copied == 0:
+            print("⚠️ No new files were copied. Nothing to commit.")
+            return
+
+        # 4. Commit the changes
+        print("📦 Committing changes...")
+        run_command('git config user.name "KUIPER Deployment"', cwd=repo_path)
+        run_command('git config user.email "deploy@kuiper.com"', cwd=repo_path)
+        run_command("git add .", cwd=repo_path)
+
+        success, _, _ = run_command("git diff --cached --quiet", cwd=repo_path, capture=True)
+        if success:  # returncode 0 means "no differences" → nothing to commit
+            print("✓ No changes to commit.")
+            return
+
+        commit_msg = f"Update feed '${feed.name}' - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        run_command(f'git commit -m "{commit_msg}"', cwd=repo_path)
+
+        # 5. Push to 'main' only — normal push, retried with rebase on conflict, NEVER forced
+        print(f"🚀 Pushing to GitHub (branch: {TARGET_BRANCH})...")
+        success, err = push_with_retry(repo_path)
+        if not success:
+            print(f"❌ Push failed: {err}")
+            print("   Your changes were committed locally but not pushed.")
+            print("   No remote data was touched or overwritten.")
+            return
+
+        print()
+        print("=" * 70)
+        print("✅ DEPLOYMENT COMPLETE!")
+        print(f"📍 Files deployed to: {TARGET_PATH}")
+        print(f"🌿 Branch: {TARGET_BRANCH}")
+        print("=" * 70)
+
+    finally:
+        # 6. Clean up the temporary directory
+        print("🧹 Cleaning up temporary files...")
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+if __name__ == "__main__":
+    main()
 `;
 
     res.json({
@@ -486,7 +380,8 @@ except Exception as e:
       feedInfo: {
         name: feed.name,
         feedPath: feedFolderName,
-        targetPath: `${feedFolderName}/src`
+        targetPath: `${feedFolderName}/src`,
+        targetBranch: 'main'
       },
       hasWriteToken: !!writeToken
     });
@@ -534,7 +429,7 @@ router.post('/complete-feed', protect, authorize('Developer'), async (req, res) 
     feed.completedAt = completedAt ? new Date(completedAt) : new Date();
     feed.completedBy = req.user._id;
     feed.completionDescription = description;
-    
+
     await feed.save();
 
     if (Log) {
@@ -723,9 +618,9 @@ router.get('/worklog', protect, authorize('Developer'), async (req, res) => {
         // ✅ FIX: Check if user can edit today's log
         const canEditToday = true;
 
-        return { 
-          feed, 
-          worklog: log, 
+        return {
+          feed,
+          worklog: log,
           todayDescription: todayDescription || null,
           canEditToday: canEditToday
         };
@@ -1029,11 +924,11 @@ router.get('/ticket-worklog', protect, async (req, res) => {
     const Ticket = require('../models/Ticket');
     const TicketWorkLog = require('../models/TicketWorkLog');
     const Project = require('../models/Project');
-    
+
     let ticketQuery = {};
     const userRole = req.user.role;
     const userId = req.user._id;
-    
+
     // ============================================
     // ROLE-BASED TICKET FILTERING
     // ============================================
@@ -1045,11 +940,11 @@ router.get('/ticket-worklog', protect, async (req, res) => {
         ],
         status: { $in: ['Open', 'In Progress'] }
       };
-    } 
+    }
     else if (userRole === 'Project Manager') {
       const pmProjects = await Project.find({ projectManager: userId }).select('_id');
       const projectIds = pmProjects.map(p => p._id);
-      
+
       ticketQuery = {
         $or: [
           { projectId: { $in: projectIds } },
@@ -1063,7 +958,7 @@ router.get('/ticket-worklog', protect, async (req, res) => {
     else if (userRole === 'Team Lead') {
       const tlProjects = await Project.find({ teamLead: userId }).select('_id');
       const projectIds = tlProjects.map(p => p._id);
-      
+
       ticketQuery = {
         $or: [
           { projectId: { $in: projectIds } },
@@ -1085,16 +980,16 @@ router.get('/ticket-worklog', protect, async (req, res) => {
         status: { $in: ['Open', 'In Progress'] }
       };
     }
-    
+
     console.log(`🔍 Fetching tickets for ${userRole} with query:`, JSON.stringify(ticketQuery));
-    
+
     // Fetch tickets based on role
     const tickets = await Ticket.find(ticketQuery)
       .select('_id title ticketNumber priority projectId status')
       .populate('projectId', 'name projectCustomId');
-    
+
     console.log(`📊 Found ${tickets.length} tickets for ${userRole}`);
-    
+
     // Build worklogs for each ticket
     const result = await Promise.all(
       tickets.map(async (ticket) => {
@@ -1103,7 +998,7 @@ router.get('/ticket-worklog', protect, async (req, res) => {
           ticketId: ticket._id,
           date: today
         });
-        
+
         // If no worklog exists, create one
         if (!log) {
           log = await TicketWorkLog.create({
@@ -1117,12 +1012,12 @@ router.get('/ticket-worklog', protect, async (req, res) => {
           });
           console.log(`📝 Created new worklog for ${userRole} on ticket: ${ticket.ticketNumber}`);
         }
-        
+
         // ✅ FIX: Calculate NET TIME for this ticket
         const netTime = calculateTicketNetTime(log);
         const rawTime = log.totalTime || 0;
         const overlapTime = Math.max(0, rawTime - netTime);
-        
+
         // Create a copy with net time included
         const worklogWithNet = {
           ...log.toObject(),
@@ -1130,11 +1025,11 @@ router.get('/ticket-worklog', protect, async (req, res) => {
           overlapTime: overlapTime,
           rawTime: rawTime
         };
-        
+
         return { ticket, worklog: worklogWithNet };
       })
     );
-    
+
     res.json(result);
   } catch (err) {
     console.error('Error fetching ticket worklogs:', err);
@@ -1152,13 +1047,13 @@ router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const userId = req.user._id;
     const Ticket = require('../models/Ticket');
-    
+
     const ticket = await Ticket.findById(req.params.ticketId);
-    
+
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
-    
+
     // Check if user has access to this ticket
     const userRole = req.user.role;
     const hasAccess = (
@@ -1168,17 +1063,17 @@ router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
       userRole === 'Project Manager' ||
       userRole === 'Team Lead'
     );
-    
+
     if (!hasAccess) {
       return res.status(403).json({ error: 'Not authorized to start timer on this ticket' });
     }
-    
+
     let log = await TicketWorkLog.findOne({
       developerId: userId,
       ticketId: req.params.ticketId,
       date: today
     });
-    
+
     if (!log) {
       log = await TicketWorkLog.create({
         developerId: userId,
@@ -1188,29 +1083,29 @@ router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
         timeBlocks: []
       });
     }
-    
+
     if (log.isRunning) {
       return res.status(400).json({ error: 'Timer already running for this ticket' });
     }
-    
+
     const serverNow = new Date();
-    
+
     log.startedAt = serverNow;
     log.isRunning = true;
-    
+
     if (!log.timeBlocks) log.timeBlocks = [];
-    
+
     log.timeBlocks.push({
       startTime: serverNow,
       endTime: null,
       duration: 0
     });
-    
+
     await log.save();
-    
+
     // Calculate net time for response
     const netTime = calculateTicketNetTime(log);
-    
+
     res.json({
       success: true,
       worklog: {
@@ -1219,7 +1114,7 @@ router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
       },
       serverTimestamp: serverNow.getTime()
     });
-    
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to start timer' });
@@ -1234,26 +1129,26 @@ router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
 router.post('/ticket-worklog/pause/:ticketId', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     const log = await TicketWorkLog.findOne({
       developerId: req.user._id,
       ticketId: req.params.ticketId,
       date: today
     });
-    
+
     if (!log) {
       return res.status(404).json({ error: 'Ticket worklog not found' });
     }
-    
+
     if (!log.isRunning) {
       return res.status(400).json({ error: 'Timer is not running' });
     }
-    
+
     const serverNow = new Date();
     const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
-    
+
     log.totalTime += diff;
-    
+
     if (log.timeBlocks?.length > 0) {
       const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
       if (currentBlock && !currentBlock.endTime) {
@@ -1261,14 +1156,14 @@ router.post('/ticket-worklog/pause/:ticketId', protect, async (req, res) => {
         currentBlock.duration = diff;
       }
     }
-    
+
     log.isRunning = false;
     log.startedAt = null;
-    
+
     await log.save();
-    
+
     const netTime = calculateTicketNetTime(log);
-    
+
     res.json({
       success: true,
       worklog: {
@@ -1277,7 +1172,7 @@ router.post('/ticket-worklog/pause/:ticketId', protect, async (req, res) => {
       },
       serverTimestamp: serverNow.getTime()
     });
-    
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to pause timer' });
@@ -1292,23 +1187,23 @@ router.post('/ticket-worklog/pause/:ticketId', protect, async (req, res) => {
 router.post('/ticket-worklog/stop/:ticketId', protect, async (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    
+
     const log = await TicketWorkLog.findOne({
       developerId: req.user._id,
       ticketId: req.params.ticketId,
       date: today
     });
-    
+
     if (!log) {
       return res.status(404).json({ error: 'Ticket worklog not found' });
     }
-    
+
     if (log.isRunning) {
       const serverNow = new Date();
       const diff = Math.floor((serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000);
-      
+
       log.totalTime += diff;
-      
+
       if (log.timeBlocks?.length > 0) {
         const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
         if (currentBlock && !currentBlock.endTime) {
@@ -1317,15 +1212,15 @@ router.post('/ticket-worklog/stop/:ticketId', protect, async (req, res) => {
         }
       }
     }
-    
+
     log.isRunning = false;
     log.startedAt = null;
-    
+
     await log.save();
-    
+
     const serverNow = new Date();
     const netTime = calculateTicketNetTime(log);
-    
+
     res.json({
       success: true,
       worklog: {
@@ -1334,7 +1229,7 @@ router.post('/ticket-worklog/stop/:ticketId', protect, async (req, res) => {
       },
       serverTimestamp: serverNow.getTime()
     });
-    
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to stop timer' });
@@ -1350,21 +1245,21 @@ router.post('/ticket-worklog/description', protect, async (req, res) => {
   try {
     const { ticketId, description } = req.body;
     const today = new Date().toISOString().split('T')[0];
-    
+
     if (!description || !description.trim()) {
       return res.status(400).json({ error: 'Description is required' });
     }
-    
+
     let log = await TicketWorkLog.findOne({
       developerId: req.user._id,
       ticketId: ticketId,
       date: today
     });
-    
+
     if (!log) {
       const Ticket = require('../models/Ticket');
       const ticket = await Ticket.findById(ticketId);
-      
+
       log = await TicketWorkLog.create({
         developerId: req.user._id,
         ticketId: ticketId,
@@ -1380,14 +1275,14 @@ router.post('/ticket-worklog/description', protect, async (req, res) => {
         minute: '2-digit',
         hour12: true
       });
-      log.description = log.description 
+      log.description = log.description
         ? `${log.description}\n\n[${timestamp}] ${description.trim()}`
         : description.trim();
       await log.save();
     }
-    
+
     const netTime = calculateTicketNetTime(log);
-    
+
     res.json({
       success: true,
       worklog: {
@@ -1395,7 +1290,7 @@ router.post('/ticket-worklog/description', protect, async (req, res) => {
         netTime: netTime
       }
     });
-    
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to save description' });

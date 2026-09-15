@@ -83,6 +83,11 @@ const ProjectManagement = () => {
   const { isCollapsed } = useSidebar();
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
+  // --- Loading States ---
+  const [isSubmittingProject, setIsSubmittingProject] = useState(false);
+  const [isSubmittingFeed, setIsSubmittingFeed] = useState(false);
+  const [isCreatingOrg, setIsCreatingOrg] = useState(false);
+
   // Handle resize for mobile detection
   useEffect(() => {
     const handleResize = () => {
@@ -305,6 +310,7 @@ const ProjectManagement = () => {
       return null;
     }
 
+    setIsCreatingOrg(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/api/orgs`, {
         companyName: newOrgData.companyName,
@@ -322,6 +328,8 @@ const ProjectManagement = () => {
       console.error("Error creating organization:", err);
       toast.error(err.response?.data?.error || "Failed to create organization");
       return null;
+    } finally {
+      setIsCreatingOrg(false);
     }
   };
 
@@ -384,45 +392,34 @@ const ProjectManagement = () => {
     fetchStatusOptions();
   }, []);
 
-  // frontend/src/pages/ProjectManagement.jsx - UPDATED fetchInitialData
+  const fetchInitialData = async () => {
+    try {
+      const userRole = localStorage.getItem('role');
+      let endpoint = `${ADMIN_BASE}/projects`;
+      
+      const [projRes, devRes, pmRes, tlRes] = await Promise.all([
+        axios.get(endpoint, authHeader),
+        axios.get(`${ADMIN_BASE}/users/developers`, authHeader),
+        axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader),
+        axios.get(`${ADMIN_BASE}/users/teamleads`, authHeader)
+      ]);
 
+      let projectsData = projRes.data;
+      
+      if (userRole === 'Project Manager') {
+        projectsData = projRes.data;
+      }
+      
+      setProjects(projectsData);
+      setDevelopers(devRes.data);
+      setProjectManagers(pmRes.data);
+      setTeamLeads(tlRes.data);
 
-const fetchInitialData = async () => {
-  try {
-    // ✅ For Super Admin and Admin, get ALL projects
-    const userRole = localStorage.getItem('role');
-    let endpoint = `${ADMIN_BASE}/projects`;
-    
-    // For Super Admin and Admin, we want ALL projects
-    // The backend now handles this correctly
-    
-    const [projRes, devRes, pmRes, tlRes] = await Promise.all([
-      axios.get(endpoint, authHeader),
-      axios.get(`${ADMIN_BASE}/users/developers`, authHeader),
-      axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader),
-      axios.get(`${ADMIN_BASE}/users/teamleads`, authHeader)
-    ]);
-
-    // For Super Admin and Admin, show ALL projects
-    // For PM, filter by projectManager
-    let projectsData = projRes.data;
-    
-    if (userRole === 'Project Manager') {
-      // PM already gets filtered by the backend
-      projectsData = projRes.data;
+    } catch (err) {
+      console.error("Data fetch failed:", err);
+      toast.error("Failed to load data");
     }
-    // ✅ For Super Admin and Admin, NO additional filtering is applied
-    
-    setProjects(projectsData);
-    setDevelopers(devRes.data);
-    setProjectManagers(pmRes.data);
-    setTeamLeads(tlRes.data);
-
-  } catch (err) {
-    console.error("Data fetch failed:", err);
-    toast.error("Failed to load data");
-  }
-};
+  };
 
   // Filter developers based on search term
   const filteredDevelopers = useMemo(() => {
@@ -434,78 +431,71 @@ const fetchInitialData = async () => {
     );
   }, [developers, developerSearchTerm]);
 
-const filteredProjects = useMemo(() => {
-  let result = [...projects];
+  const filteredProjects = useMemo(() => {
+    let result = [...projects];
 
-  // ✅ FIX: For Super Admin and Admin, show ALL projects without PM filter
-  const userRole = localStorage.getItem('role');
-  
-  // Only filter by project manager if NOT Super Admin or Admin
-  if (userRole !== 'Super Admin' && userRole !== 'Admin') {
-    result = result.filter(
-      (p) =>
-        p.projectManager?._id === currentUserId ||
-        p.projectManager === currentUserId
-    );
-  }
-  // For Super Admin and Admin, skip the PM filter - show ALL projects
+    const userRole = localStorage.getItem('role');
+    
+    if (userRole !== 'Super Admin' && userRole !== 'Admin') {
+      result = result.filter(
+        (p) =>
+          p.projectManager?._id === currentUserId ||
+          p.projectManager === currentUserId
+      );
+    }
 
-  // FILTER BY STATUS
-  if (statusFilter === 'Active') {
-    result = result.filter(p => p.projectStatus !== 'Closed');
-  } else if (statusFilter === 'Inactive') {
-    result = result.filter(p => p.projectStatus === 'Closed');
-  } else if (statusFilter === 'On Hold') {
-    result = result.filter(p => isOnHoldStatus(p.projectStatus));
-  }
-  // 'All' shows everything
+    if (statusFilter === 'Active') {
+      result = result.filter(p => p.projectStatus !== 'Closed');
+    } else if (statusFilter === 'Inactive') {
+      result = result.filter(p => p.projectStatus === 'Closed');
+    } else if (statusFilter === 'On Hold') {
+      result = result.filter(p => isOnHoldStatus(p.projectStatus));
+    }
 
-  // SEARCH FILTER
-  if (searchTerm.trim()) {
-    const search = searchTerm.toLowerCase().trim();
+    if (searchTerm.trim()) {
+      const search = searchTerm.toLowerCase().trim();
 
-    result = result.filter((project) => {
-      const orgNames = (project.organizations || []).map(org => {
-        if (typeof org === 'object') return org?.companyName || '';
-        const orgObj = organizations.find(o => o._id === org);
-        return orgObj?.companyName || '';
-      }).join(' ') || '';
-      
-      const searchableFields = [
-        project.projectCustomId,
-        project.name,
-        project.industry,
-        project.country,
-        project.projectManager?.name,
-        orgNames
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+      result = result.filter((project) => {
+        const orgNames = (project.organizations || []).map(org => {
+          if (typeof org === 'object') return org?.companyName || '';
+          const orgObj = organizations.find(o => o._id === org);
+          return orgObj?.companyName || '';
+        }).join(' ') || '';
+        
+        const searchableFields = [
+          project.projectCustomId,
+          project.name,
+          project.industry,
+          project.country,
+          project.projectManager?.name,
+          orgNames
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
 
-      return searchableFields.includes(search);
+        return searchableFields.includes(search);
+      });
+    }
+
+    result.sort((a, b) => {
+      const aId = a.projectCustomId || '';
+      const bId = b.projectCustomId || '';
+
+      return aId.localeCompare(bId, undefined, {
+        numeric: true,
+        sensitivity: 'base',
+      });
     });
-  }
 
-  // SORT PROJECTS
-  result.sort((a, b) => {
-    const aId = a.projectCustomId || '';
-    const bId = b.projectCustomId || '';
-
-    return aId.localeCompare(bId, undefined, {
-      numeric: true,
-      sensitivity: 'base',
-    });
-  });
-
-  return result;
-}, [
-  projects,
-  organizations,
-  statusFilter,
-  currentUserId,
-  searchTerm
-]);
+    return result;
+  }, [
+    projects,
+    organizations,
+    statusFilter,
+    currentUserId,
+    searchTerm
+  ]);
 
   // Reset to first page when filters change
   useEffect(() => {
@@ -543,54 +533,58 @@ const filteredProjects = useMemo(() => {
   const handleProjectSubmit = async (e) => {
     e.preventDefault();
 
+    if (isSubmittingProject) return;
+
     if (projectForm.organizations.length === 0 && !showNewOrgForm) {
       toast.error("Please select at least one client organization for this project, or create a new organization");
       return;
     }
 
-    let finalOrgId = null;
-    
-    // If creating new organization
-    if (showNewOrgForm && newOrgData.companyName.trim()) {
-      const newOrg = await createNewOrganization();
-      if (newOrg) {
-        finalOrgId = newOrg._id;
-        // Add the new organization to the organizations list
-        projectForm.organizations.push(finalOrgId);
-      } else {
-        return;
-      }
-    }
-
-    let customId = projectForm.projectCustomId;
-    let finalName = projectForm.name;
-
-    if (isEditing || projectForm.name.includes('PRJ') || projectForm.name.includes('TDS')) {
-      const sequenceMatch = projectForm.name.match(/TDS(\d{4})/) || projectForm.name.match(/PRJ(\d{4})/);
-      const sequence = sequenceMatch ? sequenceMatch[1] : "0000";
-      const prefix = projectForm.name.includes('PRJ') ? 'PRJ' : 'TDS';
-
-      const selectedCountryObj = POPULAR_COUNTRIES.find(c => c.label === projectForm.country);
-      const countryCode = selectedCountryObj ? selectedCountryObj.value : (projectForm.country?.substring(0, 2).toUpperCase() || "XX");
-      const industryCode = (projectForm.industry || 'GEN').toUpperCase().substring(0, 4);
-      const nameParts = projectForm.name.split('|');
-      const companyName = nameParts[nameParts.length - 1].trim();
-      const updatedFormattedString = `${prefix}${sequence}-${industryCode} | ${countryCode} | ${companyName}`;
-
-      customId = updatedFormattedString;
-      finalName = updatedFormattedString;
-    }
-
-    const finalData = {
-      ...projectForm,
-      name: finalName,
-      projectCustomId: customId,
-      projectManager: projectForm.projectManager || currentUserId,
-      adminId: currentUserId,
-      organizations: projectForm.organizations
-    };
+    setIsSubmittingProject(true);
 
     try {
+      let finalOrgId = null;
+      
+      // If creating new organization
+      if (showNewOrgForm && newOrgData.companyName.trim()) {
+        const newOrg = await createNewOrganization();
+        if (newOrg) {
+          finalOrgId = newOrg._id;
+          projectForm.organizations.push(finalOrgId);
+        } else {
+          setIsSubmittingProject(false);
+          return;
+        }
+      }
+
+      let customId = projectForm.projectCustomId;
+      let finalName = projectForm.name;
+
+      if (isEditing || projectForm.name.includes('PRJ') || projectForm.name.includes('TDS')) {
+        const sequenceMatch = projectForm.name.match(/TDS(\d{4})/) || projectForm.name.match(/PRJ(\d{4})/);
+        const sequence = sequenceMatch ? sequenceMatch[1] : "0000";
+        const prefix = projectForm.name.includes('PRJ') ? 'PRJ' : 'TDS';
+
+        const selectedCountryObj = POPULAR_COUNTRIES.find(c => c.label === projectForm.country);
+        const countryCode = selectedCountryObj ? selectedCountryObj.value : (projectForm.country?.substring(0, 2).toUpperCase() || "XX");
+        const industryCode = (projectForm.industry || 'GEN').toUpperCase().substring(0, 4);
+        const nameParts = projectForm.name.split('|');
+        const companyName = nameParts[nameParts.length - 1].trim();
+        const updatedFormattedString = `${prefix}${sequence}-${industryCode} | ${countryCode} | ${companyName}`;
+
+        customId = updatedFormattedString;
+        finalName = updatedFormattedString;
+      }
+
+      const finalData = {
+        ...projectForm,
+        name: finalName,
+        projectCustomId: customId,
+        projectManager: projectForm.projectManager || currentUserId,
+        adminId: currentUserId,
+        organizations: projectForm.organizations
+      };
+
       if (isEditing) {
         await axios.put(`${ADMIN_BASE}/projects/${activeProjectId}`, finalData, authHeader);
         toast.success("Project updated successfully");
@@ -617,10 +611,13 @@ const filteredProjects = useMemo(() => {
 
     } catch (err) {
       toast.error(err.response?.data?.error || "Project save failed");
+    } finally {
+      setIsSubmittingProject(false);
     }
   };
 
   const closeProjectModal = () => {
+    if (isSubmittingProject) return;
     setShowProjectModal(false);
     setIsEditing(false);
     setShowNewOrgForm(false);
@@ -668,6 +665,8 @@ const filteredProjects = useMemo(() => {
   const handleFeedSubmit = async (e) => {
     e.preventDefault();
 
+    if (isSubmittingFeed) return;
+
     if (feedForm.feedType === 'Weekly' && !feedForm.weekDay) {
       toast.error('Please select a day for weekly feed');
       return;
@@ -688,6 +687,8 @@ const filteredProjects = useMemo(() => {
         icon: '⚠️'
       });
     }
+
+    setIsSubmittingFeed(true);
 
     try {
       const payload = {
@@ -727,10 +728,13 @@ const filteredProjects = useMemo(() => {
     } catch (err) {
       console.error("Feed save error:", err);
       toast.error(err.response?.data?.error || "Feed save failed");
+    } finally {
+      setIsSubmittingFeed(false);
     }
   };
 
   const closeFeedModal = () => {
+    if (isSubmittingFeed) return;
     setShowFeedModal(false);
     setIsEditingFeed(false);
     setDeveloperSearchTerm('');
@@ -801,6 +805,8 @@ const filteredProjects = useMemo(() => {
   };
 
   const handleBulkFeedSubmit = async () => {
+    if (bulkFeedUploading) return;
+
     if (!activeProjectId) {
       toast.error('No project selected');
       return;
@@ -814,8 +820,6 @@ const filteredProjects = useMemo(() => {
     setBulkFeedUploading(true);
 
     try {
-      // Map Excel columns to feed fields
-      // Expected columns: name, feedType, weekDay, monthDay, feedPlatform, webDomain, assignedDevelopers
       const feedsToCreate = bulkFeedPreview.map(row => ({
         name: row.name || row.Name || row.feedName || row['Feed Name'] || '',
         feedType: row.feedType || row['Feed Type'] || 'Daily',
@@ -833,7 +837,6 @@ const filteredProjects = useMemo(() => {
         return;
       }
 
-      // Send all feeds in one request
       const response = await axios.post(
         `${ADMIN_BASE}/feeds/bulk`,
         {
@@ -1320,14 +1323,26 @@ const filteredProjects = useMemo(() => {
               <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
                 {isEditing ? 'Modify Workspace' : 'Launch New Project'}
               </h2>
-              <button onClick={closeProjectModal} className="text-slate-300 hover:text-slate-600 transition-colors">
+              <button 
+                onClick={closeProjectModal} 
+                disabled={isSubmittingProject}
+                className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 <X size={isMobile ? 20 : 28} />
               </button>
             </div>
             <form onSubmit={handleProjectSubmit} className="space-y-4 sm:space-y-6">
               <div className="space-y-1 sm:space-y-2">
                 <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
-                <input type="text" placeholder="Title" required className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base" value={projectForm.name} onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} />
+                <input 
+                  type="text" 
+                  placeholder="Title" 
+                  required 
+                  disabled={isSubmittingProject}
+                  className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base disabled:opacity-60" 
+                  value={projectForm.name} 
+                  onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} 
+                />
               </div>
               
               {/* ORGANIZATION SELECTION SECTION */}
@@ -1348,8 +1363,9 @@ const filteredProjects = useMemo(() => {
                           {org.companyName?.substring(0, 12) || org.companyName}
                           <button
                             type="button"
+                            disabled={isSubmittingProject}
                             onClick={() => removeOrg(orgId)}
-                            className="hover:text-red-200 transition-colors"
+                            className="hover:text-red-200 transition-colors disabled:opacity-50"
                           >
                             <X size={isMobile ? 8 : 10} />
                           </button>
@@ -1368,24 +1384,26 @@ const filteredProjects = useMemo(() => {
                         type="text"
                         placeholder={isMobile ? "Search orgs..." : "Search organizations by name or website..."}
                         value={orgSearchTerm}
+                        disabled={isSubmittingProject}
                         onChange={(e) => {
                           setOrgSearchTerm(e.target.value);
                           setIsOrgDropdownOpen(true);
                         }}
                         onFocus={() => setIsOrgDropdownOpen(true)}
-                        className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-purple-500 bg-slate-50"
+                        className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-purple-500 bg-slate-50 disabled:opacity-60"
                       />
                       <button
                         type="button"
+                        disabled={isSubmittingProject}
                         onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400 disabled:opacity-50"
                       >
                         {isOrgDropdownOpen ? <ChevronUp size={isMobile ? 12 : 14} /> : <ChevronDown size={isMobile ? 12 : 14} />}
                       </button>
                     </div>
 
                     {/* Dropdown List for Organizations */}
-                    {isOrgDropdownOpen && (
+                    {isOrgDropdownOpen && !isSubmittingProject && (
                       <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-40 sm:max-h-48 overflow-y-auto z-50">
                         {filteredOrganizations.length === 0 ? (
                           <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">No organizations found</div>
@@ -1412,11 +1430,12 @@ const filteredProjects = useMemo(() => {
 
                     <button
                       type="button"
+                      disabled={isSubmittingProject}
                       onClick={() => {
                         setShowNewOrgForm(true);
                         setIsOrgDropdownOpen(false);
                       }}
-                      className="w-full mt-1 sm:mt-2 py-1.5 sm:py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[8px] sm:text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-1 sm:gap-2"
+                      className="w-full mt-1 sm:mt-2 py-1.5 sm:py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[8px] sm:text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-1 sm:gap-2 disabled:opacity-50"
                     >
                       <Plus size={isMobile ? 12 : 14} />
                       Create New Organization
@@ -1428,11 +1447,12 @@ const filteredProjects = useMemo(() => {
                       <label className="text-[8px] sm:text-[10px] font-black uppercase text-blue-600 ml-1">New Organization</label>
                       <button
                         type="button"
+                        disabled={isSubmittingProject || isCreatingOrg}
                         onClick={() => {
                           setShowNewOrgForm(false);
                           setNewOrgData({ companyName: '', website: '', address: '' });
                         }}
-                        className="text-slate-400 hover:text-slate-600"
+                        className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
                       >
                         <X size={isMobile ? 12 : 14} />
                       </button>
@@ -1441,21 +1461,24 @@ const filteredProjects = useMemo(() => {
                       type="text"
                       placeholder="Organization Name *"
                       required
-                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-xs sm:text-sm"
+                      disabled={isSubmittingProject || isCreatingOrg}
+                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-xs sm:text-sm disabled:opacity-60"
                       value={newOrgData.companyName}
                       onChange={(e) => setNewOrgData({...newOrgData, companyName: e.target.value})}
                     />
                     <input
                       type="text"
                       placeholder="Website (optional)"
-                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm"
+                      disabled={isSubmittingProject || isCreatingOrg}
+                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm disabled:opacity-60"
                       value={newOrgData.website}
                       onChange={(e) => setNewOrgData({...newOrgData, website: e.target.value})}
                     />
                     <input
                       type="text"
                       placeholder="Address (optional)"
-                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm"
+                      disabled={isSubmittingProject || isCreatingOrg}
+                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm disabled:opacity-60"
                       value={newOrgData.address}
                       onChange={(e) => setNewOrgData({...newOrgData, address: e.target.value})}
                     />
@@ -1468,15 +1491,50 @@ const filteredProjects = useMemo(() => {
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:gap-6">
-                <CreatableSelect isClearable options={POPULAR_COUNTRIES} placeholder="Select Country" value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || { label: projectForm.country, value: projectForm.country }} onChange={(v) => setProjectForm({ ...projectForm, country: v?.label || '' })} styles={customDropdownStyles} />
-                <CreatableSelect isClearable options={INDUSTRY_OPTIONS} value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} styles={customDropdownStyles} />
+                <CreatableSelect 
+                  isClearable 
+                  isDisabled={isSubmittingProject}
+                  options={POPULAR_COUNTRIES} 
+                  placeholder="Select Country" 
+                  value={POPULAR_COUNTRIES.find(opt => opt.label === projectForm.country) || { label: projectForm.country, value: projectForm.country }} 
+                  onChange={(v) => setProjectForm({ ...projectForm, country: v?.label || '' })} 
+                  styles={customDropdownStyles} 
+                />
+                <CreatableSelect 
+                  isClearable 
+                  isDisabled={isSubmittingProject}
+                  options={INDUSTRY_OPTIONS} 
+                  value={INDUSTRY_OPTIONS.find(opt => opt.value === projectForm.industry) || { label: projectForm.industry, value: projectForm.industry }} 
+                  onChange={(v) => setProjectForm({ ...projectForm, industry: v?.value || '' })} 
+                  styles={customDropdownStyles} 
+                />
               </div>
-              <select className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700" value={projectForm.projectManager} onChange={(e) => setProjectForm({ ...projectForm, projectManager: e.target.value })}>
+              <select 
+                disabled={isSubmittingProject}
+                className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700 disabled:opacity-60" 
+                value={projectForm.projectManager} 
+                onChange={(e) => setProjectForm({ ...projectForm, projectManager: e.target.value })}
+              >
                 <option value="">Select Manager</option>
                 {projectManagers.map(pm => <option key={pm._id} value={pm._id}>{pm.name}</option>)}
               </select>
-              <button type="submit" className="w-full py-3 sm:py-5 bg-[#111C44] text-white font-black rounded-2xl hover:bg-blue-600 transition-all uppercase text-[10px] sm:text-xs tracking-widest shadow-xl">
-                {isEditing ? 'Save Changes' : 'Create Project'}
+              <button 
+                type="submit" 
+                disabled={isSubmittingProject}
+                className={`w-full py-3 sm:py-5 font-black rounded-2xl uppercase text-[10px] sm:text-xs tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${
+                  isSubmittingProject 
+                    ? 'bg-slate-400 text-white cursor-not-allowed' 
+                    : 'bg-[#111C44] text-white hover:bg-blue-600'
+                }`}
+              >
+                {isSubmittingProject ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    {isEditing ? 'Saving...' : 'Creating Project...'}
+                  </>
+                ) : (
+                  isEditing ? 'Save Changes' : 'Create Project'
+                )}
               </button>
             </form>
           </div>
@@ -1491,7 +1549,11 @@ const filteredProjects = useMemo(() => {
               <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
                 {isEditingFeed ? 'Update Stream' : 'New Feed'}
               </h2>
-              <button onClick={closeFeedModal} className="text-slate-300 hover:text-slate-600 transition-colors">
+              <button 
+                onClick={closeFeedModal} 
+                disabled={isSubmittingFeed}
+                className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
                 <X size={isMobile ? 20 : 28} />
               </button>
             </div>
@@ -1501,13 +1563,15 @@ const filteredProjects = useMemo(() => {
                 type="text"
                 placeholder="Stream Name"
                 required
-                className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base"
+                disabled={isSubmittingFeed}
+                className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base disabled:opacity-60"
                 value={feedForm.name}
                 onChange={(e) => setFeedForm({ ...feedForm, name: e.target.value })}
               />
 
               <select
-                className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700"
+                disabled={isSubmittingFeed}
+                className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 disabled:opacity-60"
                 value={feedForm.feedType}
                 onChange={(e) => setFeedForm({ 
                   ...feedForm, 
@@ -1525,7 +1589,13 @@ const filteredProjects = useMemo(() => {
               {feedForm.feedType === 'Weekly' && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
                   <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Select Weekly Day</label>
-                  <select required value={feedForm.weekDay} onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })} className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700">
+                  <select 
+                    required 
+                    disabled={isSubmittingFeed}
+                    value={feedForm.weekDay} 
+                    onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })} 
+                    className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 disabled:opacity-60"
+                  >
                     <option value="">Choose Day</option>
                     {weekDays.map(day => <option key={day} value={day}>{day}</option>)}
                   </select>
@@ -1535,7 +1605,13 @@ const filteredProjects = useMemo(() => {
               {feedForm.feedType === 'Monthly' && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
                   <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Day of Month (1-31)</label>
-                  <select required value={feedForm.monthDay} onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })} className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700">
+                  <select 
+                    required 
+                    disabled={isSubmittingFeed}
+                    value={feedForm.monthDay} 
+                    onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })} 
+                    className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 disabled:opacity-60"
+                  >
                     <option value="">Select Day</option>
                     {[...Array(31)].map((_, i) => (
                       <option key={i + 1} value={i + 1}>{i + 1}</option>
@@ -1551,7 +1627,8 @@ const filteredProjects = useMemo(() => {
                   Feed Status
                 </label>
                 <select
-                  className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 cursor-pointer"
+                  disabled={isSubmittingFeed}
+                  className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 cursor-pointer disabled:opacity-60"
                   value={feedForm.feedStatus}
                   onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
                 >
@@ -1569,6 +1646,7 @@ const filteredProjects = useMemo(() => {
                     <button
                       key={platform}
                       type="button"
+                      disabled={isSubmittingFeed}
                       onClick={() => {
                         setFeedForm({ 
                           ...feedForm, 
@@ -1576,7 +1654,7 @@ const filteredProjects = useMemo(() => {
                           webDomain: platform === 'App' ? '' : feedForm.webDomain
                         });
                       }}
-                      className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[8px] sm:text-xs uppercase tracking-wider transition-all ${
+                      className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[8px] sm:text-xs uppercase tracking-wider transition-all disabled:opacity-50 ${
                         feedForm.feedPlatform === platform
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100'
@@ -1595,9 +1673,10 @@ const filteredProjects = useMemo(() => {
                   <input
                     type="url"
                     placeholder="https://example.com"
+                    disabled={isSubmittingFeed}
                     value={feedForm.webDomain}
                     onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
-                    className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-all"
+                    className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-all disabled:opacity-60"
                   />
                   <p className="text-[7px] sm:text-[8px] text-slate-400 mt-0.5 sm:mt-1 ml-1">Enter full URL including https://</p>
                 </div>
@@ -1628,8 +1707,9 @@ const filteredProjects = useMemo(() => {
                           )}
                           <button
                             type="button"
+                            disabled={isSubmittingFeed}
                             onClick={() => toggleDeveloperSelection(devId)}
-                            className="hover:text-red-200 transition-colors"
+                            className="hover:text-red-200 transition-colors disabled:opacity-50"
                           >
                             <X size={isMobile ? 8 : 10} />
                           </button>
@@ -1659,17 +1739,19 @@ const filteredProjects = useMemo(() => {
                       type="text"
                       placeholder={isMobile ? "Search devs..." : "Search developers by name or email..."}
                       value={developerSearchTerm}
+                      disabled={isSubmittingFeed}
                       onChange={(e) => {
                         setDeveloperSearchTerm(e.target.value);
                         setIsDeveloperDropdownOpen(true);
                       }}
                       onFocus={() => setIsDeveloperDropdownOpen(true)}
-                      className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-blue-500 bg-slate-50"
+                      className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-blue-500 bg-slate-50 disabled:opacity-60"
                     />
                     <button
                       type="button"
+                      disabled={isSubmittingFeed}
                       onClick={() => setIsDeveloperDropdownOpen(!isDeveloperDropdownOpen)}
-                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400 disabled:opacity-50"
                     >
                       {isDeveloperDropdownOpen ? <ChevronUp size={isMobile ? 12 : 14} /> : <ChevronDown size={isMobile ? 12 : 14} />}
                     </button>
@@ -1677,8 +1759,9 @@ const filteredProjects = useMemo(() => {
                   
                   <button
                     type="button"
+                    disabled={isSubmittingFeed}
                     onClick={() => fetchInitialData()}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all"
+                    className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-50"
                     title="Refresh developers list"
                   >
                     <RefreshCw size={isMobile ? 14 : 16} />
@@ -1686,7 +1769,7 @@ const filteredProjects = useMemo(() => {
                 </div>
 
                 {/* Dropdown List with GitHub Status */}
-                {isDeveloperDropdownOpen && (
+                {isDeveloperDropdownOpen && !isSubmittingFeed && (
                   <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 sm:max-h-64 overflow-y-auto z-50">
                     {filteredDevelopers.length === 0 ? (
                       <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">No developers found</div>
@@ -1728,7 +1811,8 @@ const filteredProjects = useMemo(() => {
                               {!hasGitHub && dev.role === 'Developer' && (
                                 <button
                                   onClick={(e) => handleQuickLinkGitHub(dev, e)}
-                                  className="p-1 sm:p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all"
+                                  disabled={isSubmittingFeed}
+                                  className="p-1 sm:p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-50"
                                   title="Link GitHub Account"
                                 >
                                   <GitFork size={isMobile ? 12 : 14} />
@@ -1761,8 +1845,23 @@ const filteredProjects = useMemo(() => {
                 </div>
               </div>
 
-              <button type="submit" className="w-full py-3 sm:py-5 bg-blue-600 text-white font-black rounded-2xl hover:bg-[#111C44] transition-all uppercase text-[10px] sm:text-xs tracking-widest shadow-xl">
-                {isEditingFeed ? 'Save Configuration' : 'Connect Stream'}
+              <button 
+                type="submit" 
+                disabled={isSubmittingFeed}
+                className={`w-full py-3 sm:py-5 font-black rounded-2xl uppercase text-[10px] sm:text-xs tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${
+                  isSubmittingFeed 
+                    ? 'bg-slate-400 text-white cursor-not-allowed' 
+                    : 'bg-blue-600 text-white hover:bg-[#111C44]'
+                }`}
+              >
+                {isSubmittingFeed ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" />
+                    {isEditingFeed ? 'Saving...' : 'Creating Feed...'}
+                  </>
+                ) : (
+                  isEditingFeed ? 'Save Configuration' : 'Connect Stream'
+                )}
               </button>
             </form>
           </div>
@@ -1786,11 +1885,13 @@ const filteredProjects = useMemo(() => {
               </div>
               <button 
                 onClick={() => {
+                  if (bulkFeedUploading) return;
                   setShowBulkFeedModal(false);
                   setBulkFeedFile(null);
                   setBulkFeedPreview([]);
                 }} 
-                className="text-slate-300 hover:text-slate-600 transition-colors"
+                disabled={bulkFeedUploading}
+                className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <X size={isMobile ? 20 : 28} />
               </button>
@@ -1830,13 +1931,18 @@ const filteredProjects = useMemo(() => {
                   type="file"
                   accept=".xlsx,.xls,.csv"
                   onChange={handleBulkFileSelect}
+                  disabled={bulkFeedUploading}
                   className="hidden"
                 />
                 <div 
-                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
-                    bulkFeedFile ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-blue-400'
+                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+                    bulkFeedUploading 
+                      ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60' 
+                      : bulkFeedFile 
+                        ? 'border-emerald-400 bg-emerald-50 cursor-pointer' 
+                        : 'border-slate-300 hover:border-blue-400 cursor-pointer'
                   }`}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => !bulkFeedUploading && fileInputRef.current?.click()}
                 >
                   {bulkFeedFile ? (
                     <div className="flex flex-col items-center gap-2">
@@ -1847,13 +1953,14 @@ const filteredProjects = useMemo(() => {
                       </p>
                       <button
                         type="button"
+                        disabled={bulkFeedUploading}
                         onClick={(e) => {
                           e.stopPropagation();
                           setBulkFeedFile(null);
                           setBulkFeedPreview([]);
                           if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
-                        className="text-xs text-red-500 hover:text-red-700 font-bold"
+                        className="text-xs text-red-500 hover:text-red-700 font-bold disabled:opacity-50"
                       >
                         Remove file
                       </button>
@@ -1916,12 +2023,13 @@ const filteredProjects = useMemo(() => {
               <div className="flex gap-3 sm:gap-4 pt-4 border-t border-slate-200">
                 <button
                   type="button"
+                  disabled={bulkFeedUploading}
                   onClick={() => {
                     setShowBulkFeedModal(false);
                     setBulkFeedFile(null);
                     setBulkFeedPreview([]);
                   }}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
