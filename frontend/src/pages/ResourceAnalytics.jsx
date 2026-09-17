@@ -61,6 +61,23 @@ function defaultDates() {
   return { startDate: fmt(start), endDate: fmt(end) };
 }
 
+// Counts Mon–Fri inclusive between two YYYY-MM-DD date strings
+function getWeekdayCount(startDate, endDate) {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (start > end) return 0;
+
+  let count = 0;
+  const cur = new Date(start);
+  while (cur <= end) {
+    const day = cur.getDay(); // 0 = Sunday, 6 = Saturday
+    if (day !== 0 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 const ResourceAnalytics = () => {
   const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
@@ -149,6 +166,19 @@ const ResourceAnalytics = () => {
   };
 
   const summary = data?.summary;
+
+  // Working (Mon–Fri) days in the currently selected date range
+  const workingDaysInRange = useMemo(
+    () => getWeekdayCount(startDate, endDate),
+    [startDate, endDate]
+  );
+
+  // Total net (feed + ticket, overlap-corrected) minutes divided across working days
+  const avgWorkingMinutes = useMemo(() => {
+    const totalSeconds = summary?.totalNetCombinedTime || 0;
+    if (!workingDaysInRange) return 0;
+    return totalSeconds / 60 / workingDaysInRange;
+  }, [summary, workingDaysInRange]);
 
   const sortedRows = useMemo(() => {
     if (!data) return [];
@@ -428,7 +458,7 @@ const ResourceAnalytics = () => {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 mb-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
         <SummaryCard
           icon={Layers}
           iconColor="text-indigo-600"
@@ -460,6 +490,14 @@ const ResourceAnalytics = () => {
           label="Overlap Removed"
           value={formatTimeFromSeconds(summary?.totalOverlapTime)}
           sub={`${summary?.totalDevelopers ?? 0} developers`}
+        />
+        <SummaryCard
+          icon={TrendingUp}
+          iconColor="text-blue-600"
+          iconBg="bg-blue-50"
+          label="Avg Working Minutes"
+          value={`${avgWorkingMinutes.toFixed(2)} mins/day`}
+          sub={`over ${workingDaysInRange} working day${workingDaysInRange === 1 ? '' : 's'}`}
         />
       </div>
 
@@ -672,48 +710,183 @@ const Th = ({ children, align = 'left' }) => (
   </th>
 );
 
-const DeveloperTable = ({ rows }) => (
-  <table className="w-full">
-    <thead className="bg-slate-50 border-b border-slate-200">
-      <tr>
-        <Th>Developer</Th>
-        <Th align="right">Net Feed</Th>
-        <Th align="right">Net Ticket</Th>
-        <Th align="right">Net Combined</Th>
-        <Th align="right">Overlap Saved</Th>
-      </tr>
-    </thead>
-    <tbody className="divide-y divide-slate-100">
-      {rows.map((r, index) => (
-        <tr key={r.developerId} className="hover:bg-slate-50/70 transition-colors">
-          <td className="px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] font-bold text-slate-400 w-4">
-                #{index + 1}
-              </span>
-              <div>
-                <p className="font-semibold text-slate-800 text-xs">{r.developerName}</p>
-                <p className="text-[9px] text-slate-400">{r.email}</p>
-              </div>
-            </div>
-          </td>
-          <td className="px-3 py-2.5 text-right text-xs font-medium text-emerald-700">
-            {r.netFeedTimeFormatted}
-          </td>
-          <td className="px-3 py-2.5 text-right text-xs font-medium text-amber-700">
-            {r.netTicketTimeFormatted}
-          </td>
-          <td className="px-3 py-2.5 text-right text-xs font-bold text-slate-800">
-            {r.netCombinedTimeFormatted}
-          </td>
-          <td className="px-3 py-2.5 text-right text-[10px] font-medium text-slate-400">
-            {formatTimeFromSeconds(r.overlapTime)}
-          </td>
+const DeveloperTable = ({ rows }) => {
+  const [expandedId, setExpandedId] = useState(null);
+
+  return (
+    <table className="w-full">
+      <thead className="bg-slate-50 border-b border-slate-200">
+        <tr>
+          <Th>Developer</Th>
+          <Th align="right">Net Feed</Th>
+          <Th align="right">Net Ticket</Th>
+          <Th align="right">Net Combined</Th>
+          <Th align="right">Overlap Saved</Th>
         </tr>
-      ))}
-    </tbody>
-  </table>
-);
+      </thead>
+      <tbody className="divide-y divide-slate-100">
+        {rows.map((r, index) => {
+          const isExpanded = expandedId === r.developerId;
+          return (
+            <React.Fragment key={r.developerId}>
+              <tr
+                onClick={() => setExpandedId(isExpanded ? null : r.developerId)}
+                className={`cursor-pointer transition-colors ${
+                  isExpanded ? 'bg-blue-50/40' : 'hover:bg-slate-50/70'
+                }`}
+              >
+                <td className="px-3 py-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-bold text-slate-400 w-4">
+                      #{index + 1}
+                    </span>
+                    {isExpanded ? (
+                      <ChevronUp size={12} className="text-slate-400 shrink-0" />
+                    ) : (
+                      <ChevronDown size={12} className="text-slate-400 shrink-0" />
+                    )}
+                    <div>
+                      <p className="font-semibold text-slate-800 text-xs">{r.developerName}</p>
+                      <p className="text-[9px] text-slate-400">{r.email}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs font-medium text-emerald-700">
+                  {r.netFeedTimeFormatted}
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs font-medium text-amber-700">
+                  {r.netTicketTimeFormatted}
+                </td>
+                <td className="px-3 py-2.5 text-right text-xs font-bold text-slate-800">
+                  {r.netCombinedTimeFormatted}
+                </td>
+                <td className="px-3 py-2.5 text-right text-[10px] font-medium text-slate-400">
+                  {formatTimeFromSeconds(r.overlapTime)}
+                </td>
+              </tr>
+              {isExpanded && (
+                <tr>
+                  <td colSpan={5} className="bg-slate-50/60 px-3 py-3 border-b border-slate-100">
+                    <DeveloperDailyBreakdown developer={r} />
+                  </td>
+                </tr>
+              )}
+            </React.Fragment>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+};
+
+const DeveloperDailyBreakdown = ({ developer }) => {
+  const rows = developer.dailyBreakdown || [];
+
+  const chartData = useMemo(() => {
+    if (rows.length === 0) return null;
+    return {
+      labels: rows.map((d) => d.date),
+      datasets: [
+        {
+          label: 'Feed Time',
+          data: rows.map((d) => d.netFeedTime),
+          backgroundColor: 'rgba(16, 185, 129, 0.7)',
+          borderColor: 'rgba(16, 185, 129, 1)',
+          borderWidth: 1,
+          stack: 'day'
+        },
+        {
+          label: 'Ticket Time',
+          data: rows.map((d) => d.netTicketTime),
+          backgroundColor: 'rgba(245, 158, 11, 0.7)',
+          borderColor: 'rgba(245, 158, 11, 1)',
+          borderWidth: 1,
+          stack: 'day'
+        }
+      ]
+    };
+  }, [rows]);
+
+  if (rows.length === 0) {
+    return (
+      <p className="text-[11px] text-slate-400 text-center py-4">
+        No day-wise activity for {developer.developerName} in the selected range
+      </p>
+    );
+  }
+
+  return (
+    <div>
+      <h4 className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">
+        <Calendar size={11} />
+        {developer.developerName} — Day-wise Breakdown
+      </h4>
+
+      {chartData && (
+        <div className="h-40 mb-3">
+          <Bar
+            data={chartData}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: 'top',
+                  labels: { boxWidth: 10, padding: 8, font: { size: 9 } }
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (context) =>
+                      `${context.dataset.label}: ${formatTimeFromSeconds(context.parsed.y)}`
+                  }
+                }
+              },
+              scales: {
+                x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 45 } },
+                y: {
+                  stacked: true,
+                  ticks: {
+                    font: { size: 8 },
+                    callback: (value) => formatTimeFromSeconds(value)
+                  }
+                }
+              }
+            }}
+          />
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="w-full">
+          <thead className="bg-slate-50 border-b border-slate-200">
+            <tr>
+              <Th>Date</Th>
+              <Th align="right">Feed Time</Th>
+              <Th align="right">Ticket Time</Th>
+              <Th align="right">Combined</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((d) => (
+              <tr key={d.date} className="hover:bg-slate-50/70 transition-colors">
+                <td className="px-3 py-1.5 text-xs font-medium text-slate-700">{d.date}</td>
+                <td className="px-3 py-1.5 text-right text-xs font-medium text-emerald-700">
+                  {d.netFeedTimeFormatted}
+                </td>
+                <td className="px-3 py-1.5 text-right text-xs font-medium text-amber-700">
+                  {d.netTicketTimeFormatted}
+                </td>
+                <td className="px-3 py-1.5 text-right text-xs font-bold text-slate-800">
+                  {d.netCombinedTimeFormatted}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 const DeveloperList = ({ developers }) => {
   if (!developers || developers.length === 0) {

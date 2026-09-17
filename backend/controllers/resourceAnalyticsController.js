@@ -1,19 +1,3 @@
-// backend/controllers/resourceAnalyticsController.js
-//
-// Resource Analytics — rebuilt from scratch.
-//
-// Goals:
-//   1. Net time spent on Feeds and Tickets (overlapping timer intervals for
-//      the SAME developer are merged so they aren't double counted).
-//   2. Filter by one or more developers.
-//   3. Filter by date range.
-//
-// Net time is always computed per-developer first (a single person cannot
-// really "work" two overlapping intervals at once, so their timeBlocks are
-// merged), and totals are the SUM of each developer's net time. We never
-// merge intervals *across* different developers — two different people
-// working the same hour on different things is 2 hours of real work, not 1.
-
 const WorkLog = require('../models/WorkLog');
 const TicketWorkLog = require('../models/TicketWorkLog');
 const Project = require('../models/Project');
@@ -21,109 +5,44 @@ const Feed = require('../models/Feed');
 const Ticket = require('../models/Ticket');
 const User = require('../models/User');
 
-/* ============================================================
-   TIME HELPERS
-   ============================================================ */
-
-// Build a list of {start, end} (ms epoch) intervals from a set of logs
-// (WorkLog or TicketWorkLog documents share the same shape).
-function getIntervals(logs) {
-  const now = Date.now();
-  const intervals = [];
-
-  logs.forEach((log) => {
-    if (Array.isArray(log.timeBlocks) && log.timeBlocks.length > 0) {
-      log.timeBlocks.forEach((block) => {
-        if (!block.startTime) return;
-        const start = new Date(block.startTime).getTime();
-        const end = block.endTime
-          ? new Date(block.endTime).getTime()
-          : now; // still running block
-        if (end > start) intervals.push({ start, end });
-      });
-    } else if (log.isRunning && log.startedAt) {
-      // No timeBlocks recorded yet, but a timer is currently running
-      const start = new Date(log.startedAt).getTime();
-      if (now > start) intervals.push({ start, end: now });
-    }
-  });
-
-  return intervals;
-}
-
-function mergeIntervals(intervals) {
-  if (intervals.length === 0) return [];
-  const sorted = [...intervals].sort((a, b) => a.start - b.start);
-  const merged = [{ ...sorted[0] }];
-
-  for (let i = 1; i < sorted.length; i++) {
-    const current = sorted[i];
-    const last = merged[merged.length - 1];
-    if (current.start <= last.end) {
-      last.end = Math.max(last.end, current.end);
-    } else {
-      merged.push({ ...current });
-    }
-  }
-  return merged;
-}
-
-// Net seconds for a set of logs belonging to ONE developer (safe to merge).
-function netSecondsForOneDeveloper(logs) {
-  const intervals = getIntervals(logs);
-
-  if (intervals.length === 0) {
-    // No timeBlocks at all recorded — fall back to the raw totalTime sum.
-    return logs.reduce((sum, l) => sum + (l.totalTime || 0), 0);
-  }
-
-  const merged = mergeIntervals(intervals);
-  const totalMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
-  return Math.floor(totalMs / 1000);
-}
-
-function formatTime(seconds = 0) {
-  seconds = Math.max(0, Math.floor(seconds));
-  const hrs = Math.floor(seconds / 3600);
-  const mins = Math.floor((seconds % 3600) / 60);
-  const secs = seconds % 60;
-  if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
-}
-
-function toHours(seconds = 0) {
-  return (seconds / 3600).toFixed(2);
-}
+const {
+  APP_TZ,
+  MAX_SESSION_SECONDS,
+  todayKey,
+  netSecondsForOneDeveloper,
+  activeDayKeys,
+  splitIntervalsByDay,
+  formatTime,
+  toHours,
+  avg,
+} = require('../utils/workTime');
 
 /* ============================================================
    FILTER PARSING
    ============================================================ */
 
-// developerId query param can be: absent/'all', a single id, or a
-// comma-separated list of ids ("id1,id2,id3") for multi-select filtering.
+// developerId can be absent / 'all' / a single id / 'id1,id2,id3'.
 function parseDeveloperIds(developerId) {
   if (!developerId || developerId === 'all') return null;
-  return developerId
+  const ids = String(developerId)
     .split(',')
     .map((id) => id.trim())
     .filter(Boolean);
+  return ids.length ? ids : null;
 }
 
-function buildBaseFilter({ developerIds, projectId, startDate, endDate }) {
+function buildLogFilter({ developerIds, startDate, endDate }) {
   const filter = {};
 
   if (developerIds) {
-    filter.developerId = developerIds.length === 1 ? developerIds[0] : { $in: developerIds };
+    filter.developerId =
+      developerIds.length === 1 ? developerIds[0] : { $in: developerIds };
   }
 
-  if (projectId && projectId !== 'all') {
-    filter.projectId = projectId;
-  }
-
+  // `date` is a 'YYYY-MM-DD' string, so lexical comparison is chronological.
   if (startDate || endDate) {
     filter.date = {};
-    if (startDate) filter.date.$gte = startDate; // dates stored as 'YYYY-MM-DD' strings
+    if (startDate) filter.date.$gte = startDate;
     if (endDate) filter.date.$lte = endDate;
   }
 
@@ -139,74 +58,88 @@ exports.getResourceAnalytics = async (req, res) => {
     const { developerId, projectId, startDate, endDate } = req.query;
 
     const developerIds = parseDeveloperIds(developerId);
-    const baseFilter = buildBaseFilter({ developerIds, projectId, startDate, endDate });
+    const hasProjectFilter = projectId && projectId !== 'all';
 
-    // Feed filter also honours an optional feedId narrower filter.
+    // Everything in this request is measured against one consistent instant
+    // and one consistent "today", so no two numbers on the page disagree.
+    const now = new Date();
+    const today = todayKey();
+    const timeOpts = { now, today, startDate, endDate };
+
+    const baseFilter = buildLogFilter({ developerIds, startDate, endDate });
+
     const feedFilter = { ...baseFilter };
+    if (hasProjectFilter) feedFilter.projectId = projectId; // feed logs always carry projectId
     if (req.query.feedId && req.query.feedId !== 'all') {
       feedFilter.feedId = req.query.feedId;
     }
 
-    // Ticket filter also honours an optional ticketId narrower filter.
+    // NOTE: deliberately NOT filtering ticket logs on log.projectId — most
+    // ticket logs have projectId:null. Ticket project scoping happens below,
+    // driven by the Ticket document.
     const ticketFilter = { ...baseFilter };
     if (req.query.ticketId && req.query.ticketId !== 'all') {
       ticketFilter.ticketId = req.query.ticketId;
     }
 
-    // The "master list" filters — these decide which Feeds/Tickets/Developers
-    // exist in the tables at all. They deliberately ignore date/time filters
-    // (a feed doesn't stop existing because nothing was logged this month)
-    // but DO respect the project filter, since that scopes "what am I looking at".
-    const feedListFilter = {};
-    if (projectId && projectId !== 'all') feedListFilter.projectId = projectId;
+    const feedListFilter = hasProjectFilter ? { projectId } : {};
+    const ticketListFilter = hasProjectFilter ? { projectId } : {};
 
-    const ticketListFilter = {};
-    if (projectId && projectId !== 'all') ticketListFilter.projectId = projectId;
+    const [feedLogs, rawTicketLogs, allFeeds, allTickets, allDevelopers, projects] =
+      await Promise.all([
+        WorkLog.find(feedFilter)
+          .populate('developerId', 'name email')
+          .populate('feedId', 'name')
+          .populate('projectId', 'name projectCustomId')
+          .sort({ date: -1 })
+          .lean(),
+        TicketWorkLog.find(ticketFilter)
+          .populate('developerId', 'name email')
+          .populate('ticketId', 'title ticketNumber status priority projectId')
+          .sort({ date: -1 })
+          .lean(),
+        Feed.find(feedListFilter).select('name projectId').lean(),
+        Ticket.find(ticketListFilter)
+          .select('title ticketNumber status priority projectId')
+          .lean(),
+        User.find({ role: 'Developer' }).select('name email').sort({ name: 1 }).lean(),
+        Project.find().select('name projectCustomId').lean(),
+      ]);
 
-    /* ------------------------------------------------------------
-       FETCH RAW LOGS + MASTER LISTS (feeds/tickets/developers all exist
-       independently of whether anyone has logged time against them)
-       ------------------------------------------------------------ */
+    // Apply the project filter to ticket logs via their Ticket, not via the
+    // (usually null) projectId on the log itself.
+    const allowedTicketIds = new Set(allTickets.map((t) => t._id.toString()));
+    const ticketLogs = hasProjectFilter
+      ? rawTicketLogs.filter((l) => {
+          const tid = l.ticketId?._id?.toString();
+          return tid && allowedTicketIds.has(tid);
+        })
+      : rawTicketLogs;
 
-    const [feedLogs, ticketLogs, allFeeds, allTickets, allDevelopers, projects] = await Promise.all([
-      WorkLog.find(feedFilter)
-        .populate('developerId', 'name email')
-        .populate('feedId', 'name')
-        .populate('projectId', 'name projectCustomId')
-        .sort({ date: -1 })
-        .lean(),
-      TicketWorkLog.find(ticketFilter)
-        .populate('developerId', 'name email')
-        .populate('ticketId', 'title ticketNumber status priority')
-        .populate('projectId', 'name projectCustomId')
-        .sort({ date: -1 })
-        .lean(),
-      Feed.find(feedListFilter).select('name projectId').lean(),
-      Ticket.find(ticketListFilter).select('title ticketNumber status priority projectId').lean(),
-      User.find({ role: 'Developer' }).select('name email').sort({ name: 1 }).lean(),
-      Project.find().select('name projectCustomId').lean(),
-    ]);
-
-    // Narrow the master developer list down when a developer filter is applied,
-    // so filtering by a developer doesn't bring back everyone else at 0s.
     const developers = developerIds
       ? allDevelopers.filter((d) => developerIds.includes(d._id.toString()))
       : allDevelopers;
 
     const projectMap = new Map(projects.map((p) => [p._id.toString(), p]));
     const projectLabel = (idOrDoc) => {
-      const id = typeof idOrDoc === 'object' ? idOrDoc?._id?.toString() : idOrDoc?.toString();
+      const id =
+        typeof idOrDoc === 'object'
+          ? idOrDoc?._id?.toString()
+          : idOrDoc?.toString();
       const p = id ? projectMap.get(id) : null;
-      return p ? p.projectCustomId || p.name : 'Unknown';
+      return p ? p.projectCustomId || p.name : 'Unassigned';
     };
 
+    // Running totals for the data-quality block.
+    let totalRunningTimers = 0;
+    const abandonedTimers = [];
+
     /* ------------------------------------------------------------
-       GROUP BY DEVELOPER (net time on feeds, tickets, and combined)
-       Seeded from every Developer-role user, not just ones with logs,
-       so devs with zero logged time still show up (at 0s).
+       BY DEVELOPER — net feed time, net ticket time, combined,
+       plus the averages this page exists to show.
        ------------------------------------------------------------ */
 
-    const devMap = new Map(); // developerId -> { info, feedLogs: [], ticketLogs: [] }
+    const devMap = new Map();
 
     developers.forEach((d) => {
       devMap.set(d._id.toString(), {
@@ -221,9 +154,10 @@ exports.getResourceAnalytics = async (req, res) => {
     const ensureDev = (userDoc) => {
       const id = userDoc?._id?.toString();
       if (!id) return null;
+      // A log by someone who is no longer role:'Developer' still counts, but
+      // only when no explicit developer filter is narrowing the view.
       if (!devMap.has(id)) {
-        // Log references a user outside the current developer filter/role
-        // (e.g. role changed since the log was created) — still track them.
+        if (developerIds && !developerIds.includes(id)) return null;
         devMap.set(id, {
           developerId: id,
           developerName: userDoc.name || 'Unknown',
@@ -249,48 +183,125 @@ exports.getResourceAnalytics = async (req, res) => {
     let totalNetFeedTime = 0;
     let totalNetTicketTime = 0;
     let totalNetCombinedTime = 0;
+    let totalActiveDayCount = 0;
 
     for (const dev of devMap.values()) {
-      const netFeedTime = netSecondsForOneDeveloper(dev.feedLogs);
-      const netTicketTime = netSecondsForOneDeveloper(dev.ticketLogs);
-      // Combined: merge feed + ticket intervals together for this developer
-      // so time spent simultaneously on both isn't counted twice.
-      const netCombinedTime = netSecondsForOneDeveloper([...dev.feedLogs, ...dev.ticketLogs]);
+      const feed = netSecondsForOneDeveloper(dev.feedLogs, timeOpts);
+      const ticket = netSecondsForOneDeveloper(dev.ticketLogs, timeOpts);
+      // Merge feed + ticket together so time double-tracked on both isn't
+      // counted twice in the combined figure.
+      const combined = netSecondsForOneDeveloper(
+        [...dev.feedLogs, ...dev.ticketLogs],
+        timeOpts
+      );
+
+      totalRunningTimers += combined.runningCount;
+      combined.abandoned.forEach((a) =>
+        abandonedTimers.push({ ...a, developerName: dev.developerName })
+      );
+
+      // Days this developer actually recorded time on, in APP_TZ.
+      const activeDays = activeDayKeys(combined.merged).size;
+      totalActiveDayCount += activeDays;
+
+      // Day-by-day split: how much of this developer's feed / ticket / combined
+      // net time landed on each calendar day (APP_TZ), so the UI can show a
+      // per-day breakdown when this developer is selected.
+      const feedByDay = splitIntervalsByDay(feed.merged);
+      const ticketByDay = splitIntervalsByDay(ticket.merged);
+      const combinedByDay = splitIntervalsByDay(combined.merged);
+      const dayKeys = new Set([
+        ...feedByDay.keys(),
+        ...ticketByDay.keys(),
+        ...combinedByDay.keys(),
+      ]);
+      const dailyBreakdown = [...dayKeys].sort().map((date) => {
+        const netFeedTime = feedByDay.get(date) || 0;
+        const netTicketTime = ticketByDay.get(date) || 0;
+        const netCombinedTime = combinedByDay.get(date) || 0;
+        return {
+          date,
+          netFeedTime,
+          netFeedTimeFormatted: formatTime(netFeedTime),
+          netTicketTime,
+          netTicketTimeFormatted: formatTime(netTicketTime),
+          netCombinedTime,
+          netCombinedTimeFormatted: formatTime(netCombinedTime),
+        };
+      });
+
+      // Distinct feeds / tickets they touched with real logged time.
+      const feedsTouched = new Set(
+        dev.feedLogs.map((l) => l.feedId?._id?.toString()).filter(Boolean)
+      ).size;
+      const ticketsTouched = new Set(
+        dev.ticketLogs.map((l) => l.ticketId?._id?.toString()).filter(Boolean)
+      ).size;
 
       const rawFeedTime = dev.feedLogs.reduce((s, l) => s + (l.totalTime || 0), 0);
       const rawTicketTime = dev.ticketLogs.reduce((s, l) => s + (l.totalTime || 0), 0);
 
-      totalNetFeedTime += netFeedTime;
-      totalNetTicketTime += netTicketTime;
-      totalNetCombinedTime += netCombinedTime;
+      totalNetFeedTime += feed.seconds;
+      totalNetTicketTime += ticket.seconds;
+      totalNetCombinedTime += combined.seconds;
+
+      // ---- the averages ----
+      const avgPerActiveDay = avg(combined.seconds, activeDays);
+      const avgPerFeed = avg(feed.seconds, feedsTouched);
+      const avgPerTicket = avg(ticket.seconds, ticketsTouched);
 
       byDeveloper.push({
         developerId: dev.developerId,
         developerName: dev.developerName,
         email: dev.email,
-        netFeedTime,
-        netFeedTimeFormatted: formatTime(netFeedTime),
-        netTicketTime,
-        netTicketTimeFormatted: formatTime(netTicketTime),
-        netCombinedTime,
-        netCombinedTimeFormatted: formatTime(netCombinedTime),
+
+        netFeedTime: feed.seconds,
+        netFeedTimeFormatted: formatTime(feed.seconds),
+        netFeedHours: toHours(feed.seconds),
+
+        netTicketTime: ticket.seconds,
+        netTicketTimeFormatted: formatTime(ticket.seconds),
+        netTicketHours: toHours(ticket.seconds),
+
+        netCombinedTime: combined.seconds,
+        netCombinedTimeFormatted: formatTime(combined.seconds),
+        netCombinedHours: toHours(combined.seconds),
+
+        activeDays,
+        feedsTouched,
+        ticketsTouched,
+        dailyBreakdown,
+
+        avgSecondsPerActiveDay: avgPerActiveDay,
+        avgHoursPerActiveDay: toHours(avgPerActiveDay),
+        avgPerActiveDayFormatted: formatTime(avgPerActiveDay),
+
+        avgSecondsPerFeed: avgPerFeed,
+        avgHoursPerFeed: toHours(avgPerFeed),
+        avgPerFeedFormatted: formatTime(avgPerFeed),
+
+        avgSecondsPerTicket: avgPerTicket,
+        avgHoursPerTicket: toHours(avgPerTicket),
+        avgPerTicketFormatted: formatTime(avgPerTicket),
+
         rawFeedTime,
         rawTicketTime,
-        overlapTime: Math.max(0, rawFeedTime + rawTicketTime - netCombinedTime),
+        overlapTime: Math.max(0, rawFeedTime + rawTicketTime - combined.seconds),
+
         feedLogCount: dev.feedLogs.length,
         ticketLogCount: dev.ticketLogs.length,
+        runningTimers: combined.runningCount,
+        abandonedTimers: combined.abandoned.length,
       });
     }
 
     byDeveloper.sort((a, b) => b.netCombinedTime - a.netCombinedTime);
 
     /* ------------------------------------------------------------
-       GROUP BY FEED — one row per Feed (seeded from ALL feeds, even
-       ones with zero logged time), with a per-developer breakdown
-       so multiple developers on one feed are still overlap-safe.
+       BY FEED
        ------------------------------------------------------------ */
 
-    const feedGroups = new Map(); // feedId -> { feed info, logsByDev: Map<devId, logs[]> }
+    const feedGroups = new Map();
 
     allFeeds.forEach((feed) => {
       const feedId = feed._id.toString();
@@ -306,33 +317,30 @@ exports.getResourceAnalytics = async (req, res) => {
 
     feedLogs.forEach((log) => {
       const feedId = log.feedId?._id?.toString();
-      const developerId = log.developerId?._id?.toString();
-      if (!feedId || !developerId) return;
-
-      // Log references a feed outside the current project filter (shouldn't
-      // normally happen) — skip rather than fabricate a group for it.
-      if (!feedGroups.has(feedId)) return;
+      const devId = log.developerId?._id?.toString();
+      if (!feedId || !devId || !feedGroups.has(feedId)) return;
 
       const group = feedGroups.get(feedId);
-      if (!group.logsByDev.has(developerId)) {
-        group.logsByDev.set(developerId, {
-          developerId,
+      if (!group.logsByDev.has(devId)) {
+        group.logsByDev.set(devId, {
+          developerId: devId,
           developerName: log.developerId?.name || 'Unknown',
           logs: [],
         });
       }
-      group.logsByDev.get(developerId).logs.push(log);
+      group.logsByDev.get(devId).logs.push(log);
       if (log.date > group.lastDate) group.lastDate = log.date;
     });
 
     const byFeed = [...feedGroups.values()].map((group) => {
       const devBreakdown = [...group.logsByDev.values()].map((d) => {
-        const netTime = netSecondsForOneDeveloper(d.logs);
+        const r = netSecondsForOneDeveloper(d.logs, timeOpts);
         return {
           developerId: d.developerId,
           developerName: d.developerName,
-          netTime,
-          netTimeFormatted: formatTime(netTime),
+          netTime: r.seconds,
+          netTimeFormatted: formatTime(r.seconds),
+          netHours: toHours(r.seconds),
           rawTime: d.logs.reduce((s, l) => s + (l.totalTime || 0), 0),
           logCount: d.logs.length,
         };
@@ -341,6 +349,8 @@ exports.getResourceAnalytics = async (req, res) => {
       const netTime = devBreakdown.reduce((s, d) => s + d.netTime, 0);
       const rawTime = devBreakdown.reduce((s, d) => s + d.rawTime, 0);
       const logCount = devBreakdown.reduce((s, d) => s + d.logCount, 0);
+      const devCount = devBreakdown.filter((d) => d.netTime > 0).length;
+      const avgPerDev = avg(netTime, devCount);
 
       return {
         feedId: group.feedId,
@@ -349,8 +359,13 @@ exports.getResourceAnalytics = async (req, res) => {
         projectName: group.projectName,
         developers: devBreakdown.sort((a, b) => b.netTime - a.netTime),
         developerNames: devBreakdown.map((d) => d.developerName).join(', '),
+        developerCount: devCount,
         netTime,
         netTimeFormatted: formatTime(netTime),
+        netHours: toHours(netTime),
+        avgSecondsPerDeveloper: avgPerDev,
+        avgHoursPerDeveloper: toHours(avgPerDev),
+        avgPerDeveloperFormatted: formatTime(avgPerDev),
         rawTime,
         rawTimeFormatted: formatTime(rawTime),
         overlapTime: Math.max(0, rawTime - netTime),
@@ -361,8 +376,7 @@ exports.getResourceAnalytics = async (req, res) => {
     byFeed.sort((a, b) => b.netTime - a.netTime);
 
     /* ------------------------------------------------------------
-       GROUP BY TICKET — one row per Ticket (seeded from ALL tickets,
-       even ones with zero logged time), same per-developer breakdown.
+       BY TICKET
        ------------------------------------------------------------ */
 
     const ticketGroups = new Map();
@@ -384,31 +398,30 @@ exports.getResourceAnalytics = async (req, res) => {
 
     ticketLogs.forEach((log) => {
       const ticketId = log.ticketId?._id?.toString();
-      const developerId = log.developerId?._id?.toString();
-      if (!ticketId || !developerId) return;
-
-      if (!ticketGroups.has(ticketId)) return;
+      const devId = log.developerId?._id?.toString();
+      if (!ticketId || !devId || !ticketGroups.has(ticketId)) return;
 
       const group = ticketGroups.get(ticketId);
-      if (!group.logsByDev.has(developerId)) {
-        group.logsByDev.set(developerId, {
-          developerId,
+      if (!group.logsByDev.has(devId)) {
+        group.logsByDev.set(devId, {
+          developerId: devId,
           developerName: log.developerId?.name || 'Unknown',
           logs: [],
         });
       }
-      group.logsByDev.get(developerId).logs.push(log);
+      group.logsByDev.get(devId).logs.push(log);
       if (log.date > group.lastDate) group.lastDate = log.date;
     });
 
     const byTicket = [...ticketGroups.values()].map((group) => {
       const devBreakdown = [...group.logsByDev.values()].map((d) => {
-        const netTime = netSecondsForOneDeveloper(d.logs);
+        const r = netSecondsForOneDeveloper(d.logs, timeOpts);
         return {
           developerId: d.developerId,
           developerName: d.developerName,
-          netTime,
-          netTimeFormatted: formatTime(netTime),
+          netTime: r.seconds,
+          netTimeFormatted: formatTime(r.seconds),
+          netHours: toHours(r.seconds),
           rawTime: d.logs.reduce((s, l) => s + (l.totalTime || 0), 0),
           logCount: d.logs.length,
         };
@@ -417,6 +430,8 @@ exports.getResourceAnalytics = async (req, res) => {
       const netTime = devBreakdown.reduce((s, d) => s + d.netTime, 0);
       const rawTime = devBreakdown.reduce((s, d) => s + d.rawTime, 0);
       const logCount = devBreakdown.reduce((s, d) => s + d.logCount, 0);
+      const devCount = devBreakdown.filter((d) => d.netTime > 0).length;
+      const avgPerDev = avg(netTime, devCount);
 
       return {
         ticketId: group.ticketId,
@@ -428,8 +443,13 @@ exports.getResourceAnalytics = async (req, res) => {
         projectName: group.projectName,
         developers: devBreakdown.sort((a, b) => b.netTime - a.netTime),
         developerNames: devBreakdown.map((d) => d.developerName).join(', '),
+        developerCount: devCount,
         netTime,
         netTimeFormatted: formatTime(netTime),
+        netHours: toHours(netTime),
+        avgSecondsPerDeveloper: avgPerDev,
+        avgHoursPerDeveloper: toHours(avgPerDev),
+        avgPerDeveloperFormatted: formatTime(avgPerDev),
         rawTime,
         rawTimeFormatted: formatTime(rawTime),
         overlapTime: Math.max(0, rawTime - netTime),
@@ -440,18 +460,34 @@ exports.getResourceAnalytics = async (req, res) => {
     byTicket.sort((a, b) => b.netTime - a.netTime);
 
     /* ------------------------------------------------------------
-       SUMMARY
+       SUMMARY + AVERAGES
        ------------------------------------------------------------ */
 
     const totalRawFeedTime = feedLogs.reduce((s, l) => s + (l.totalTime || 0), 0);
     const totalRawTicketTime = ticketLogs.reduce((s, l) => s + (l.totalTime || 0), 0);
 
+    // Only developers who actually logged something count toward the average,
+    // otherwise every idle account drags the mean to zero. Both variants are
+    // returned so the UI can show whichever the PM prefers.
+    const activeDevelopers = byDeveloper.filter((d) => d.netCombinedTime > 0).length;
+    const feedsWithTime = byFeed.filter((f) => f.netTime > 0).length;
+    const ticketsWithTime = byTicket.filter((t) => t.netTime > 0).length;
+
+    const avgPerActiveDeveloper = avg(totalNetCombinedTime, activeDevelopers);
+    const avgPerAnyDeveloper = avg(totalNetCombinedTime, devMap.size);
+    const avgFeedPerActiveDeveloper = avg(totalNetFeedTime, activeDevelopers);
+    const avgTicketPerActiveDeveloper = avg(totalNetTicketTime, activeDevelopers);
+    const avgPerActiveDay = avg(totalNetCombinedTime, totalActiveDayCount);
+    const avgPerFeed = avg(totalNetFeedTime, feedsWithTime);
+    const avgPerTicket = avg(totalNetTicketTime, ticketsWithTime);
+
     const summary = {
       totalDevelopers: devMap.size,
+      activeDevelopers,
       totalFeeds: allFeeds.length,
-      totalFeedsWithTime: byFeed.filter((f) => f.netTime > 0).length,
+      totalFeedsWithTime: feedsWithTime,
       totalTickets: allTickets.length,
-      totalTicketsWithTime: byTicket.filter((t) => t.netTime > 0).length,
+      totalTicketsWithTime: ticketsWithTime,
       totalFeedLogs: feedLogs.length,
       totalTicketLogs: ticketLogs.length,
 
@@ -467,9 +503,49 @@ exports.getResourceAnalytics = async (req, res) => {
       totalNetCombinedTimeFormatted: formatTime(totalNetCombinedTime),
       totalNetCombinedHours: toHours(totalNetCombinedTime),
 
+      // ---------- AVERAGES ----------
+      avgHoursPerDeveloper: toHours(avgPerActiveDeveloper),
+      avgPerDeveloperFormatted: formatTime(avgPerActiveDeveloper),
+      avgHoursPerDeveloperIncludingIdle: toHours(avgPerAnyDeveloper),
+
+      avgFeedHoursPerDeveloper: toHours(avgFeedPerActiveDeveloper),
+      avgFeedPerDeveloperFormatted: formatTime(avgFeedPerActiveDeveloper),
+
+      avgTicketHoursPerDeveloper: toHours(avgTicketPerActiveDeveloper),
+      avgTicketPerDeveloperFormatted: formatTime(avgTicketPerActiveDeveloper),
+
+      totalActiveDayCount,
+      avgHoursPerActiveDay: toHours(avgPerActiveDay),
+      avgPerActiveDayFormatted: formatTime(avgPerActiveDay),
+
+      avgHoursPerFeed: toHours(avgPerFeed),
+      avgPerFeedFormatted: formatTime(avgPerFeed),
+
+      avgHoursPerTicket: toHours(avgPerTicket),
+      avgPerTicketFormatted: formatTime(avgPerTicket),
+
       totalRawFeedTime,
       totalRawTicketTime,
-      totalOverlapTime: Math.max(0, totalRawFeedTime + totalRawTicketTime - totalNetCombinedTime),
+      totalOverlapTime: Math.max(
+        0,
+        totalRawFeedTime + totalRawTicketTime - totalNetCombinedTime
+      ),
+
+      // ---------- DATA QUALITY ----------
+      // Surfaces the problem instead of silently inflating the totals with it.
+      dataQuality: {
+        timezone: APP_TZ,
+        today,
+        maxSessionHours: MAX_SESSION_SECONDS / 3600,
+        runningTimers: totalRunningTimers,
+        abandonedTimerCount: abandonedTimers.length,
+        abandonedTimers: abandonedTimers
+          .sort((a, b) => b.openForHours - a.openForHours)
+          .slice(0, 25),
+        note: abandonedTimers.length
+          ? 'Some timers were started and never stopped. They are excluded from all totals because their real end time is unknown. Run scripts/closeStaleTimers.js to clean them up.'
+          : null,
+      },
     };
 
     res.json({
@@ -485,6 +561,7 @@ exports.getResourceAnalytics = async (req, res) => {
         projectId: projectId || 'all',
         startDate: startDate || null,
         endDate: endDate || null,
+        timezone: APP_TZ,
       },
     });
   } catch (error) {
