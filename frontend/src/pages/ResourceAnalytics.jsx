@@ -173,11 +173,11 @@ const ResourceAnalytics = () => {
     [startDate, endDate]
   );
 
-  // Total net (feed + ticket, overlap-corrected) minutes divided across working days
-  const avgWorkingMinutes = useMemo(() => {
+  // Total net (feed + ticket, overlap-corrected) hours divided across working days
+  const avgWorkingHours = useMemo(() => {
     const totalSeconds = summary?.totalNetCombinedTime || 0;
     if (!workingDaysInRange) return 0;
-    return totalSeconds / 60 / workingDaysInRange;
+    return totalSeconds / 3600 / workingDaysInRange;
   }, [summary, workingDaysInRange]);
 
   const sortedRows = useMemo(() => {
@@ -495,8 +495,8 @@ const ResourceAnalytics = () => {
           icon={TrendingUp}
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
-          label="Avg Working Minutes"
-          value={`${avgWorkingMinutes.toFixed(2)} mins/day`}
+          label="Avg Working Hours"
+          value={`${avgWorkingHours.toFixed(2)} hrs/day`}
           sub={`over ${workingDaysInRange} working day${workingDaysInRange === 1 ? '' : 's'}`}
         />
       </div>
