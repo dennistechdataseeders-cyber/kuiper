@@ -407,6 +407,7 @@ const Sidebar = () => {
   { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Management' },
   { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
   { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
+  { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
   
   // ============================================
   // SALES & LEAD MANAGEMENT
@@ -478,6 +479,7 @@ const Sidebar = () => {
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
       { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
+      { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
       { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
       { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
       { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
@@ -513,6 +515,7 @@ const Sidebar = () => {
       { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
+      { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
@@ -584,6 +587,7 @@ const Sidebar = () => {
       '/sales', '/sales-manager', '/developer', '/admin', '/teamlead',
       '/knowledge', '/hr', '/employee', '/pm/feasibility', '/pm/dashboard',
       '/pm/feeds', '/pm/git-manager', '/pm/resource-analytics', '/pm/feed-status',
+      '/pm/work-report',
       '/client', '/tickets', '/profile', '/hr/leaves', '/hr/employee-attendance',
       '/hr/employee-attendance-report', '/hr/attendance-sync', '/admin/projects',
       '/admin/users', '/admin/project-clients', '/admin/ticket-rules',

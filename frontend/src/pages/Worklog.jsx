@@ -46,7 +46,7 @@ const Worklog = () => {
   // ========================================
   // TAB STATE
   // ========================================
-  const [selectedTab, setSelectedTab] = useState('feeds'); // 'feeds' | 'tickets'
+  const [selectedTab, setSelectedTab] = useState('feeds');
 
   // ========================================
   // FEED WORKLOG STATE
@@ -61,6 +61,7 @@ const Worklog = () => {
 
   const [showLogModal, setShowLogModal] = useState(false);
   const [selectedFeed, setSelectedFeed] = useState(null);
+  const [selectedFeedDescription, setSelectedFeedDescription] = useState(null);
   const [workDescription, setWorkDescription] = useState('');
   const [submittingLog, setSubmittingLog] = useState(false);
   const [isEditingLog, setIsEditingLog] = useState(false);
@@ -81,7 +82,6 @@ const Worklog = () => {
 
   // Track if notification has been sent for each running feed
   const notificationSentRef = useRef({});
-  // Track last notification time for each feed (to avoid spam)
   const lastNotificationTimeRef = useRef({});
 
   // Track ticket long running notifications
@@ -122,21 +122,9 @@ const Worklog = () => {
 
   const [tick, setTick] = useState(0);
 
-  /*
-  ========================================
-  GET SERVER-CORRECTED "NOW"
-  ========================================
-  */
-
   const getServerNow = useCallback(() => {
     return Date.now() + serverTimeOffsetRef.current;
   }, []);
-
-  /*
-  ========================================
-  FORMAT TIME
-  ========================================
-  */
 
   const formatTimeWithSeconds = (seconds) => {
     const hrs = Math.floor(seconds / 3600);
@@ -159,12 +147,6 @@ const Worklog = () => {
     if (ageSeconds < 60) return `${ageSeconds}s ago`;
     return `${Math.floor(ageSeconds / 60)}m ago`;
   };
-
-  /*
-  ========================================
-  SYNC SERVER TIME
-  ========================================
-  */
 
   const syncServerTime = useCallback(async (silent = false) => {
     if (!silent) {
@@ -240,12 +222,6 @@ const Worklog = () => {
     }
   }, []);
 
-  /*
-  ========================================
-  FETCH DATA
-  ========================================
-  */
-
   const fetchLogs = async () => {
     try {
       setLoading(true);
@@ -281,12 +257,6 @@ const Worklog = () => {
     }
   };
 
-  /*
-  ========================================
-  BREAK FUNCTION - Stop ALL running timers (Feed + Ticket)
-  ========================================
-  */
-
   const handleBreak = async () => {
     if (isStoppingAll) return;
     
@@ -300,14 +270,12 @@ const Worklog = () => {
 
     setIsStoppingAll(true);
     try {
-      // Stop all running feed timers
       const runningFeeds = logs.filter(item => item.worklog.isRunning);
       for (const item of runningFeeds) {
         await stopTimer(item.feed._id, true);
         await new Promise(resolve => setTimeout(resolve, 200));
       }
       
-      // Stop all running ticket timers
       const runningTickets = ticketLogs.filter(item => item.worklog?.isRunning);
       for (const item of runningTickets) {
         await stopTicketTimer(item.ticket._id, true);
@@ -334,16 +302,9 @@ const Worklog = () => {
     }
   };
 
-  /*
-  ========================================
-  CHECK FOR LONG RUNNING TIMERS
-  ========================================
-  */
-
   const checkLongRunningTimers = useCallback(() => {
     const serverNow = getServerNow();
     
-    // Check feed timers
     logs.forEach(item => {
       const worklog = item.worklog;
       const feedName = item.feed?.name;
@@ -381,7 +342,6 @@ const Worklog = () => {
       }
     });
     
-    // Check ticket timers
     ticketLogs.forEach(item => {
       const worklog = item.worklog;
       const ticketTitle = item.ticket?.title;
@@ -424,12 +384,6 @@ const Worklog = () => {
     const interval = setInterval(checkLongRunningTimers, 60000);
     return () => clearInterval(interval);
   }, [checkLongRunningTimers]);
-
-  /*
-  ========================================
-  EFFECTS
-  ========================================
-  */
 
   useEffect(() => {
     const timer = setTimeout(() => syncServerTime(false), 500);
@@ -712,20 +666,32 @@ const Worklog = () => {
 
   /*
   ========================================
-  MODAL FUNCTIONS
+  MODAL FUNCTIONS - FEED (FIXED)
   ========================================
+  
+  ✅ FIX: The `todayDescription` is a sibling of `feed` in the API response,
+  NOT a property of `feed`. We now pass it explicitly.
   */
 
-  const openLogModal = (feed, editing = false) => {
+  const openLogModal = (feed, todayDescription, editing = false) => {
     setSelectedFeed(feed);
-    setWorkDescription('');
-    setIsEditingLog(editing);
+    setSelectedFeedDescription(todayDescription || null);
+    
+    if (editing && todayDescription?.description) {
+      setWorkDescription(todayDescription.description);
+      setIsEditingLog(true);
+    } else {
+      setWorkDescription('');
+      setIsEditingLog(false);
+    }
+    
     setShowLogModal(true);
   };
 
   const closeModal = () => {
     setShowLogModal(false);
     setSelectedFeed(null);
+    setSelectedFeedDescription(null);
     setWorkDescription('');
     setIsEditingLog(false);
   };
@@ -739,13 +705,16 @@ const Worklog = () => {
     try {
       setSubmittingLog(true);
       const token = localStorage.getItem('token');
+      
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/log-description`, {
         feedId: selectedFeed._id,
-        description: workDescription
+        description: workDescription.trim(),
+        isEdit: isEditingLog
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      // Update the logs state with the new todayDescription
       setLogs(prev => prev.map(item =>
         item.feed._id === selectedFeed._id ? { ...item, todayDescription: res.data } : item
       ));
@@ -759,6 +728,12 @@ const Worklog = () => {
       setSubmittingLog(false);
     }
   };
+
+  /*
+  ========================================
+  MODAL FUNCTIONS - TICKET
+  ========================================
+  */
 
   const openTicketLogModal = (ticket, worklog, editing = false) => {
     setSelectedTicket({ ...ticket, worklog });
@@ -832,7 +807,7 @@ const Worklog = () => {
 
   /*
   ========================================
-  OVERLAP DETECTION — Combines Feed + Ticket intervals
+  OVERLAP DETECTION
   ========================================
   */
 
@@ -840,7 +815,6 @@ const Worklog = () => {
     const intervals = [];
     const serverNow = getServerNow();
 
-    // Get feed intervals
     logs.forEach(item => {
       const worklog = item.worklog;
       
@@ -868,7 +842,6 @@ const Worklog = () => {
       }
     });
 
-    // Get ticket intervals
     ticketLogs.forEach(item => {
       const worklog = item.worklog;
       if (!worklog) return;
@@ -1025,12 +998,6 @@ const Worklog = () => {
     return new Date(getServerNow()).toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata' });
   };
 
-  /*
-  ========================================
-  SYNC INDICATOR
-  ========================================
-  */
-
   const SyncIndicator = () => {
     const { synced, isSyncing, isStale, lastSyncAt, offsetMs } = serverSyncStatus;
     const ageLabel = formatSyncAge(lastSyncAt);
@@ -1129,7 +1096,7 @@ const Worklog = () => {
         </div>
       )}
 
-      {/* BREAK BUTTON - Stops ALL timers */}
+      {/* BREAK BUTTON */}
       <div className="mb-4">
         <button
           onClick={handleBreak}
@@ -1341,8 +1308,9 @@ const Worklog = () => {
                     {filteredLogs.map((item) => {
                       const feed = item.feed;
                       const worklog = item.worklog;
+                      const todayDescription = item.todayDescription;
                       const feedTime = getFeedTime(worklog);
-                      const hasTodayLog = item.canEditToday;
+                      const hasTodayLog = !!todayDescription?.description;
                       const statusType = worklog.isRunning ? 'running' : (worklog.totalTime > 0 ? 'paused' : 'stopped');
                       const statusData = getStatusBadge(statusType);
                       
@@ -1436,9 +1404,10 @@ const Worklog = () => {
 
                               <div className="w-px h-5 bg-slate-200 mx-1" />
 
+                              {/* ✅ FIX: Pass todayDescription explicitly */}
                               {!hasTodayLog ? (
                                 <button
-                                  onClick={() => openLogModal(feed, false)}
+                                  onClick={() => openLogModal(feed, todayDescription, false)}
                                   className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all duration-200 hover:shadow-md"
                                   title="Log Today's Work"
                                 >
@@ -1446,7 +1415,7 @@ const Worklog = () => {
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => openLogModal(feed, true)}
+                                  onClick={() => openLogModal(feed, todayDescription, true)}
                                   className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-600 hover:text-white transition-all duration-200 hover:shadow-md"
                                   title="Edit Today's Log"
                                 >
@@ -1569,7 +1538,6 @@ const Worklog = () => {
                             </div>
                           </td>
 
-                    
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
                               <Clock3 size={12} className="text-purple-500" />
@@ -1646,7 +1614,7 @@ const Worklog = () => {
       )}
 
       {/* ========================================
-          FEED DESCRIPTION MODAL
+          FEED DESCRIPTION MODAL (UPDATED)
           ======================================== */}
       {showLogModal && (
         <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -1665,20 +1633,24 @@ const Worklog = () => {
             </div>
 
             <div className="p-6">
-              {isEditingLog && selectedFeed?.todayDescription?.description && (
+              {/* ✅ FIX: Use selectedFeedDescription instead of selectedFeed.todayDescription */}
+              {isEditingLog && selectedFeedDescription?.description && (
                 <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle size={12} className="text-amber-600" />
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Existing Log</p>
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Current Description</p>
                   </div>
                   <div className="text-xs whitespace-pre-wrap text-slate-700 max-h-32 overflow-y-auto bg-white p-3 rounded-lg">
-                    {selectedFeed?.todayDescription?.description}
+                    {selectedFeedDescription.description}
                   </div>
+                  <p className="text-[8px] text-amber-600 mt-2 italic">
+                    This will be replaced with your new description below
+                  </p>
                 </div>
               )}
 
               <label className="text-[9px] uppercase tracking-[0.25em] font-black text-slate-500 block mb-2">
-                {isEditingLog ? 'Append New Update' : 'What did you work on today?'}
+                {isEditingLog ? 'New Description' : 'What did you work on today?'}
               </label>
 
               <textarea

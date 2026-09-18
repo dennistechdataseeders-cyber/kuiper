@@ -133,6 +133,7 @@ const employeeRoutes = require('./routes/employeeRoutes');
 const leaveRoutes = require('./routes/leaveRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const holidayRoutes = require('./routes/holidayRoutes');
+const workReportRoutes = require('./routes/workReportRoutes');
 
 // ✅ IMPORT THE LEAVE BUCKET ROUTES
 let leaveBucketRoutes;
@@ -402,6 +403,7 @@ app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/holidays', holidayRoutes);
+app.use('/api/work-report', workReportRoutes);
 
 // =========================================================
 // ✅ LEAVE ROUTES - Both old and new systems

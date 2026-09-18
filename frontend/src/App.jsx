@@ -1,5 +1,3 @@
-// frontend/src/App.jsx
-
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -49,6 +47,7 @@ import EmployeeAttendanceDetail from './pages/EmployeeAttendanceDetail';
 import EmployeeAttendanceReport from './pages/EmployeeAttendanceReport';
 import Announcements from './pages/Announcements';
 import HolidayList from './pages/HolidayList';
+import WorkReport from './pages/WorkReport';
 
 // ============================================
 // HRMS IMPORTS
@@ -467,7 +466,11 @@ function AppContent() {
                         <ProjectFeedStatus />
                       </ProtectedRoute>
                     } />
-                    
+                    <Route path="/pm/work-report" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                        <WorkReport  />
+                      </ProtectedRoute>
+                    } />
                     {/* PM FEASIBILITY ROUTE */}
                     <Route path="/pm/feasibility" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Project Manager']}>

@@ -785,7 +785,7 @@ router.post('/worklog/stop/:feedId', protect, authorize('Developer'), async (req
  */
 router.post('/worklog/log-description', protect, authorize('Developer'), async (req, res) => {
   try {
-    const { feedId, description } = req.body;
+    const { feedId, description, isEdit } = req.body;
     const developerId = req.user.id;
     const today = new Date().toISOString().split('T')[0];
 
@@ -793,7 +793,7 @@ router.post('/worklog/log-description', protect, authorize('Developer'), async (
       return res.status(400).json({ error: 'Description is required' });
     }
 
-    // ✅ FIX: Find existing description for today
+    // Find existing description for today
     let existing = await WorkDescription.findOne({
       developer: developerId,
       feed: feedId,
@@ -801,13 +801,18 @@ router.post('/worklog/log-description', protect, authorize('Developer'), async (
     });
 
     if (existing) {
-      // ✅ FIX: Append new description with timestamp
-      const timestamp = new Date().toLocaleTimeString('en-IN', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-      existing.description += `\n\n[${timestamp}] ${description.trim()}`;
+      if (isEdit) {
+        // ✅ EDIT MODE: Replace the entire description
+        existing.description = description.trim();
+      } else {
+        // ✅ APPEND MODE: Add new description with timestamp
+        const timestamp = new Date().toLocaleTimeString('en-IN', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        });
+        existing.description += `\n\n[${timestamp}] ${description.trim()}`;
+      }
       await existing.save();
       return res.json(existing);
     }
@@ -826,7 +831,6 @@ router.post('/worklog/log-description', protect, authorize('Developer'), async (
     res.status(500).json({ error: 'Failed to save work description' });
   }
 });
-
 /**
  * @route   GET /api/dev/worklog/today-descriptions
  * @desc    Get all today's descriptions for the developer
