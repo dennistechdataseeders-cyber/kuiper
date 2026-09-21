@@ -21,9 +21,6 @@ import toast from 'react-hot-toast';
 const IST_OFFSET_MINUTES = 5 * 60 + 30; // +05:30
 const OFFICE_START_MINUTES = 10 * 60 + 45; // 10:45 AM IST cutoff
 
-/**
- * Formats a UTC date string into IST 24-hour time (e.g., "14:30") — for UI display.
- */
 const formatTime = (dateString) => {
   if (!dateString) return '00:00';
   try {
@@ -42,12 +39,6 @@ const formatTime = (dateString) => {
   }
 };
 
-/**
- * ✅ FIXED: Returns an Excel time-of-day FRACTION (0..1).
- *   Example: 10:52:58 IST  →  (10*3600 + 52*60 + 58) / 86400 = 0.453449...
- *   Excel stores time as a fraction of a day, so this is what we want.
- *   Returns null if there is no time.
- */
 const timeFractionIST = (dateString) => {
   if (!dateString) return null;
   try {
@@ -68,27 +59,18 @@ const timeFractionIST = (dateString) => {
   }
 };
 
-/**
- * ✅ FIXED: Returns Excel time-of-day fraction for a duration given in hours.
- */
 const durationFraction = (hours) => {
   if (!hours || hours <= 0) return null;
   const totalSeconds = Math.round(hours * 3600);
   return totalSeconds / 86400;
 };
 
-/**
- * ✅ FIXED: Returns Excel time-of-day fraction for a duration given in minutes.
- */
 const minutesFraction = (minutes) => {
   if (!minutes || minutes <= 0) return null;
   const totalSeconds = Math.round(minutes * 60);
   return totalSeconds / 86400;
 };
 
-/**
- * Calculates "Late By" in minutes based on IST cutoff.
- */
 const getLateMinutes = (punchInUTC) => {
   if (!punchInUTC) return 0;
   try {
@@ -105,9 +87,6 @@ const getLateMinutes = (punchInUTC) => {
   }
 };
 
-/**
- * Formats a number of minutes into "HH:MM" format.
- */
 const formatMinutesToHHMM = (minutes) => {
   if (!minutes || minutes <= 0) return '00:00';
   const hrs = Math.floor(minutes / 60);
@@ -115,9 +94,6 @@ const formatMinutesToHHMM = (minutes) => {
   return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 };
 
-/**
- * Formats a number of hours into "HH:MM" format.
- */
 const formatHoursToHHMM = (hours) => {
   if (!hours || hours <= 0) return '00:00';
   const totalMinutes = Math.round(hours * 60);
@@ -136,10 +112,6 @@ const getStatusInfo = (status) => {
   }
 };
 
-/**
- * ✅ Computes Working Days for a given month/year.
- *    Working Days = total days in month − Saturdays − Sundays − Leaves
- */
 const getWorkingDays = (year, month, leaveCount = 0) => {
   const totalDays = new Date(year, month, 0).getDate();
   let weekendCount = 0;
@@ -148,6 +120,31 @@ const getWorkingDays = (year, month, leaveCount = 0) => {
     if (dow === 0 || dow === 6) weekendCount++;
   }
   return totalDays - weekendCount - (leaveCount || 0);
+};
+
+/**
+ * ✅ Counts "break sessions" for a single day from the sessions array.
+ *   sessions = [{ punchInUTC, punchOutUTC }, ...]
+ *   1 session  → 0 breaks
+ *   2 sessions → 1 break
+ *   N sessions → N − 1 breaks
+ */
+const countDailyBreaks = (rec) => {
+  if (!rec) return 0;
+
+  if (rec.isWeekend) return 0;
+  if (
+    rec.status === 'Weekend' ||
+    rec.status === 'Leave' ||
+    rec.status === 'Absent'
+  ) {
+    return 0;
+  }
+
+  const sessions = Array.isArray(rec.sessions) ? rec.sessions : [];
+  if (sessions.length <= 1) return 0;
+
+  return sessions.length - 1;
 };
 
 // ============================================================
@@ -218,6 +215,15 @@ const EmployeeAttendanceReport = () => {
     }
   };
 
+  // ============================================================
+  // Break metrics:
+  //   - totalBreaksCount  = sum of daily break session counts
+  //   - breakDaysCount    = days with at least 1 break
+  //   - avgBreaksPerDay   = totalBreaksCount / breakDaysCount
+  //   - totalBreakMinutes = gross − effective (informational)
+  // (Summary strip removed from UI — kept only for the Excel
+  //  header line.)
+  // ============================================================
   const groupedAndSummarizedData = useMemo(() => {
     if (!reportData || reportData.length === 0) {
       return [];
@@ -243,8 +249,14 @@ const EmployeeAttendanceReport = () => {
       let totalLeave = 0;
       let totalLateMinutes = 0;
       let totalEffectiveHours = 0;
+      let totalGrossHours = 0;
+      let totalBreakMinutes = 0;
+      let totalBreaksCount = 0;
+      let breakDaysCount = 0;
 
-      const sortedRecords = employee.records.sort((a, b) => new Date(a.date) - new Date(b.date));
+      const sortedRecords = employee.records.sort(
+        (a, b) => new Date(a.date) - new Date(b.date)
+      );
 
       sortedRecords.forEach(record => {
         switch (record.status) {
@@ -268,10 +280,33 @@ const EmployeeAttendanceReport = () => {
           default:
             break;
         }
-        if (record.status === 'Present' || record.status === 'Late' || record.status === 'Partial') {
-          totalEffectiveHours += record.effectiveHours || 0;
+
+        if (
+          record.status === 'Present' ||
+          record.status === 'Late' ||
+          record.status === 'Partial'
+        ) {
+          const eff = record.effectiveHours || 0;
+          const gross = record.grossHours || 0;
+
+          totalEffectiveHours += eff;
+          totalGrossHours += gross;
+
+          const breakMin = Math.max(0, (gross - eff) * 60);
+          if (breakMin > 0.5) {
+            totalBreakMinutes += breakMin;
+          }
+
+          const dailyBreaks = countDailyBreaks(record);
+          if (dailyBreaks > 0) {
+            totalBreaksCount += dailyBreaks;
+            breakDaysCount += 1;
+          }
         }
       });
+
+      const avgBreaksPerDay =
+        breakDaysCount > 0 ? totalBreaksCount / breakDaysCount : 0;
 
       return {
         ...employee,
@@ -281,14 +316,23 @@ const EmployeeAttendanceReport = () => {
           totalAbsent,
           totalLeave,
           totalDuration: formatHoursToHHMM(totalEffectiveHours),
+          totalGrossDuration: formatHoursToHHMM(totalGrossHours),
           totalLateBy: formatMinutesToHHMM(totalLateMinutes),
+          totalBreaksCount,
+          breakDaysCount,
+          avgBreaksPerDay: Number(avgBreaksPerDay.toFixed(2)),
+          totalBreakMinutes,
+          totalBreakFormatted: formatMinutesToHHMM(totalBreakMinutes),
         }
       };
     });
   }, [reportData]);
 
   // ============================================================
-  // ✅ Excel export — uses Excel time FRACTIONS with hh:mm:ss format
+  // Excel export
+  //   - Keeps per-day "Breaks" (count) and "Break Duration" rows
+  //   - Keeps the compact per-employee summary line above the grid
+  //   - REMOVED the trailing "Monthly totals summary" block
   // ============================================================
   const exportToExcel = () => {
     if (groupedAndSummarizedData.length === 0) {
@@ -311,10 +355,7 @@ const EmployeeAttendanceReport = () => {
         hour12: true
       });
 
-      // Track which cells need time formatting.
-      // Key: "row,col"  → applied after ws is built.
       const timeCellFormats = [];
-
       const wsData = [];
 
       // Title block
@@ -339,14 +380,15 @@ const EmployeeAttendanceReport = () => {
           `Employee Name:- ${employee.employeeName}`
         ]);
 
-        // ✅ NEW: Present Days / Working Days line
-        //    Working Days = total days in month − Sat − Sun − Leaves
         const leaveCount = employee.summary.totalLeave || 0;
         const workingDays = getWorkingDays(selectedYear, selectedMonth, leaveCount);
         const presentDays = employee.summary.totalPresent;
 
+        wsData.push([`Present Days / Working Days - ${presentDays} / ${workingDays}`]);
+
+        // Break summary line — kept in the header only
         wsData.push([
-          `Present Days / Working Days - ${presentDays} / ${workingDays}`
+          `Total Breaks: ${employee.summary.totalBreaksCount} session(s) across ${employee.summary.breakDaysCount} day(s)  |  Total Break Time: ${employee.summary.totalBreakFormatted}  |  Avg Breaks/Day: ${employee.summary.avgBreaksPerDay}`
         ]);
 
         wsData.push([]);
@@ -372,11 +414,7 @@ const EmployeeAttendanceReport = () => {
           const fraction = timeFractionIST(rec.punchInUTC);
           inTimeRow.push(fraction);
           if (fraction !== null) {
-            timeCellFormats.push({
-              row: wsData.length,
-              col: idx + 1,
-              format: 'hh:mm:ss'
-            });
+            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
           }
         });
         wsData.push(inTimeRow);
@@ -387,11 +425,7 @@ const EmployeeAttendanceReport = () => {
           const fraction = timeFractionIST(rec.punchOutUTC);
           outTimeRow.push(fraction);
           if (fraction !== null) {
-            timeCellFormats.push({
-              row: wsData.length,
-              col: idx + 1,
-              format: 'hh:mm:ss'
-            });
+            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
           }
         });
         wsData.push(outTimeRow);
@@ -402,11 +436,7 @@ const EmployeeAttendanceReport = () => {
           const fraction = minutesFraction(getLateMinutes(rec.punchInUTC));
           lateByRow.push(fraction);
           if (fraction !== null) {
-            timeCellFormats.push({
-              row: wsData.length,
-              col: idx + 1,
-              format: 'hh:mm:ss'
-            });
+            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
           }
         });
         wsData.push(lateByRow);
@@ -424,14 +454,42 @@ const EmployeeAttendanceReport = () => {
           const fraction = durationFraction(rec.effectiveHours);
           tDurationRow.push(fraction);
           if (fraction !== null) {
-            timeCellFormats.push({
-              row: wsData.length,
-              col: idx + 1,
-              format: 'hh:mm:ss'
-            });
+            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
           }
         });
         wsData.push(tDurationRow);
+
+        // ---- Gross Duration row ----
+        const grossDurationRow = ['Gross Duration'];
+        employee.records.forEach((rec, idx) => {
+          const fraction = durationFraction(rec.grossHours);
+          grossDurationRow.push(fraction);
+          if (fraction !== null) {
+            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
+          }
+        });
+        wsData.push(grossDurationRow);
+
+        // ---- Breaks (count) row ----
+        const breakCountRow = ['Breaks'];
+        employee.records.forEach((rec) => {
+          breakCountRow.push(countDailyBreaks(rec));
+        });
+        wsData.push(breakCountRow);
+
+        // ---- Break Duration row ----
+        const breakDurationRow = ['Break Duration'];
+        employee.records.forEach((rec, idx) => {
+          const eff = rec.effectiveHours || 0;
+          const gross = rec.grossHours || 0;
+          const breakHours = Math.max(0, gross - eff);
+          const fraction = durationFraction(breakHours);
+          breakDurationRow.push(fraction);
+          if (fraction !== null) {
+            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
+          }
+        });
+        wsData.push(breakDurationRow);
 
         // ---- Status row ----
         const statusRow = ['Status'];
@@ -440,21 +498,19 @@ const EmployeeAttendanceReport = () => {
         });
         wsData.push(statusRow);
 
-        // Spacing between employees
+        // Spacing between employees (NO totals block)
         wsData.push([]);
         wsData.push([]);
       });
 
       const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-      // Column widths
       const maxCols = Math.max(...wsData.map(row => row.length));
       ws['!cols'] = [];
       for (let i = 0; i < maxCols; i++) {
-        ws['!cols'].push({ wch: i === 0 ? 14 : 10 });
+        ws['!cols'].push({ wch: i === 0 ? 30 : 12 });
       }
 
-      // ✅ Apply the hh:mm:ss number format to the specific cells
       timeCellFormats.forEach(({ row, col, format }) => {
         const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
         if (ws[cellRef]) {
@@ -608,11 +664,12 @@ const EmployeeAttendanceReport = () => {
                   </div>
                 </div>
 
-                {/* ✅ NEW: Present Days / Working Days line in UI */}
                 <div className="text-center mt-3 text-[10px] font-bold text-slate-600">
                   Present Days / Working Days - {employee.summary.totalPresent} /{' '}
                   {getWorkingDays(selectedYear, selectedMonth, employee.summary.totalLeave)}
                 </div>
+
+                {/* Break summary stats strip REMOVED */}
               </div>
 
               {/* Daily Breakdown Table */}
@@ -645,7 +702,6 @@ const EmployeeAttendanceReport = () => {
                         </th>
                       ))}
                     </tr>
-                    {/* ✅ Weekday row in UI */}
                     <tr>
                       <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
                         
@@ -726,6 +782,65 @@ const EmployeeAttendanceReport = () => {
                         </td>
                       ))}
                     </tr>
+
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Gross Duration
+                      </td>
+                      {employee.records.map(rec => (
+                        <td
+                          key={`gdur-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-bold font-mono text-slate-700"
+                        >
+                          {formatHoursToHHMM(rec.grossHours)}
+                        </td>
+                      ))}
+                    </tr>
+
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Breaks
+                      </td>
+                      {employee.records.map(rec => {
+                        const dailyBreaks = countDailyBreaks(rec);
+                        return (
+                          <td
+                            key={`brk-${rec.date}`}
+                            className="px-2 py-1.5 text-center"
+                          >
+                            <span
+                              className={`inline-flex items-center justify-center min-w-[24px] h-5 rounded-md text-[9px] font-black ${
+                                dailyBreaks === 0
+                                  ? 'bg-slate-100 text-slate-400'
+                                  : 'bg-indigo-100 text-indigo-700'
+                              }`}
+                            >
+                              {dailyBreaks}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Break Duration
+                      </td>
+                      {employee.records.map(rec => {
+                        const eff = rec.effectiveHours || 0;
+                        const gross = rec.grossHours || 0;
+                        const breakHours = Math.max(0, gross - eff);
+                        return (
+                          <td
+                            key={`bdur-${rec.date}`}
+                            className="px-2 py-1.5 text-center font-bold font-mono text-slate-500"
+                          >
+                            {formatHoursToHHMM(breakHours)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Status
