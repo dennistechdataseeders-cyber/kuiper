@@ -84,7 +84,7 @@ router.get('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales
 // ============================================
 // GET USERS BY ROLE - FOR TICKET ASSIGNMENT
 // ============================================
-router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance'), async (req, res) => {
+router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance','Developer'), async (req, res) => {
   try {
     const { role } = req.params;
     

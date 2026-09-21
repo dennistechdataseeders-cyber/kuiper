@@ -112,7 +112,8 @@ const TICKET_CATEGORIES = {
         'Feed Not Working',
         'Feed Missing Data',
         'Feed Shortage Outage',
-        'Scripts Issues'
+        'Scripts Issues',
+        'Proxy'
       ],
       'Data Quality': [
         'Duplicate Records',
@@ -307,6 +308,7 @@ const CreateTicket = () => {
   const fileInputRef = useRef(null);
 
   const isClient = userRole === 'Client';
+  const isDeveloper = userRole === 'Developer';
   const canSeeProjectFeed = userRole === 'Client' || userRole === 'Project Manager' || userRole === 'Team Lead';
   const isSpecialSubcategory = (formData.category === 'Production' && 
     (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others'));
@@ -550,6 +552,7 @@ const CreateTicket = () => {
   };
 
   // ✅ FIX: Only fetch department users if NOT a client
+  // For Developers creating Production tickets, fetch Team Leads instead of Developers
   const fetchDepartmentUsers = async (category, subcategory = '') => {
     // ✅ Skip if user is Client - they don't need to assign tickets
     if (isClient) {
@@ -585,6 +588,13 @@ const CreateTicket = () => {
           return;
         }
         roleToFetch = 'Developer';
+        
+        // ✅ FIX: If current user is a Developer, show Team Leads instead
+        // Developers should raise tickets TO Team Leads, not to other Developers
+        if (isDeveloper) {
+          roleToFetch = 'Team Lead';
+          console.log('🔍 Developer profile detected - fetching Team Leads for assignment');
+        }
       }
 
       if (category === 'Payroll') {
@@ -626,6 +636,7 @@ const CreateTicket = () => {
   }, [formData.category, formData.subcategory, isClient]);
 
   // ✅ Only fetch developers if user is not client
+  // For Developers, fetch Team Leads instead (for Feasibility/Others subcategories)
   useEffect(() => {
     if (!isClient && isSpecialSubcategory) {
       fetchDevelopers();
@@ -689,6 +700,15 @@ const CreateTicket = () => {
   // ✅ Show watcher section only for non-client users
   const shouldShowWatchers = () => {
     return !isClient;
+  };
+
+  // Helper to get the display label for the assignee role
+  // Developers see "Team Lead", others see their category name
+  const getAssigneeLabel = () => {
+    if (isDeveloper && formData.category === 'Production') {
+      return 'Team Lead';
+    }
+    return formData.category;
   };
 
   useEffect(() => {
@@ -796,12 +816,23 @@ const CreateTicket = () => {
     }
   };
 
+  // ✅ FIX: For Developers, fetch Team Leads instead of Developers
+  // This is used for Feasibility/Others subcategories
   const fetchDevelopers = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/Developer`, {
+      
+      // If current user is a Developer, fetch Team Leads instead
+      const roleToFetch = isDeveloper ? 'Team Lead' : 'Developer';
+      
+      console.log(`🔍 Fetching users with role: ${roleToFetch} for special subcategory assignment`);
+      
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${roleToFetch}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      
+      console.log(`✅ Found ${res.data.length} users with role ${roleToFetch}:`, res.data.map(u => u.name));
+      
       setDevelopers(res.data || []);
     } catch (error) {
       console.error('Error fetching developers:', error);
@@ -847,13 +878,13 @@ const CreateTicket = () => {
     
     // ✅ Skip person dropdown validation for clients
     if (shouldShowPersonDropdown() && !selectedPerson && !isSpecialSubcategory) {
-      const categoryName = formData.category || 'department';
+      const categoryName = getAssigneeLabel() || 'department';
       toast.error(`Please select a ${categoryName} team member for this ticket`);
       return;
     }
     
     if (isSpecialSubcategory && !formData.assignedTo) {
-      toast.error('Please assign a developer for this ticket');
+      toast.error(`Please assign a ${isDeveloper ? 'Team Lead' : 'developer'} for this ticket`);
       return;
     }
     
@@ -1024,7 +1055,7 @@ const CreateTicket = () => {
                     <p className="text-xs text-purple-700 mt-0.5">
                       This ticket is for {formData.subcategory === 'Feasibility' ? 'feasibility assessment' : 'general other requests'}. 
                       Project and Feed will be set to <span className="font-medium">General</span>.
-                      Please assign a developer.
+                      Please assign a {isDeveloper ? 'Team Lead' : 'developer'}.
                     </p>
                   </div>
                 </div>
@@ -1181,7 +1212,7 @@ const CreateTicket = () => {
                       <span className="text-xs font-medium text-purple-700">
                         {formData.subcategory === 'Feasibility' 
                           ? 'No specific issue selection needed' 
-                          : 'General other request - assign developer'}
+                          : `General other request - assign ${isDeveloper ? 'Team Lead' : 'developer'}`}
                       </span>
                     </div>
                   )}
@@ -1222,7 +1253,8 @@ const CreateTicket = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <Users size={18} className="text-blue-600" />
                     <label className="text-sm font-semibold text-slate-700">
-                      Assign to {formData.category} Team Member <span className="text-red-500">*</span>
+                      {/* ✅ FIX: Show "Team Lead" label for Developers */}
+                      Assign to {getAssigneeLabel()} Team Member <span className="text-red-500">*</span>
                     </label>
                     {loadingDepartmentUsers && (
                       <div className="ml-2">
@@ -1245,12 +1277,12 @@ const CreateTicket = () => {
                       {loadingDepartmentUsers 
                         ? 'Loading team members...' 
                         : departmentUsers.length === 0 
-                          ? `No ${formData.category} team members available` 
-                          : `Select a ${formData.category} team member...`}
+                          ? `No ${getAssigneeLabel()} team members available` 
+                          : `Select a ${getAssigneeLabel()} team member...`}
                     </option>
                     {departmentUsers.map(user => (
                       <option key={user._id} value={user._id}>
-                        {user.name}
+                        {user.name} {user.role === 'Team Lead' ? '(Team Lead)' : ''}
                       </option>
                     ))}
                   </select>
@@ -1274,13 +1306,13 @@ const CreateTicket = () => {
                   {departmentUsers.length === 0 && !loadingDepartmentUsers && (
                     <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
                       <p className="text-xs text-amber-700">
-                        ⚠️ No {formData.category} users found in the system. Please contact an administrator to add {formData.category} users.
+                        ⚠️ No {getAssigneeLabel()} users found in the system. Please contact an administrator to add {getAssigneeLabel()} users.
                       </p>
                     </div>
                   )}
                   
                   <p className="text-[8px] text-slate-400 mt-2">
-                    This ticket will be assigned to the selected {formData.category} team member
+                    This ticket will be assigned to the selected {getAssigneeLabel()} team member
                   </p>
                 </div>
               )}
@@ -1290,7 +1322,8 @@ const CreateTicket = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <UserCheck size={18} className="text-purple-600" />
                     <label className="text-sm font-semibold text-purple-700">
-                      Assign Developer <span className="text-red-500">*</span>
+                      {/* ✅ FIX: Show "Team Lead" label for Developers */}
+                      Assign {isDeveloper ? 'Team Lead' : 'Developer'} <span className="text-red-500">*</span>
                     </label>
                   </div>
                   
@@ -1300,13 +1333,17 @@ const CreateTicket = () => {
                     onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
                     className="w-full px-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
                   >
-                    <option value="">Select a developer for {formData.subcategory.toLowerCase()} request</option>
+                    <option value="">
+                      Select a {isDeveloper ? 'Team Lead' : 'developer'} for {formData.subcategory.toLowerCase()} request
+                    </option>
                     {developers.length === 0 ? (
-                      <option value="" disabled>No developers available</option>
+                      <option value="" disabled>
+                        No {isDeveloper ? 'Team Leads' : 'developers'} available
+                      </option>
                     ) : (
                       developers.map(dev => (
                         <option key={dev._id} value={dev._id}>
-                          {dev.name} {dev.githubUsername ? `(${dev.githubUsername})` : ''}
+                          {dev.name} {dev.role === 'Team Lead' ? '(Team Lead)' : ''} {dev.githubUsername ? `(${dev.githubUsername})` : ''}
                         </option>
                       ))
                     )}
@@ -1326,13 +1363,13 @@ const CreateTicket = () => {
                         </div>
                       )}
                       <span className="text-xs text-slate-400 ml-auto">
-                        Developer will be assigned to this ticket
+                        {isDeveloper ? 'Team Lead' : 'Developer'} will be assigned to this ticket
                       </span>
                     </div>
                   )}
                   
                   <p className="text-[8px] text-purple-500 mt-2">
-                    Select a developer who will handle this {formData.subcategory.toLowerCase()} request
+                    Select a {isDeveloper ? 'Team Lead' : 'developer'} who will handle this {formData.subcategory.toLowerCase()} request
                   </p>
                 </div>
               )}
@@ -1434,7 +1471,7 @@ const CreateTicket = () => {
                   <div>
                     <p className="text-sm font-semibold text-purple-800">Project & Feed: General</p>
                     <p className="text-xs text-purple-600">
-                      This {formData.subcategory.toLowerCase()} ticket will be assigned to the general pool and handled by the selected developer.
+                      This {formData.subcategory.toLowerCase()} ticket will be assigned to the general pool and handled by the selected {isDeveloper ? 'Team Lead' : 'developer'}.
                     </p>
                   </div>
                 </div>
@@ -1695,19 +1732,19 @@ const CreateTicket = () => {
                 
                 {!isClient && isSpecialSubcategory && !formData.assignedTo && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    Please assign a developer to create this {formData.subcategory.toLowerCase()} ticket
+                    Please assign a {isDeveloper ? 'Team Lead' : 'developer'} to create this {formData.subcategory.toLowerCase()} ticket
                   </p>
                 )}
                 
                 {!isClient && shouldShowPersonDropdown() && !selectedPerson && departmentUsers.length > 0 && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    Please select a {formData.category} team member to assign this ticket
+                    Please select a {getAssigneeLabel()} team member to assign this ticket
                   </p>
                 )}
                 
                 {!isClient && shouldShowPersonDropdown() && departmentUsers.length === 0 && formData.category && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    No {formData.category} users available. Please contact an administrator.
+                    No {getAssigneeLabel()} users available. Please contact an administrator.
                   </p>
                 )}
               </div>
