@@ -1,36 +1,161 @@
 // frontend/src/pages/EmployeeAttendanceReport.jsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
 import {
   Download,
   Calendar,
   Loader2,
-  Search,
-  Users,
   FileText,
-  ChevronLeft,
-  ChevronRight,
-  Filter,
-  User,
-  Mail,
-  Building2,
-  X,
-  XCircle,
-  CheckCircle,
-  AlertCircle,
-  Clock
+  Users,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
+// ============================================================
+// ✅ SHARED TIME HELPERS (Matches AttendanceCombined / Timeline)
+// ============================================================
+
+const IST_OFFSET_MINUTES = 5 * 60 + 30; // +05:30
+const OFFICE_START_MINUTES = 10 * 60 + 45; // 10:45 AM IST cutoff
+
+/**
+ * Formats a UTC date string into IST 24-hour time (e.g., "14:30") — for UI display.
+ */
+const formatTime = (dateString) => {
+  if (!dateString) return '00:00';
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '00:00';
+
+    let total = date.getUTCHours() * 60 + date.getUTCMinutes() + IST_OFFSET_MINUTES;
+    total = ((total % 1440) + 1440) % 1440;
+
+    const hours = Math.floor(total / 60);
+    const minutes = String(total % 60).padStart(2, '0');
+
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+  } catch (e) {
+    return '00:00';
+  }
+};
+
+/**
+ * ✅ FIXED: Returns an Excel time-of-day FRACTION (0..1).
+ *   Example: 10:52:58 IST  →  (10*3600 + 52*60 + 58) / 86400 = 0.453449...
+ *   Excel stores time as a fraction of a day, so this is what we want.
+ *   Returns null if there is no time.
+ */
+const timeFractionIST = (dateString) => {
+  if (!dateString) return null;
+  try {
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return null;
+
+    let totalMinutes = date.getUTCHours() * 60 + date.getUTCMinutes() + IST_OFFSET_MINUTES;
+    totalMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const seconds = date.getUTCSeconds();
+
+    const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+    return totalSeconds / 86400;
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
+ * ✅ FIXED: Returns Excel time-of-day fraction for a duration given in hours.
+ */
+const durationFraction = (hours) => {
+  if (!hours || hours <= 0) return null;
+  const totalSeconds = Math.round(hours * 3600);
+  return totalSeconds / 86400;
+};
+
+/**
+ * ✅ FIXED: Returns Excel time-of-day fraction for a duration given in minutes.
+ */
+const minutesFraction = (minutes) => {
+  if (!minutes || minutes <= 0) return null;
+  const totalSeconds = Math.round(minutes * 60);
+  return totalSeconds / 86400;
+};
+
+/**
+ * Calculates "Late By" in minutes based on IST cutoff.
+ */
+const getLateMinutes = (punchInUTC) => {
+  if (!punchInUTC) return 0;
+  try {
+    const d = new Date(punchInUTC);
+    if (isNaN(d.getTime())) return 0;
+
+    let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
+    total = ((total % 1440) + 1440) % 1440;
+
+    if (total <= OFFICE_START_MINUTES) return 0;
+    return total - OFFICE_START_MINUTES;
+  } catch (e) {
+    return 0;
+  }
+};
+
+/**
+ * Formats a number of minutes into "HH:MM" format.
+ */
+const formatMinutesToHHMM = (minutes) => {
+  if (!minutes || minutes <= 0) return '00:00';
+  const hrs = Math.floor(minutes / 60);
+  const mins = Math.round(minutes % 60);
+  return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+};
+
+/**
+ * Formats a number of hours into "HH:MM" format.
+ */
+const formatHoursToHHMM = (hours) => {
+  if (!hours || hours <= 0) return '00:00';
+  const totalMinutes = Math.round(hours * 60);
+  return formatMinutesToHHMM(totalMinutes);
+};
+
+const getStatusInfo = (status) => {
+  switch (status) {
+    case 'Present': return { code: 'P', color: 'bg-emerald-100 text-emerald-700' };
+    case 'Late': return { code: 'P', color: 'bg-amber-100 text-amber-700' };
+    case 'Absent': return { code: 'A', color: 'bg-rose-100 text-rose-700' };
+    case 'Leave': return { code: 'L', color: 'bg-indigo-100 text-indigo-700' };
+    case 'Weekend': return { code: 'WO', color: 'bg-slate-100 text-slate-500' };
+    case 'Partial': return { code: '½P', color: 'bg-blue-100 text-blue-700' };
+    default: return { code: '?', color: 'bg-slate-100 text-slate-700' };
+  }
+};
+
+/**
+ * ✅ Computes Working Days for a given month/year.
+ *    Working Days = total days in month − Saturdays − Sundays − Leaves
+ */
+const getWorkingDays = (year, month, leaveCount = 0) => {
+  const totalDays = new Date(year, month, 0).getDate();
+  let weekendCount = 0;
+  for (let d = 1; d <= totalDays; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    if (dow === 0 || dow === 6) weekendCount++;
+  }
+  return totalDays - weekendCount - (leaveCount || 0);
+};
+
+// ============================================================
+
 const EmployeeAttendanceReport = () => {
   const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
 
-  // State
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [reportData, setReportData] = useState([]);
@@ -38,10 +163,6 @@ const EmployeeAttendanceReport = () => {
   const [selectedEmployee, setSelectedEmployee] = useState('all');
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [summary, setSummary] = useState(null);
-  const itemsPerPage = 20;
 
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
@@ -52,31 +173,22 @@ const EmployeeAttendanceReport = () => {
     'July', 'August', 'September', 'October', 'November', 'December'
   ];
 
-  // Fetch employees on load
   useEffect(() => {
     fetchEmployees();
   }, []);
 
-  // Fetch report when filters change
   useEffect(() => {
-    if (employees.length > 0) {
-      fetchReport();
-    }
-  }, [selectedEmployee, selectedMonth, selectedYear]);
+    fetchReport();
+  }, [selectedMonth, selectedYear, selectedEmployee]);
 
   const fetchEmployees = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/hr/employees`, authHeader);
       if (res.data.success) {
-        // Employees already exclude Clients from the backend
-        setEmployees(res.data.employees);
-        if (res.data.employees.length > 0 && selectedEmployee === 'all') {
-          setSelectedEmployee('all');
-        }
+        setEmployees(res.data.employees || []);
       }
     } catch (error) {
       console.error('Error fetching employees:', error);
-      toast.error('Failed to load employees');
     }
   };
 
@@ -89,15 +201,14 @@ const EmployeeAttendanceReport = () => {
         month: selectedMonth,
         year: selectedYear
       };
-      
+
       const res = await axios.get(`${API_BASE_URL}/api/hr/attendance/employee-report`, {
         ...authHeader,
         params
       });
-      
+
       if (res.data.success) {
         setReportData(res.data.data || []);
-        setSummary(res.data.summary || null);
       }
     } catch (error) {
       console.error('Error fetching report:', error);
@@ -107,59 +218,253 @@ const EmployeeAttendanceReport = () => {
     }
   };
 
+  const groupedAndSummarizedData = useMemo(() => {
+    if (!reportData || reportData.length === 0) {
+      return [];
+    }
+
+    const groupedByEmployee = reportData.reduce((acc, row) => {
+      const key = row.employeeId;
+      if (!acc[key]) {
+        acc[key] = {
+          employeeId: row.employeeId,
+          employeeName: row.employeeName,
+          employeeCode: row.employeeCode,
+          records: []
+        };
+      }
+      acc[key].records.push(row);
+      return acc;
+    }, {});
+
+    return Object.values(groupedByEmployee).map(employee => {
+      let totalPresent = 0;
+      let totalAbsent = 0;
+      let totalLeave = 0;
+      let totalLateMinutes = 0;
+      let totalEffectiveHours = 0;
+
+      const sortedRecords = employee.records.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+      sortedRecords.forEach(record => {
+        switch (record.status) {
+          case 'Present':
+            totalPresent += 1;
+            break;
+          case 'Late':
+            totalPresent += 1;
+            totalLateMinutes += getLateMinutes(record.punchInUTC);
+            break;
+          case 'Partial':
+            totalPresent += 0.5;
+            totalAbsent += 0.5;
+            break;
+          case 'Absent':
+            totalAbsent += 1;
+            break;
+          case 'Leave':
+            totalLeave += 1;
+            break;
+          default:
+            break;
+        }
+        if (record.status === 'Present' || record.status === 'Late' || record.status === 'Partial') {
+          totalEffectiveHours += record.effectiveHours || 0;
+        }
+      });
+
+      return {
+        ...employee,
+        records: sortedRecords,
+        summary: {
+          totalPresent,
+          totalAbsent,
+          totalLeave,
+          totalDuration: formatHoursToHHMM(totalEffectiveHours),
+          totalLateBy: formatMinutesToHHMM(totalLateMinutes),
+        }
+      };
+    });
+  }, [reportData]);
+
+  // ============================================================
+  // ✅ Excel export — uses Excel time FRACTIONS with hh:mm:ss format
+  // ============================================================
   const exportToExcel = () => {
-    if (reportData.length === 0) {
+    if (groupedAndSummarizedData.length === 0) {
       toast.error('No data to export');
       return;
     }
 
     setExporting(true);
     try {
-      // Prepare data for Excel
-      const excelData = reportData.map(row => ({
-        'Employee': row.employeeName,
-        'Employee Code': row.employeeCode,
-        'Email': row.employeeEmail,
-        'Date': row.date,
-        'Day': row.day,
-        'Status': row.status,
-        'In': row.punchIn,
-        'Out': row.punchOut,
-        'Effective (h)': row.effectiveHours,
-        'Gross (h)': row.grossHours,
-        'Arrival': row.arrival
-      }));
-
-      // Create worksheet
-      const ws = XLSX.utils.json_to_sheet(excelData);
-
-      // Set column widths
-      ws['!cols'] = [
-        { wch: 20 }, // Employee
-        { wch: 15 }, // Employee Code
-        { wch: 25 }, // Email
-        { wch: 12 }, // Date
-        { wch: 10 }, // Day
-        { wch: 10 }, // Status
-        { wch: 10 }, // In
-        { wch: 10 }, // Out
-        { wch: 12 }, // Effective
-        { wch: 12 }, // Gross
-        { wch: 12 }  // Arrival
-      ];
-
-      // Create workbook
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Attendance');
-
-      // Generate filename
-      const employeeName = selectedEmployee === 'all' 
-        ? 'All_Employees' 
-        : employees.find(e => e._id === selectedEmployee)?.name || 'Employee';
       const monthName = monthNames[selectedMonth - 1];
-      const filename = `Attendance_Report_${employeeName}_${monthName}_${selectedYear}.xlsx`;
+      const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+      const period = `01-${monthName.substring(0, 3)}-${selectedYear} To ${lastDay}-${monthName.substring(0, 3)}-${selectedYear}`;
+      const generatedOn = new Date().toLocaleString('en-IN', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
 
-      // Download
+      // Track which cells need time formatting.
+      // Key: "row,col"  → applied after ws is built.
+      const timeCellFormats = [];
+
+      const wsData = [];
+
+      // Title block
+      wsData.push(['Techdataseeders']);
+      wsData.push(['Work Duration Report']);
+      wsData.push([period]);
+      wsData.push([]);
+      wsData.push([`Generated On: ${generatedOn}`]);
+      wsData.push([]);
+
+      groupedAndSummarizedData.forEach((employee) => {
+        // Employee header block
+        wsData.push(['Department:-', 'DefaultDepartment']);
+        wsData.push([
+          `Employee Code:- ${employee.employeeCode || 'N/A'}`,
+          '',
+          '',
+          '',
+          '',
+          '',
+          '',
+          `Employee Name:- ${employee.employeeName}`
+        ]);
+
+        // ✅ NEW: Present Days / Working Days line
+        //    Working Days = total days in month − Sat − Sun − Leaves
+        const leaveCount = employee.summary.totalLeave || 0;
+        const workingDays = getWorkingDays(selectedYear, selectedMonth, leaveCount);
+        const presentDays = employee.summary.totalPresent;
+
+        wsData.push([
+          `Present Days / Working Days - ${presentDays} / ${workingDays}`
+        ]);
+
+        wsData.push([]);
+
+        // ---- Header rows ----
+        const dayHeaderRow = ['Day'];
+        const dateHeaderRow = ['Days'];
+        const weekdayHeaderRow = [''];
+
+        employee.records.forEach((rec, idx) => {
+          dayHeaderRow.push(`Day${idx + 1}`);
+          dateHeaderRow.push(`${rec.date.split('-')[2]}-${monthName.substring(0, 3)}`);
+          weekdayHeaderRow.push(rec.day ? rec.day.substring(0, 3) : '');
+        });
+
+        wsData.push(dayHeaderRow);
+        wsData.push(dateHeaderRow);
+        wsData.push(weekdayHeaderRow);
+
+        // ---- In Time row ----
+        const inTimeRow = ['In Time'];
+        employee.records.forEach((rec, idx) => {
+          const fraction = timeFractionIST(rec.punchInUTC);
+          inTimeRow.push(fraction);
+          if (fraction !== null) {
+            timeCellFormats.push({
+              row: wsData.length,
+              col: idx + 1,
+              format: 'hh:mm:ss'
+            });
+          }
+        });
+        wsData.push(inTimeRow);
+
+        // ---- Out Time row ----
+        const outTimeRow = ['Out Time'];
+        employee.records.forEach((rec, idx) => {
+          const fraction = timeFractionIST(rec.punchOutUTC);
+          outTimeRow.push(fraction);
+          if (fraction !== null) {
+            timeCellFormats.push({
+              row: wsData.length,
+              col: idx + 1,
+              format: 'hh:mm:ss'
+            });
+          }
+        });
+        wsData.push(outTimeRow);
+
+        // ---- Late By row ----
+        const lateByRow = ['Late By'];
+        employee.records.forEach((rec, idx) => {
+          const fraction = minutesFraction(getLateMinutes(rec.punchInUTC));
+          lateByRow.push(fraction);
+          if (fraction !== null) {
+            timeCellFormats.push({
+              row: wsData.length,
+              col: idx + 1,
+              format: 'hh:mm:ss'
+            });
+          }
+        });
+        wsData.push(lateByRow);
+
+        // ---- Early By row (placeholder) ----
+        const earlyByRow = ['Early By'];
+        employee.records.forEach(() => {
+          earlyByRow.push(null);
+        });
+        wsData.push(earlyByRow);
+
+        // ---- T Duration row ----
+        const tDurationRow = ['T Duration'];
+        employee.records.forEach((rec, idx) => {
+          const fraction = durationFraction(rec.effectiveHours);
+          tDurationRow.push(fraction);
+          if (fraction !== null) {
+            timeCellFormats.push({
+              row: wsData.length,
+              col: idx + 1,
+              format: 'hh:mm:ss'
+            });
+          }
+        });
+        wsData.push(tDurationRow);
+
+        // ---- Status row ----
+        const statusRow = ['Status'];
+        employee.records.forEach(rec => {
+          statusRow.push(getStatusInfo(rec.status).code);
+        });
+        wsData.push(statusRow);
+
+        // Spacing between employees
+        wsData.push([]);
+        wsData.push([]);
+      });
+
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // Column widths
+      const maxCols = Math.max(...wsData.map(row => row.length));
+      ws['!cols'] = [];
+      for (let i = 0; i < maxCols; i++) {
+        ws['!cols'].push({ wch: i === 0 ? 14 : 10 });
+      }
+
+      // ✅ Apply the hh:mm:ss number format to the specific cells
+      timeCellFormats.forEach(({ row, col, format }) => {
+        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+        if (ws[cellRef]) {
+          ws[cellRef].z = format;
+        }
+      });
+
+      XLSX.utils.book_append_sheet(wb, ws, 'Work Duration Report');
+
+      const filename = `Work_Duration_Report_${monthName}_${selectedYear}.xlsx`;
       XLSX.writeFile(wb, filename);
       toast.success(`Report exported successfully: ${filename}`);
     } catch (error) {
@@ -170,57 +475,6 @@ const EmployeeAttendanceReport = () => {
     }
   };
 
-  // Filter report data by search term
-  const filteredData = reportData.filter(row =>
-    row.employeeName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    row.employeeCode?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    row.date?.includes(searchTerm)
-  );
-
-  // Paginate data
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const currentData = filteredData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
-
-  // Get status color
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Present': return 'bg-emerald-100 text-emerald-700';
-      case 'Late': return 'bg-amber-100 text-amber-700';
-      case 'Absent': return 'bg-rose-100 text-rose-700';
-      case 'Leave': return 'bg-indigo-100 text-indigo-700';
-      case 'Weekend': return 'bg-slate-100 text-slate-500';
-      case 'Partial': return 'bg-amber-100 text-amber-700';
-      default: return 'bg-slate-100 text-slate-700';
-    }
-  };
-
-  // Get status icon
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'Present': return <CheckCircle size={12} className="text-emerald-600" />;
-      case 'Late': return <AlertCircle size={12} className="text-amber-600" />;
-      case 'Absent': return <XCircle size={12} className="text-rose-600" />;
-      case 'Leave': return <Calendar size={12} className="text-indigo-600" />;
-      case 'Weekend': return <Calendar size={12} className="text-slate-400" />;
-      case 'Partial': return <Clock size={12} className="text-amber-600" />;
-      default: return <FileText size={12} className="text-slate-400" />;
-    }
-  };
-
-  // Calculate statistics
-  const stats = {
-    total: reportData.length,
-    present: reportData.filter(r => r.status === 'Present').length,
-    late: reportData.filter(r => r.status === 'Late').length,
-    absent: reportData.filter(r => r.status === 'Absent').length,
-    leave: reportData.filter(r => r.status === 'Leave').length,
-    weekend: reportData.filter(r => r.status === 'Weekend').length,
-    partial: reportData.filter(r => r.status === 'Partial').length
-  };
-
   return (
     <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
       {/* Header */}
@@ -228,13 +482,15 @@ const EmployeeAttendanceReport = () => {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
           <div>
             <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-              Employee Attendance Report
+              Work Duration Report
             </h1>
-            <p className="text-slate-500 mt-1">Generate and export attendance reports for all employees</p>
+            <p className="text-slate-500 mt-1">
+              Generate and export a detailed monthly work report for employees
+            </p>
           </div>
           <button
             onClick={exportToExcel}
-            disabled={exporting || reportData.length === 0}
+            disabled={exporting || groupedAndSummarizedData.length === 0}
             className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
           >
             {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
@@ -246,7 +502,6 @@ const EmployeeAttendanceReport = () => {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Employee Filter */}
           <div>
             <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
               <Users size={14} className="inline mr-1" />
@@ -266,7 +521,6 @@ const EmployeeAttendanceReport = () => {
             </select>
           </div>
 
-          {/* Month Filter */}
           <div>
             <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
               <Calendar size={14} className="inline mr-1" />
@@ -283,7 +537,6 @@ const EmployeeAttendanceReport = () => {
             </select>
           </div>
 
-          {/* Year Filter */}
           <div>
             <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
               Year
@@ -302,54 +555,20 @@ const EmployeeAttendanceReport = () => {
             </select>
           </div>
         </div>
-
-       
       </div>
 
-      {/* Search */}
-      {reportData.length > 0 && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 mb-4">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by employee name, code, or date..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:border-blue-400 bg-slate-50"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => {
-                  setSearchTerm('');
-                  setCurrentPage(1);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Report Table */}
+      {/* Report Display */}
       {loading ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
           <Loader2 size={40} className="text-blue-600 animate-spin mx-auto mb-3" />
           <p className="text-slate-500 font-medium">Loading report data...</p>
         </div>
-      ) : reportData.length === 0 ? (
+      ) : groupedAndSummarizedData.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-12 text-center">
           <FileText size={48} className="text-slate-300 mx-auto mb-4" />
           <p className="text-sm font-bold text-slate-500">No attendance data found</p>
           <p className="text-xs text-slate-400 mt-1">
-            {selectedEmployee === 'all' 
-              ? 'No employees have attendance records for this period' 
-              : 'This employee has no attendance records for this period'}
+            No employees have work records for the selected period.
           </p>
           <button
             onClick={fetchReport}
@@ -359,101 +578,179 @@ const EmployeeAttendanceReport = () => {
           </button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px]">
-              <thead className="bg-slate-50/80 border-b border-slate-200">
-                <tr>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Employee</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Code</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Date</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Day</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Status</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">In</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Out</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Eff</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Gross</th>
-                  <th className="px-3 py-3 text-left text-[8px] font-black uppercase text-slate-400 tracking-wider">Arrival</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {currentData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50/50 transition-all">
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-[10px] font-bold">
-                          {row.employeeName?.charAt(0) || '?'}
-                        </div>
-                        <span className="text-xs font-semibold text-slate-700 truncate max-w-[120px]">
-                          {row.employeeName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs font-mono text-slate-500">{row.employeeCode}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs font-medium text-slate-700">{row.date}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs text-slate-500">{row.day}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-bold ${getStatusColor(row.status)}`}>
-                        {getStatusIcon(row.status)}
-                        {row.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs font-mono text-slate-700">{row.punchIn}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs font-mono text-slate-700">{row.punchOut}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs font-bold text-emerald-700">{row.effectiveHours}h</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-xs font-medium text-slate-700">{row.grossHours}h</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`text-xs font-medium ${row.arrival.includes('late') ? 'text-amber-600' : row.arrival === 'On Time' ? 'text-emerald-600' : 'text-slate-400'}`}>
-                        {row.arrival}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="space-y-8">
+          {groupedAndSummarizedData.map(employee => (
+            <div
+              key={employee.employeeId}
+              className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+            >
+              {/* Employee Header */}
+              <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <div className="text-center">
+                  <h2 className="text-sm font-black uppercase text-slate-700">
+                    Techdataseeders
+                  </h2>
+                  <p className="text-xs font-bold text-slate-600">Work Duration Report</p>
+                  <p className="text-[10px] text-slate-500">
+                    {`01-${monthNames[selectedMonth - 1].substring(0, 3)}-${selectedYear} To ${new Date(selectedYear, selectedMonth, 0).getDate()}-${monthNames[selectedMonth - 1].substring(0, 3)}-${selectedYear}`}
+                  </p>
+                </div>
+                <div className="flex justify-between items-center mt-3 text-[10px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-black uppercase text-slate-400">Employee Code:</span>
+                    <span className="font-bold text-slate-800">
+                      {employee.employeeCode || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black uppercase text-slate-400">Employee Name:</span>
+                    <span className="font-bold text-slate-800">{employee.employeeName}</span>
+                  </div>
+                </div>
 
-          {/* Pagination */}
-          {totalPages > 1 && (
-            <div className="p-4 border-t border-slate-100 flex justify-between items-center">
-              <span className="text-xs text-slate-500">
-                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredData.length)} of {filteredData.length} records
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                >
-                  <ChevronLeft size={14} />
-                </button>
-                <span className="text-xs font-bold text-slate-600 flex items-center px-2">
-                  {currentPage} / {totalPages}
-                </span>
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
-                >
-                  <ChevronRight size={14} />
-                </button>
+                {/* ✅ NEW: Present Days / Working Days line in UI */}
+                <div className="text-center mt-3 text-[10px] font-bold text-slate-600">
+                  Present Days / Working Days - {employee.summary.totalPresent} /{' '}
+                  {getWorkingDays(selectedYear, selectedMonth, employee.summary.totalLeave)}
+                </div>
+              </div>
+
+              {/* Daily Breakdown Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px]">
+                  <thead className="bg-slate-50/80 border-b border-slate-200">
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
+                        Day
+                      </th>
+                      {employee.records.map((rec, index) => (
+                        <th
+                          key={`day-${index}`}
+                          className="px-2 py-1.5 text-center font-black uppercase text-slate-400 tracking-wider min-w-[50px]"
+                        >
+                          Day{index + 1}
+                        </th>
+                      ))}
+                    </tr>
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
+                        Date
+                      </th>
+                      {employee.records.map(rec => (
+                        <th
+                          key={`date-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-bold text-slate-500"
+                        >
+                          {rec.date.split('-')[2]}-{monthNames[selectedMonth - 1].substring(0, 3)}
+                        </th>
+                      ))}
+                    </tr>
+                    {/* ✅ Weekday row in UI */}
+                    <tr>
+                      <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
+                        
+                      </th>
+                      {employee.records.map(rec => (
+                        <th
+                          key={`weekday-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-bold text-slate-400 italic"
+                        >
+                          {rec.day ? rec.day.substring(0, 3) : ''}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        In Time
+                      </td>
+                      {employee.records.map(rec => (
+                        <td
+                          key={`in-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-mono text-slate-700"
+                        >
+                          {formatTime(rec.punchInUTC)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Out Time
+                      </td>
+                      {employee.records.map(rec => (
+                        <td
+                          key={`out-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-mono text-slate-700"
+                        >
+                          {formatTime(rec.punchOutUTC)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Late By
+                      </td>
+                      {employee.records.map(rec => (
+                        <td
+                          key={`late-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-mono text-amber-600"
+                        >
+                          {formatMinutesToHHMM(getLateMinutes(rec.punchInUTC))}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Early By
+                      </td>
+                      {employee.records.map(rec => (
+                        <td
+                          key={`early-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-mono text-slate-400"
+                        >
+                          00:00
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        T Duration
+                      </td>
+                      {employee.records.map(rec => (
+                        <td
+                          key={`tdur-${rec.date}`}
+                          className="px-2 py-1.5 text-center font-bold font-mono text-slate-700"
+                        >
+                          {formatHoursToHHMM(rec.effectiveHours)}
+                        </td>
+                      ))}
+                    </tr>
+                    <tr className="hover:bg-slate-50/50">
+                      <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        Status
+                      </td>
+                      {employee.records.map(rec => {
+                        const statusInfo = getStatusInfo(rec.status);
+                        return (
+                          <td
+                            key={`status-${rec.date}`}
+                            className="px-2 py-1.5 text-center"
+                          >
+                            <span
+                              className={`inline-flex items-center justify-center w-6 h-5 rounded-md text-[9px] font-black ${statusInfo.color}`}
+                            >
+                              {statusInfo.code}
+                            </span>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
