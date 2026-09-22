@@ -1,4 +1,4 @@
-// frontend/src/pages/Worklog.jsx - FULL UPDATED WITH INTEGRATED TIME TRACKING + AUTO-STOP INDICATOR
+// frontend/src/pages/Worklog.jsx - FULL UPDATED WITH INTEGRATED TIME TRACKING + AUTO-STOP INDICATOR + HISTORY + AUTO-STOP SYNC
 
 import React, {
   useEffect,
@@ -9,13 +9,14 @@ import React, {
 } from 'react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
+import { io } from 'socket.io-client';
 import { useSidebar } from '../context/SidebarContext';
 import {
   Play,
   Pause,
   Square,
   Clock3,
-  Search, 
+  Search,
   X,
   FileText,
   Pencil,
@@ -30,12 +31,18 @@ import {
   Lock,
   RefreshCw,
   Globe,
-  Wifi,
   WifiOff,
   ShieldCheck,
   Coffee,
   StopCircle,
-  Ticket
+  Ticket,
+  History,
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  User,
+  TrendingUp
 } from 'lucide-react';
 
 import API_BASE_URL from '../config';
@@ -54,7 +61,7 @@ const Worklog = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const { isCollapsed } = useSidebar();
-  
+
   const [selectedProject, setSelectedProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -80,6 +87,18 @@ const Worklog = () => {
   const [submittingTicketLog, setSubmittingTicketLog] = useState(false);
   const [isEditingTicketLog, setIsEditingTicketLog] = useState(false);
 
+  // ========================================
+  // HISTORY STATE
+  // ========================================
+  const [historyDate, setHistoryDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toISOString().split('T')[0];
+  });
+  const [historyData, setHistoryData] = useState(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [expandedHistoryRow, setExpandedHistoryRow] = useState(null);
+
   // Track if notification has been sent for each running feed
   const notificationSentRef = useRef({});
   const lastNotificationTimeRef = useRef({});
@@ -93,16 +112,15 @@ const Worklog = () => {
   const [isStoppingAll, setIsStoppingAll] = useState(false);
 
   // System Time Mismatch State
-  const [timeMismatch, setTimeMismatch] = useState({ 
-    isMismatch: false, 
-    message: '', 
-    serverTime: null, 
+  const [timeMismatch, setTimeMismatch] = useState({
+    isMismatch: false,
+    message: '',
+    serverTime: null,
     localTime: null,
     serverDate: null,
     localDate: null,
     timeDiffMinutes: 0
   });
-  const [isChecking, setIsChecking] = useState(false);
 
   /*
   ========================================
@@ -130,7 +148,7 @@ const Worklog = () => {
     const hrs = Math.floor(seconds / 3600);
     const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hrs > 0) {
       return `${hrs}h ${mins}m ${secs}s`;
     }
@@ -140,12 +158,38 @@ const Worklog = () => {
     return `${secs}s`;
   };
 
+  const formatClockTime = (dateString) => {
+    if (!dateString) return '—';
+    try {
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return '—';
+      return d.toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch {
+      return '—';
+    }
+  };
+
   const formatSyncAge = (lastSyncAt) => {
     if (!lastSyncAt) return 'Never';
     const ageSeconds = Math.floor((Date.now() - lastSyncAt) / 1000);
     if (ageSeconds < 5) return 'Just now';
     if (ageSeconds < 60) return `${ageSeconds}s ago`;
     return `${Math.floor(ageSeconds / 60)}m ago`;
+  };
+
+  const formatDurationFromSeconds = (seconds) => {
+    if (!seconds || seconds <= 0) return '0s';
+    const hrs = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hrs > 0) return `${hrs}h ${mins}m ${secs}s`;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
   };
 
   const syncServerTime = useCallback(async (silent = false) => {
@@ -167,12 +211,12 @@ const Worklog = () => {
       const networkLatencyMs = (t1 - t0) / 2;
       const estimatedServerNow = serverTime + networkLatencyMs;
       const newOffset = estimatedServerNow - t1;
-      
+
       serverTimeOffsetRef.current = newOffset;
 
       const now = Date.now();
-      const displayTime = new Date(estimatedServerNow).toLocaleTimeString('en-IN', { 
-        timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit' 
+      const displayTime = new Date(estimatedServerNow).toLocaleTimeString('en-IN', {
+        timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit'
       });
 
       setServerSyncStatus({
@@ -191,8 +235,8 @@ const Worklog = () => {
       if (serverDate !== localDate || timeDiffMinutes > 5) {
         setTimeMismatch({
           isMismatch: true,
-          message: serverDate !== localDate 
-            ? `Date mismatch: Server ${serverDate} vs Local ${localDate}` 
+          message: serverDate !== localDate
+            ? `Date mismatch: Server ${serverDate} vs Local ${localDate}`
             : `Time offset: ${Math.round(timeDiffMinutes)} minutes`,
           serverTime: new Date(estimatedServerNow).toLocaleTimeString(),
           localTime: new Date(t1).toLocaleTimeString(),
@@ -201,9 +245,9 @@ const Worklog = () => {
           timeDiffMinutes: Math.round(timeDiffMinutes)
         });
       } else {
-        setTimeMismatch({ 
-          isMismatch: false, 
-          message: '', 
+        setTimeMismatch({
+          isMismatch: false,
+          message: '',
           serverTime: new Date(estimatedServerNow).toLocaleTimeString(),
           localTime: new Date(t1).toLocaleTimeString(),
           serverDate,
@@ -214,8 +258,8 @@ const Worklog = () => {
 
     } catch (err) {
       console.error('[TimeSync] Sync failed:', err);
-      setServerSyncStatus(prev => ({ 
-        ...prev, 
+      setServerSyncStatus(prev => ({
+        ...prev,
         isSyncing: false,
         synced: prev.synced,
       }));
@@ -227,7 +271,7 @@ const Worklog = () => {
       setLoading(true);
       const token = localStorage.getItem('token');
       if (!token) { setLoading(false); return; }
-      
+
       const res = await axios.get(`${API_BASE_URL}/api/dev/worklog`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -244,7 +288,7 @@ const Worklog = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) { setTicketLoading(false); return; }
-      
+
       const res = await axios.get(`${API_BASE_URL}/api/dev/ticket-worklog`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -257,12 +301,47 @@ const Worklog = () => {
     }
   };
 
+  /*
+  ========================================
+  HISTORY FETCH
+  ========================================
+  */
+
+  const fetchHistory = useCallback(async (date) => {
+    if (!date) return;
+    setHistoryLoading(true);
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) { setHistoryLoading(false); return; }
+
+      const res = await axios.get(`${API_BASE_URL}/api/dev/worklog/history`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { date }
+      });
+
+      setHistoryData(res.data);
+    } catch (err) {
+      console.error('Error fetching history:', err);
+      toast.error(err.response?.data?.error || 'Failed to load history');
+      setHistoryData(null);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  // Lazy-load history when the tab is opened
+  useEffect(() => {
+    if (selectedTab === 'history') {
+      fetchHistory(historyDate);
+    }
+  }, [selectedTab, historyDate, fetchHistory]);
+
   const handleBreak = async () => {
     if (isStoppingAll) return;
-    
+
     const hasRunningFeeds = logs.some(item => item.worklog.isRunning);
     const hasRunningTickets = ticketLogs.some(item => item.worklog?.isRunning);
-    
+
     if (!hasRunningFeeds && !hasRunningTickets) {
       toast.info('No running timers to stop');
       return;
@@ -275,25 +354,25 @@ const Worklog = () => {
         await stopTimer(item.feed._id, true);
         await new Promise(resolve => setTimeout(resolve, 200));
       }
-      
+
       const runningTickets = ticketLogs.filter(item => item.worklog?.isRunning);
       for (const item of runningTickets) {
         await stopTicketTimer(item.ticket._id, true);
         await new Promise(resolve => setTimeout(resolve, 200));
       }
-      
+
       const totalStopped = runningFeeds.length + runningTickets.length;
-      
+
       setIsBreakMode(true);
       toast.success(`🛑 Break started! ${totalStopped} timer(s) stopped`, {
         duration: 3000,
         icon: '☕'
       });
-      
+
       setTimeout(() => {
         setIsBreakMode(false);
       }, 5000);
-      
+
     } catch (err) {
       console.error('Break error:', err);
       toast.error('Failed to stop all timers');
@@ -304,11 +383,11 @@ const Worklog = () => {
 
   const checkLongRunningTimers = useCallback(() => {
     const serverNow = getServerNow();
-    
+
     logs.forEach(item => {
       const worklog = item.worklog;
       const feedName = item.feed?.name;
-      
+
       if (worklog.isRunning && worklog.startedAt) {
         const elapsedSeconds = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
         if (elapsedSeconds >= 7200) {
@@ -317,10 +396,10 @@ const Worklog = () => {
           if (!notificationSentRef.current[notificationKey] || (serverNow - lastNotifTime) >= 30 * 60 * 1000) {
             notificationSentRef.current[notificationKey] = true;
             lastNotificationTimeRef.current[notificationKey] = serverNow;
-            
+
             const hours = Math.floor(elapsedSeconds / 3600);
             const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-            
+
             notificationManager.show({
               title: '⏰ Long Work Session Alert',
               body: `You've been working on "${feedName}" for ${hours}h ${minutes}m. Consider taking a break!`,
@@ -329,7 +408,7 @@ const Worklog = () => {
               priority: 'default',
               data: { feedId: item.feed._id, type: 'worklog' }
             });
-            
+
             toast.warning(`Working on "${feedName}" for ${hours}h ${minutes}m. Time for a break?`, {
               duration: 5000,
               icon: '☕'
@@ -341,11 +420,11 @@ const Worklog = () => {
         }
       }
     });
-    
+
     ticketLogs.forEach(item => {
       const worklog = item.worklog;
       const ticketTitle = item.ticket?.title;
-      
+
       if (worklog?.isRunning && worklog.startedAt) {
         const elapsedSeconds = Math.floor((serverNow - new Date(worklog.startedAt).getTime()) / 1000);
         if (elapsedSeconds >= 7200) {
@@ -354,10 +433,10 @@ const Worklog = () => {
           if (!ticketNotificationSentRef.current[notificationKey] || (serverNow - lastNotifTime) >= 30 * 60 * 1000) {
             ticketNotificationSentRef.current[notificationKey] = true;
             ticketLastNotificationTimeRef.current[notificationKey] = serverNow;
-            
+
             const hours = Math.floor(elapsedSeconds / 3600);
             const minutes = Math.floor((elapsedSeconds % 3600) / 60);
-            
+
             notificationManager.show({
               title: '⏰ Long Ticket Work Session Alert',
               body: `You've been working on ticket "${ticketTitle}" for ${hours}h ${minutes}m. Consider taking a break!`,
@@ -366,7 +445,7 @@ const Worklog = () => {
               priority: 'default',
               data: { ticketId: item.ticket._id, type: 'ticket' }
             });
-            
+
             toast.warning(`Working on ticket "${ticketTitle}" for ${hours}h ${minutes}m. Time for a break?`, {
               duration: 5000,
               icon: '☕'
@@ -384,6 +463,76 @@ const Worklog = () => {
     const interval = setInterval(checkLongRunningTimers, 60000);
     return () => clearInterval(interval);
   }, [checkLongRunningTimers]);
+
+  /*
+  ========================================
+  ✅ NEW: SOCKET CONNECTION FOR AUTO-STOP SYNC
+  ========================================
+  This ensures that when the system auto-stops a timer at 11:55 PM,
+  the developer's view immediately refreshes to show the final,
+  server-authoritative time — matching exactly what the PM sees.
+  ========================================
+  */
+
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    const userId = localStorage.getItem('userId');
+    if (!token || !userId) return;
+
+    const newSocket = io(API_BASE_URL, {
+      transports: ['websocket'],
+      auth: { token },
+    });
+
+    newSocket.on('connect', () => {
+      console.log('🔌 Worklog socket connected');
+      newSocket.emit('join-user-room', userId);
+    });
+
+    // ✅ KEY FIX: Listen for the auto-stop event from the server
+    newSocket.on('worklog_auto_stopped', (data) => {
+      console.log('📢 Received worklog_auto_stopped event:', data);
+
+      // Notify the user with a custom toast
+      toast.custom((t) => (
+        <div className="bg-amber-100 border-l-4 border-amber-500 text-amber-700 p-4 rounded-md shadow-lg max-w-md" role="alert">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-sm">System Auto-Stop</p>
+              <p className="text-xs mt-1">{data.message}</p>
+              <p className="text-[10px] mt-2 text-amber-600 italic">
+                Your timer has been stopped at the end of the work day (11:55 PM IST).
+                The displayed time is now the final, server-calculated duration.
+              </p>
+            </div>
+          </div>
+        </div>
+      ), { duration: 8000 });
+
+      // ✅ THE KEY FIX: Refresh the worklogs to get the final calculated time from the server.
+      // This replaces the client-side "live" calculation with the authoritative totalTime.
+      fetchLogs();
+      fetchTicketWorklogs();
+
+      // Also refresh history if the user is viewing it
+      if (selectedTab === 'history') {
+        fetchHistory(historyDate);
+      }
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('🔌 Worklog socket disconnected');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      console.warn('⚠️ Worklog socket connection error:', error.message);
+    });
+
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [selectedTab, historyDate, fetchHistory]);
 
   useEffect(() => {
     const timer = setTimeout(() => syncServerTime(false), 500);
@@ -458,7 +607,7 @@ const Worklog = () => {
 
   const startTimer = async (feedId) => {
     await syncServerTime(false);
-    
+
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/start/${feedId}`, {}, {
@@ -469,9 +618,9 @@ const Worklog = () => {
         const receivedAt = Date.now();
         const newOffset = res.data.serverTimestamp - receivedAt;
         serverTimeOffsetRef.current = newOffset;
-        setServerSyncStatus(prev => ({ 
-          ...prev, 
-          lastSyncAt: receivedAt, 
+        setServerSyncStatus(prev => ({
+          ...prev,
+          lastSyncAt: receivedAt,
           offsetMs: Math.round(newOffset),
           isStale: false,
           synced: true
@@ -501,9 +650,9 @@ const Worklog = () => {
       if (res.data.serverTimestamp) {
         const receivedAt = Date.now();
         serverTimeOffsetRef.current = res.data.serverTimestamp - receivedAt;
-        setServerSyncStatus(prev => ({ 
-          ...prev, 
-          lastSyncAt: receivedAt, 
+        setServerSyncStatus(prev => ({
+          ...prev,
+          lastSyncAt: receivedAt,
           offsetMs: Math.round(res.data.serverTimestamp - receivedAt),
           isStale: false,
           synced: true
@@ -529,9 +678,9 @@ const Worklog = () => {
       if (res.data.serverTimestamp) {
         const receivedAt = Date.now();
         serverTimeOffsetRef.current = res.data.serverTimestamp - receivedAt;
-        setServerSyncStatus(prev => ({ 
-          ...prev, 
-          lastSyncAt: receivedAt, 
+        setServerSyncStatus(prev => ({
+          ...prev,
+          lastSyncAt: receivedAt,
           offsetMs: Math.round(res.data.serverTimestamp - receivedAt),
           isStale: false,
           synced: true
@@ -545,7 +694,7 @@ const Worklog = () => {
       setLogs(prev => prev.map(item =>
         item.feed._id === feedId ? { ...item, worklog: res.data.worklog ?? res.data } : item
       ));
-      
+
       if (!silent) {
         toast.success('Timer stopped successfully');
       }
@@ -565,7 +714,7 @@ const Worklog = () => {
 
   const startTicketTimer = async (ticketId) => {
     await syncServerTime(false);
-    
+
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/dev/ticket-worklog/start/${ticketId}`, {}, {
@@ -576,9 +725,9 @@ const Worklog = () => {
         const receivedAt = Date.now();
         const newOffset = res.data.serverTimestamp - receivedAt;
         serverTimeOffsetRef.current = newOffset;
-        setServerSyncStatus(prev => ({ 
-          ...prev, 
-          lastSyncAt: receivedAt, 
+        setServerSyncStatus(prev => ({
+          ...prev,
+          lastSyncAt: receivedAt,
           offsetMs: Math.round(newOffset),
           isStale: false,
           synced: true
@@ -608,9 +757,9 @@ const Worklog = () => {
       if (res.data.serverTimestamp) {
         const receivedAt = Date.now();
         serverTimeOffsetRef.current = res.data.serverTimestamp - receivedAt;
-        setServerSyncStatus(prev => ({ 
-          ...prev, 
-          lastSyncAt: receivedAt, 
+        setServerSyncStatus(prev => ({
+          ...prev,
+          lastSyncAt: receivedAt,
           offsetMs: Math.round(res.data.serverTimestamp - receivedAt),
           isStale: false,
           synced: true
@@ -636,9 +785,9 @@ const Worklog = () => {
       if (res.data.serverTimestamp) {
         const receivedAt = Date.now();
         serverTimeOffsetRef.current = res.data.serverTimestamp - receivedAt;
-        setServerSyncStatus(prev => ({ 
-          ...prev, 
-          lastSyncAt: receivedAt, 
+        setServerSyncStatus(prev => ({
+          ...prev,
+          lastSyncAt: receivedAt,
           offsetMs: Math.round(res.data.serverTimestamp - receivedAt),
           isStale: false,
           synced: true
@@ -652,7 +801,7 @@ const Worklog = () => {
       setTicketLogs(prev => prev.map(item =>
         item.ticket._id === ticketId ? { ...item, worklog: res.data.worklog ?? res.data } : item
       ));
-      
+
       if (!silent) {
         toast.success('Ticket timer stopped successfully');
       }
@@ -666,17 +815,14 @@ const Worklog = () => {
 
   /*
   ========================================
-  MODAL FUNCTIONS - FEED (FIXED)
+  MODAL FUNCTIONS - FEED
   ========================================
-  
-  ✅ FIX: The `todayDescription` is a sibling of `feed` in the API response,
-  NOT a property of `feed`. We now pass it explicitly.
   */
 
   const openLogModal = (feed, todayDescription, editing = false) => {
     setSelectedFeed(feed);
     setSelectedFeedDescription(todayDescription || null);
-    
+
     if (editing && todayDescription?.description) {
       setWorkDescription(todayDescription.description);
       setIsEditingLog(true);
@@ -684,7 +830,7 @@ const Worklog = () => {
       setWorkDescription('');
       setIsEditingLog(false);
     }
-    
+
     setShowLogModal(true);
   };
 
@@ -705,7 +851,7 @@ const Worklog = () => {
     try {
       setSubmittingLog(true);
       const token = localStorage.getItem('token');
-      
+
       const res = await axios.post(`${API_BASE_URL}/api/dev/worklog/log-description`, {
         feedId: selectedFeed._id,
         description: workDescription.trim(),
@@ -714,7 +860,6 @@ const Worklog = () => {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      // Update the logs state with the new todayDescription
       setLogs(prev => prev.map(item =>
         item.feed._id === selectedFeed._id ? { ...item, todayDescription: res.data } : item
       ));
@@ -817,7 +962,7 @@ const Worklog = () => {
 
     logs.forEach(item => {
       const worklog = item.worklog;
-      
+
       if (worklog.timeBlocks?.length > 0) {
         worklog.timeBlocks.forEach(block => {
           if (block.startTime && block.endTime) {
@@ -833,7 +978,7 @@ const Worklog = () => {
           }
         });
       }
-      
+
       if (worklog.isRunning && worklog.startedAt) {
         intervals.push({
           start: new Date(worklog.startedAt).getTime(),
@@ -845,7 +990,7 @@ const Worklog = () => {
     ticketLogs.forEach(item => {
       const worklog = item.worklog;
       if (!worklog) return;
-      
+
       if (worklog.timeBlocks?.length > 0) {
         worklog.timeBlocks.forEach(block => {
           if (block.startTime && block.endTime) {
@@ -861,7 +1006,7 @@ const Worklog = () => {
           }
         });
       }
-      
+
       if (worklog.isRunning && worklog.startedAt) {
         intervals.push({
           start: new Date(worklog.startedAt).getTime(),
@@ -891,13 +1036,13 @@ const Worklog = () => {
 
   const calculateActualWorkingTime = useCallback(() => {
     const intervals = getAllTimeIntervals();
-    
+
     if (intervals.length === 0) {
       const feedTotal = logs.reduce((total, item) => total + (item.worklog.totalTime || 0), 0);
       const ticketTotal = ticketLogs.reduce((total, item) => total + (item.worklog?.totalTime || 0), 0);
       return feedTotal + ticketTotal;
     }
-    
+
     const merged = mergeIntervals(intervals);
     const totalMs = merged.reduce((sum, iv) => sum + (iv.end - iv.start), 0);
     return Math.floor(totalMs / 1000);
@@ -936,16 +1081,16 @@ const Worklog = () => {
     return ticketLogs.filter(item => {
       const ticket = item.ticket;
       const worklog = item.worklog || {};
-      
+
       const matchesSearch = ticket.title?.toLowerCase().includes(ticketSearchTerm.toLowerCase()) ||
                            ticket.ticketNumber?.toLowerCase().includes(ticketSearchTerm.toLowerCase());
-      
+
       let currentStatus = 'stopped';
       if (worklog.isRunning) currentStatus = 'running';
       else if (worklog.totalTime > 0) currentStatus = 'paused';
-      
+
       const matchesStatus = ticketStatusFilter === 'all' || currentStatus === ticketStatusFilter;
-      
+
       return matchesSearch && matchesStatus;
     });
   }, [ticketLogs, ticketSearchTerm, ticketStatusFilter]);
@@ -966,8 +1111,8 @@ const Worklog = () => {
 
   const overlapTime = useMemo(() => Math.max(0, totalIndividualTime - actualWorkingTime), [totalIndividualTime, actualWorkingTime]);
 
-  const activeRunningCount = useMemo(() => 
-    filteredLogs.filter(item => item.worklog.isRunning).length + 
+  const activeRunningCount = useMemo(() =>
+    filteredLogs.filter(item => item.worklog.isRunning).length +
     filteredTicketLogs.filter(item => item.worklog?.isRunning).length,
     [filteredLogs, filteredTicketLogs]
   );
@@ -992,6 +1137,7 @@ const Worklog = () => {
     syncServerTime(false);
     fetchLogs();
     fetchTicketWorklogs();
+    if (selectedTab === 'history') fetchHistory(historyDate);
   };
 
   const getCurrentISTTime = () => {
@@ -1055,9 +1201,365 @@ const Worklog = () => {
     );
   };
 
+  /*
+  ========================================
+  HISTORY RENDER HELPERS
+  ========================================
+  */
+
+  const renderHistorySummary = () => {
+    if (!historyData?.summary) return null;
+    const { totalSeconds, totalFeeds, totalTickets } = historyData.summary;
+
+    return (
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Timer size={14} className="text-blue-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Total Time</p>
+              <p className="text-sm font-black text-blue-700 font-mono">
+                {formatDurationFromSeconds(totalSeconds)}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+              <Activity size={14} className="text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Feeds</p>
+              <p className="text-sm font-black text-emerald-700">{totalFeeds}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+              <Ticket size={14} className="text-purple-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Tickets</p>
+              <p className="text-sm font-black text-purple-700">{totalTickets}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+              <TrendingUp size={14} className="text-amber-600" />
+            </div>
+            <div>
+              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Entries</p>
+              <p className="text-sm font-black text-amber-700">
+                {totalFeeds + totalTickets}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderHistoryTimeBlocks = (entry) => {
+    if (!entry.timeBlocks || entry.timeBlocks.length === 0) {
+      return (
+        <p className="text-[10px] text-slate-400 italic px-2 py-3">
+          No time blocks recorded for this entry.
+        </p>
+      );
+    }
+
+    return (
+      <div className="space-y-1.5">
+        {entry.timeBlocks.map((block, idx) => (
+          <div
+            key={idx}
+            className="flex items-center justify-between text-[10px] bg-white border border-slate-100 rounded-lg px-3 py-1.5"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 font-black flex items-center justify-center text-[8px]">
+                {idx + 1}
+              </span>
+              <span className="font-mono font-semibold text-slate-700">
+                {formatClockTime(block.startTime)}
+              </span>
+              <span className="text-slate-300">→</span>
+              <span className="font-mono font-semibold text-slate-700">
+                {formatClockTime(block.endTime)}
+              </span>
+            </div>
+            <span className="font-black text-blue-700 font-mono">
+              {block.duration ? `${block.duration}s` : '—'}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderHistorySection = () => {
+    if (historyLoading) {
+      return (
+        <div className="flex justify-center py-20 text-slate-400 font-black">
+          LOADING HISTORY...
+        </div>
+      );
+    }
+
+    if (!historyData) {
+      return (
+        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 font-bold">
+          No history data available.
+        </div>
+      );
+    }
+
+    const { feeds, tickets } = historyData;
+
+    if (feeds.length === 0 && tickets.length === 0) {
+      return (
+        <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
+          <History size={32} className="mx-auto text-slate-300 mb-2" />
+          <p className="text-sm font-black text-slate-500">No work logged on this date</p>
+          <p className="text-[10px] text-slate-400 mt-1">
+            Try picking a different date from the calendar above.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* ========================================
+            FEEDS HISTORY
+        ======================================== */}
+        {feeds.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                  <Activity size={12} className="text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-black text-slate-800">Feeds Worked On</p>
+                  <p className="text-[8px] text-slate-500">
+                    {feeds.length} feed{feeds.length !== 1 ? 's' : ''} · {' '}
+                    {formatDurationFromSeconds(feeds.reduce((s, f) => s + f.seconds, 0))} total
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Feed</th>
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Project</th>
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Time</th>
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Sessions</th>
+                    <th className="text-right px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feeds.map((entry) => {
+                    const isExpanded = expandedHistoryRow === `feed-${entry.feedId}`;
+                    return (
+                      <React.Fragment key={entry.worklogId}>
+                        <tr
+                          onClick={() => setExpandedHistoryRow(isExpanded ? null : `feed-${entry.feedId}`)}
+                          className="border-b border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-all"
+                        >
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Hash size={11} className="text-slate-400" />
+                              <span className="text-xs font-bold text-slate-800">{entry.feedName}</span>
+                              {entry.stoppedBySystem && (
+                                <span className="text-[7px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase">
+                                  System
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-[10px] font-medium text-slate-600">
+                              {entry.projectCustomId || entry.projectName}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Clock3 size={11} className="text-emerald-500" />
+                              <span className="text-xs font-black text-emerald-700 font-mono">
+                                {formatDurationFromSeconds(entry.seconds)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {entry.timeBlocks?.length || 0}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {isExpanded ? (
+                              <ChevronUp size={14} className="inline text-slate-400" />
+                            ) : (
+                              <ChevronDown size={14} className="inline text-slate-400" />
+                            )}
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr className="bg-slate-50/50">
+                            <td colSpan={5} className="px-4 py-3">
+                              {entry.description && (
+                                <div className="mb-3 bg-white border border-slate-200 rounded-lg p-3">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                                    Work Description
+                                  </p>
+                                  <p className="text-[11px] text-slate-700 whitespace-pre-wrap">
+                                    {entry.description}
+                                  </p>
+                                </div>
+                              )}
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                                Time Blocks
+                              </p>
+                              {renderHistoryTimeBlocks(entry)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================
+            TICKETS HISTORY
+        ======================================== */}
+        {tickets.length > 0 && (
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-white border-b border-purple-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center">
+                  <Ticket size={12} className="text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-black text-slate-800">Tickets Worked On</p>
+                  <p className="text-[8px] text-slate-500">
+                    {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} · {' '}
+                    {formatDurationFromSeconds(tickets.reduce((s, t) => s + t.seconds, 0))} total
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200">
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Ticket</th>
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Project</th>
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Time</th>
+                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Sessions</th>
+                    <th className="text-right px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map((entry) => {
+                    const isExpanded = expandedHistoryRow === `ticket-${entry.ticketId}`;
+                    return (
+                      <React.Fragment key={entry.worklogId}>
+                        <tr
+                          onClick={() => setExpandedHistoryRow(isExpanded ? null : `ticket-${entry.ticketId}`)}
+                          className="border-b border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-all"
+                        >
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Ticket size={11} className="text-slate-400" />
+                              <span className="text-xs font-bold text-slate-800">
+                                #{entry.ticketNumber} — {entry.ticketTitle}
+                              </span>
+                              {entry.stoppedBySystem && (
+                                <span className="text-[7px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase">
+                                  System
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-[10px] font-medium text-slate-600">
+                              {entry.projectCustomId || entry.projectName}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <div className="flex items-center gap-1.5">
+                              <Clock3 size={11} className="text-purple-500" />
+                              <span className="text-xs font-black text-purple-700 font-mono">
+                                {formatDurationFromSeconds(entry.seconds)}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span className="text-[10px] font-bold text-slate-500">
+                              {entry.timeBlocks?.length || 0}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            {isExpanded ? (
+                              <ChevronUp size={14} className="inline text-slate-400" />
+                            ) : (
+                              <ChevronDown size={14} className="inline text-slate-400" />
+                            )}
+                          </td>
+                        </tr>
+
+                        {isExpanded && (
+                          <tr className="bg-slate-50/50">
+                            <td colSpan={5} className="px-4 py-3">
+                              {entry.description && (
+                                <div className="mb-3 bg-white border border-slate-200 rounded-lg p-3">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                                    Work Description
+                                  </p>
+                                  <p className="text-[11px] text-slate-700 whitespace-pre-wrap">
+                                    {entry.description}
+                                  </p>
+                                </div>
+                              )}
+                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                                Time Blocks
+                              </p>
+                              {renderHistoryTimeBlocks(entry)}
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-      
+
       {/* HEADER */}
       <div className="mb-6">
         <div className="flex justify-between items-start">
@@ -1069,7 +1571,7 @@ const Worklog = () => {
               Time Tracking (Overlap-Aware)
             </p>
           </div>
-          
+
           <div className="flex flex-col items-end gap-2">
             <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm text-right">
               <div className="flex items-center gap-2">
@@ -1097,39 +1599,41 @@ const Worklog = () => {
       )}
 
       {/* BREAK BUTTON */}
-      <div className="mb-4">
-        <button
-          onClick={handleBreak}
-          disabled={isStoppingAll || activeRunningCount === 0}
-          className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-md ${
-            isBreakMode 
-              ? 'bg-green-500 text-white shadow-green-200' 
-              : isStoppingAll || activeRunningCount === 0
-              ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-              : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200 hover:shadow-lg active:scale-95'
-          }`}
-        >
-          {isBreakMode ? (
-            <>
-              <Coffee size={18} className="animate-bounce" />
-              Break Taken! ☕
-            </>
-          ) : isStoppingAll ? (
-            <>
-              <RefreshCw size={18} className="animate-spin" />
-              Stopping...
-            </>
-          ) : (
-            <>
-              <Coffee size={18} />
-              Break ({activeRunningCount} running)
-            </>
-          )}
-        </button>
-        <span className="text-[8px] text-slate-400 ml-3">
-          {activeRunningCount === 0 ? 'No timers running' : `Stops ${activeRunningCount} running timer(s)`}
-        </span>
-      </div>
+      {selectedTab !== 'history' && (
+        <div className="mb-4">
+          <button
+            onClick={handleBreak}
+            disabled={isStoppingAll || activeRunningCount === 0}
+            className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-md ${
+              isBreakMode
+                ? 'bg-green-500 text-white shadow-green-200'
+                : isStoppingAll || activeRunningCount === 0
+                ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-amber-500 text-white hover:bg-amber-600 shadow-amber-200 hover:shadow-lg active:scale-95'
+            }`}
+          >
+            {isBreakMode ? (
+              <>
+                <Coffee size={18} className="animate-bounce" />
+                Break Taken! ☕
+              </>
+            ) : isStoppingAll ? (
+              <>
+                <RefreshCw size={18} className="animate-spin" />
+                Stopping...
+              </>
+            ) : (
+              <>
+                <Coffee size={18} />
+                Break ({activeRunningCount} running)
+              </>
+            )}
+          </button>
+          <span className="text-[8px] text-slate-400 ml-3">
+            {activeRunningCount === 0 ? 'No timers running' : `Stops ${activeRunningCount} running timer(s)`}
+          </span>
+        </div>
+      )}
 
       {/* STATS BAR */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
@@ -1185,7 +1689,7 @@ const Worklog = () => {
       </div>
 
       {/* INFO NOTE */}
-      {activeRunningCount > 1 && (
+      {activeRunningCount > 1 && selectedTab !== 'history' && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start gap-2">
             <Info size={14} className="text-blue-600 mt-0.5" />
@@ -1203,8 +1707,8 @@ const Worklog = () => {
       <div className="flex gap-2 mb-6 border-b border-slate-200">
         <button
           className={`px-6 py-3 text-sm font-black uppercase tracking-wider transition-all border-b-2 ${
-            selectedTab === 'feeds' 
-              ? 'border-blue-600 text-blue-600' 
+            selectedTab === 'feeds'
+              ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
           onClick={() => setSelectedTab('feeds')}
@@ -1219,8 +1723,8 @@ const Worklog = () => {
         </button>
         <button
           className={`px-6 py-3 text-sm font-black uppercase tracking-wider transition-all border-b-2 ${
-            selectedTab === 'tickets' 
-              ? 'border-purple-600 text-purple-600' 
+            selectedTab === 'tickets'
+              ? 'border-purple-600 text-purple-600'
               : 'border-transparent text-slate-400 hover:text-slate-600'
           }`}
           onClick={() => setSelectedTab('tickets')}
@@ -1233,7 +1737,70 @@ const Worklog = () => {
             </span>
           </div>
         </button>
+        <button
+          className={`px-6 py-3 text-sm font-black uppercase tracking-wider transition-all border-b-2 ${
+            selectedTab === 'history'
+              ? 'border-slate-800 text-slate-800'
+              : 'border-transparent text-slate-400 hover:text-slate-600'
+          }`}
+          onClick={() => setSelectedTab('history')}
+        >
+          <div className="flex items-center gap-2">
+            <History size={16} />
+            History
+          </div>
+        </button>
       </div>
+
+      {/* ========================================
+          HISTORY TAB
+          ======================================== */}
+      {selectedTab === 'history' && (
+        <>
+          {/* Date Picker */}
+          <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
+              <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
+                <div>
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
+                    <Calendar size={11} /> Select Date
+                  </label>
+                  <input
+                    type="date"
+                    value={historyDate}
+                    max={new Date().toISOString().split('T')[0]}
+                    onChange={(e) => setHistoryDate(e.target.value)}
+                    className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-slate-800 bg-slate-50"
+                  />
+                </div>
+
+                <button
+                  onClick={() => fetchHistory(historyDate)}
+                  disabled={historyLoading}
+                  className="h-10 rounded-lg bg-slate-900 text-white px-5 font-black text-xs uppercase tracking-wider hover:bg-blue-600 transition-all disabled:opacity-50 flex items-center gap-2"
+                >
+                  {historyLoading ? (
+                    <RefreshCw size={14} className="animate-spin" />
+                  ) : (
+                    <Search size={14} />
+                  )}
+                  Load
+                </button>
+              </div>
+
+              <p className="text-[9px] text-slate-400 font-medium">
+                Showing entries where time was actually logged on the selected date.
+              </p>
+            </div>
+          </div>
+
+          {/* Summary */}
+          {renderHistorySummary()}
+
+          {/* Sections */}
+          {renderHistorySection()}
+        </>
+      )}
 
       {/* ========================================
           FEED SECTION
@@ -1313,7 +1880,7 @@ const Worklog = () => {
                       const hasTodayLog = !!todayDescription?.description;
                       const statusType = worklog.isRunning ? 'running' : (worklog.totalTime > 0 ? 'paused' : 'stopped');
                       const statusData = getStatusBadge(statusType);
-                      
+
                       let isLongRunning = false;
                       if (worklog.isRunning && worklog.startedAt) {
                         const serverNow = getServerNow();
@@ -1337,7 +1904,6 @@ const Worklog = () => {
                                   Logged
                                 </span>
                               )}
-                              {/* ✅ NEW: System auto-stop badge */}
                               {worklog.stoppedBySystem && (
                                 <span
                                   className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1"
@@ -1414,7 +1980,6 @@ const Worklog = () => {
 
                               <div className="w-px h-5 bg-slate-200 mx-1" />
 
-                              {/* ✅ FIX: Pass todayDescription explicitly */}
                               {!hasTodayLog ? (
                                 <button
                                   onClick={() => openLogModal(feed, todayDescription, false)}
@@ -1488,8 +2053,8 @@ const Worklog = () => {
             <div className="flex justify-center py-20 text-slate-400 font-black">LOADING TICKETS...</div>
           ) : filteredTicketLogs.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 font-bold">
-              {ticketLogs.length === 0 
-                ? 'No active tickets assigned to you.' 
+              {ticketLogs.length === 0
+                ? 'No active tickets assigned to you.'
                 : 'No tickets match your filters.'}
             </div>
           ) : (
@@ -1534,7 +2099,6 @@ const Worklog = () => {
                                   <span className="text-sm font-bold text-slate-800">
                                     #{ticket.ticketNumber} - {ticket.title}
                                   </span>
-                                  {/* ✅ NEW: System auto-stop badge */}
                                   {worklog.stoppedBySystem && (
                                     <span
                                       className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase inline-flex items-center gap-1"
@@ -1614,8 +2178,8 @@ const Worklog = () => {
                               <button
                                 onClick={() => openTicketLogModal(ticket, worklog, hasDescription)}
                                 className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:shadow-md ${
-                                  hasDescription 
-                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white' 
+                                  hasDescription
+                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white'
                                     : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
                                 }`}
                                 title={hasDescription ? "Edit Description" : "Add Description"}
@@ -1636,7 +2200,7 @@ const Worklog = () => {
       )}
 
       {/* ========================================
-          FEED DESCRIPTION MODAL (UPDATED)
+          FEED DESCRIPTION MODAL
           ======================================== */}
       {showLogModal && (
         <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
@@ -1655,7 +2219,6 @@ const Worklog = () => {
             </div>
 
             <div className="p-6">
-              {/* ✅ FIX: Use selectedFeedDescription instead of selectedFeed.todayDescription */}
               {isEditingLog && selectedFeedDescription?.description && (
                 <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 p-4">
                   <div className="flex items-center gap-2 mb-2">

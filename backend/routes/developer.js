@@ -1300,5 +1300,139 @@ router.post('/ticket-worklog/description', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to save description' });
   }
 });
+/**
+ * @route   GET /api/dev/worklog/history
+ * @desc    Get date-wise worklog history for the logged-in developer
+ * @query   date - YYYY-MM-DD (required)
+ * @access  Private (Developer)
+ */
+router.get('/worklog/history', protect, authorize('Developer'), async (req, res) => {
+  try {
+    const { date } = req.query;
 
+    if (!date) {
+      return res.status(400).json({ error: 'date query param is required (YYYY-MM-DD)' });
+    }
+
+    // ---- Fetch feed worklogs for that date ----
+    const feedLogs = await WorkLog.find({
+      developerId: req.user._id,
+      date: date
+    })
+      .populate({
+        path: 'feedId',
+        select: 'name projectId',
+        populate: { path: 'projectId', select: 'name projectCustomId' }
+      })
+      .lean();
+
+    // ---- Fetch ticket worklogs for that date ----
+    const ticketLogs = await TicketWorkLog.find({
+      developerId: req.user._id,
+      date: date
+    })
+      .populate({
+        path: 'ticketId',
+        select: 'ticketNumber title status priority projectId',
+        populate: { path: 'projectId', select: 'name projectCustomId' }
+      })
+      .lean();
+
+    // ---- Fetch descriptions for that date ----
+    const descriptions = await WorkDescription.find({
+      developer: req.user._id,
+      date: date
+    }).lean();
+
+    const descMap = {};
+    descriptions.forEach(d => {
+      descMap[`${d.feed}`] = d.description;
+    });
+
+    // ---- Net-time helper (merges overlapping blocks) ----
+    function netSeconds(timeBlocks = []) {
+      if (!timeBlocks.length) return 0;
+      const intervals = timeBlocks
+        .filter(b => b.startTime && b.endTime)
+        .map(b => ({
+          start: new Date(b.startTime).getTime(),
+          end: new Date(b.endTime).getTime()
+        }))
+        .sort((a, b) => a.start - b.start);
+
+      if (!intervals.length) return 0;
+
+      const merged = [{ ...intervals[0] }];
+      for (let i = 1; i < intervals.length; i++) {
+        const cur = intervals[i];
+        const last = merged[merged.length - 1];
+        if (cur.start <= last.end) last.end = Math.max(last.end, cur.end);
+        else merged.push({ ...cur });
+      }
+      const ms = merged.reduce((s, iv) => s + (iv.end - iv.start), 0);
+      return Math.floor(ms / 1000);
+    }
+
+    const feeds = feedLogs
+      .filter(l => l.feedId)
+      .map(l => ({
+        worklogId: l._id,
+        feedId: l.feedId._id,
+        feedName: l.feedId.name,
+        projectId: l.feedId.projectId?._id,
+        projectName: l.feedId.projectId?.name || 'Unknown',
+        projectCustomId: l.feedId.projectId?.projectCustomId || '',
+        seconds: netSeconds(l.timeBlocks),
+        timeBlocks: (l.timeBlocks || []).map(b => ({
+          startTime: b.startTime,
+          endTime: b.endTime,
+          duration: b.duration
+        })),
+        description: descMap[l.feedId._id.toString()] || '',
+        stoppedBySystem: !!l.stoppedBySystem
+      }))
+      .filter(f => f.seconds > 0);
+
+    const tickets = ticketLogs
+      .filter(l => l.ticketId)
+      .map(l => ({
+        worklogId: l._id,
+        ticketId: l.ticketId._id,
+        ticketNumber: l.ticketId.ticketNumber,
+        ticketTitle: l.ticketId.title,
+        status: l.ticketId.status,
+        priority: l.ticketId.priority,
+        projectName: l.ticketId.projectId?.name || 'Unknown',
+        projectCustomId: l.ticketId.projectId?.projectCustomId || '',
+        seconds: netSeconds(l.timeBlocks),
+        timeBlocks: (l.timeBlocks || []).map(b => ({
+          startTime: b.startTime,
+          endTime: b.endTime,
+          duration: b.duration
+        })),
+        description: l.description || '',
+        stoppedBySystem: !!l.stoppedBySystem
+      }))
+      .filter(t => t.seconds > 0);
+
+    const totalSeconds =
+      feeds.reduce((s, f) => s + f.seconds, 0) +
+      tickets.reduce((s, t) => s + t.seconds, 0);
+
+    res.json({
+      success: true,
+      date,
+      summary: {
+        totalSeconds,
+        totalFeeds: feeds.length,
+        totalTickets: tickets.length
+      },
+      feeds,
+      tickets
+    });
+  } catch (err) {
+    console.error('Error fetching worklog history:', err);
+    res.status(500).json({ error: 'Failed to fetch worklog history' });
+  }
+});
 module.exports = router;

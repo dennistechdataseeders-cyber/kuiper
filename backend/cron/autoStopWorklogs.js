@@ -2,7 +2,7 @@
 const cron = require('node-cron');
 const worklogService = require('../services/worklogService');
 
-// Run at 11:55 PM ("23:55") every day
+// Run at 4:01 PM IST (16:01) every day
 cron.schedule('55 23 * * *', async () => {
   console.log('⏰ Cron job: Auto-stopping running worklogs...');
   try {
@@ -14,4 +14,4 @@ cron.schedule('55 23 * * *', async () => {
   timezone: "Asia/Kolkata" // Match the timezone of your other cron jobs
 });
 
-console.log('⏰ Auto-stop worklogs cron job scheduled (daily at 11:55 PM IST)');
+console.log('⏰ Auto-stop worklogs cron job scheduled (daily at 4:01 PM IST)');
