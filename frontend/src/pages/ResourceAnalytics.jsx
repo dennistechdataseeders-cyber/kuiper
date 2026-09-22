@@ -18,7 +18,9 @@ import {
   Search,
   BarChart3,
   PieChart,
-  TrendingUp
+  TrendingUp,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import { Bar, Pie, Doughnut } from 'react-chartjs-2';
 import {
@@ -52,11 +54,10 @@ const TABS = [
   { key: 'ticket', label: 'By Ticket', icon: TicketIcon }
 ];
 
-// Default date range: last 30 days from current date
+// Default date range: today to today
 function defaultDates() {
   const end = new Date();
   const start = new Date();
-  start.setDate(start.getDate());
   const fmt = (d) => d.toISOString().split('T')[0];
   return { startDate: fmt(start), endDate: fmt(end) };
 }
@@ -71,11 +72,25 @@ function getWeekdayCount(startDate, endDate) {
   let count = 0;
   const cur = new Date(start);
   while (cur <= end) {
-    const day = cur.getDay(); // 0 = Sunday, 6 = Saturday
+    const day = cur.getDay();
     if (day !== 0 && day !== 6) count++;
     cur.setDate(cur.getDate() + 1);
   }
   return count;
+}
+
+// ============================================================
+// ✅ NEW: Format seconds into "Xh Ym" (or just "Ym" if under 1 hour)
+// Used for the Avg Working Hours card
+// ============================================================
+function formatHoursMinutes(seconds = 0) {
+  seconds = Math.max(0, Math.floor(seconds || 0));
+  const hrs = Math.floor(seconds / 3600);
+  const mins = Math.floor((seconds % 3600) / 60);
+
+  if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
+  if (hrs > 0) return `${hrs}h`;
+  return `${mins}m`;
 }
 
 const ResourceAnalytics = () => {
@@ -84,11 +99,13 @@ const ResourceAnalytics = () => {
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [data, setData] = useState(null);
   const [activeTab, setActiveTab] = useState('developer');
   const [sortDesc, setSortDesc] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCharts, setShowCharts] = useState(true);
+  const [filtersDirty, setFiltersDirty] = useState(false);
 
   // Filters
   const initialDates = defaultDates();
@@ -99,7 +116,10 @@ const ResourceAnalytics = () => {
 
   const developerOptions = useMemo(() => {
     if (!data?.developers) return [];
-    return data.developers.map((d) => ({ value: d._id, label: d.name || d.email }));
+    return data.developers.map((d) => ({
+      value: d._id,
+      label: d.name || d.email
+    }));
   }, [data]);
 
   const projectOptions = useMemo(() => {
@@ -110,6 +130,9 @@ const ResourceAnalytics = () => {
     }));
   }, [data]);
 
+  // ============================================
+  // FETCH
+  // ============================================
   const fetchData = async () => {
     try {
       const params = { startDate, endDate };
@@ -126,12 +149,14 @@ const ResourceAnalytics = () => {
       });
 
       setData(res.data);
+      setFiltersDirty(false);
     } catch (err) {
       console.error(err);
       toast.error('Failed to load resource analytics');
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setGenerating(false);
     }
   };
 
@@ -140,12 +165,20 @@ const ResourceAnalytics = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleApplyFilters = () => {
-    if (startDate && endDate && startDate > endDate) {
+  useEffect(() => {
+    setFiltersDirty(true);
+  }, [startDate, endDate, projectId, selectedDevelopers]);
+
+  const handleGenerate = () => {
+    if (!startDate || !endDate) {
+      toast.error('Please select both start and end dates');
+      return;
+    }
+    if (startDate > endDate) {
       toast.error('Start date must be before end date');
       return;
     }
-    setLoading(true);
+    setGenerating(true);
     fetchData();
   };
 
@@ -157,7 +190,9 @@ const ResourceAnalytics = () => {
     setEndDate(d.endDate);
     setSearchQuery('');
     setLoading(true);
-    setTimeout(fetchData, 0);
+    setTimeout(() => {
+      fetchData();
+    }, 0);
   };
 
   const handleRefresh = () => {
@@ -167,23 +202,28 @@ const ResourceAnalytics = () => {
 
   const summary = data?.summary;
 
-  // Working (Mon–Fri) days in the currently selected date range
   const workingDaysInRange = useMemo(
     () => getWeekdayCount(startDate, endDate),
     [startDate, endDate]
   );
 
-  // Total net (feed + ticket, overlap-corrected) hours divided across working days
-  const avgWorkingHours = useMemo(() => {
+  // ============================================================
+  // ✅ UPDATED: Compute avg working time in SECONDS per working day,
+  // then format as "Xh Ym".
+  // ============================================================
+  const avgWorkingTime = useMemo(() => {
     const totalSeconds = summary?.totalNetCombinedTime || 0;
-    if (!workingDaysInRange) return 0;
-    return totalSeconds / 3600 / workingDaysInRange;
+    if (!workingDaysInRange) return { seconds: 0, formatted: '0m' };
+    const avgSeconds = totalSeconds / workingDaysInRange;
+    return {
+      seconds: avgSeconds,
+      formatted: formatHoursMinutes(avgSeconds)
+    };
   }, [summary, workingDaysInRange]);
 
   const sortedRows = useMemo(() => {
     if (!data) return [];
-    const key =
-      activeTab === 'developer' ? 'netCombinedTime' : 'netTime';
+    const key = activeTab === 'developer' ? 'netCombinedTime' : 'netTime';
     const source =
       activeTab === 'developer'
         ? data.byDeveloper
@@ -192,26 +232,26 @@ const ResourceAnalytics = () => {
         : data.byTicket;
 
     let rows = [...(source || [])];
-    
+
     if (activeTab === 'feed' && searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      rows = rows.filter((r) => 
+      rows = rows.filter((r) =>
         r.feedName?.toLowerCase().includes(query) ||
         r.projectName?.toLowerCase().includes(query) ||
         r.developerName?.toLowerCase().includes(query)
       );
     }
-    
+
     if (activeTab === 'ticket' && searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      rows = rows.filter((r) => 
+      rows = rows.filter((r) =>
         r.ticketNumber?.toLowerCase().includes(query) ||
         r.ticketTitle?.toLowerCase().includes(query) ||
         r.projectName?.toLowerCase().includes(query) ||
         r.developerName?.toLowerCase().includes(query)
       );
     }
-    
+
     rows.sort((a, b) => (sortDesc ? b[key] - a[key] : a[key] - b[key]));
     return rows;
   }, [data, activeTab, sortDesc, searchQuery]);
@@ -220,27 +260,22 @@ const ResourceAnalytics = () => {
   const chartData = useMemo(() => {
     if (!data) return null;
 
-    // Developer chart data (top 10)
     const devData = data.byDeveloper?.slice(0, 10) || [];
-    const devLabels = devData.map(d => d.developerName || 'Unknown');
-    const devCombined = devData.map(d => d.netCombinedTime || 0);
-    const devFeed = devData.map(d => d.netFeedTime || 0);
-    const devTicket = devData.map(d => d.netTicketTime || 0);
+    const devLabels = devData.map((d) => d.developerName || 'Unknown');
+    const devFeed = devData.map((d) => d.netFeedTime || 0);
+    const devTicket = devData.map((d) => d.netTicketTime || 0);
 
-    // Feed chart data (top 10)
     const feedData = data.byFeed?.slice(0, 10) || [];
-    const feedLabels = feedData.map(d => d.feedName || 'Unknown');
-    const feedTimes = feedData.map(d => d.netTime || 0);
+    const feedLabels = feedData.map((d) => d.feedName || 'Unknown');
+    const feedTimes = feedData.map((d) => d.netTime || 0);
 
-    // Ticket chart data (top 10)
     const ticketData = data.byTicket?.slice(0, 10) || [];
-    const ticketLabels = ticketData.map(d => d.ticketNumber || 'Unknown');
-    const ticketTimes = ticketData.map(d => d.netTime || 0);
+    const ticketLabels = ticketData.map((d) => d.ticketNumber || 'Unknown');
+    const ticketTimes = ticketData.map((d) => d.netTime || 0);
 
-    // Pie chart data - developer distribution
     const pieData = data.byDeveloper?.slice(0, 8) || [];
-    const pieLabels = pieData.map(d => d.developerName || 'Unknown');
-    const pieValues = pieData.map(d => d.netCombinedTime || 0);
+    const pieLabels = pieData.map((d) => d.developerName || 'Unknown');
+    const pieValues = pieData.map((d) => d.netCombinedTime || 0);
 
     return {
       devBar: {
@@ -264,45 +299,51 @@ const ResourceAnalytics = () => {
       },
       feedBar: {
         labels: feedLabels,
-        datasets: [{
-          label: 'Net Time',
-          data: feedTimes,
-          backgroundColor: feedTimes.map(t => 
-            t > 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(148, 163, 184, 0.4)'
-          ),
-          borderColor: 'rgba(16, 185, 129, 1)',
-          borderWidth: 1
-        }]
+        datasets: [
+          {
+            label: 'Net Time',
+            data: feedTimes,
+            backgroundColor: feedTimes.map((t) =>
+              t > 0 ? 'rgba(16, 185, 129, 0.7)' : 'rgba(148, 163, 184, 0.4)'
+            ),
+            borderColor: 'rgba(16, 185, 129, 1)',
+            borderWidth: 1
+          }
+        ]
       },
       ticketBar: {
         labels: ticketLabels,
-        datasets: [{
-          label: 'Net Time',
-          data: ticketTimes,
-          backgroundColor: ticketTimes.map(t => 
-            t > 0 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.4)'
-          ),
-          borderColor: 'rgba(245, 158, 11, 1)',
-          borderWidth: 1
-        }]
+        datasets: [
+          {
+            label: 'Net Time',
+            data: ticketTimes,
+            backgroundColor: ticketTimes.map((t) =>
+              t > 0 ? 'rgba(245, 158, 11, 0.7)' : 'rgba(148, 163, 184, 0.4)'
+            ),
+            borderColor: 'rgba(245, 158, 11, 1)',
+            borderWidth: 1
+          }
+        ]
       },
       pie: {
         labels: pieLabels,
-        datasets: [{
-          data: pieValues,
-          backgroundColor: [
-            'rgba(59, 130, 246, 0.8)',
-            'rgba(16, 185, 129, 0.8)',
-            'rgba(245, 158, 11, 0.8)',
-            'rgba(139, 92, 246, 0.8)',
-            'rgba(236, 72, 153, 0.8)',
-            'rgba(14, 165, 233, 0.8)',
-            'rgba(234, 179, 8, 0.8)',
-            'rgba(239, 68, 68, 0.8)'
-          ],
-          borderColor: '#fff',
-          borderWidth: 2
-        }]
+        datasets: [
+          {
+            data: pieValues,
+            backgroundColor: [
+              'rgba(59, 130, 246, 0.8)',
+              'rgba(16, 185, 129, 0.8)',
+              'rgba(245, 158, 11, 0.8)',
+              'rgba(139, 92, 246, 0.8)',
+              'rgba(236, 72, 153, 0.8)',
+              'rgba(14, 165, 233, 0.8)',
+              'rgba(234, 179, 8, 0.8)',
+              'rgba(239, 68, 68, 0.8)'
+            ],
+            borderColor: '#fff',
+            borderWidth: 2
+          }
+        ]
       }
     };
   }, [data]);
@@ -422,16 +463,31 @@ const ResourceAnalytics = () => {
 
           <div className="lg:col-span-1 flex gap-1.5">
             <button
-              onClick={handleApplyFilters}
-              className="flex-1 px-2.5 py-1 bg-blue-600 text-white rounded-lg text-xs font-semibold shadow-sm hover:bg-blue-700 transition-all"
+              onClick={handleGenerate}
+              disabled={generating}
+              className={`flex-1 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-1 ${
+                filtersDirty
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              } disabled:opacity-50`}
             >
-              Apply
+              {generating ? (
+                <>
+                  <Loader2 size={12} className="animate-spin" />
+                  Generating...
+                </>
+              ) : (
+                <>
+                  <Search size={12} />
+                  Generate
+                </>
+              )}
             </button>
           </div>
         </div>
 
-        {(selectedDevelopers.length > 0 || projectId !== 'all') && (
-          <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+        <div className="flex items-center justify-between mt-2 gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {selectedDevelopers.map((d) => (
               <span
                 key={d.value}
@@ -442,19 +498,43 @@ const ResourceAnalytics = () => {
                   size={10}
                   className="cursor-pointer"
                   onClick={() =>
-                    setSelectedDevelopers((prev) => prev.filter((x) => x.value !== d.value))
+                    setSelectedDevelopers((prev) =>
+                      prev.filter((x) => x.value !== d.value)
+                    )
                   }
                 />
               </span>
             ))}
-            <button
-              onClick={handleReset}
-              className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 ml-0.5"
-            >
-              Reset all
-            </button>
+            {(selectedDevelopers.length > 0 || projectId !== 'all') && (
+              <button
+                onClick={handleReset}
+                className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 ml-0.5"
+              >
+                Reset all
+              </button>
+            )}
           </div>
-        )}
+
+          {filtersDirty && !generating ? (
+            <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg">
+              <AlertCircle size={11} className="text-amber-500" />
+              <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">
+                Filters changed — click Generate
+              </span>
+            </div>
+          ) : (
+            data && (
+              <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-200 rounded-lg">
+                <Clock size={11} className="text-emerald-500" />
+                <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">
+                  {startDate === endDate
+                    ? `Data for ${startDate}`
+                    : `Data from ${startDate} to ${endDate}`}
+                </span>
+              </div>
+            )
+          )}
+        </div>
       </div>
 
       {/* Summary cards */}
@@ -491,13 +571,17 @@ const ResourceAnalytics = () => {
           value={formatTimeFromSeconds(summary?.totalOverlapTime)}
           sub={`${summary?.totalDevelopers ?? 0} developers`}
         />
+
+        {/* ✅ UPDATED: Avg Working Hours now shows "Xh Ym" format */}
         <SummaryCard
           icon={TrendingUp}
           iconColor="text-blue-600"
           iconBg="bg-blue-50"
           label="Avg Working Hours"
-          value={`${avgWorkingHours.toFixed(2)} hrs/day`}
-          sub={`over ${workingDaysInRange} working day${workingDaysInRange === 1 ? '' : 's'}`}
+          value={avgWorkingTime.formatted}
+          sub={`per working day · ${workingDaysInRange} working day${
+            workingDaysInRange === 1 ? '' : 's'
+          }`}
         />
       </div>
 
@@ -518,20 +602,22 @@ const ResourceAnalytics = () => {
                   plugins: {
                     legend: {
                       position: 'right',
-                      labels: {
-                        boxWidth: 10,
-                        padding: 8,
-                        font: { size: 9 }
-                      }
+                      labels: { boxWidth: 10, padding: 8, font: { size: 9 } }
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
+                        label: function (context) {
                           const label = context.label || '';
                           const value = context.parsed || 0;
-                          const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-                          return `${label}: ${formatTimeFromSeconds(value)} (${percentage}%)`;
+                          const total = context.dataset.data.reduce(
+                            (a, b) => a + b,
+                            0
+                          );
+                          const percentage =
+                            total > 0 ? ((value / total) * 100).toFixed(1) : 0;
+                          return `${label}: ${formatTimeFromSeconds(
+                            value
+                          )} (${percentage}%)`;
                         }
                       }
                     }
@@ -555,31 +641,26 @@ const ResourceAnalytics = () => {
                   plugins: {
                     legend: {
                       position: 'top',
-                      labels: {
-                        boxWidth: 10,
-                        padding: 8,
-                        font: { size: 9 }
-                      }
+                      labels: { boxWidth: 10, padding: 8, font: { size: 9 } }
                     },
                     tooltip: {
                       callbacks: {
-                        label: function(context) {
-                          return `${context.dataset.label}: ${formatTimeFromSeconds(context.parsed.y)}`;
+                        label: function (context) {
+                          return `${context.dataset.label}: ${formatTimeFromSeconds(
+                            context.parsed.y
+                          )}`;
                         }
                       }
                     }
                   },
                   scales: {
                     x: {
-                      ticks: {
-                        font: { size: 8 },
-                        maxRotation: 45
-                      }
+                      ticks: { font: { size: 8 }, maxRotation: 45 }
                     },
                     y: {
                       ticks: {
                         font: { size: 8 },
-                        callback: function(value) {
+                        callback: function (value) {
                           return formatTimeFromSeconds(value);
                         }
                       }
@@ -615,7 +696,9 @@ const ResourceAnalytics = () => {
                 {tab.label}
                 <span
                   className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-bold ${
-                    isActive ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'
+                    isActive
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-slate-100 text-slate-500'
                   }`}
                 >
                   {tab.key === 'developer'
@@ -641,12 +724,19 @@ const ResourceAnalytics = () => {
         {(activeTab === 'feed' || activeTab === 'ticket') && (
           <div className="px-3 py-2 bg-slate-50/50 border-b border-slate-200">
             <div className="relative">
-              <Search size={14} className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <Search
+                size={14}
+                className="absolute left-2.5 top-1/2 transform -translate-y-1/2 text-slate-400"
+              />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${activeTab === 'feed' ? 'feeds, projects, or developers' : 'tickets, projects, or developers'}...`}
+                placeholder={`Search ${
+                  activeTab === 'feed'
+                    ? 'feeds, projects, or developers'
+                    : 'tickets, projects, or developers'
+                }...`}
                 className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
               />
               {searchQuery && (
@@ -666,10 +756,14 @@ const ResourceAnalytics = () => {
             <div className="text-center py-8">
               <Clock size={28} className="mx-auto text-slate-300 mb-1.5" />
               <p className="text-slate-500 font-medium text-sm">
-                {searchQuery ? 'No results found for your search' : 'No time logged for the selected filters'}
+                {searchQuery
+                  ? 'No results found for your search'
+                  : 'No time logged for the selected filters'}
               </p>
               <p className="text-slate-400 text-[10px] mt-0.5">
-                {searchQuery ? 'Try adjusting your search terms' : 'Try widening the date range or clearing developer filters'}
+                {searchQuery
+                  ? 'Try adjusting your search terms'
+                  : 'Try widening the date range or clearing developer filters'}
               </p>
             </div>
           ) : activeTab === 'developer' ? (
@@ -692,11 +786,15 @@ const ResourceAnalytics = () => {
 const SummaryCard = ({ icon: Icon, iconColor, iconBg, label, value, sub }) => (
   <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-2 hover:shadow-md transition-shadow">
     <div className="flex items-center justify-between mb-1.5">
-      <div className={`w-6 h-6 rounded-lg ${iconBg} flex items-center justify-center`}>
+      <div
+        className={`w-6 h-6 rounded-lg ${iconBg} flex items-center justify-center`}
+      >
         <Icon size={12} className={iconColor} />
       </div>
     </div>
-    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">{label}</p>
+    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">
+      {label}
+    </p>
     <p className="text-base font-black text-slate-800">{value}</p>
     <p className="text-[9px] text-slate-400 mt-0.5">{sub}</p>
   </div>
@@ -743,10 +841,15 @@ const DeveloperTable = ({ rows }) => {
                     {isExpanded ? (
                       <ChevronUp size={12} className="text-slate-400 shrink-0" />
                     ) : (
-                      <ChevronDown size={12} className="text-slate-400 shrink-0" />
+                      <ChevronDown
+                        size={12}
+                        className="text-slate-400 shrink-0"
+                      />
                     )}
                     <div>
-                      <p className="font-semibold text-slate-800 text-xs">{r.developerName}</p>
+                      <p className="font-semibold text-slate-800 text-xs">
+                        {r.developerName}
+                      </p>
                       <p className="text-[9px] text-slate-400">{r.email}</p>
                     </div>
                   </div>
@@ -766,7 +869,10 @@ const DeveloperTable = ({ rows }) => {
               </tr>
               {isExpanded && (
                 <tr>
-                  <td colSpan={5} className="bg-slate-50/60 px-3 py-3 border-b border-slate-100">
+                  <td
+                    colSpan={5}
+                    className="bg-slate-50/60 px-3 py-3 border-b border-slate-100"
+                  >
                     <DeveloperDailyBreakdown developer={r} />
                   </td>
                 </tr>
@@ -837,12 +943,17 @@ const DeveloperDailyBreakdown = ({ developer }) => {
                 tooltip: {
                   callbacks: {
                     label: (context) =>
-                      `${context.dataset.label}: ${formatTimeFromSeconds(context.parsed.y)}`
+                      `${context.dataset.label}: ${formatTimeFromSeconds(
+                        context.parsed.y
+                      )}`
                   }
                 }
               },
               scales: {
-                x: { stacked: true, ticks: { font: { size: 8 }, maxRotation: 45 } },
+                x: {
+                  stacked: true,
+                  ticks: { font: { size: 8 }, maxRotation: 45 }
+                },
                 y: {
                   stacked: true,
                   ticks: {
@@ -868,8 +979,13 @@ const DeveloperDailyBreakdown = ({ developer }) => {
           </thead>
           <tbody className="divide-y divide-slate-100">
             {rows.map((d) => (
-              <tr key={d.date} className="hover:bg-slate-50/70 transition-colors">
-                <td className="px-3 py-1.5 text-xs font-medium text-slate-700">{d.date}</td>
+              <tr
+                key={d.date}
+                className="hover:bg-slate-50/70 transition-colors"
+              >
+                <td className="px-3 py-1.5 text-xs font-medium text-slate-700">
+                  {d.date}
+                </td>
                 <td className="px-3 py-1.5 text-right text-xs font-medium text-emerald-700">
                   {d.netFeedTimeFormatted}
                 </td>
@@ -893,11 +1009,17 @@ const DeveloperList = ({ developers }) => {
     return <span className="text-slate-300 text-[10px]">No one yet</span>;
   }
   if (developers.length === 1) {
-    return <span className="text-xs text-slate-600">{developers[0].developerName}</span>;
+    return (
+      <span className="text-xs text-slate-600">
+        {developers[0].developerName}
+      </span>
+    );
   }
   return (
     <div>
-      <span className="text-xs text-slate-600">{developers[0].developerName}</span>
+      <span className="text-xs text-slate-600">
+        {developers[0].developerName}
+      </span>
       <span className="ml-1 px-1 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500">
         +{developers.length - 1}
       </span>
@@ -920,8 +1042,12 @@ const FeedTable = ({ rows }) => (
     <tbody className="divide-y divide-slate-100">
       {rows.map((r) => (
         <tr key={r.feedId} className="hover:bg-slate-50/70 transition-colors">
-          <td className="px-3 py-2.5 font-semibold text-slate-800 text-xs">{r.feedName}</td>
-          <td className="px-3 py-2.5 text-xs text-slate-500">{r.projectName}</td>
+          <td className="px-3 py-2.5 font-semibold text-slate-800 text-xs">
+            {r.feedName}
+          </td>
+          <td className="px-3 py-2.5 text-xs text-slate-500">
+            {r.projectName}
+          </td>
           <td className="px-3 py-2.5">
             <DeveloperList developers={r.developers} />
           </td>
@@ -960,20 +1086,31 @@ const TicketTable = ({ rows }) => (
       {rows.map((r) => (
         <tr key={r.ticketId} className="hover:bg-slate-50/70 transition-colors">
           <td className="px-3 py-2.5">
-            <p className="font-semibold text-slate-800 text-xs">{r.ticketNumber}</p>
-            <p className="text-[9px] text-slate-400 truncate max-w-xs">{r.ticketTitle}</p>
+            <p className="font-semibold text-slate-800 text-xs">
+              {r.ticketNumber}
+            </p>
+            <p className="text-[9px] text-slate-400 truncate max-w-xs">
+              {r.ticketTitle}
+            </p>
           </td>
-          <td className="px-3 py-2.5 text-xs text-slate-500">{r.projectName}</td>
+          <td className="px-3 py-2.5 text-xs text-slate-500">
+            {r.projectName}
+          </td>
           <td className="px-3 py-2.5">
             <DeveloperList developers={r.developers} />
           </td>
           <td className="px-3 py-2.5">
-            <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
-              r.status === 'Completed' ? 'bg-emerald-100 text-emerald-700' :
-              r.status === 'In Progress' ? 'bg-blue-100 text-blue-700' :
-              r.status === 'Review' ? 'bg-amber-100 text-amber-700' :
-              'bg-slate-100 text-slate-600'
-            }`}>
+            <span
+              className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
+                r.status === 'Completed'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : r.status === 'In Progress'
+                  ? 'bg-blue-100 text-blue-700'
+                  : r.status === 'Review'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-slate-100 text-slate-600'
+              }`}
+            >
               {r.status || '—'}
             </span>
           </td>

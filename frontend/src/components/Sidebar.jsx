@@ -516,13 +516,13 @@ const Sidebar = () => {
       { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
       { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
       { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
+      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
       { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
       { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
       { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
       { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
       { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
       { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
-      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
     ],
 
     'Team Lead': [
