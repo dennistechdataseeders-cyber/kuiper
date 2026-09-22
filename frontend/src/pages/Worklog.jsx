@@ -1,4 +1,4 @@
-// frontend/src/pages/Worklog.jsx - FULL UPDATED WITH INTEGRATED TIME TRACKING
+// frontend/src/pages/Worklog.jsx - FULL UPDATED WITH INTEGRATED TIME TRACKING + AUTO-STOP INDICATOR
 
 import React, {
   useEffect,
@@ -1326,7 +1326,7 @@ const Worklog = () => {
                       return (
                         <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
                           <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'}`}>
                                 <Hash size={12} className={worklog.isRunning ? 'text-emerald-600' : 'text-slate-400'} />
                               </div>
@@ -1335,6 +1335,16 @@ const Worklog = () => {
                                 <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1">
                                   <CheckCircle size={8} />
                                   Logged
+                                </span>
+                              )}
+                              {/* ✅ NEW: System auto-stop badge */}
+                              {worklog.stoppedBySystem && (
+                                <span
+                                  className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1"
+                                  title="This timer was automatically stopped by the system at 11:55 PM"
+                                >
+                                  <AlertTriangle size={8} />
+                                  System
                                 </span>
                               )}
                               {isLongRunning && (
@@ -1519,20 +1529,32 @@ const Worklog = () => {
                               <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-purple-100 animate-pulse' : 'bg-slate-100'}`}>
                                 <Ticket size={12} className={worklog.isRunning ? 'text-purple-600' : 'text-slate-400'} />
                               </div>
-                              <div>
-                                <span className="text-sm font-bold text-slate-800">
-                                  #{ticket.ticketNumber} - {ticket.title}
-                                </span>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-sm font-bold text-slate-800">
+                                    #{ticket.ticketNumber} - {ticket.title}
+                                  </span>
+                                  {/* ✅ NEW: System auto-stop badge */}
+                                  {worklog.stoppedBySystem && (
+                                    <span
+                                      className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase inline-flex items-center gap-1"
+                                      title="This timer was automatically stopped by the system at 11:55 PM"
+                                    >
+                                      <AlertTriangle size={8} />
+                                      System
+                                    </span>
+                                  )}
+                                  {isLongRunning && (
+                                    <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase animate-pulse inline-flex items-center gap-1">
+                                      <Coffee size={8} />
+                                      Long Run
+                                    </span>
+                                  )}
+                                </div>
                                 {hasDescription && (
-                                  <p className="text-[8px] text-slate-500 truncate max-w-[150px]">
+                                  <p className="text-[8px] text-slate-500 truncate max-w-[220px] mt-0.5">
                                     {worklog.description}
                                   </p>
-                                )}
-                                {isLongRunning && (
-                                  <span className="ml-1 text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase animate-pulse">
-                                    <Coffee size={8} />
-                                    Long Run
-                                  </span>
                                 )}
                               </div>
                             </div>

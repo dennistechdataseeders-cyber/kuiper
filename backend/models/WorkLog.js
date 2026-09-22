@@ -1,3 +1,5 @@
+// backend/models/WorkLog.js
+
 const mongoose = require('mongoose');
 
 const workLogSchema = new mongoose.Schema({
@@ -37,7 +39,14 @@ const workLogSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-   timeBlocks: [{
+
+  // ✅ NEW FIELD
+  stoppedBySystem: {
+    type: Boolean,
+    default: false
+  },
+
+  timeBlocks: [{
     startTime: Date,
     endTime: Date,
     duration: Number

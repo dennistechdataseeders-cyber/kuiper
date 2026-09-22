@@ -1,4 +1,4 @@
-// backend/server.js - UPDATED with leaveBucketRoutes
+// backend/server.js - UPDATED with leaveBucketRoutes + autoStopWorklogs
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -57,6 +57,10 @@ try {
 } catch (err) {
   console.log('⚠️ Notice: Announcement Automation not loaded:', err.message);
 }
+
+// =========================================================
+// ✅ HOLIDAY REMINDER (Daily at 6:25 PM IST)
+// =========================================================
 try {
   require(path.join(__dirname, 'cron', 'holidayReminder'));
   console.log('⏰ Holiday Reminder initialized (daily at 6:00 PM IST)');
@@ -72,6 +76,16 @@ try {
   console.log('⏰ Leave Bucket Accrual initialized (1st of every month)');
 } catch (err) {
   console.log('⚠️ Notice: Leave Bucket Accrual not loaded:', err.message);
+}
+
+// =========================================================
+// ✅ NEW: AUTO-STOP WORKLOGS (Daily at 11:55 PM IST)
+// =========================================================
+try {
+  require(path.join(__dirname, 'cron', 'autoStopWorklogs'));
+  console.log('⏰ Auto-Stop Worklogs initialized (daily at 11:55 PM IST)');
+} catch (err) {
+  console.log('⚠️ Notice: Auto-Stop Worklogs not loaded:', err.message);
 }
 
 // =========================================================
@@ -296,7 +310,6 @@ if (!isProduction) {
 // ✅ UPDATED STATIC FILE SERVING WITH BETTER ERROR HANDLING
 // =========================================================
 
-// Route static access for uploaded document assets
 app.use('/uploads', (req, res, next) => {
   console.log(`📂 Static file request: ${req.path}`);
   console.log(`   Full URL: ${req.protocol}://${req.get('host')}${req.originalUrl}`);
@@ -351,7 +364,6 @@ app.use('/uploads', (req, res, next) => {
   }
 }));
 
-// Handle 404 for static files
 app.use('/uploads', (req, res) => {
   console.log(`❌ File not found: ${req.path}`);
   res.status(404).json({
@@ -409,12 +421,9 @@ app.use('/api/work-report', workReportRoutes);
 // ✅ LEAVE ROUTES - Both old and new systems
 // =========================================================
 
-// Old leave routes (for backward compatibility)
 app.use('/api/leaves', leaveRoutes);
 
-// New leave bucket routes
 if (leaveBucketRoutes) {
-  // Use a different path to avoid conflict with old routes
   app.use('/api/leave-bucket', leaveBucketRoutes);
   console.log('✅ Leave Bucket Routes mounted at /api/leave-bucket');
 } else {
@@ -461,6 +470,7 @@ mongoose.connect(MONGO_URI)
       console.log('  ✅ Announcement Automation');
       console.log('  ✅ Holiday Reminder');
       console.log('  ✅ Leave Bucket Accrual');
+      console.log('  ✅ Auto-Stop Worklogs (11:55 PM IST)'); // ← NEW
       console.log('  ✅ Socket.IO Server');
       console.log('  ✅ REST API Routes');
       console.log('  ✅ File Upload Service');
