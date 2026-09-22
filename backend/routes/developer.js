@@ -937,14 +937,14 @@ router.get('/ticket-worklog', protect, async (req, res) => {
     // ROLE-BASED TICKET FILTERING
     // ============================================
     if (userRole === 'Developer') {
-      ticketQuery = {
-        $or: [
-          { assignedTo: userId },
-          { watchers: userId }
-        ],
-        status: { $in: ['Open', 'In Progress'] }
-      };
-    }
+    // ✅ Worklog is a personal workspace — only show tickets that are
+    // assigned to this developer. Watched tickets are excluded here
+    // (they still appear on the Ticket Dashboard).
+    ticketQuery = {
+      assignedTo: userId,
+      status: { $in: ['Open', 'In Progress'] }
+    };
+  }
     else if (userRole === 'Project Manager') {
       const pmProjects = await Project.find({ projectManager: userId }).select('_id');
       const projectIds = pmProjects.map(p => p._id);
