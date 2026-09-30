@@ -1,5 +1,6 @@
 // frontend/src/pages/TicketDetails.jsx - COMPACT WITH WATCHERS IN RIGHT SIDEBAR
 // FIXED: Better error handling for file uploads and connection issues
+// FIXED: Attachments "+X more" is now clickable and expands to show all files
 
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
@@ -10,7 +11,7 @@ import {
   Loader2, Eye, Download, UploadCloud, GitFork, Paperclip,
   File, FileText, FileArchive, FileSpreadsheet, FileVideo, FileAudio,
   FileCode, FileJson, Tag, Layers, Building2, Briefcase, Lock,
-  UserPlus, Search, ChevronDown, ChevronRight
+  UserPlus, Search, ChevronDown, ChevronRight, ChevronUp
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -42,6 +43,11 @@ const TicketDetails = () => {
   const currentUserId = localStorage.getItem('userId');
   const currentUserName = localStorage.getItem('userName');
   const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+
+  // ============================================
+  // ✅ NEW: Attachments expand/collapse state
+  // ============================================
+  const [showAllAttachments, setShowAllAttachments] = useState(false);
 
   // ============================================
   // WATCHERS STATE
@@ -716,7 +722,6 @@ const TicketDetails = () => {
         const formData = new FormData();
         formData.append('file', file);
         
-        // Log the upload attempt
         console.log(`📤 Uploading file ${index + 1}/${files.length}: ${file.name} (${formatFileSize(file.size)})`);
         
         axios.post(`${API_BASE_URL}/api/tickets/upload-file`, formData, {
@@ -724,7 +729,7 @@ const TicketDetails = () => {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'multipart/form-data'
           },
-          timeout: 60000 // 60 second timeout
+          timeout: 60000
         })
         .then(response => {
           if (response.data.success) {
@@ -742,7 +747,6 @@ const TicketDetails = () => {
           hasError = true;
           console.error(`❌ File upload failed for ${file.name}:`, error.message);
           
-          // Show user-friendly error message
           if (error.code === 'ECONNABORTED') {
             toast.error(`Upload timeout for ${file.name}. The server may be busy.`);
           } else if (error.response?.status === 413) {
@@ -794,7 +798,6 @@ const TicketDetails = () => {
       if (selectedFiles.length > 0) {
         uploadedFiles = await uploadFilesWithConcurrency(selectedFiles);
         
-        // If all files failed to upload, show a warning
         if (uploadedFiles.length === 0 && selectedFiles.length > 0) {
           toast.warning('Files could not be uploaded. Comment will be sent without attachments.');
         }
@@ -811,7 +814,7 @@ const TicketDetails = () => {
         payload,
         { 
           headers: { Authorization: `Bearer ${token}` },
-          timeout: 120000 // 2 minute timeout for large comments
+          timeout: 120000
         }
       );
       
@@ -834,7 +837,6 @@ const TicketDetails = () => {
     } catch (error) {
       console.error('Error adding comment:', error);
       
-      // Better error messages
       if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
         toast.error('Network error: Could not connect to server. Please check your connection and try again.');
       } else if (error.response?.status === 401) {
@@ -885,7 +887,6 @@ const TicketDetails = () => {
     return colors[category] || 'bg-gray-100 text-gray-700 border-gray-200';
   };
 
-  // ✅ SAFE: Only check ticket creator if ticket exists
   const isTicketCreator = ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId);
 
   const formatCommentTime = (date) => {
@@ -943,20 +944,14 @@ const TicketDetails = () => {
     }
   };
 
-  // ============================================
-  // CAN ADD WATCHER CHECK - SAFE WITH NULL CHECK
-  // ============================================
   const canAddWatcher = 
-    ticket && // ✅ MUST have ticket
+    ticket &&
     (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead' || 
      (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId))) && 
     ticket.status !== 'Closed';
 
-  // ============================================
-  // CHECK IF USER CAN CLOSE THE TICKET - SAFE WITH NULL CHECK
-  // ============================================
   const canCloseTicket = 
-    ticket && // ✅ MUST have ticket
+    ticket &&
     (userRole === 'Admin' || 
      (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId)));
 
@@ -971,7 +966,6 @@ const TicketDetails = () => {
     );
   }
 
-  // ✅ EARLY RETURN if ticket is null
   if (!ticket) {
     return (
       <div className={`min-h-screen bg-gray-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -991,6 +985,14 @@ const TicketDetails = () => {
   }
 
   const hasTicketAttachments = ticket.files && ticket.files.length > 0;
+
+  // ============================================
+  // ✅ NEW: Calculate displayed attachments
+  // ============================================
+  const displayedAttachments = hasTicketAttachments
+    ? (showAllAttachments ? ticket.files : ticket.files.slice(0, 3))
+    : [];
+  const hasMoreAttachments = hasTicketAttachments && ticket.files.length > 3;
 
   return (
     <div className={`min-h-screen bg-gray-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10' : 'ml-64'}`}>
@@ -1140,111 +1142,189 @@ const TicketDetails = () => {
           )}
         </div>
 
-        {/* Attachments - Compact */}
-        {hasTicketAttachments && (
+        {/* ✅ FIXED: Attachments - Now expandable */}
+        {hasTicketAttachments ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5">
-            <div className="flex items-center gap-1.5 mb-1.5">
-              <Paperclip size={12} className="text-blue-600" />
-              <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">Attachments ({ticket.files.length})</span>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {ticket.files.slice(0, 3).map((file, index) => {
-                const isImage = isImageFile(file.originalName || file.filename);
-                const fileUrl = file.url || `${API_BASE_URL}/uploads/tickets/${file.filename}`;
-                
-                return (
-                  <div key={index} className="flex items-center gap-1 p-1 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all group">
-                    <div className="flex-shrink-0 w-5 h-5 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
-                      {isImage ? (
-                        <img 
-                          src={fileUrl} 
-                          alt={file.originalName || 'Attachment'}
-                          className="w-full h-full object-cover rounded-lg cursor-pointer"
-                          onClick={() => setShowImageViewer(fileUrl)}
-                        />
-                      ) : (
-                        getFileIcon(file)
-                      )}
-                    </div>
-                    <div className="min-w-0 max-w-[60px]">
-                      <p className="text-[7px] font-semibold text-gray-700 truncate">
-                        {file.originalName || file.filename}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleFileDownload(file)}
-                      className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
-                      title="Download"
-                    >
-                      <Download size={8} />
-                    </button>
-                  </div>
-                );
-              })}
-              {ticket.files.length > 3 && (
-                <span className="text-[8px] text-gray-400 font-medium self-center">+{ticket.files.length - 3} more</span>
+            <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center gap-1.5">
+                <Paperclip size={12} className="text-blue-600" />
+                <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider">
+                  Attachments ({ticket.files.length})
+                </span>
+              </div>
+              {hasMoreAttachments && (
+                <button
+                  onClick={() => setShowAllAttachments(!showAllAttachments)}
+                  className="text-[8px] font-bold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 transition-colors"
+                >
+                  {showAllAttachments ? (
+                    <>
+                      <ChevronUp size={10} />
+                      Show Less
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown size={10} />
+                      Show All
+                    </>
+                  )}
+                </button>
               )}
             </div>
+            
+            {/* Expanded: Show all as list. Collapsed: Show 3 as compact chips */}
+            {showAllAttachments ? (
+              <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                {displayedAttachments.map((file, index) => {
+                  const isImage = isImageFile(file.originalName || file.filename);
+                  const fileUrl = file.url || `${API_BASE_URL}/uploads/tickets/${file.filename}`;
+                  
+                  return (
+                    <div key={index} className="flex items-center gap-2 p-1.5 bg-gray-50 rounded-lg border border-gray-200 hover:border-blue-300 transition-all">
+                      <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 overflow-hidden">
+                        {isImage ? (
+                          <img 
+                            src={fileUrl} 
+                            alt={file.originalName || 'Attachment'}
+                            className="w-full h-full object-cover rounded-lg cursor-pointer"
+                            onClick={() => setShowImageViewer(fileUrl)}
+                          />
+                        ) : (
+                          getFileIcon(file)
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[8px] font-semibold text-gray-700 truncate" title={file.originalName || file.filename}>
+                          {file.originalName || file.filename}
+                        </p>
+                        <p className="text-[7px] text-gray-400">
+                          {formatFileSize(file.size)} • {getFileTypeLabel(file)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-0.5">
+                        {isImage && (
+                          <button
+                            onClick={() => setShowImageViewer(fileUrl)}
+                            className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                            title="View"
+                          >
+                            <Eye size={10} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleFileDownload(file)}
+                          className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                          title="Download"
+                        >
+                          <Download size={10} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {displayedAttachments.map((file, index) => {
+                  const isImage = isImageFile(file.originalName || file.filename);
+                  const fileUrl = file.url || `${API_BASE_URL}/uploads/tickets/${file.filename}`;
+                  
+                  return (
+                    <div key={index} className="flex items-center gap-1 p-1 bg-gray-50 rounded-lg border border-gray-200 hover:shadow-md transition-all group">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
+                        {isImage ? (
+                          <img 
+                            src={fileUrl} 
+                            alt={file.originalName || 'Attachment'}
+                            className="w-full h-full object-cover rounded-lg cursor-pointer"
+                            onClick={() => setShowImageViewer(fileUrl)}
+                          />
+                        ) : (
+                          getFileIcon(file)
+                        )}
+                      </div>
+                      <div className="min-w-0 max-w-[60px]">
+                        <p className="text-[7px] font-semibold text-gray-700 truncate">
+                          {file.originalName || file.filename}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleFileDownload(file)}
+                        className="p-0.5 rounded hover:bg-gray-200 text-gray-400 hover:text-blue-600 transition-all"
+                        title="Download"
+                      >
+                        <Download size={8} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {hasMoreAttachments && (
+                  <button
+                    onClick={() => setShowAllAttachments(true)}
+                    className="text-[8px] text-blue-600 hover:text-blue-800 font-bold self-center px-1.5 py-0.5 rounded hover:bg-blue-50 transition-all"
+                  >
+                    +{ticket.files.length - 3} more
+                  </button>
+                )}
+              </div>
+            )}
           </div>
-        )}
-
-        {/* If no attachments, make this cell empty but keep grid consistent */}
-        {!hasTicketAttachments && (
+        ) : (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 flex items-center justify-center">
             <span className="text-[9px] text-gray-400">No attachments</span>
           </div>
         )}
       </div>
 
-      {/* Ticket Progress - Full width with same width as description */}
-      {ticket && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2.5 mb-3">
-          <div className="flex items-center gap-1.5 mb-1.5">
-            <CheckCircle size={12} className="text-blue-600" />
-            <span className="text-[10px] font-semibold text-gray-700">Progress</span>
-            <span className="text-[9px] font-medium text-gray-400 ml-auto">
-              {currentStatusIndex + 1}/{statusFlow.length}
-            </span>
-          </div>
-          <div className="relative px-4 sm:px-8">
-            <div className="absolute top-1.5 left-4 right-4 sm:left-8 sm:right-8 h-0.5 bg-gray-200 rounded-full" />
-            <div 
-              className="absolute top-1.5 left-4 sm:left-8 h-0.5 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
-              style={{ width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - 8px)` }}
-            />
-            <div className="flex justify-between">
-              {statusFlow.map((status, index) => {
-                const isCompleted = index <= currentStatusIndex;
-                const isCurrent = status === ticket.status;
-                
-                return (
-                  <div key={status} className="flex flex-col items-center relative group">
-                    <div 
-                      className={`w-3.5 h-3.5 rounded-full flex items-center justify-center text-[5px] font-bold transition-all duration-300 cursor-pointer
-                        ${isCompleted 
-                          ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-sm' 
-                          : 'bg-gray-200 text-gray-500'
-                        }
-                        ${isCurrent ? 'ring-2 ring-blue-100 ring-offset-0.5 border border-blue-500' : ''}
-                      `}
-                    >
-                      {isCompleted ? <CheckCircle size={5} className="text-white" /> : index + 1}
-                    </div>
-                    <p className={`text-[5px] font-semibold transition-colors mt-0.5 ${isCompleted ? 'text-green-700' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>
-                      {isMobile ? status.substring(0, 1) : status}
-                    </p>
-                  </div>
-                );
-              })}
+     {/* Ticket Progress */}
+{ticket && (
+  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-3">
+    <div className="flex items-center gap-2 mb-3">
+      <CheckCircle size={16} className="text-blue-600" />
+      <span className="text-sm font-semibold text-gray-700">Progress</span>
+      <span className="text-xs font-medium text-gray-400 ml-auto">
+        {currentStatusIndex + 1}/{statusFlow.length}
+      </span>
+    </div>
+    <div className="relative px-6 sm:px-12">
+      <div className="absolute top-3 left-6 right-6 sm:left-12 sm:right-12 h-1 bg-gray-200 rounded-full" />
+      <div 
+        className="absolute top-3 left-6 sm:left-12 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
+        style={{ width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - 16px)` }}
+      />
+      <div className="flex justify-between">
+        {statusFlow.map((status, index) => {
+          const isCompleted = index <= currentStatusIndex;
+          const isCurrent = status === ticket.status;
+          
+          return (
+            <div key={status} className="flex flex-col items-center relative group">
+              <div 
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-pointer
+                  ${isCompleted 
+                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' 
+                    : 'bg-gray-200 text-gray-500'
+                  }
+                  ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500' : ''}
+                `}
+              >
+                {isCompleted ? <CheckCircle size={14} className="text-white" /> : index + 1}
+              </div>
+              <p className={`text-[10px] sm:text-xs font-semibold transition-colors mt-1.5 ${isCompleted ? 'text-green-700' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>
+                {isMobile ? status.substring(0, 1) : status}
+              </p>
             </div>
-          </div>
-        </div>
-      )}
+          );
+        })}
+      </div>
+    </div>
+  </div>
+)}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Content Side */}
         <div className="lg:col-span-2 space-y-4 sm:space-y-6">
-          {/* Description Card - Reduced padding */}
+          {/* Description Card */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Description</h2>
             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed break-words">{ticket.description}</p>
@@ -1393,7 +1473,7 @@ const TicketDetails = () => {
               )}
             </div>
             
-            {/* Comment Form - Disabled when ticket is closed */}
+            {/* Comment Form */}
             <div className="border-t border-gray-200 bg-white p-2 sm:p-4">
               {filePreviews.length > 0 && (
                 <div className="mb-2 sm:mb-3 flex flex-wrap gap-1.5 sm:gap-2 p-1.5 sm:p-2 bg-gray-50 rounded-lg border border-gray-200">
@@ -1480,7 +1560,6 @@ const TicketDetails = () => {
                 </button>
               </div>
               
-              {/* Closed ticket message */}
               {isTicketClosed && (
                 <div className="mt-1.5 sm:mt-2 text-center">
                   <span className="text-xs font-medium text-red-600 flex items-center justify-center gap-1.5">
@@ -1509,9 +1588,9 @@ const TicketDetails = () => {
           </div>
         </div>
         
-        {/* Right Info Sidebar Segment - COMPACT */}
+        {/* Right Info Sidebar Segment */}
         <div className="space-y-3 sm:space-y-4">
-          {/* Metadata - Moved UP - Column wise and compact */}
+          {/* Metadata */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
             <h3 className="font-semibold text-gray-900 mb-2 sm:mb-3 text-[10px] sm:text-xs uppercase tracking-wider">Ticket Metadata</h3>
             <div className="space-y-1.5 sm:space-y-2 text-xs">
@@ -1575,9 +1654,7 @@ const TicketDetails = () => {
             </div>
           </div>
 
-          {/* ============================================
-              WATCHERS SECTION - Hidden for Client users
-              ============================================ */}
+          {/* WATCHERS SECTION - Hidden for Client users */}
           {userRole !== 'Client' && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
               <div 
@@ -1729,9 +1806,7 @@ const TicketDetails = () => {
         </div>
       </div>
 
-      {/* ============================================
-          ADD WATCHER MODAL WITH SEARCH
-          ============================================ */}
+      {/* ADD WATCHER MODAL WITH SEARCH */}
       {showWatcherModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
           <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
@@ -1752,7 +1827,6 @@ const TicketDetails = () => {
             </div>
             
             <div className="p-4">
-              {/* Search Bar */}
               <div className="relative mb-3">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input
@@ -1774,7 +1848,6 @@ const TicketDetails = () => {
                 )}
               </div>
               
-              {/* User List */}
               <div className="max-h-56 overflow-y-auto">
                 {availableUsers.length === 0 ? (
                   <p className="text-sm text-slate-400 text-center py-4">

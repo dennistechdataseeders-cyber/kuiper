@@ -278,7 +278,159 @@ router.post('/attendance/sync-logs', protect, async (req, res) => {
     });
   }
 });
+// ============================================
+// 🆕 TODAY STATUS — For Employee Dashboard
+// Accessible to ALL authenticated users (not just HR/Admin)
+// Must be placed BEFORE the global authorize middleware.
+//
+// Returns for every active (non-Admin/HR/Client) employee:
+//   - status: 'present' | 'late' | 'absent' | 'leave'
+//   - isCurrentlyIn: true if punched in and not yet punched out
+//   - shift info
+//   - punchInUTC / punchOutUTC
+//   - lateMinutes (with 15-minute shift-based buffer)
+//   - leaveType (if on leave today)
+// ============================================
+router.get('/attendance/today-status', protect, async (req, res) => {
+  try {
+    const now = new Date();
+    const istNow = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    const todayStr = istNow.toISOString().split('T')[0];
 
+    const [year, month, day] = todayStr.split('-').map(Number);
+    const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
+    const endDate   = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
+
+    // Exclude Admin / HR / Client / Super Admin
+    const employees = await User.find({
+      isActive: true,
+      role: { $nin: ['Admin', 'HR', 'Client', 'Super Admin'] }
+    }).select('name email employeeCode role shiftHour shiftMinute shiftAmPm profileImage');
+
+    if (employees.length === 0) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const employeeIds = employees.map(e => e._id);
+
+    // Today's punch logs
+    const punchLogs = await EmployeePunchLog.find({
+      employeeId: { $in: employeeIds },
+      date: { $gte: startDate, $lte: endDate }
+    });
+
+    const punchMap = {};
+    punchLogs.forEach(p => {
+      punchMap[p.employeeId.toString()] = p;
+    });
+
+    // Approved leaves covering today
+    const leaves = await LeaveApplication.find({
+      employeeId: { $in: employeeIds },
+      status: 'approved',
+      startDate: { $lte: endDate },
+      endDate:   { $gte: startDate }
+    });
+
+    const leaveMap = {};
+    leaves.forEach(l => {
+      leaveMap[l.employeeId.toString()] = l;
+    });
+
+    // IST helpers
+    const IST_OFFSET_MINUTES = 5 * 60 + 30;
+    const LATE_BUFFER_MINUTES = 15;
+
+    const getISTMinutesOfDay = (dateString) => {
+      if (!dateString) return null;
+      const d = new Date(dateString);
+      if (isNaN(d.getTime())) return null;
+      let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
+      return ((total % 1440) + 1440) % 1440;
+    };
+
+    const getShiftStartMinutes = (emp) => {
+      let hour = Number(emp.shiftHour);
+      const minute = Number(emp.shiftMinute) || 0;
+      const ampm = (emp.shiftAmPm || 'AM').toUpperCase();
+      if (!Number.isFinite(hour) || hour < 1 || hour > 12) hour = 10;
+      let hour24 = hour % 12;
+      if (ampm === 'PM') hour24 += 12;
+      return hour24 * 60 + minute;
+    };
+
+    const results = employees.map(emp => {
+      const empId = emp._id.toString();
+      const punch = punchMap[empId];
+      const leave = leaveMap[empId];
+
+      let status = 'absent';
+      let punchInUTC = null;
+      let punchOutUTC = null;
+      let isCurrentlyIn = false;
+      let lateMinutes = 0;
+
+      if (punch) {
+        // Prefer sessions[], fall back to legacy punchIn/punchOut
+        if (punch.sessions && punch.sessions.length > 0) {
+          const first = punch.sessions[0];
+          const last  = punch.sessions[punch.sessions.length - 1];
+          punchInUTC  = first.punchIn  ? first.punchIn.toISOString()  : null;
+          punchOutUTC = last.punchOut  ? last.punchOut.toISOString()  : null;
+        } else {
+          punchInUTC  = punch.punchIn  ? punch.punchIn.toISOString()  : null;
+          punchOutUTC = punch.punchOut ? punch.punchOut.toISOString() : null;
+        }
+
+        // "Currently IN" if any session is still open
+        const hasOpenSession = (punch.sessions || []).some(s => s.punchIn && !s.punchOut);
+        isCurrentlyIn = hasOpenSession || (punchInUTC && !punchOutUTC);
+
+        if (punchInUTC) {
+          const punchMinutes = getISTMinutesOfDay(punchInUTC);
+          const shiftStart   = getShiftStartMinutes(emp);
+          const cutoff       = shiftStart + LATE_BUFFER_MINUTES;
+          if (punchMinutes !== null && punchMinutes > cutoff) {
+            status = 'late';
+            lateMinutes = punchMinutes - cutoff;
+          } else {
+            status = 'present';
+          }
+        }
+      }
+
+      // Leave overrides everything except an actual punch today
+      if (leave && !punchInUTC) {
+        status = 'leave';
+      }
+
+      return {
+        _id: emp._id,
+        name: emp.name,
+        email: emp.email,
+        role: emp.role,
+        employeeCode: emp.employeeCode || null,
+        profileImage: emp.profileImage || null,
+        shiftHour: emp.shiftHour ?? 10,
+        shiftMinute: emp.shiftMinute ?? 30,
+        shiftAmPm: emp.shiftAmPm || 'AM',
+        status,
+        isCurrentlyIn,
+        punchInUTC,
+        punchOutUTC,
+        lateMinutes,
+        leaveType: leave ? leave.leaveType : null,
+        isHalfDay: leave ? !!leave.isHalfDay : false,
+        halfDayType: leave ? leave.halfDayType : null
+      };
+    });
+
+    res.json({ success: true, data: results });
+  } catch (error) {
+    console.error('Error fetching today-status:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch today status' });
+  }
+});
 // ============================================
 // ALL OTHER HR ROUTES - Keep HR/Admin only
 // ============================================
