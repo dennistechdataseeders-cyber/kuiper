@@ -87,34 +87,40 @@ exports.stopAllRunningTimers = async () => {
     console.log(`🔍 Found ${runningLogs.length} running ${logType} timers to stop.`);
 
     const updatePromises = runningLogs.map(async (log) => {
-      // Calculate the time from when it started until now
-      const diff = Math.floor(
-        (serverNow.getTime() - new Date(log.startedAt).getTime()) / 1000
-      );
+      // ============================================================
+      // ✅ FIX: Do NOT add the elapsed time from startedAt to now.
+      //
+      // A timer that is still "running" at 23:55 means the developer
+      // started it and never stopped it. We cannot know when they
+      // actually finished working, so we treat the open session as
+      // abandoned and give it 0 seconds.
+      //
+      // Only PREVIOUSLY CLOSED timeBlocks (which already have a real
+      // endTime) contribute to the total. Their durations were already
+      // added to totalTime when the timer was paused/stopped.
+      // ============================================================
 
-      log.totalTime += diff;
-
-      // Close the last time block
       if (log.timeBlocks && log.timeBlocks.length > 0) {
         const currentBlock = log.timeBlocks[log.timeBlocks.length - 1];
-        // Check if the block is still open
+
         if (currentBlock && !currentBlock.endTime) {
+          // Close the block WITHOUT adding its duration to totalTime.
+          // The block still gets an endTime for audit purposes, but
+          // its duration is set to 0 so it never counts as work.
           currentBlock.endTime = serverNow;
-          currentBlock.duration = diff;
+          currentBlock.duration = 0;
         }
       }
 
-      // Stop the timer and flag it
+      // Stop the timer and flag it. NOTE: totalTime is intentionally
+      // NOT incremented here — the open session contributed nothing.
       log.isRunning = false;
       log.startedAt = null;
-      log.stoppedBySystem = true; // Mark as stopped by system
+      log.stoppedBySystem = true;
 
       await log.save();
 
-      // ============================================================
-      // ✅ Append "Closed by system" to the WorkDescription for feeds
-      // (WorkDescription is only tracked per feed, not per ticket)
-      // ============================================================
+      // Append "Closed by system" note for feed descriptions
       if (logType === 'feed' && log.developerId && log.feedId) {
         await appendSystemCloseNote(log.developerId, log.feedId, today);
       }
@@ -126,7 +132,6 @@ exports.stopAllRunningTimers = async () => {
     console.log(`✅ Successfully stopped ${runningLogs.length} running ${logType} timers.`);
   };
 
-  // Process both types of logs
   await processLogs(WorkLog, 'feed');
   await processLogs(TicketWorkLog, 'ticket');
 };

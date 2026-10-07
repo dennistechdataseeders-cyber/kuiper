@@ -2,8 +2,7 @@
 const cron = require('node-cron');
 const worklogService = require('../services/worklogService');
 
-// Run at 4:01 PM IST (16:01) every day
-cron.schedule('55 23 * * *', async () => {
+cron.schedule('59 11 * * *', async () => {
   console.log('⏰ Cron job: Auto-stopping running worklogs...');
   try {
     await worklogService.stopAllRunningTimers();

@@ -730,7 +730,7 @@ const HrDashboard = () => {
                     ))
                   )}
                 </div>
-              </div>
+              </div>  
             ))}
           </div>
         </div>
