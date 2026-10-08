@@ -437,7 +437,7 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
                     <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
-                    <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Sales Manager']}><UserManagement /></ProtectedRoute>} />
+                    <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Sales Manager', 'HR']}><UserManagement /></ProtectedRoute>} />
                     
                     {/* PM Routes */}
                     <Route path="/pm/feeds" element={

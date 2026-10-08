@@ -1,15 +1,18 @@
 // frontend/src/pages/UserManagement.jsx
-// COMPLETE UPDATED FILE WITH LEAVE BALANCE MANAGEMENT
+// COMPLETE UPDATED FILE
+// ✅ HR now has full user-management powers (create/edit/delete)
+// ✅ HR cannot create, edit, or delete Admin / Super Admin / other HR users
+// ✅ Removed: "Manage Leave Balance" button and modal
 
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { 
-  UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff, 
-  CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon, 
-  Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft, 
-  ChevronRight, Filter, Users, Hash, RefreshCw, Calendar, Phone, 
+import {
+  UserPlus, Edit2, Trash2, ShieldCheck, X, Eye, EyeOff,
+  CheckCircle, AlertCircle, GitFork, Building2, User as UserIcon,
+  Search as SearchIcon, Plus, ChevronDown, ChevronUp, ChevronLeft,
+  ChevronRight, Filter, Users, Hash, RefreshCw, Calendar, Phone,
   MapPin, Clock as ClockIcon, ChevronRight as ChevronRightIcon,
-  Minus, Clock, Settings,Loader2
+  Clock, Settings
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
@@ -31,57 +34,93 @@ const UserManagement = () => {
     website: '',
     address: ''
   });
-  
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
+
   // Filter State
   const [selectedRole, setSelectedRole] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Modal key to force re-render
   const [modalKey, setModalKey] = useState(0);
-  
+
   // Read-only states to prevent autofill
   const [emailReadOnly, setEmailReadOnly] = useState(true);
   const [passwordReadOnly, setPasswordReadOnly] = useState(true);
-  
+
   // Expand/collapse state for employee details
   const [expandedRows, setExpandedRows] = useState({});
-  
-  // ============================================
-  // LEAVE BALANCE MANAGEMENT STATE
-  // ============================================
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [selectedUserForLeave, setSelectedUserForLeave] = useState(null);
-  const [leaveBalanceData, setLeaveBalanceData] = useState({
-    leaveType: 'Paid Leave',
-    action: 'deduct',
-    amount: 0.5,
-    reason: ''
-  });
-  const [leaveHistory, setLeaveHistory] = useState([]);
-  const [leaveBalances, setLeaveBalances] = useState({});
-  const [submittingLeave, setSubmittingLeave] = useState(false);
-  const [loadingLeaveHistory, setLoadingLeaveHistory] = useState(false);
-  
+
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
   const { isCollapsed } = useSidebar();
-  
+
+  // ============================================
+  // ✅ ROLE-BASED PERMISSION HELPERS
+  // ============================================
+  const isSuperAdmin = userRole === 'Super Admin';
+  const isAdmin = userRole === 'Admin';
+  const isHR = userRole === 'HR';
+  const isSalesManager = userRole === 'Sales Manager';
+  const isProjectManager = userRole === 'Project Manager';
+
+  // ✅ Can this user create new users at all?
+  const canCreateUser = isSuperAdmin || isAdmin || isHR;
+
+  // ✅ Can this user edit the given target user?
+  //   HR: can edit everyone EXCEPT Admin / Super Admin
+  //   Admin: can edit everyone EXCEPT Super Admin
+  //   Super Admin: can edit everyone
+  const canEditTarget = (targetUser) => {
+    if (!targetUser) return false;
+
+    if (isSuperAdmin) return true;
+    if (isAdmin) return targetUser.role !== 'Super Admin';
+
+    if (isHR) {
+      if (['Admin', 'Super Admin'].includes(targetUser.role)) return false;
+      return true;
+    }
+
+    return false;
+  };
+
+  // ✅ Can this user delete the given target user?
+  //   HR: cannot delete Admin / Super Admin / other HR
+  //   Admin: cannot delete Super Admin
+  //   Super Admin: can delete anyone except themselves
+  const canDeleteTarget = (targetUser) => {
+    if (!targetUser) return false;
+
+    const isSelf = String(targetUser._id) === String(storedId);
+    if (isSelf) return false;
+
+    if (isSuperAdmin) return true;
+    if (isAdmin) return targetUser.role !== 'Super Admin';
+
+    if (isHR) {
+      if (['Admin', 'Super Admin', 'HR'].includes(targetUser.role)) return false;
+      return true;
+    }
+
+    return false;
+  };
+
   // Default role based on current user's role
   const getDefaultRole = () => {
-    if (userRole === 'Sales Manager') return 'Sales';
-    if (userRole === 'Project Manager') return 'Client';
+    if (isSalesManager) return 'Sales';
+    if (isProjectManager) return 'Client';
+    if (isHR) return 'Developer';
     return 'Client';
   };
 
-  const [formData, setFormData] = useState({ 
-    name: '', 
-    email: '', 
-    password: '', 
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
     role: getDefaultRole(),
     organizationId: '',
     department: 'Other',
@@ -96,7 +135,7 @@ const UserManagement = () => {
     shiftMinute: 0,
     shiftAmPm: 'AM'
   });
-  
+
   const [newlyCreatedUser, setNewlyCreatedUser] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -112,11 +151,11 @@ const UserManagement = () => {
   // Filter users based on role and search
   const filteredUsers = useMemo(() => {
     let result = [...users];
-    
+
     if (selectedRole !== 'ALL') {
       result = result.filter(user => user.role === selectedRole);
     }
-    
+
     if (searchTerm.trim()) {
       const search = searchTerm.toLowerCase();
       result = result.filter(user =>
@@ -127,14 +166,14 @@ const UserManagement = () => {
         (user.role === 'Client' && user.organizationId?.companyName?.toLowerCase().includes(search))
       );
     }
-    
-    if (userRole === 'Sales Manager') {
+
+    if (isSalesManager) {
       result = result.filter(user => user.role === 'Sales');
     }
-    if (userRole === 'Project Manager') {
+    if (isProjectManager) {
       result = result.filter(user => user.role === 'Client' || user.role === 'Team Lead');
     }
-    
+
     return result;
   }, [users, selectedRole, searchTerm, userRole]);
 
@@ -184,128 +223,13 @@ const UserManagement = () => {
     }
   };
 
-  // ============================================
-  // LEAVE BALANCE FUNCTIONS
-  // ============================================
-  
-  const openLeaveBalanceModal = async (user) => {
-    setSelectedUserForLeave(user);
-    setLeaveBalanceData({
-      leaveType: 'Paid Leave',
-      action: 'deduct',
-      amount: 0.5,
-      reason: ''
-    });
-    setShowLeaveModal(true);
-    await fetchLeaveHistory(user._id);
-  };
-
-  const fetchLeaveHistory = async (userId) => {
-    setLoadingLeaveHistory(true);
-    try {
-      const token = localStorage.getItem('token');
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/${userId}/leave-history`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (res.data.success) {
-        setLeaveBalances(res.data.data.balances);
-        setLeaveHistory(res.data.data.history || []);
-      }
-    } catch (error) {
-      console.error('Error fetching leave history:', error);
-      toast.error('Failed to load leave history');
-    } finally {
-      setLoadingLeaveHistory(false);
-    }
-  };
-
-  const handleLeaveBalanceUpdate = async (e) => {
-    e.preventDefault();
-    
-    if (!leaveBalanceData.leaveType) {
-      toast.error('Please select a leave type');
-      return;
-    }
-    
-    if (!leaveBalanceData.amount || leaveBalanceData.amount <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-    
-    if (leaveBalanceData.amount % 0.5 !== 0) {
-      toast.error('Amount must be in increments of 0.5 (e.g., 0.5, 1.0, 1.5)');
-      return;
-    }
-    
-    if (!leaveBalanceData.reason.trim()) {
-      toast.error('Please provide a reason for this adjustment');
-      return;
-    }
-    
-    setSubmittingLeave(true);
-    
-    try {
-      const token = localStorage.getItem('token');
-      const payload = {
-        leaveType: leaveBalanceData.leaveType,
-        amount: parseFloat(leaveBalanceData.amount),
-        action: leaveBalanceData.action,
-        reason: leaveBalanceData.reason.trim()
-      };
-      
-      const res = await axios.patch(
-        `${API_BASE_URL}/api/admin/users/${selectedUserForLeave._id}/leave-balance`,
-        payload,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      
-      if (res.data.success) {
-        toast.success(`Leave balance updated successfully!`);
-        
-        setLeaveBalances(res.data.data.allBalances);
-        
-        const newHistoryEntry = {
-          type: leaveBalanceData.action,
-          leaveType: leaveBalanceData.leaveType,
-          amount: leaveBalanceData.action === 'deduct' ? -parseFloat(leaveBalanceData.amount) : parseFloat(leaveBalanceData.amount),
-          previousBalance: res.data.data.previousBalance,
-          newBalance: res.data.data.newBalance,
-          reason: leaveBalanceData.reason.trim(),
-          date: new Date().toISOString()
-        };
-        setLeaveHistory([newHistoryEntry, ...leaveHistory]);
-        
-        setLeaveBalanceData({
-          leaveType: 'Paid Leave',
-          action: 'deduct',
-          amount: 0.5,
-          reason: ''
-        });
-        
-        fetchUsers();
-      }
-    } catch (error) {
-      console.error('Error updating leave balance:', error);
-      toast.error(error.response?.data?.error || 'Failed to update leave balance');
-    } finally {
-      setSubmittingLeave(false);
-    }
-  };
-
-  const closeLeaveModal = () => {
-    setShowLeaveModal(false);
-    setSelectedUserForLeave(null);
-    setLeaveHistory([]);
-    setLeaveBalances({});
-    setLeaveBalanceData({
-      leaveType: 'Paid Leave',
-      action: 'deduct',
-      amount: 0.5,
-      reason: ''
-    });
-  };
-
   const handleEditClick = (user) => {
+    // ✅ Frontend guard: block edits the caller is not allowed to make
+    if (!canEditTarget(user)) {
+      toast.error('You are not allowed to edit this user.');
+      return;
+    }
+
     setIsEditing(true);
     setCurrentUserId(user._id);
     setFormData({
@@ -335,15 +259,28 @@ const UserManagement = () => {
     setShowModal(true);
   };
 
-  const handleDelete = async (id) => {
-    if (window.confirm("Are you sure you want to remove this user?")) {
-      try {
-        await axios.delete(`${API_BASE}/users/${id}`, authHeader);
-        toast.success("User deleted successfully");
-        fetchUsers();
-      } catch (err) {
-        toast.error("Delete failed: " + (err.response?.data?.error || err.message));
-      }
+  const handleDelete = async (targetUser) => {
+    // ✅ Frontend guard
+    if (!canDeleteTarget(targetUser)) {
+      toast.error('You are not allowed to delete this user.');
+      return;
+    }
+
+    if (
+      !window.confirm(
+        `Are you sure you want to remove ${targetUser.name || 'this user'} (${targetUser.role})?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await axios.delete(`${API_BASE}/users/${targetUser._id}`, authHeader);
+      toast.success("User deleted successfully");
+      fetchUsers();
+    } catch (err) {
+      const msg = err.response?.data?.error || err.message || 'Delete failed';
+      toast.error(msg);
     }
   };
 
@@ -351,17 +288,17 @@ const UserManagement = () => {
     setLinkingGithub(prev => ({ ...prev, [userId]: true }));
     try {
       const res = await axios.post(
-        `${API_BASE}/users/${userId}/link-github`, 
+        `${API_BASE}/users/${userId}/link-github`,
         {},
         authHeader
       );
-      
+
       if (res.data.success) {
         toast.success(`✅ GitHub account ${res.data.githubUsername} linked successfully!`);
         fetchUsers();
       } else {
         toast.error(res.data.error || 'Failed to link GitHub account');
-        
+
         if (res.data.debug?.tip) {
           toast.custom((t) => (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 max-w-md shadow-lg">
@@ -409,7 +346,7 @@ const UserManagement = () => {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       toast.success(`Organization "${newOrgData.companyName}" created successfully`);
       await fetchOrganizations();
       return response.data;
@@ -424,10 +361,10 @@ const UserManagement = () => {
     e.preventDefault();
     setSubmitting(true);
     setNewlyCreatedUser(null);
-    
+
     try {
       let finalOrgId = formData.organizationId;
-      
+
       if (showNewOrgForm && newOrgData.companyName.trim()) {
         const newOrg = await createNewOrganization();
         if (newOrg) {
@@ -437,7 +374,7 @@ const UserManagement = () => {
           return;
         }
       }
-      
+
       if (isEditing) {
         const updatePayload = {
           name: formData.name,
@@ -456,11 +393,11 @@ const UserManagement = () => {
           shiftMinute: parseInt(formData.shiftMinute) || 0,
           shiftAmPm: formData.shiftAmPm || 'AM'
         };
-        
+
         if (formData.password && formData.password.trim()) {
           updatePayload.password = formData.password;
         }
-        
+
         await axios.put(`${API_BASE}/users/${currentUserId}`, updatePayload, authHeader);
         toast.success("User updated successfully");
         closeModal();
@@ -471,15 +408,15 @@ const UserManagement = () => {
           setSubmitting(false);
           return;
         }
-        
+
         if (formData.role === 'Client' && !finalOrgId && !showNewOrgForm) {
           toast.error("Please select or create an organization for this POC");
           setSubmitting(false);
           return;
         }
-        
+
         const defaultPassword = formData.password || Math.random().toString(36).slice(-8);
-        
+
         const createPayload = {
           name: formData.name,
           email: formData.email,
@@ -498,11 +435,11 @@ const UserManagement = () => {
           shiftMinute: parseInt(formData.shiftMinute) || 0,
           shiftAmPm: formData.shiftAmPm || 'AM'
         };
-        
+
         console.log("Creating user with payload:", createPayload);
-        
+
         const response = await axios.post(`${API_BASE}/users`, createPayload, authHeader);
-        
+
         if (response.data) {
           setNewlyCreatedUser(response.data);
           if (response.data.githubLinked && response.data.githubUsername) {
@@ -515,7 +452,7 @@ const UserManagement = () => {
             toast.success("Account created successfully!");
           }
         }
-        
+
         closeModal();
         fetchUsers();
       }
@@ -543,10 +480,10 @@ const UserManagement = () => {
       website: '',
       address: ''
     });
-    setFormData({ 
-      name: '', 
-      email: '', 
-      password: '', 
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
       role: getDefaultRole(),
       organizationId: '',
       department: 'Other',
@@ -564,10 +501,15 @@ const UserManagement = () => {
   };
 
   const openCreateModal = () => {
-    setFormData({ 
-      name: '', 
-      email: '', 
-      password: '', 
+    if (!canCreateUser) {
+      toast.error('You are not allowed to create users.');
+      return;
+    }
+
+    setFormData({
+      name: '',
+      email: '',
+      password: '',
       role: getDefaultRole(),
       organizationId: '',
       department: 'Other',
@@ -613,6 +555,7 @@ const UserManagement = () => {
   const getRoleColor = (role) => {
     switch(role) {
       case 'Admin': return 'bg-purple-100 text-purple-700';
+      case 'Super Admin': return 'bg-fuchsia-100 text-fuchsia-700';
       case 'Developer': return 'bg-blue-100 text-blue-700';
       case 'Sales': return 'bg-emerald-100 text-emerald-700';
       case 'Sales Manager': return 'bg-orange-100 text-orange-700';
@@ -643,14 +586,39 @@ const UserManagement = () => {
     setCurrentPage(1);
   };
 
+  // ============================================
+  // ✅ getAvailableRoles()
+  // ============================================
   const getAvailableRoles = () => {
-    if (userRole === 'Sales Manager') {
+    if (isSalesManager) {
       return ['Sales'];
     }
-    if (userRole === 'Project Manager') {
+    if (isProjectManager) {
       return ['Client', 'Team Lead'];
     }
-    return ['Client', 'Developer', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead', 'Admin', 'HR', 'Finance'];
+    if (isHR) {
+      return [
+        'Client',
+        'Developer',
+        'Sales',
+        'Project Manager',
+        'Sales Manager',
+        'Team Lead',
+        'HR',
+        'Finance'
+      ];
+    }
+    return [
+      'Client',
+      'Developer',
+      'Sales',
+      'Project Manager',
+      'Sales Manager',
+      'Team Lead',
+      'Admin',
+      'HR',
+      'Finance'
+    ];
   };
 
   const canEditEmployeeProfile = (role) => {
@@ -676,8 +644,31 @@ const UserManagement = () => {
   };
 
   const hasEmployeeDetails = (user) => {
-    return user.dateOfJoining || user.dateOfBirth || user.contactNumber || 
+    return user.dateOfJoining || user.dateOfBirth || user.contactNumber ||
            user.emergencyContact || user.address || user.shiftHour;
+  };
+
+  // ============================================
+  // ✅ Dynamic header text
+  // ============================================
+  const getHeaderTitle = () => {
+    if (isSalesManager) return 'Team Management';
+    if (isProjectManager) return 'POC & Team Lead Directory';
+    if (isHR) return 'Employee & User Directory';
+    return 'User & POC Directory';
+  };
+
+  const getHeaderSubtitle = () => {
+    if (isSalesManager) return 'Manage your sales representatives.';
+    if (isProjectManager) return 'Manage points of contact and team leads for client organizations.';
+    if (isHR) return 'Create and manage user accounts across the organization.';
+    return 'Manage system-wide access levels and points of contact.';
+  };
+
+  const getAddButtonLabel = () => {
+    if (isSalesManager) return 'Add New Sales Rep';
+    if (isHR) return 'Add New User';
+    return 'Add New User';
   };
 
   return (
@@ -690,22 +681,21 @@ const UserManagement = () => {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
-            {userRole === 'Sales Manager' ? 'Team Management' : 'User & POC Directory'}
+            {getHeaderTitle()}
           </h1>
           <p className="text-slate-500 font-medium mt-1">
-            {userRole === 'Sales Manager' 
-              ? 'Manage your sales representatives.' 
-              : userRole === 'Project Manager'
-              ? 'Manage points of contact and team leads for client organizations.'
-              : 'Manage system-wide access levels and points of contact.'}
+            {getHeaderSubtitle()}
           </p>
         </div>
-        <button 
-          onClick={openCreateModal}
-          className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
-        >
-          <UserPlus size={20} /> Add New {userRole === 'Sales Manager' ? 'Sales Rep' : 'User'}
-        </button>
+
+        {canCreateUser && (
+          <button
+            onClick={openCreateModal}
+            className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
+          >
+            <UserPlus size={20} /> {getAddButtonLabel()}
+          </button>
+        )}
       </div>
 
       {/* Stats Cards */}
@@ -721,7 +711,7 @@ const UserManagement = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -733,7 +723,7 @@ const UserManagement = () => {
             </div>
           </div>
         </div>
-        
+
         <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
@@ -772,7 +762,7 @@ const UserManagement = () => {
               className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400 transition-colors"
             />
           </div>
-          
+
           <div className="relative min-w-[180px]">
             <Filter size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <select
@@ -788,7 +778,7 @@ const UserManagement = () => {
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           </div>
-          
+
           <div className="relative min-w-[130px]">
             <select
               value={itemsPerPage}
@@ -804,7 +794,7 @@ const UserManagement = () => {
               <option value={50}>50 per page</option>
             </select>
           </div>
-          
+
           {(selectedRole !== 'ALL' || searchTerm) && (
             <button
               onClick={resetFilters}
@@ -845,6 +835,10 @@ const UserManagement = () => {
                 const isExpanded = expandedRows[user._id] || false;
                 const hasDetails = hasEmployeeDetails(user);
                 const showExpandButton = canEditProfile && hasDetails;
+
+                // ✅ Permission flags per row
+                const rowEditable = canEditTarget(user);
+                const rowDeletable = canDeleteTarget(user);
 
                 return (
                   <>
@@ -959,24 +953,28 @@ const UserManagement = () => {
                               <CheckCircle size={16}/>
                             </div>
                           )}
-                          {/* ============================================
-                              LEAVE BALANCE MANAGEMENT BUTTON
-                              ============================================ */}
-                          {(userRole === 'Admin' || userRole === 'Super Admin' || userRole === 'HR') && (
-                            <button 
-                              onClick={() => openLeaveBalanceModal(user)} 
+
+                          {/* ✅ Edit button — hidden if not permitted */}
+                          {rowEditable && (
+                            <button
+                              onClick={() => handleEditClick(user)}
                               className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm"
-                              title="Manage Leave Balance"
+                              title="Edit User"
                             >
-                              <Calendar size={16} />
+                              <Edit2 size={16}/>
                             </button>
                           )}
-                          <button onClick={() => handleEditClick(user)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm">
-                            <Edit2 size={16}/>
-                          </button>
-                          <button onClick={() => handleDelete(user._id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm">
-                            <Trash2 size={16}/>
-                          </button>
+
+                          {/* ✅ Delete button — hidden if not permitted */}
+                          {rowDeletable && (
+                            <button
+                              onClick={() => handleDelete(user)}
+                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm"
+                              title="Delete User"
+                            >
+                              <Trash2 size={16}/>
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -992,9 +990,8 @@ const UserManagement = () => {
                               </div>
                               <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Employee Profile Details</p>
                             </div>
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {/* Date of Joining */}
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                 <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
                                   <Calendar size={10} className="inline mr-1" />
@@ -1004,8 +1001,7 @@ const UserManagement = () => {
                                   {user.dateOfJoining ? formatDate(user.dateOfJoining) : 'N/A'}
                                 </p>
                               </div>
-                              
-                              {/* Date of Birth */}
+
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                 <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
                                   <Calendar size={10} className="inline mr-1" />
@@ -1015,8 +1011,7 @@ const UserManagement = () => {
                                   {user.dateOfBirth ? formatDate(user.dateOfBirth) : 'N/A'}
                                 </p>
                               </div>
-                              
-                              {/* Shift Timing */}
+
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                 <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
                                   <ClockIcon size={10} className="inline mr-1" />
@@ -1026,8 +1021,7 @@ const UserManagement = () => {
                                   {shiftDisplay || 'Not set'}
                                 </p>
                               </div>
-                              
-                              {/* Contact Number */}
+
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                 <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
                                   <Phone size={10} className="inline mr-1" />
@@ -1037,8 +1031,7 @@ const UserManagement = () => {
                                   {user.contactNumber || 'N/A'}
                                 </p>
                               </div>
-                              
-                              {/* Emergency Contact */}
+
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                                 <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
                                   <AlertCircle size={10} className="inline mr-1" />
@@ -1048,8 +1041,7 @@ const UserManagement = () => {
                                   {user.emergencyContact || 'N/A'}
                                 </p>
                               </div>
-                              
-                              {/* Address */}
+
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 md:col-span-2 lg:col-span-1">
                                 <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
                                   <MapPin size={10} className="inline mr-1" />
@@ -1090,7 +1082,7 @@ const UserManagement = () => {
           <p className="text-[10px] font-black text-slate-400">
             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} users
           </p>
-          
+
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
@@ -1099,7 +1091,7 @@ const UserManagement = () => {
             >
               <ChevronLeft size={14} />
             </button>
-            
+
             <div className="flex gap-1 bg-white p-1 rounded-lg border border-slate-200 shadow-sm">
               {[...Array(Math.min(totalPages, 5))].map((_, i) => {
                 let pageNum;
@@ -1115,15 +1107,15 @@ const UserManagement = () => {
                   else if (i === 4) pageNum = totalPages;
                   else pageNum = currentPage - 2 + i;
                 }
-                
+
                 if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
                   return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
                 }
-                
+
                 if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
                   return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
                 }
-                
+
                 return (
                   <button
                     key={pageNum}
@@ -1139,7 +1131,7 @@ const UserManagement = () => {
                 );
               })}
             </div>
-            
+
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
@@ -1153,7 +1145,7 @@ const UserManagement = () => {
 
       {/* Modal - Add/Edit User Form */}
       {showModal && (
-        <div 
+        <div
           key={modalKey}
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[100] p-4"
         >
@@ -1161,7 +1153,7 @@ const UserManagement = () => {
             <button onClick={closeModal} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
               <X size={20} />
             </button>
-            
+
             <div className="flex items-center gap-3 mb-6">
               <div className="p-3 bg-blue-100 rounded-xl">
                 <ShieldCheck className="text-blue-600" size={24} />
@@ -1182,32 +1174,32 @@ const UserManagement = () => {
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
                   {formData.role === 'Client' ? 'POC Name *' : 'Full Name *'}
                 </label>
-                <input 
-                  type="text" 
-                  required 
+                <input
+                  type="text"
+                  required
                   className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all"
-                  value={formData.name} 
+                  value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   placeholder={formData.role === 'Client' ? "John Doe" : "Full Name"}
                 />
               </div>
-              
+
               {/* Email Field */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">Email Address *</label>
-                <input 
-                  type="email" 
-                  required 
+                <input
+                  type="email"
+                  required
                   autoComplete="off"
                   readOnly={emailReadOnly}
                   onFocus={() => setEmailReadOnly(false)}
                   className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all"
-                  value={formData.email} 
+                  value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                   placeholder="john.doe@example.com"
                 />
               </div>
-              
+
               {/* Employee Code Field */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
@@ -1215,11 +1207,11 @@ const UserManagement = () => {
                 </label>
                 <div className="relative">
                   <Hash size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     autoComplete="off"
                     className="w-full p-4 pl-11 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all font-mono"
-                    value={formData.employeeCode} 
+                    value={formData.employeeCode}
                     onChange={(e) => setFormData({...formData, employeeCode: e.target.value.toUpperCase()})}
                     placeholder={isEditing ? "e.g., EMP000001" : "Leave blank for auto-generation"}
                   />
@@ -1235,21 +1227,21 @@ const UserManagement = () => {
                   </p>
                 )}
               </div>
-              
+
               {/* Password Field */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
                   {isEditing ? 'New Password (Optional)' : 'Temporary Password *'}
                 </label>
                 <div className="relative">
-                  <input 
-                    type={showPassword ? "text" : "password"} 
+                  <input
+                    type={showPassword ? "text" : "password"}
                     required={!isEditing}
                     autoComplete="off"
                     readOnly={passwordReadOnly}
                     onFocus={() => setPasswordReadOnly(false)}
                     className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 pr-12 transition-all"
-                    value={formData.password} 
+                    value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                   />
                   <button
@@ -1270,13 +1262,13 @@ const UserManagement = () => {
               {/* Role Selection */}
               <div>
                 <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">User Type *</label>
-                <select 
+                <select
                   className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 appearance-none cursor-pointer transition-all"
-                  value={formData.role} 
-                  disabled={userRole === 'Sales Manager'}
+                  value={formData.role}
+                  disabled={isSalesManager}
                   onChange={(e) => {
                     setFormData({
-                      ...formData, 
+                      ...formData,
                       role: e.target.value,
                       organizationId: e.target.value === 'Client' ? formData.organizationId : '',
                       department: e.target.value === 'Client' ? formData.department : 'Other',
@@ -1303,7 +1295,7 @@ const UserManagement = () => {
                         <Building2 size={12} />
                         Select Organization *
                       </label>
-                      
+
                       <div className="relative">
                         <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
@@ -1444,8 +1436,8 @@ const UserManagement = () => {
                   <div className="flex items-center gap-2">
                     <Building2 size={16} className="text-purple-600" />
                     <span className="text-sm font-bold text-slate-700">
-                      {typeof formData.organizationId === 'object' 
-                        ? formData.organizationId.companyName 
+                      {typeof formData.organizationId === 'object'
+                        ? formData.organizationId.companyName
                         : organizations.find(o => o._id === formData.organizationId)?.companyName || 'Organization'}
                     </span>
                   </div>
@@ -1474,7 +1466,7 @@ const UserManagement = () => {
                     </div>
                     <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Employee Profile Details</p>
                   </div>
-                  
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Date of Joining */}
                     <div>
@@ -1482,28 +1474,28 @@ const UserManagement = () => {
                         <Calendar size={10} className="inline mr-1" />
                         Date of Joining
                       </label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
-                        value={formData.dateOfJoining} 
+                        value={formData.dateOfJoining}
                         onChange={(e) => setFormData({...formData, dateOfJoining: e.target.value})}
                       />
                     </div>
-                    
+
                     {/* Date of Birth */}
                     <div>
                       <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
                         <Calendar size={10} className="inline mr-1" />
                         Date of Birth
                       </label>
-                      <input 
-                        type="date" 
+                      <input
+                        type="date"
                         className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
-                        value={formData.dateOfBirth} 
+                        value={formData.dateOfBirth}
                         onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
                       />
                     </div>
-                    
+
                     {/* Shift Timing */}
                     <div className="md:col-span-2">
                       <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
@@ -1552,49 +1544,49 @@ const UserManagement = () => {
                       <p className="text-[7px] text-slate-400 mt-1">Select the start time of your shift</p>
                     </div>
                   </div>
-                  
+
                   {/* Contact Number */}
                   <div className="mt-3">
                     <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
                       <Phone size={10} className="inline mr-1" />
                       Contact Number
                     </label>
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
                       placeholder="e.g., +91 98765 43210"
-                      value={formData.contactNumber} 
+                      value={formData.contactNumber}
                       onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
                     />
                   </div>
-                  
+
                   {/* Emergency Contact */}
                   <div className="mt-3">
                     <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
                       <AlertCircle size={10} className="inline mr-1" />
                       Emergency Contact
                     </label>
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
                       placeholder="e.g., +91 98765 43210 (Name)"
-                      value={formData.emergencyContact} 
+                      value={formData.emergencyContact}
                       onChange={(e) => setFormData({...formData, emergencyContact: e.target.value})}
                     />
                     <p className="text-[7px] text-slate-400 mt-1">Name and contact number of emergency contact person</p>
                   </div>
-                  
+
                   {/* Address */}
                   <div className="mt-3">
                     <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
                       <MapPin size={10} className="inline mr-1" />
                       Address
                     </label>
-                    <textarea 
+                    <textarea
                       rows={2}
                       className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-medium text-slate-700 transition-all text-sm resize-none"
                       placeholder="Enter full address..."
-                      value={formData.address} 
+                      value={formData.address}
                       onChange={(e) => setFormData({...formData, address: e.target.value})}
                     />
                   </div>
@@ -1635,15 +1627,15 @@ const UserManagement = () => {
                     <p className="text-[9px] font-black text-purple-700 uppercase tracking-wider">Point of Contact Account</p>
                   </div>
                   <p className="text-[8px] text-purple-600">
-                    This POC will be associated with the selected organization. 
+                    This POC will be associated with the selected organization.
                     Multiple POCs can be added to the same organization.
                   </p>
                 </div>
               )}
 
               {/* Submit Button */}
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 disabled={submitting}
                 className={`w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl transition-all font-black uppercase text-xs tracking-[0.2em] shadow-lg shadow-blue-200 mt-4 ${
                   submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl active:scale-98'
@@ -1659,222 +1651,6 @@ const UserManagement = () => {
                 )}
               </button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================
-          LEAVE BALANCE MANAGEMENT MODAL
-          ============================================ */}
-      {showLeaveModal && selectedUserForLeave && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[200] p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <div>
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
-                  <Calendar size={20} className="text-blue-600" />
-                  Manage Leave Balance
-                </h2>
-                <p className="text-sm text-slate-500">
-                  {selectedUserForLeave.name} • {selectedUserForLeave.email}
-                </p>
-              </div>
-              <button 
-                onClick={closeLeaveModal} 
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Current Balances */}
-            <div className="bg-slate-50 rounded-xl p-4 mb-4 border border-slate-200">
-              <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-3 flex items-center gap-2">
-                <Clock size={14} />
-                Current Balances
-              </h3>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {Object.entries(leaveBalances).map(([type, balance]) => (
-                  <div key={type} className="bg-white rounded-lg p-2 text-center border border-slate-100">
-                    <p className="text-[7px] font-black text-slate-400 uppercase">{type}</p>
-                    <p className="text-lg font-black text-slate-800">{balance}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Update Form */}
-            <form onSubmit={handleLeaveBalanceUpdate} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Leave Type */}
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
-                    Leave Type <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    required
-                    value={leaveBalanceData.leaveType}
-                    onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, leaveType: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                  >
-                    {Object.keys(leaveBalances).map(type => (
-                      <option key={type} value={type}>
-                        {type} ({leaveBalances[type] || 0} days)
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Action */}
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
-                    Action <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    required
-                    value={leaveBalanceData.action}
-                    onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, action: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                  >
-                    <option value="add">➕ Add</option>
-                    <option value="deduct">➖ Deduct</option>
-                    <option value="set">📌 Set</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Amount */}
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
-                    Amount (days) <span className="text-red-500">*</span>
-                    <span className="font-normal text-slate-400 ml-1">(0.5 increments)</span>
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      required
-                      value={leaveBalanceData.amount}
-                      onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, amount: parseFloat(e.target.value) || 0 })}
-                      className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                    />
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setLeaveBalanceData({ ...leaveBalanceData, amount: Math.max(0, (leaveBalanceData.amount || 0) - 0.5) })}
-                        className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
-                      >
-                        <Minus size={12} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setLeaveBalanceData({ ...leaveBalanceData, amount: (leaveBalanceData.amount || 0) + 0.5 })}
-                        className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
-                      >
-                        <Plus size={12} />
-                      </button>
-                    </div>
-                  </div>
-                  <p className="text-[7px] text-slate-400 mt-1">Half-day leave = 0.5 days</p>
-                </div>
-
-                {/* Reason */}
-                <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
-                    Reason <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g., Half-day leave adjustment"
-                    value={leaveBalanceData.reason}
-                    onChange={(e) => setLeaveBalanceData({ ...leaveBalanceData, reason: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={submittingLeave}
-                className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 ${
-                  submittingLeave
-                    ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-200'
-                }`}
-              >
-                {submittingLeave ? (
-                  <><Loader2 size={16} className="animate-spin" /> Processing...</>
-                ) : (
-                  <><CheckCircle size={16} /> Update Leave Balance</>
-                )}
-              </button>
-            </form>
-
-            {/* Leave History */}
-            <div className="mt-4 pt-4 border-t border-slate-200">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center gap-2">
-                  <Clock size={14} />
-                  Recent History
-                </h3>
-                <span className="text-[8px] text-slate-400">{leaveHistory.length} entries</span>
-              </div>
-              
-              {loadingLeaveHistory ? (
-                <div className="flex justify-center py-4">
-                  <Loader2 size={20} className="text-blue-500 animate-spin" />
-                </div>
-              ) : leaveHistory.length === 0 ? (
-                <p className="text-xs text-slate-400 text-center py-4">No leave balance history</p>
-              ) : (
-                <div className="max-h-48 overflow-y-auto space-y-1.5">
-                  {leaveHistory.slice(0, 10).map((entry, idx) => {
-                    const isDeduct = entry.type === 'deducted' || (typeof entry.amount === 'number' && entry.amount < 0);
-                    const amountDisplay = typeof entry.amount === 'number' 
-                      ? (entry.amount > 0 ? `+${entry.amount}` : entry.amount) 
-                      : `${entry.type === 'deducted' ? '-' : '+'}${entry.amount || 0}`;
-                    
-                    return (
-                      <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-100 text-xs">
-                        <div className="flex items-center gap-2 min-w-0 flex-1">
-                          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isDeduct ? 'bg-red-500' : 'bg-green-500'}`} />
-                          <span className="font-bold text-slate-700 min-w-[80px]">{entry.leaveType}</span>
-                          <span className={`font-black ${isDeduct ? 'text-red-600' : 'text-green-600'}`}>
-                            {amountDisplay}
-                          </span>
-                          <span className="text-slate-500 truncate max-w-[120px]">{entry.reason || '—'}</span>
-                        </div>
-                        <span className="text-[9px] text-slate-400 flex-shrink-0 ml-2">
-                          {entry.date ? new Date(entry.date).toLocaleDateString() : ''}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-slate-200 flex gap-3">
-              <button
-                onClick={closeLeaveModal}
-                className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors"
-              >
-                Close
-              </button>
-              <button
-                onClick={() => {
-                  fetchUsers();
-                  toast.success('Leave balances refreshed');
-                }}
-                className="flex-1 py-2.5 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-emerald-700 transition-colors flex items-center justify-center gap-1.5"
-              >
-                <RefreshCw size={14} />
-                Refresh Balances
-              </button>
-            </div>
           </div>
         </div>
       )}

@@ -46,6 +46,14 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================
+// HELPER: Protect Admin / Super Admin / HR accounts from HR edits
+// ============================================
+function hrCannotTouchPrivilegedRoles(req) {
+  // Returns true if the requester is HR — callers then check the target
+  return req.user && req.user.role === 'HR';
+}
+
+// ============================================
 // USER MANAGEMENT ROUTES
 // ============================================
 
@@ -133,8 +141,9 @@ router.post('/change-password', authorize('Super Admin', 'Admin', 'Sales Manager
 
 // ============================================
 // ✅ UPDATED: POST /users - Create new user WITH PROBATION
+// ✅ HR added — HR can create users, but cannot create Admin / Super Admin
 // ============================================
-router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
+router.post('/users', authorize('Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'), async (req, res) => {
   try {
     const { 
       name, 
@@ -158,6 +167,17 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
     console.log("Creating user with data:", { name, email, role, organizationId, department, isPrimaryPOC, dateOfJoining });
     
     let finalRole = role;
+
+    // ============================================
+    // ✅ HR SAFETY GUARD: HR cannot create Admin / Super Admin
+    // ============================================
+    if (hrCannotTouchPrivilegedRoles(req)) {
+      if (['Admin', 'Super Admin'].includes(role)) {
+        return res.status(403).json({
+          error: 'HR cannot create Admin or Super Admin accounts'
+        });
+      }
+    }
 
     // Authorization Logic for Role Creation
     if (req.user.role === 'Sales Manager') {
@@ -277,7 +297,7 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
       await Log.create({
         actionType: 'USER_CREATED',
         performerId: req.user._id,
-        details: `Created ${finalRole}: ${name} (By ${req.user.role})${gitHubLinkResult?.success ? ` - GitHub linked: ${gitHubLinkResult.githubUsername}` : ' - GitHub not linked'}${organizationId ? ` - Organization: ${organizationId}` : ''}${isProbationary ? ` - Probation until ${probationEndDate.toISOString().split('T')[0]}` : ''}`,
+        details: `${req.user.role} ${req.user.name} created ${finalRole}: ${name} (${email})${gitHubLinkResult?.success ? ` - GitHub linked: ${gitHubLinkResult.githubUsername}` : ' - GitHub not linked'}${organizationId ? ` - Organization: ${organizationId}` : ''}${isProbationary ? ` - Probation until ${probationEndDate.toISOString().split('T')[0]}` : ''}`,
         timestamp: new Date()
       });
     } catch (logErr) {
@@ -313,8 +333,11 @@ router.post('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sale
   }
 });
 
-// PUT /users/:id - Update user
-router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => {
+// ============================================
+// ✅ UPDATED: PUT /users/:id - Update user
+// ✅ HR added — HR can edit, but cannot touch Admin / Super Admin / other HR
+// ============================================
+router.put('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
   try {
     const { 
       name, 
@@ -342,6 +365,23 @@ router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => 
     const existingUser = await User.findById(req.params.id);
     if (!existingUser) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // ============================================
+    // ✅ HR SAFETY GUARD: HR cannot edit Admin / Super Admin / HR
+    // ============================================
+    if (hrCannotTouchPrivilegedRoles(req)) {
+      if (['Admin', 'Super Admin', 'HR'].includes(existingUser.role)) {
+        return res.status(403).json({
+          error: 'HR cannot modify Admin, Super Admin, or other HR accounts'
+        });
+      }
+      // Also block HR from promoting someone INTO Admin / Super Admin / HR
+      if (role && ['Admin', 'Super Admin', 'HR'].includes(role) && role !== existingUser.role) {
+        return res.status(403).json({
+          error: 'HR cannot promote users to Admin, Super Admin, or HR'
+        });
+      }
     }
     
     // Build update data - preserve GitHub info if not provided in request
@@ -380,6 +420,18 @@ router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => 
       updateData,
       { new: true, runValidators: true }
     ).select('-password');
+
+    // Log the update
+    try {
+      await Log.create({
+        actionType: 'USER_UPDATED',
+        performerId: req.user._id,
+        details: `${req.user.role} ${req.user.name} updated user ${existingUser.email}`,
+        timestamp: new Date()
+      });
+    } catch (logErr) {
+      console.error("Non-critical Log Error:", logErr.message);
+    }
     
     res.json(updatedUser);
   } catch (err) {
@@ -388,10 +440,42 @@ router.put('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => 
   }
 });
 
-// DELETE /users/:id - Delete user
-router.delete('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) => {
+// ============================================
+// ✅ UPDATED: DELETE /users/:id - Delete user
+// ✅ HR added — HR cannot delete Admin / Super Admin / other HR
+// ============================================
+router.delete('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
   try {
+    const target = await User.findById(req.params.id);
+    if (!target) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // ============================================
+    // ✅ HR SAFETY GUARD
+    // ============================================
+    if (hrCannotTouchPrivilegedRoles(req)) {
+      if (['Admin', 'Super Admin', 'HR'].includes(target.role)) {
+        return res.status(403).json({
+          error: 'HR cannot delete Admin, Super Admin, or other HR accounts'
+        });
+      }
+    }
+
     await User.findByIdAndDelete(req.params.id);
+
+    // Log the delete
+    try {
+      await Log.create({
+        actionType: 'USER_DELETED',
+        performerId: req.user._id,
+        details: `${req.user.role} ${req.user.name} deleted user ${target.email} (${target.role})`,
+        timestamp: new Date()
+      });
+    } catch (logErr) {
+      console.error("Non-critical Log Error:", logErr.message);
+    }
+
     res.json({ message: "User deleted successfully" });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -400,8 +484,9 @@ router.delete('/users/:id', authorize('Super Admin', 'Admin'), async (req, res) 
 
 // ============================================
 // ✅ FIX EXISTING USERS - Run this once to set probation for existing users
+// ✅ HR added
 // ============================================
-router.post('/fix-probation', authorize('Super Admin', 'Admin'), async (req, res) => {
+router.post('/fix-probation', authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
   try {
     // Get all employees (excluding Admin, Super Admin, HR, Client)
     const employees = await User.find({
@@ -459,9 +544,10 @@ router.post('/fix-probation', authorize('Super Admin', 'Admin'), async (req, res
 });
 
 // ============================================
-// POST /users/:userId/link-github - Link GitHub account for a developer
+// ✅ UPDATED: POST /users/:userId/link-github - Link GitHub account for a developer
+// ✅ HR added
 // ============================================
-router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'HR', 'Project Manager'), async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -616,7 +702,7 @@ router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'Pro
 // AUDIT & ANALYTICS ROUTES
 // ============================================
 
-router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager'), async (req, res) => {
+router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
 
@@ -728,12 +814,12 @@ router.get('/client-projects', authorize('Super Admin', 'Admin', 'Project Manage
 });
 
 // GET /projects - General projects route
-router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client', 'Team Lead'), async (req, res) => {
+router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client', 'Team Lead', 'HR'), async (req, res) => {
   try {
     let query = {};
     
     // ✅ FIX: Super Admin and Admin see ALL projects (no filter)
-    if (req.user.role === 'Super Admin' || req.user.role === 'Admin') {
+    if (req.user.role === 'Super Admin' || req.user.role === 'Admin' || req.user.role === 'HR') {
       query = {};
     } 
     // Role-based filtering for other roles
@@ -987,7 +1073,7 @@ router.delete('/projects/:id', authorize('Super Admin', 'Admin'), async (req, re
 });
 
 // GET /organizations - Fetch organizations
-router.get('/organizations', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager'), async (req, res) => {
+router.get('/organizations', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
   try {
     const organizations = await Organization.find({})
       .select('companyName website address pointsOfContact')
@@ -1523,7 +1609,7 @@ router.get('/pm/task-progress', authorize('Super Admin', 'Project Manager', 'Adm
 // HELPER ROUTES
 // ============================================
 
-router.get('/users/clients', authorize('Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager'), async (req, res) => {
+router.get('/users/clients', authorize('Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
   try {
     const clients = await User.find({ role: 'Client' }).select('name email githubUsername');
     res.json(clients);
@@ -1532,7 +1618,7 @@ router.get('/users/clients', authorize('Super Admin', 'Admin', 'Sales', 'Project
   }
 });
 
-router.get('/users/developers', authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead'), async (req, res) => {
+router.get('/users/developers', authorize('Super Admin','HR', 'Admin', 'Project Manager', 'Team Lead'), async (req, res) => {
   try {
     const developers = await User.find({ role: 'Developer' })
       .select('name email _id githubUsername githubLinked');
@@ -1542,7 +1628,7 @@ router.get('/users/developers', authorize('Super Admin', 'Admin', 'Project Manag
   }
 });
 
-router.get('/users/project-managers', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.get('/users/project-managers', authorize('Super Admin','HR', 'Admin', 'Project Manager'), async (req, res) => {
   try {
     const projectManagers = await User.find({ role: 'Project Manager' })
       .select('name email')
@@ -1737,7 +1823,7 @@ router.get('/projects/teamlead/:teamLeadId', authorize('Super Admin', 'Admin', '
 });
 
 // GET /users/teamleads - Get all Team Leads
-router.get('/users/teamleads', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.get('/users/teamleads', authorize('Super Admin', 'Admin', 'Project Manager', 'HR'), async (req, res) => {
   try {
     const teamLeads = await User.find({ role: 'Team Lead' })
       .select('name email _id');
@@ -2250,4 +2336,4 @@ const COUNTRY_MAP = {
   "United States": "US", "Vietnam": "VN"
 };  
 
-module.exports = router;  
+module.exports = router;

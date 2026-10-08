@@ -557,7 +557,9 @@ const Sidebar = () => {
 
     HR: [
       { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
+      { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
       { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
+      
       { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
       { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
       { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
