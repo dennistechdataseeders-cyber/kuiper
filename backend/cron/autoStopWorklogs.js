@@ -2,7 +2,7 @@
 const cron = require('node-cron');
 const worklogService = require('../services/worklogService');
 
-cron.schedule('59 11 * * *', async () => {
+cron.schedule('55 23 * * *', async () => {
   console.log('⏰ Cron job: Auto-stopping running worklogs...');
   try {
     await worklogService.stopAllRunningTimers();

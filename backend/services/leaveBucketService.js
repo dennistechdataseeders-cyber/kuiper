@@ -1,11 +1,13 @@
 // backend/services/leaveBucketService.js - COMPLETE FIXED FILE
 // INCLUDES: Email notifications to HR + dhaval@techdataseeders.in
+// ✅ NEW: Email notification to employee when HR adjusts leave balance
 
 const LeaveBucket = require('../models/LeaveBucket');
 const LeaveApplication = require('../models/LeaveApplication');
 const User = require('../models/User');
 const sendEmail = require('./zohoMailer');
 const mongoose = require('mongoose');
+const { getLeaveBalanceAdjustedTemplate } = require('../templates/leaveBalanceEmailTemplates');
 
 class LeaveBucketService {
 
@@ -248,7 +250,7 @@ class LeaveBucketService {
     await leaveApplication.save();
 
     // ============================================
-    // ✅ FIX: SEND EMAIL NOTIFICATION TO HR + DHAVAL
+    // ✅ SEND EMAIL NOTIFICATION TO HR + DHAVAL
     // ============================================
     await this.sendLeaveRequestEmail(leaveApplication, employee);
 
@@ -264,31 +266,25 @@ class LeaveBucketService {
   }
 
   // ============================================
-  // ✅ NEW: Send leave request email to HR + Dhaval
+  // ✅ Send leave request email to HR + Dhaval
   // ============================================
   async sendLeaveRequestEmail(leaveApplication, employee) {
     try {
-      // Get all active HR users with valid emails
       const hrUsers = await User.find({
         role: 'HR',
         isActive: true,
         email: { $ne: null, $ne: '' }
       }).select('email name');
 
-      // ============================================
-      // ✅ ADD DHAVAL TO THE RECIPIENT LIST
-      // ============================================
       const additionalRecipients = [
         { email: 'dhaval@techdataseeders.in', name: 'Dhaval' }
       ];
 
-      // Combine HR users + Additional recipients
       const allRecipients = [
         ...hrUsers.map(hr => ({ email: hr.email, name: hr.name })),
         ...additionalRecipients
       ];
 
-      // Remove duplicates (in case Dhaval is also in HR list)
       const uniqueRecipients = [];
       const seenEmails = new Set();
       for (const recipient of allRecipients) {
@@ -315,7 +311,6 @@ class LeaveBucketService {
 
       const isProbationary = employee.isProbationary || false;
 
-      // Generate a single email HTML template
       const emailHtml = `
 <!DOCTYPE html>
 <html>
@@ -407,8 +402,7 @@ class LeaveBucketService {
 
               <!-- Reason -->
               <div style="background:#f8fafc; padding:16px 20px; border-radius:12px; margin-bottom:20px;">
-                <div style="font-size:10px; font-weight:700; color:#64748
-                                <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Reason</div>
+                <div style="font-size:10px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:0.06em; margin-bottom:6px;">Reason</div>
                 <p style="margin:0; font-size:13px; line-height:1.5; color:#334155;">${leaveApplication.reason}</p>
               </div>
 
@@ -435,7 +429,6 @@ class LeaveBucketService {
 </html>
       `;
 
-      // Send to each recipient (HR + Dhaval)
       let sentCount = 0;
       let failedCount = 0;
 
@@ -453,7 +446,6 @@ class LeaveBucketService {
           failedCount++;
         }
 
-        // Small delay between emails to avoid rate limiting
         if (uniqueRecipients.length > 1) {
           await new Promise(resolve => setTimeout(resolve, 300));
         }
@@ -463,7 +455,6 @@ class LeaveBucketService {
 
     } catch (error) {
       console.error('❌ Error sending leave request email:', error.message);
-      // Don't throw - email failure shouldn't break the leave application
     }
   }
 
@@ -620,6 +611,9 @@ class LeaveBucketService {
     };
   }
 
+  // ============================================
+  // ✅ UPDATED: adjustBalance now sends email to the employee
+  // ============================================
   async adjustBalance(employeeId, newBalance, reason, adjustedBy) {
     if (newBalance === undefined || newBalance === null || isNaN(newBalance)) {
       throw new Error('A valid newBalance is required');
@@ -633,13 +627,14 @@ class LeaveBucketService {
 
     const bucket = await this.getOrCreateBucket(employeeId);
     const previousBalance = bucket.totalBalance;
+    const change = Number((newBalance - previousBalance).toFixed(2));
 
     bucket.totalBalance = newBalance;
     bucket.adjustmentHistory = bucket.adjustmentHistory || [];
     bucket.adjustmentHistory.push({
       previousBalance,
       newBalance,
-      change: newBalance - previousBalance,
+      change,
       reason: reason.trim(),
       adjustedBy,
       adjustedAt: new Date()
@@ -647,11 +642,57 @@ class LeaveBucketService {
 
     await bucket.save();
 
+    // ============================================
+    // ✅ SEND EMAIL NOTIFICATION TO EMPLOYEE
+    // ============================================
+    try {
+      const employee = await User.findById(employeeId).select('name email');
+      const adjustedByUser = await User.findById(adjustedBy).select('name');
+
+      if (employee && employee.email) {
+        const frontendUrl = process.env.FRONTEND_URL || 'https://kuiperapp.co.in';
+
+        const emailHtml = getLeaveBalanceAdjustedTemplate({
+          employeeName: employee.name,
+          previousBalance,
+          newBalance,
+          change,
+          reason: reason.trim(),
+          adjustedByName: adjustedByUser?.name || 'HR Team',
+          adjustedAt: new Date(),
+          frontendUrl
+        });
+
+        const subjectLine =
+          change > 0
+            ? `🎁 Your Paid Leave balance has been increased by ${change} day${change === 1 ? '' : 's'}`
+            : change < 0
+            ? `⚠️ Your Paid Leave balance has been reduced by ${Math.abs(change)} day${Math.abs(change) === 1 ? '' : 's'}`
+            : `📋 Your Paid Leave balance has been updated`;
+
+        await sendEmail({
+          to: employee.email,
+          subject: subjectLine,
+          html: emailHtml
+        });
+
+        console.log(
+          `📧 Leave balance adjustment email sent to ${employee.email} ` +
+          `(${previousBalance} → ${newBalance}, change: ${change})`
+        );
+      } else {
+        console.warn(`⚠️ Could not send balance adjustment email — employee ${employeeId} has no email`);
+      }
+    } catch (emailError) {
+      // Don't throw — the balance was already updated successfully.
+      console.error('❌ Failed to send leave balance adjustment email:', emailError.message);
+    }
+
     return {
       bucket,
       previousBalance,
       newBalance,
-      change: newBalance - previousBalance
+      change
     };
   }
 

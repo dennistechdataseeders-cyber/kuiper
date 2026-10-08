@@ -1,4 +1,5 @@
 // backend/controllers/leaveBucketController.js - COMPLETE FIXED FILE
+// ✅ UPDATED: adjustEmployeeBalance now returns a message noting the employee was notified
 
 const leaveBucketService = require('../services/leaveBucketService');
 const LeaveApplication = require('../models/LeaveApplication');
@@ -60,12 +61,10 @@ exports.applyLeave = async (req, res) => {
     const { leaveType, startDate, endDate, isHalfDay, halfDayType, reason } = req.body;
     const userId = req.user._id;
 
-    // Validate inputs
     if (!leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({ error: 'All fields are required' });
     }
 
-    // Only allow Paid Leave and Unpaid Leave
     if (!['Paid Leave', 'Unpaid Leave'].includes(leaveType)) {
       return res.status(400).json({ error: 'Invalid leave type. Only Paid Leave and Unpaid Leave are allowed.' });
     }
@@ -80,9 +79,6 @@ exports.applyLeave = async (req, res) => {
       reason
     );
 
-    // ============================================
-    // ✅ Additional notification logging
-    // ============================================
     try {
       const employee = await User.findById(userId).select('name email');
       console.log(`📋 Leave application submitted by ${employee.name}: ${leaveType} from ${startDate} to ${endDate}`);
@@ -203,7 +199,6 @@ exports.getEmployeeLeaveSummary = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
@@ -233,7 +228,6 @@ exports.getEmployeeLeaveSummary = async (req, res) => {
 // ============================================
 exports.forceAccrue = async (req, res) => {
   try {
-    // Only allow in development or with specific permission
     const result = await leaveBucketService.accrueMonthlyLeaves();
 
     res.json({
@@ -284,8 +278,10 @@ exports.getAllEmployeeBuckets = async (req, res) => {
 };
 
 // ============================================
-// HR/ADMIN: ADJUST AN EMPLOYEE'S BALANCE (REWARD / PENALTY)
+// ✅ HR/ADMIN: ADJUST AN EMPLOYEE'S BALANCE (REWARD / PENALTY)
 // Body: { newBalance: number, reason: string }
+// Now triggers an email to the employee with prev/current balance,
+// change amount, reason, and who adjusted it.
 // ============================================
 exports.adjustEmployeeBalance = async (req, res) => {
   try {
@@ -313,6 +309,7 @@ exports.adjustEmployeeBalance = async (req, res) => {
 
     res.json({
       success: true,
+      message: 'Leave balance updated and employee notified by email',
       data: result
     });
   } catch (error) {
