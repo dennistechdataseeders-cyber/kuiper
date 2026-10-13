@@ -1,9 +1,12 @@
-// backend/routes/workReportRoutes.js - UPDATED
+// backend/routes/workReportRoutes.js - UPDATED (v2)
 // ✅ Aligns timing with the Worklog page:
 //    - Respects `stoppedBySystem` (auto-stop at 23:55 IST = 0 seconds)
-//    - Respects explicit `duration` on closed blocks
+//    - Skips the LAST block when the log was auto-stopped by the system,
+//      because the cron fabricates its endTime but stores duration=0.
+//    - Fallback heuristic: any closed block with duration=0 and a span
+//      > 5 seconds is treated as system-zeroed (covers legacy records).
 //    - Only counts an "open" block up to `now` if it belongs to TODAY and
-//      the timer is genuinely still running (not abandoned)
+//      the timer is genuinely still running (not abandoned).
 
 const express = require('express');
 const router = express.Router();
@@ -23,14 +26,15 @@ const { authorize } = require('../middleware/roleCheck');
 // ============================================
 // HELPER: Calculate NET time from time blocks
 //
-// Rules (matched to the Worklog frontend):
-//   1. Closed block (startTime + endTime) → use its timestamps.
-//   2. Open block on a log where `stoppedBySystem === true`
-//      → treat as closed; use stored `duration` (usually 0).
-//   3. Open block on a log where `isRunning === true` AND
-//      the log is for TODAY → count up to `now`.
-//   4. Open block on a log where `isRunning === false` AND
-//      no endTime AND not system-stopped → ABANDONED. Counts as 0.
+// Rules:
+//   1. If the log was stoppedBySystem, skip the LAST block entirely —
+//      the cron sets endTime on it but zeroes its duration. Counting
+//      its span would incorrectly credit the whole runaway period.
+//   2. Closed block (startTime + endTime) → use its timestamps,
+//      UNLESS duration=0 with a span > 5s (system-zeroed legacy block).
+//   3. Open block on a log where `isRunning === true` AND the log is
+//      for TODAY → count up to `now`.
+//   4. Open block otherwise (abandoned, past date) → contributes 0.
 // ============================================
 function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedBySystem) {
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
@@ -46,30 +50,50 @@ function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedB
 
   const intervals = [];
   const now = Date.now();
+  const lastIndex = timeBlocks.length - 1;
 
-  timeBlocks.forEach(block => {
+  timeBlocks.forEach((block, idx) => {
     if (!block || !block.startTime) return;
 
     const start = new Date(block.startTime).getTime();
     if (!Number.isFinite(start)) return;
 
+    // ============================================================
+    // ✅ THE FIX: if the whole log was auto-stopped by the system,
+    //    the LAST block's endTime was fabricated by the cron and its
+    //    duration is 0. Skip it BEFORE the closed-block branch can
+    //    count the (huge) span.
+    //
+    //    We only skip the last block — earlier blocks were closed by
+    //    the developer and represent real work that must still count.
+    // ============================================================
+    if (stoppedBySystem && idx === lastIndex) {
+      return;
+    }
+
     // ---------- CLOSED BLOCK ----------
     if (block.endTime) {
       const end = new Date(block.endTime).getTime();
-      if (Number.isFinite(end) && end > start) {
-        intervals.push({ start, end });
+      if (!Number.isFinite(end) || end <= start) return;
+
+      const storedDuration = Number(block.duration) || 0;
+      const spanSeconds = Math.floor((end - start) / 1000);
+
+      // Legacy safety net: a closed block with duration=0 but a span
+      // > 5s is a system-zeroed block that predates the flag.
+      if (storedDuration === 0 && spanSeconds > 5) {
+        return;
       }
+
+      intervals.push({ start, end });
       return;
     }
 
     // ---------- OPEN BLOCK ----------
-    // If the log was auto-stopped by the system, this open block's
-    // duration is 0 by design. Do NOT count it as "still running".
     if (stoppedBySystem) {
       return; // contributes 0
     }
 
-    // If the log is running AND it's a log for today → count up to now
     if (isRunning && logDate === todayStr) {
       intervals.push({ start, end: now });
       return;
@@ -210,7 +234,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
     const feedKey = log.feedId._id.toString();
 
-    // ✅ NEW: pass stoppedBySystem + logDate
     const netSeconds = calculateNetSeconds(
       log.timeBlocks,
       log.isRunning,
@@ -271,7 +294,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
     const ticketKey = log.ticketId._id.toString();
 
-    // ✅ NEW: pass stoppedBySystem + logDate
     const netSeconds = calculateNetSeconds(
       log.timeBlocks,
       log.isRunning,
