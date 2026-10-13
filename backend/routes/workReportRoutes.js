@@ -1,5 +1,5 @@
-// backend/routes/workReportRoutes.js - UPDATED (v2)
-// ✅ Aligns timing with the Worklog page:
+// backend/routes/workReportRoutes.js - UPDATED (v3)
+// ✅ Timing aligned with the Worklog page:
 //    - Respects `stoppedBySystem` (auto-stop at 23:55 IST = 0 seconds)
 //    - Skips the LAST block when the log was auto-stopped by the system,
 //      because the cron fabricates its endTime but stores duration=0.
@@ -7,6 +7,10 @@
 //      > 5 seconds is treated as system-zeroed (covers legacy records).
 //    - Only counts an "open" block up to `now` if it belongs to TODAY and
 //      the timer is genuinely still running (not abandoned).
+//
+// ✅ v3 CHANGE: system-stopped feeds/tickets are STILL LISTED with 0s so
+//    the PM can audit "this timer existed but was auto-closed". They no
+//    longer silently disappear from the report.
 
 const express = require('express');
 const router = express.Router();
@@ -25,21 +29,10 @@ const { authorize } = require('../middleware/roleCheck');
 
 // ============================================
 // HELPER: Calculate NET time from time blocks
-//
-// Rules:
-//   1. If the log was stoppedBySystem, skip the LAST block entirely —
-//      the cron sets endTime on it but zeroes its duration. Counting
-//      its span would incorrectly credit the whole runaway period.
-//   2. Closed block (startTime + endTime) → use its timestamps,
-//      UNLESS duration=0 with a span > 5s (system-zeroed legacy block).
-//   3. Open block on a log where `isRunning === true` AND the log is
-//      for TODAY → count up to `now`.
-//   4. Open block otherwise (abandoned, past date) → contributes 0.
 // ============================================
 function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedBySystem) {
   const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
-  // ---- Fallback: no time blocks ----
   if (!timeBlocks || timeBlocks.length === 0) {
     if (isRunning && startedAt && logDate === todayStr && !stoppedBySystem) {
       const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
@@ -58,15 +51,7 @@ function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedB
     const start = new Date(block.startTime).getTime();
     if (!Number.isFinite(start)) return;
 
-    // ============================================================
-    // ✅ THE FIX: if the whole log was auto-stopped by the system,
-    //    the LAST block's endTime was fabricated by the cron and its
-    //    duration is 0. Skip it BEFORE the closed-block branch can
-    //    count the (huge) span.
-    //
-    //    We only skip the last block — earlier blocks were closed by
-    //    the developer and represent real work that must still count.
-    // ============================================================
+    // ✅ Skip the LAST block if the log was auto-stopped by the system
     if (stoppedBySystem && idx === lastIndex) {
       return;
     }
@@ -79,8 +64,7 @@ function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedB
       const storedDuration = Number(block.duration) || 0;
       const spanSeconds = Math.floor((end - start) / 1000);
 
-      // Legacy safety net: a closed block with duration=0 but a span
-      // > 5s is a system-zeroed block that predates the flag.
+      // Legacy safety net for records zeroed before the flag existed
       if (storedDuration === 0 && spanSeconds > 5) {
         return;
       }
@@ -90,22 +74,17 @@ function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedB
     }
 
     // ---------- OPEN BLOCK ----------
-    if (stoppedBySystem) {
-      return; // contributes 0
-    }
+    if (stoppedBySystem) return;
 
     if (isRunning && logDate === todayStr) {
       intervals.push({ start, end: now });
       return;
     }
-
-    // Otherwise: abandoned block (open, not running, not today).
-    // Contributes 0 — this is what fixes the "3-month runaway timer" bug.
+    // abandoned → 0
   });
 
   if (intervals.length === 0) return 0;
 
-  // Merge overlapping intervals so we don't double-count
   intervals.sort((a, b) => a.start - b.start);
   const merged = [{ ...intervals[0] }];
   for (let i = 1; i < intervals.length; i++) {
@@ -199,7 +178,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
     })
     .sort({ date: -1 });
 
-  // Only keep ticket logs where the developer is the ASSIGNEE
   const ticketLogs = allTicketLogs.filter((log) => {
     const assigned = log.ticketId?.assignedTo;
     if (!assigned) return false;
@@ -242,7 +220,12 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       log.stoppedBySystem
     );
 
-    if (netSeconds <= 0) return;
+    // ✅ v3 CHANGE: system-stopped entries are kept (with 0s), everything
+    //    else with 0 seconds is dropped.
+    const hasRealTime = netSeconds > 0;
+    const isSystemStop = !!log.stoppedBySystem;
+
+    if (!hasRealTime && !isSystemStop) return;
 
     if (!feedMap.has(feedKey)) {
       feedMap.set(feedKey, {
@@ -258,7 +241,7 @@ async function buildDeveloperReport(developer, startDate, endDate) {
     }
 
     const entry = feedMap.get(feedKey);
-    entry.totalSeconds += netSeconds;
+    entry.totalSeconds += netSeconds;           // adds 0 for system stops
     if (log.date) entry.daysWorked.add(log.date);
 
     entry.entries.push({
@@ -269,7 +252,7 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       description:
         descriptionsByFeedDate[`${feedKey}_${log.date}`] || '',
       isRunning: !!log.isRunning,
-      stoppedBySystem: !!log.stoppedBySystem
+      stoppedBySystem: isSystemStop
     });
   });
 
@@ -281,7 +264,8 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       totalHours: toHours(f.totalSeconds),
       entries: f.entries.sort((a, b) => (a.date < b.date ? 1 : -1))
     }))
-    .filter(f => f.totalSeconds > 0)
+    // ✅ v3 CHANGE: keep any feed that has at least one entry (real or system-stop)
+    .filter(f => f.entries.length > 0)
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
   // ============================================
@@ -302,7 +286,11 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       log.stoppedBySystem
     );
 
-    if (netSeconds <= 0) return;
+    // ✅ v3 CHANGE: same rule as feeds
+    const hasRealTime = netSeconds > 0;
+    const isSystemStop = !!log.stoppedBySystem;
+
+    if (!hasRealTime && !isSystemStop) return;
 
     if (!ticketMap.has(ticketKey)) {
       ticketMap.set(ticketKey, {
@@ -331,7 +319,7 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       hours: toHours(netSeconds),
       description: log.description || '',
       isRunning: !!log.isRunning,
-      stoppedBySystem: !!log.stoppedBySystem
+      stoppedBySystem: isSystemStop
     });
   });
 
@@ -343,7 +331,7 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       totalHours: toHours(t.totalSeconds),
       entries: t.entries.sort((a, b) => (a.date < b.date ? 1 : -1))
     }))
-    .filter(t => t.totalSeconds > 0)
+    .filter(t => t.entries.length > 0)
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
   // ============================================
@@ -356,6 +344,18 @@ async function buildDeveloperReport(developer, startDate, endDate) {
   const allDates = new Set();
   feedLogs.forEach(l => l.date && allDates.add(l.date));
   ticketLogs.forEach(l => l.date && allDates.add(l.date));
+
+  // ✅ v3: expose a count of system-stopped entries so the UI can show
+  //        a top-level indicator (optional but useful).
+  const systemStopCount =
+    perFeed.reduce(
+      (s, f) => s + f.entries.filter(e => e.stoppedBySystem).length,
+      0
+    ) +
+    perTicket.reduce(
+      (s, t) => s + t.entries.filter(e => e.stoppedBySystem).length,
+      0
+    );
 
   return {
     success: true,
@@ -384,7 +384,10 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
       feedsWorkedOn: perFeed.length,
       ticketsWorkedOn: perTicket.length,
-      activeDays: allDates.size
+      activeDays: allDates.size,
+
+      // ✅ v3: useful for the UI to show "1 System Stop" badge at the top
+      systemStopCount
     },
     perFeed,
     perTicket
@@ -479,8 +482,13 @@ router.get(
           developers.map(async (dev) => {
             try {
               const report = await buildDeveloperReport(dev, startDate, endDate);
-              if (report.summary.totalSeconds > 0) return report;
-              return null;
+
+              // ✅ v3: keep any dev who has real activity OR any system-stop
+              const hasActivity =
+                report.summary.totalSeconds > 0 ||
+                report.summary.systemStopCount > 0;
+
+              return hasActivity ? report : null;
             } catch (err) {
               console.error(`Failed to build report for ${dev.name}:`, err.message);
               return null;
