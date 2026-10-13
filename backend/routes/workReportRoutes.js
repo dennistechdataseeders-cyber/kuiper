@@ -1,4 +1,9 @@
-// backend/routes/workReportRoutes.js
+// backend/routes/workReportRoutes.js - UPDATED
+// ✅ Aligns timing with the Worklog page:
+//    - Respects `stoppedBySystem` (auto-stop at 23:55 IST = 0 seconds)
+//    - Respects explicit `duration` on closed blocks
+//    - Only counts an "open" block up to `now` if it belongs to TODAY and
+//      the timer is genuinely still running (not abandoned)
 
 const express = require('express');
 const router = express.Router();
@@ -17,10 +22,22 @@ const { authorize } = require('../middleware/roleCheck');
 
 // ============================================
 // HELPER: Calculate NET time from time blocks
+//
+// Rules (matched to the Worklog frontend):
+//   1. Closed block (startTime + endTime) → use its timestamps.
+//   2. Open block on a log where `stoppedBySystem === true`
+//      → treat as closed; use stored `duration` (usually 0).
+//   3. Open block on a log where `isRunning === true` AND
+//      the log is for TODAY → count up to `now`.
+//   4. Open block on a log where `isRunning === false` AND
+//      no endTime AND not system-stopped → ABANDONED. Counts as 0.
 // ============================================
-function calculateNetSeconds(timeBlocks, isRunning, startedAt) {
+function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedBySystem) {
+  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+
+  // ---- Fallback: no time blocks ----
   if (!timeBlocks || timeBlocks.length === 0) {
-    if (isRunning && startedAt) {
+    if (isRunning && startedAt && logDate === todayStr && !stoppedBySystem) {
       const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
       return Math.max(0, elapsed);
     }
@@ -31,29 +48,40 @@ function calculateNetSeconds(timeBlocks, isRunning, startedAt) {
   const now = Date.now();
 
   timeBlocks.forEach(block => {
-    if (block.startTime && block.endTime) {
-      intervals.push({
-        start: new Date(block.startTime).getTime(),
-        end: new Date(block.endTime).getTime()
-      });
-    } else if (block.startTime && !block.endTime && isRunning) {
-      intervals.push({
-        start: new Date(block.startTime).getTime(),
-        end: now
-      });
-    }
-  });
+    if (!block || !block.startTime) return;
 
-  if (isRunning && startedAt) {
-    const start = new Date(startedAt).getTime();
-    const alreadyOpen = timeBlocks.some(b => b.startTime && !b.endTime);
-    if (!alreadyOpen) {
-      intervals.push({ start, end: now });
+    const start = new Date(block.startTime).getTime();
+    if (!Number.isFinite(start)) return;
+
+    // ---------- CLOSED BLOCK ----------
+    if (block.endTime) {
+      const end = new Date(block.endTime).getTime();
+      if (Number.isFinite(end) && end > start) {
+        intervals.push({ start, end });
+      }
+      return;
     }
-  }
+
+    // ---------- OPEN BLOCK ----------
+    // If the log was auto-stopped by the system, this open block's
+    // duration is 0 by design. Do NOT count it as "still running".
+    if (stoppedBySystem) {
+      return; // contributes 0
+    }
+
+    // If the log is running AND it's a log for today → count up to now
+    if (isRunning && logDate === todayStr) {
+      intervals.push({ start, end: now });
+      return;
+    }
+
+    // Otherwise: abandoned block (open, not running, not today).
+    // Contributes 0 — this is what fixes the "3-month runaway timer" bug.
+  });
 
   if (intervals.length === 0) return 0;
 
+  // Merge overlapping intervals so we don't double-count
   intervals.sort((a, b) => a.start - b.start);
   const merged = [{ ...intervals[0] }];
   for (let i = 1; i < intervals.length; i++) {
@@ -114,7 +142,6 @@ async function pmCanViewDeveloper(pmUserId, developerId) {
 
 // ============================================
 // CORE: Build a single developer's report
-//   Returns null if developer has no activity
 // ============================================
 async function buildDeveloperReport(developer, startDate, endDate) {
   const developerId = developer._id;
@@ -136,7 +163,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
   // ============================================
   // FETCH TICKET WORKLOGS
-  //   ✅ Only keep logs where the developer is the ASSIGNEE
   // ============================================
   const allTicketLogs = await TicketWorkLog.find({
     developerId,
@@ -149,20 +175,19 @@ async function buildDeveloperReport(developer, startDate, endDate) {
     })
     .sort({ date: -1 });
 
+  // Only keep ticket logs where the developer is the ASSIGNEE
   const ticketLogs = allTicketLogs.filter((log) => {
     const assigned = log.ticketId?.assignedTo;
     if (!assigned) return false;
-
     const assignedId =
       typeof assigned === 'object'
         ? (assigned._id || assigned).toString()
         : assigned.toString();
-
     return assignedId === developerId.toString();
   });
 
   // ============================================
-  // FETCH DESCRIPTIONS (for the same range)
+  // FETCH DESCRIPTIONS
   // ============================================
   const descriptions = await WorkDescription.find({
     developer: developerId,
@@ -177,7 +202,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
   // ============================================
   // AGGREGATE: PER FEED
-  //   ✅ Zero-time feeds are dropped entirely
   // ============================================
   const feedMap = new Map();
 
@@ -185,13 +209,16 @@ async function buildDeveloperReport(developer, startDate, endDate) {
     if (!log.feedId) return;
 
     const feedKey = log.feedId._id.toString();
+
+    // ✅ NEW: pass stoppedBySystem + logDate
     const netSeconds = calculateNetSeconds(
       log.timeBlocks,
       log.isRunning,
-      log.startedAt
+      log.startedAt,
+      log.date,
+      log.stoppedBySystem
     );
 
-    // ✅ NEW: Skip zero-time entries entirely
     if (netSeconds <= 0) return;
 
     if (!feedMap.has(feedKey)) {
@@ -231,13 +258,11 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       totalHours: toHours(f.totalSeconds),
       entries: f.entries.sort((a, b) => (a.date < b.date ? 1 : -1))
     }))
-    // ✅ Final safety net: drop any feed whose aggregated total is 0
     .filter(f => f.totalSeconds > 0)
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
   // ============================================
   // AGGREGATE: PER TICKET
-  //   ✅ Zero-time tickets are dropped entirely
   // ============================================
   const ticketMap = new Map();
 
@@ -245,13 +270,16 @@ async function buildDeveloperReport(developer, startDate, endDate) {
     if (!log.ticketId) return;
 
     const ticketKey = log.ticketId._id.toString();
+
+    // ✅ NEW: pass stoppedBySystem + logDate
     const netSeconds = calculateNetSeconds(
       log.timeBlocks,
       log.isRunning,
-      log.startedAt
+      log.startedAt,
+      log.date,
+      log.stoppedBySystem
     );
 
-    // ✅ NEW: Skip zero-time entries entirely
     if (netSeconds <= 0) return;
 
     if (!ticketMap.has(ticketKey)) {
@@ -293,7 +321,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
       totalHours: toHours(t.totalSeconds),
       entries: t.entries.sort((a, b) => (a.date < b.date ? 1 : -1))
     }))
-    // ✅ Final safety net: drop any ticket whose aggregated total is 0
     .filter(t => t.totalSeconds > 0)
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
@@ -304,7 +331,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
   const totalTicketSeconds = perTicket.reduce((s, t) => s + t.totalSeconds, 0);
   const totalSeconds = totalFeedSeconds + totalTicketSeconds;
 
-  // Unique days worked (union of feed days + ticket days)
   const allDates = new Set();
   feedLogs.forEach(l => l.date && allDates.add(l.date));
   ticketLogs.forEach(l => l.date && allDates.add(l.date));
@@ -345,7 +371,6 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
 // ============================================
 // GET /api/work-report/developers
-//   List of developers a PM can report on
 // ============================================
 router.get(
   '/developers',
@@ -355,7 +380,6 @@ router.get(
     try {
       let developerIds = null;
 
-      // PMs only see devs on their projects; Admin/Super Admin see all
       if (req.user.role === 'Project Manager') {
         const pmProjects = await Project.find({ projectManager: req.user._id }).select('_id');
         const projectIds = pmProjects.map(p => p._id);
@@ -392,10 +416,6 @@ router.get(
 //   developerId - required. Single dev id OR 'all'
 //   startDate   - YYYY-MM-DD (optional)
 //   endDate     - YYYY-MM-DD (optional)
-//
-// Response shape:
-//   Single dev:  { success, developer, range, summary, perFeed, perTicket }
-//   All devs:    { success, mode: 'all', developers: [ { success, developer, range, summary, perFeed, perTicket }, ... ] }
 // ============================================
 router.get(
   '/',
@@ -413,7 +433,6 @@ router.get(
       // MODE: ALL DEVELOPERS
       // ============================================
       if (developerId === 'all') {
-        // Determine which developers the requester can see
         let query = { role: 'Developer', isActive: true };
 
         if (req.user.role === 'Project Manager') {
@@ -434,12 +453,10 @@ router.get(
           .select('_id name email employeeCode role')
           .sort({ name: 1 });
 
-        // Build reports in parallel; keep only devs with actual activity
         const reports = await Promise.all(
           developers.map(async (dev) => {
             try {
               const report = await buildDeveloperReport(dev, startDate, endDate);
-              // Only include devs with any logged time
               if (report.summary.totalSeconds > 0) return report;
               return null;
             } catch (err) {
@@ -467,8 +484,6 @@ router.get(
       // ============================================
       // MODE: SINGLE DEVELOPER
       // ============================================
-
-      // Access control for PMs
       if (req.user.role === 'Project Manager') {
         const canView = await pmCanViewDeveloper(req.user._id, developerId);
         if (!canView) {

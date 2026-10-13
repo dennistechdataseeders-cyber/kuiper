@@ -1,4 +1,6 @@
-// backend/routes/developer.js - COMPLETE FIXED VERSION (v2: hardened main-only push)
+// backend/routes/developer.js - COMPLETE FIXED VERSION (v3: adds dashboard/overview)
+// v2: hardened main-only push
+// v3: adds GET /api/dev/dashboard/overview → returns current (today) + upcoming (next 7 days) feeds
 
 const express = require('express');
 const router = express.Router();
@@ -12,6 +14,7 @@ const Task = require('../models/Task');
 const WorkLog = require('../models/WorkLog');
 const TicketWorkLog = require('../models/TicketWorkLog');
 const WorkDescription = require('../models/WorkDescription');
+const FeedStatus = require('../models/FeedStatus');
 
 const { getServerTimestamp } = require('../utils/serverTime');
 
@@ -128,6 +131,187 @@ router.get('/my-feeds', protect, authorize('Developer'), async (req, res) => {
   } catch (err) {
     console.error('Error fetching dev feeds:', err);
     res.status(500).json({ error: 'Server error while fetching assigned feeds' });
+  }
+});
+
+/**
+ * @route   GET /api/dev/dashboard/overview
+ * @desc    Returns:
+ *            - current: today's scheduled feeds + their live status from FeedStatus
+ *            - upcoming: next 7 days of scheduled feeds (excludes today)
+ * @access  Private (Developer)
+ */
+router.get('/dashboard/overview', protect, authorize('Developer'), async (req, res) => {
+  try {
+    // ---- IST-aware "today" ----
+    const nowUTC = new Date();
+    const istNow = new Date(nowUTC.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+
+    const todayStr = istNow.toISOString().split('T')[0];
+    const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+    const todayDayName = dayNames[istNow.getDay()];
+    const todayDayOfMonth = istNow.getDate();
+
+    // ---- All feeds assigned to this developer ----
+    const feeds = await Feed.find({
+      assignedDevelopers: req.user._id
+    })
+      .populate('projectId', 'name projectCustomId')
+      .lean();
+
+    if (feeds.length === 0) {
+      return res.json({ success: true, current: [], upcoming: [] });
+    }
+
+    // ---- Helper: does this feed run on a given (dayName, dayOfMonth)? ----
+    const feedRunsOn = (feed, dayName, dayOfMonth) => {
+      // Closed feeds never show up
+      if (feed.feedStatus === 'Closed') return false;
+
+      if (feed.feedType === 'Daily') return true;
+      if (feed.feedType === 'Weekly') return feed.weekDay === dayName;
+      if (feed.feedType === 'Monthly') return Number(feed.monthDay) === Number(dayOfMonth);
+      // 'Once off' / 'Ad hoc' — only show on today if it exists in FeedStatus for today,
+      // otherwise don't treat as recurring. We'll let the status lookup decide.
+      return false;
+    };
+
+    // ---- Fetch today's FeedStatus entries for this developer's feeds ----
+    const feedNames = feeds.map(f => f.name).filter(Boolean);
+
+    // FeedStatus uses feed_name + date (YYYY-MM-DD strings)
+    const todayStatuses = await FeedStatus.find({
+      feed_name: { $in: feedNames },
+      date: todayStr
+    }).lean();
+
+    const statusMap = {};
+    todayStatuses.forEach(s => {
+      statusMap[s.feed_name] = s;
+    });
+
+    // ---- Build CURRENT list (today's scheduled feeds) ----
+    const current = feeds
+      .filter(f => {
+        // Recurring feed scheduled for today?
+        if (feedRunsOn(f, todayDayName, todayDayOfMonth)) return true;
+
+        // Once-off / Ad-hoc: show only if there's an actual FeedStatus entry for today
+        if ((f.feedType === 'Once off' || f.feedType === 'Ad hoc') && statusMap[f.name]) {
+          return true;
+        }
+        return false;
+      })
+      .map(f => {
+        const st = statusMap[f.name] || null;
+
+        // Derive status/progress from stages if not directly present
+        let derivedProgress = st?.progress ?? 0;
+        let derivedStatus = st?.status || 'Not Started';
+
+        if (st && st.stages && typeof st.stages === 'object') {
+          const totalStages = 5;
+          const completedStages = Object.values(st.stages).filter(
+            s => s && s.completed === true
+          ).length;
+          if (st.progress === undefined || st.progress === null) {
+            derivedProgress = Math.round((completedStages / totalStages) * 100);
+          }
+          if (!st.status) {
+            if (st.failed) derivedStatus = 'Failed';
+            else if (derivedProgress === 100) derivedStatus = 'Completed';
+            else if (derivedProgress > 0) derivedStatus = 'In Progress';
+            else derivedStatus = 'Pending';
+          }
+        }
+
+        return {
+          feedId: f._id,
+          name: f.name,
+          projectId: f.projectId?._id || null,
+          projectName: f.projectId?.name || 'Unknown Project',
+          projectCustomId: f.projectId?.projectCustomId || 'N/A',
+          feedType: f.feedType,
+          feedStatus: f.feedStatus || 'New',
+          scheduledFor: todayStr,
+          status: derivedStatus,
+          progress: derivedProgress,
+          recordCount:
+            st?.record_count !== undefined && st?.record_count !== null
+              ? st.record_count
+              : null,
+          outputPath: st?.output_path || null,
+          stages: st?.stages || {},
+          failed: !!st?.failed,
+          errorMessage: st?.error_message || '',
+          updatedAt: st?.updated_at || null
+        };
+      });
+
+    // Sort: In Progress → Pending/Not Started → Completed/Failed, then by name
+    const statusRank = (s) => {
+      if (s === 'In Progress') return 0;
+      if (s === 'Pending' || s === 'Not Started') return 1;
+      if (s === 'Completed') return 2;
+      if (s === 'Failed') return 3;
+      return 4;
+    };
+    current.sort((a, b) => {
+      const r = statusRank(a.status) - statusRank(b.status);
+      if (r !== 0) return r;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+
+    // ---- Build UPCOMING list (next 7 days, excludes today) ----
+    const upcoming = [];
+
+    for (let i = 1; i <= 7; i++) {
+      const d = new Date(istNow);
+      d.setDate(d.getDate() + i);
+
+      const dayName = dayNames[d.getDay()];
+      const dayOfMonth = d.getDate();
+      const dateStr = d.toISOString().split('T')[0];
+
+      const feedsForDay = feeds
+        .filter(f => feedRunsOn(f, dayName, dayOfMonth))
+        .map(f => ({
+          feedId: f._id,
+          name: f.name,
+          projectId: f.projectId?._id || null,
+          projectName: f.projectId?.name || 'Unknown Project',
+          projectCustomId: f.projectId?.projectCustomId || 'N/A',
+          feedType: f.feedType,
+          weekDay: f.weekDay || null,
+          monthDay: f.monthDay || null
+        }));
+
+      // Deduplicate (a "Daily" feed obviously only appears once per day)
+      if (feedsForDay.length > 0) {
+        upcoming.push({
+          date: dateStr,
+          dayName,
+          dayOfMonth,
+          isTomorrow: i === 1,
+          count: feedsForDay.length,
+          feeds: feedsForDay
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      today: todayStr,
+      current,
+      upcoming
+    });
+  } catch (err) {
+    console.error('Error building dashboard overview:', err);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to build dashboard overview',
+      details: err.message
+    });
   }
 });
 
@@ -831,6 +1015,7 @@ router.post('/worklog/log-description', protect, authorize('Developer'), async (
     res.status(500).json({ error: 'Failed to save work description' });
   }
 });
+
 /**
  * @route   GET /api/dev/worklog/today-descriptions
  * @desc    Get all today's descriptions for the developer
@@ -1300,6 +1485,7 @@ router.post('/ticket-worklog/description', protect, async (req, res) => {
     res.status(500).json({ error: 'Failed to save description' });
   }
 });
+
 /**
  * @route   GET /api/dev/worklog/history
  * @desc    Get date-wise worklog history for the logged-in developer
@@ -1435,4 +1621,5 @@ router.get('/worklog/history', protect, authorize('Developer'), async (req, res)
     res.status(500).json({ error: 'Failed to fetch worklog history' });
   }
 });
+
 module.exports = router;
