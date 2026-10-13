@@ -178,16 +178,26 @@ async function buildDeveloperReport(developer, startDate, endDate) {
     })
     .sort({ date: -1 });
 
-  const ticketLogs = allTicketLogs.filter((log) => {
-    const assigned = log.ticketId?.assignedTo;
-    if (!assigned) return false;
-    const assignedId =
-      typeof assigned === 'object'
-        ? (assigned._id || assigned).toString()
-        : assigned.toString();
-    return assignedId === developerId.toString();
-  });
+const ticketLogs = allTicketLogs.filter((log) => {
+  if (!log.ticketId) return false;
 
+  // ✅ System-stopped tickets are ALWAYS kept for audit,
+  //    regardless of who the ticket is currently assigned to.
+  if (log.stoppedBySystem) return true;
+
+  // Otherwise apply the strict "assigned to this developer" rule
+  // so we don't inflate real-time numbers with tickets the dev
+  // never actually worked on.
+  const assigned = log.ticketId?.assignedTo;
+  if (!assigned) return false;
+
+  const assignedId =
+    typeof assigned === 'object'
+      ? (assigned._id || assigned).toString()
+      : assigned.toString();
+
+  return assignedId === developerId.toString();
+});
   // ============================================
   // FETCH DESCRIPTIONS
   // ============================================
