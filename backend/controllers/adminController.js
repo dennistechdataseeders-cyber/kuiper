@@ -6,6 +6,13 @@ const bcrypt = require('bcryptjs');
 const nodemailer = require('nodemailer');
 const leaveBucketService = require('../services/leaveBucketService');
 
+// ✅ Shift history helpers (Option B)
+const {
+  ensureInitialShiftHistory,
+  recordShiftChange,
+  getISTDateString
+} = require('../services/shiftService');
+
 // ============================================
 // MAIL TRANSPORTER (Gmail — for welcome emails)
 // ============================================
@@ -24,20 +31,10 @@ const transporter = nodemailer.createTransport({
 // ============================================
 // ✅ PERMISSION HELPERS
 // ============================================
-
-// Who is allowed to hit these endpoints at all?
 const ADMIN_LEVEL_ROLES = ['Super Admin', 'Admin', 'HR'];
-
-// Roles that HR is forbidden from creating or editing TO
 const FORBIDDEN_ROLES_FOR_HR = ['Admin', 'Super Admin'];
-
-// Roles HR is forbidden from editing/deleting
 const PROTECTED_TARGET_ROLES_FOR_HR = ['Admin', 'Super Admin', 'HR'];
 
-/**
- * Assert the caller is an Admin-level user.
- * Returns { ok, error }.
- */
 function checkAdminLevel(req) {
   if (!req.user || !ADMIN_LEVEL_ROLES.includes(req.user.role)) {
     return { ok: false, error: 'Forbidden: admin access required' };
@@ -45,10 +42,6 @@ function checkAdminLevel(req) {
   return { ok: true };
 }
 
-/**
- * Assert the requested role can be assigned by the caller.
- * HR cannot create/assign Admin or Super Admin.
- */
 function canAssignRole(caller, targetRole) {
   if (caller.role === 'HR' && FORBIDDEN_ROLES_FOR_HR.includes(targetRole)) {
     return false;
@@ -56,25 +49,13 @@ function canAssignRole(caller, targetRole) {
   return true;
 }
 
-/**
- * Assert the caller can modify the given target user.
- * - HR cannot modify Admin / Super Admin / other HR
- * - Admin cannot modify Super Admin
- * - Super Admin can modify anyone except self-deletion (checked separately)
- */
 function canModifyTarget(caller, targetUser) {
   if (!targetUser) return false;
-
   if (caller.role === 'Super Admin') return true;
-
-  if (caller.role === 'Admin') {
-    return targetUser.role !== 'Super Admin';
-  }
-
+  if (caller.role === 'Admin') return targetUser.role !== 'Super Admin';
   if (caller.role === 'HR') {
     return !PROTECTED_TARGET_ROLES_FOR_HR.includes(targetUser.role);
   }
-
   return false;
 }
 
@@ -192,20 +173,17 @@ exports.createUser = async (req, res) => {
       return res.status(400).json({ error: 'Password is required' });
     }
 
-    // ✅ Role whitelist per caller (HR cannot create Admin / Super Admin)
     if (!canAssignRole(req.user, role)) {
       return res.status(403).json({
         error: `Your role (${req.user.role}) is not permitted to create a ${role} account`,
       });
     }
 
-    // ---- Duplicate email check ----
     const existingByEmail = await User.findOne({ email: email.toLowerCase().trim() });
     if (existingByEmail) {
       return res.status(400).json({ error: 'Email already exists' });
     }
 
-    // ---- Duplicate employee code check (if provided) ----
     const normalizedCode = employeeCode ? String(employeeCode).trim().toUpperCase() : null;
     if (normalizedCode) {
       const existingByCode = await User.findOne({ employeeCode: normalizedCode });
@@ -216,14 +194,9 @@ exports.createUser = async (req, res) => {
       }
     }
 
-    // ---- Hash password ----
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(String(password), salt);
 
-    // ============================================
-    // ✅ AUTO-SET PROBATION
-    //   Not for Admin, Super Admin, HR, Client
-    // ============================================
     let isProbationary = false;
     let probationEndDate = null;
 
@@ -238,9 +211,6 @@ exports.createUser = async (req, res) => {
       );
     }
 
-    // ============================================
-    // ✅ Build user document with ALL fields
-    // ============================================
     const user = new User({
       name: name.trim(),
       email: email.toLowerCase().trim(),
@@ -269,6 +239,22 @@ exports.createUser = async (req, res) => {
     await user.save();
     console.log('✅ User saved to DB:', user.email);
 
+    // ============================================
+    // ✅ SEED INITIAL SHIFT HISTORY (Option B)
+    // ============================================
+    try {
+      await ensureInitialShiftHistory(user._id, {
+        changedBy: req.user._id,
+        note: 'Shift record on user creation',
+        effectiveFrom: dateOfJoining
+          ? getISTDateString(dateOfJoining)
+          : undefined
+      });
+    } catch (shiftErr) {
+      // Non-fatal — a backfill script can always seed this later.
+      console.error('⚠️ Failed to seed initial ShiftHistory:', shiftErr.message);
+    }
+
     // ---- Audit log ----
     try {
       await Log.create({
@@ -281,7 +267,6 @@ exports.createUser = async (req, res) => {
       console.error('Audit log failed (non-critical):', logErr.message);
     }
 
-    // ---- Respond immediately ----
     res.status(201).json({
       _id: user._id,
       name: user.name,
@@ -360,6 +345,7 @@ exports.createUser = async (req, res) => {
 
 // ============================================
 // ✅ PUT: Update user
+// ✅ Shift changes now recorded in ShiftHistory (Option B)
 // ============================================
 exports.updateUser = async (req, res) => {
   try {
@@ -369,7 +355,6 @@ exports.updateUser = async (req, res) => {
     const target = await User.findById(req.params.id);
     if (!target) return res.status(404).json({ error: 'User not found' });
 
-    // ✅ Target-level guard
     if (!canModifyTarget(req.user, target)) {
       return res.status(403).json({
         error: `Your role (${req.user.role}) is not permitted to modify a ${target.role} account`,
@@ -398,22 +383,18 @@ exports.updateUser = async (req, res) => {
       isActive,
     } = req.body;
 
-    // ✅ Prevent HR from promoting anyone to Admin / Super Admin
     if (role && role !== target.role && !canAssignRole(req.user, role)) {
       return res.status(403).json({
         error: `Your role (${req.user.role}) is not permitted to assign the ${role} role`,
       });
     }
 
-    // ✅ Prevent changing a user's role TO something that would place them out of reach
-    //   e.g. HR cannot change a Developer → Admin
     if (role && FORBIDDEN_ROLES_FOR_HR.includes(role) && req.user.role === 'HR') {
       return res.status(403).json({
         error: 'HR cannot assign Admin or Super Admin roles',
       });
     }
 
-    // Duplicate email check (if email changed)
     if (email && email.toLowerCase().trim() !== target.email) {
       const dup = await User.findOne({
         email: email.toLowerCase().trim(),
@@ -423,7 +404,6 @@ exports.updateUser = async (req, res) => {
       target.email = email.toLowerCase().trim();
     }
 
-    // Duplicate employeeCode check (if provided and changed)
     if (employeeCode !== undefined) {
       const normalizedCode = employeeCode ? String(employeeCode).trim().toUpperCase() : null;
       if (normalizedCode && normalizedCode !== target.employeeCode) {
@@ -440,7 +420,6 @@ exports.updateUser = async (req, res) => {
       target.employeeCode = normalizedCode;
     }
 
-    // Optional fields
     if (name !== undefined) target.name = name.trim();
     if (role !== undefined) target.role = role.trim();
     if (githubUsername !== undefined) {
@@ -456,10 +435,48 @@ exports.updateUser = async (req, res) => {
     if (department !== undefined) target.department = department || 'Other';
     if (organizationId !== undefined) target.organizationId = organizationId || null;
     if (isPrimaryPOC !== undefined) target.isPrimaryPOC = !!isPrimaryPOC;
-    if (shiftHour !== undefined) target.shiftHour = parseInt(shiftHour) || 9;
-    if (shiftMinute !== undefined) target.shiftMinute = parseInt(shiftMinute) || 0;
-    if (shiftAmPm !== undefined) target.shiftAmPm = shiftAmPm || 'AM';
     if (isActive !== undefined) target.isActive = !!isActive;
+
+    // ============================================
+    // ✅ SHIFT CHANGE HANDLING (Option B)
+    //    Capture -> history -> commit
+    // ============================================
+    const parsedShiftHour   = shiftHour   !== undefined ? parseInt(shiftHour)   : undefined;
+    const parsedShiftMinute = shiftMinute !== undefined ? parseInt(shiftMinute) : undefined;
+    const parsedShiftAmPm   = shiftAmPm   !== undefined ? shiftAmPm             : undefined;
+
+    const prevHour   = target.shiftHour   ?? 9;
+    const prevMinute = target.shiftMinute ?? 0;
+    const prevAmPm   = target.shiftAmPm   ?? 'AM';
+
+    const shiftChanging =
+      (parsedShiftHour   !== undefined && parsedShiftHour   !== prevHour) ||
+      (parsedShiftMinute !== undefined && parsedShiftMinute !== prevMinute) ||
+      (parsedShiftAmPm   !== undefined && parsedShiftAmPm   !== prevAmPm);
+
+    if (shiftChanging) {
+      const nextHour   = parsedShiftHour   !== undefined ? parsedShiftHour   : prevHour;
+      const nextMinute = parsedShiftMinute !== undefined ? parsedShiftMinute : prevMinute;
+      const nextAmPm   = parsedShiftAmPm   !== undefined ? parsedShiftAmPm   : prevAmPm;
+
+      try {
+        await recordShiftChange(
+          target._id,
+          { hour: nextHour, minute: nextMinute, ampm: nextAmPm },
+          req.user._id,
+          `Shift changed by ${req.user.role} ${req.user.name}`
+        );
+      } catch (shiftErr) {
+        console.error('⚠️ Failed to record ShiftHistory change:', shiftErr.message);
+        return res.status(500).json({
+          error: 'Failed to record shift change history. Shift was not updated.',
+        });
+      }
+
+      target.shiftHour   = nextHour;
+      target.shiftMinute = nextMinute;
+      target.shiftAmPm   = nextAmPm;
+    }
 
     // Password change (optional)
     if (password && password.trim() !== '' && password !== 'undefined') {
@@ -470,12 +487,11 @@ exports.updateUser = async (req, res) => {
     await target.save();
     console.log('✅ User updated:', target.email);
 
-    // Audit log
     try {
       await Log.create({
         actionType: 'USER_UPDATED',
         performerId: req.user._id,
-        details: `${req.user.role} ${req.user.name} updated user ${target.email} (${target.role})`,
+        details: `${req.user.role} ${req.user.name} updated user ${target.email} (${target.role})${shiftChanging ? ' [shift changed]' : ''}`,
         timestamp: new Date(),
       });
     } catch (logErr) {
@@ -505,12 +521,10 @@ exports.deleteUser = async (req, res) => {
     const target = await User.findById(req.params.id);
     if (!target) return res.status(404).json({ error: 'User not found' });
 
-    // Self-deletion guard
     if (String(target._id) === String(req.user._id)) {
       return res.status(400).json({ error: 'You cannot delete your own account' });
     }
 
-    // Target-level guard
     if (!canModifyTarget(req.user, target)) {
       return res.status(403).json({
         error: `Your role (${req.user.role}) is not permitted to delete a ${target.role} account`,
@@ -559,7 +573,6 @@ exports.linkGitHub = async (req, res) => {
       return res.status(400).json({ error: 'GitHub linking is only available for Developer accounts' });
     }
 
-    // Target-level guard
     if (!canModifyTarget(req.user, user)) {
       return res.status(403).json({
         error: `Your role (${req.user.role}) is not permitted to modify this account`,
@@ -596,7 +609,6 @@ exports.linkGitHub = async (req, res) => {
 
 // ============================================
 // ✅ GET: Leave history for a user
-//   Returns balances + aggregated adjustment history
 // ============================================
 exports.getUserLeaveHistory = async (req, res) => {
   try {
@@ -615,7 +627,6 @@ exports.getUserLeaveHistory = async (req, res) => {
       'Unpaid Leave': '∞',
     };
 
-    // Build a history array from the bucket's adjustmentHistory (most reliable source)
     const adjustments = (bucket?.adjustmentHistory || []).map((entry) => ({
       type: entry.change < 0 ? 'deducted' : entry.change > 0 ? 'added' : 'set',
       leaveType: 'Paid Leave',
@@ -626,7 +637,6 @@ exports.getUserLeaveHistory = async (req, res) => {
       date: entry.adjustedAt || entry.createdAt || new Date(),
     }));
 
-    // Additionally, show recent LeaveApplication approvals
     const leaves = await LeaveApplication.find({
       employeeId: userId,
       status: 'approved',
@@ -648,7 +658,6 @@ exports.getUserLeaveHistory = async (req, res) => {
       };
     });
 
-    // Merge + sort, newest first
     const history = [...adjustments, ...approvals].sort(
       (a, b) => new Date(b.date) - new Date(a.date)
     );
@@ -674,10 +683,6 @@ exports.getUserLeaveHistory = async (req, res) => {
 
 // ============================================
 // ✅ PATCH: Adjust a user's leave balance
-//   Body: { leaveType?, action?: 'add'|'deduct'|'set', amount?, newBalance?, reason }
-//   The frontend currently sends: { leaveType, amount, action, reason }
-//   We translate that into newBalance and call leaveBucketService.adjustBalance,
-//   which ALSO sends the employee notification email.
 // ============================================
 exports.adjustUserLeaveBalance = async (req, res) => {
   try {
@@ -694,18 +699,15 @@ exports.adjustUserLeaveBalance = async (req, res) => {
     const user = await User.findById(userId).select('_id name email role');
     if (!user) return res.status(404).json({ error: 'User not found' });
 
-    // Only Paid Leave is tracked in the bucket system
     if (leaveType !== 'Paid Leave') {
       return res.status(400).json({
         error: `Only "Paid Leave" can be adjusted via this endpoint. Received: ${leaveType}`,
       });
     }
 
-    // Ensure the bucket exists
     const bucket = await leaveBucketService.getOrCreateBucket(userId);
     const previousBalance = bucket.totalBalance;
 
-    // Compute target newBalance
     let targetBalance;
     if (newBalance !== undefined && newBalance !== null && !isNaN(newBalance)) {
       targetBalance = parseFloat(newBalance);
@@ -733,7 +735,6 @@ exports.adjustUserLeaveBalance = async (req, res) => {
       return res.status(400).json({ error: 'Leave balance cannot be negative' });
     }
 
-    // ✅ adjustBalance sends the employee notification email (from the earlier change)
     const result = await leaveBucketService.adjustBalance(
       userId,
       targetBalance,
@@ -741,7 +742,6 @@ exports.adjustUserLeaveBalance = async (req, res) => {
       req.user._id
     );
 
-    // Fetch refreshed balances so the frontend modal updates
     const refreshedBucket = await LeaveBucket.findOne({ employeeId: userId });
 
     try {
@@ -777,7 +777,7 @@ exports.adjustUserLeaveBalance = async (req, res) => {
 };
 
 // ============================================
-// ✅ GET: Analytics (unchanged behaviour)
+// ✅ GET: Analytics
 // ============================================
 exports.getAnalytics = async (req, res) => {
   try {

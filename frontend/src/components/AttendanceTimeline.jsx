@@ -1,23 +1,15 @@
 // frontend/src/components/AttendanceTimeline.jsx
-// ✅ FIXED: Time and date are now consistently displayed in IST, matching the
-//    AttendanceCombined.jsx component. This ensures "late" status and times
-//    are calculated correctly regardless of server timezone.
-// ✅ FIXED (2026-08-31): Race condition where attendance data was processed
-//    before the holidays list finished loading, permanently baking in
-//    isHoliday: false for holidays like Rakshabandhan (Aug 28, 2026).
-//    Raw attendance data and holiday data are now merged reactively via
-//    useMemo, so it recomputes automatically whenever either finishes loading.
-// ✅ FIXED (2026-09-21): Component now accepts an optional `targetUserId`
-//    prop. When set (HR view of another employee), it calls the HR timeline
-//    endpoint; otherwise it calls the self endpoint. Both endpoints return
-//    the exact same shape, so the rendering path is identical.
-//    Also switched all date math (formatDateDisplay, getDayShortName,
-//    isToday, calculateStatsForMonth, monthDays) from local timezone to
-//    UTC so day labels and month filters stay correct on any server.
-// ✅ FIXED (2026-09-21): Time and "late" status now use a fixed IST (+05:30)
-//    offset, matching the exact logic of AttendanceCombined.jsx. This
-//    resolves inconsistencies where a punch time was shown correctly in one
-//    view but was considered "late" in another due to timezone differences.
+// ✅ Shift-based late evaluation (Option B — ShiftHistory)
+//    - The frontend no longer computes lateness. It reads `day.isLate`
+//      and `day.lateMinutes` from the API, which are derived from the
+//      shift that was active on that specific date (ShiftHistory).
+// ✅ FIXED: Time and date are consistently displayed in IST.
+// ✅ FIXED: Race condition where attendance was processed before holidays
+//    loaded — data and holiday list are now merged reactively via useMemo.
+// ✅ FIXED: Supports optional `targetUserId` prop for HR viewing another
+//    employee. Same rendering path for both.
+// ✅ FIXED: All date math (formatDateDisplay, getDayShortName, isToday,
+//    calculateStatsForMonth, monthDays) uses UTC to stay correct on any server.
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
@@ -33,11 +25,10 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 // ─────────────────────────────────────────────────────────────
-// ✅ IST TIME CONVERSION HELPERS (Matches AttendanceCombined)
+// IST TIME CONVERSION HELPERS
 // ─────────────────────────────────────────────────────────────
 
 const IST_OFFSET_MINUTES = 5 * 60 + 30; // +05:30
-const OFFICE_START_MINUTES = 10 * 60 + 45; // 10:45 AM IST cutoff
 
 /**
  * Formats a UTC date string into IST 12-hour time (e.g., "10:09 AM").
@@ -72,26 +63,6 @@ const getISTDateString = (date) => {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 };
 
-/**
- * Arrival status: "On Time", "Xm late", or "—".
- * Compares the IST-adjusted punch-in minute to the 10:45 AM cutoff.
- */
-const getArrivalStatus = (punchInUTC) => {
-  if (!punchInUTC) return '—';
-  try {
-    const d = new Date(punchInUTC);
-    if (isNaN(d.getTime())) return '—';
-
-    let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
-    total = ((total % 1440) + 1440) % 1440;
-
-    if (total <= OFFICE_START_MINUTES) return 'On Time';
-    return `${total - OFFICE_START_MINUTES}m late`;
-  } catch (e) {
-    return '—';
-  }
-};
-
 // ─────────────────────────────────────────────────────────────
 // Timeline track config
 // ─────────────────────────────────────────────────────────────
@@ -99,7 +70,6 @@ const TRACK_START_HOUR = 6;
 const TRACK_END_HOUR = 21;
 const TRACK_TOTAL_MIN = (TRACK_END_HOUR - TRACK_START_HOUR) * 60;
 
-// This function is now IST-aware
 const minutesOfDayIST = (dateString) => {
   if (!dateString) return null;
   const d = new Date(dateString);
@@ -160,7 +130,7 @@ const STATUS_STYLES = {
   }
 };
 
-// ✅ UTC-based date display (no local timezone shift)
+// UTC-based date display
 const formatDateDisplay = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
@@ -172,7 +142,7 @@ const formatDateDisplay = (dateStr) => {
   return `${day} ${month} ${year}`;
 };
 
-// ✅ UTC-based day name
+// UTC-based day name
 const getDayShortName = (dateStr) => {
   if (!dateStr) return '—';
   const date = new Date(dateStr);
@@ -181,7 +151,7 @@ const getDayShortName = (dateStr) => {
   return dayNames[date.getUTCDay()];
 };
 
-// ✅ UTC-based "is today" check
+// UTC-based "is today" check
 const isToday = (dateStr) => {
   if (!dateStr) return false;
   const now = new Date();
@@ -399,7 +369,6 @@ const DayTimelineBar = ({ day }) => {
     setLocalTooltipPosition({ x: tooltipX, y: tooltipY });
   };
 
-  // If it's a holiday, show a special holiday bar
   if (isHoliday) {
     return (
       <div className="flex items-center gap-2 h-5">
@@ -700,6 +669,9 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
       const isHolidayDay = !!holidayData;
       const holidayName = holidayData ? holidayData.name : null;
 
+      // ✅ Holiday overrides status for display purposes, BUT we still
+      //    preserve the original status so downstream logic (stats etc.)
+      //    can differentiate if needed.
       return {
         ...day,
         isHoliday: isHolidayDay,
@@ -794,6 +766,10 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
             }
           }
 
+          // ✅ Preserve the API-provided isLate / lateMinutes. Do NOT
+          //    recompute using a hardcoded cutoff — the backend now
+          //    evaluates lateness against the shift that was active on
+          //    that specific date (ShiftHistory).
           return {
             ...day,
             sessions: sessions,
@@ -804,7 +780,9 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
             grossHours: grossHours,
             breakMinutes: breakMinutes,
             breakGaps: breakGaps,
-            totalDuration: effectiveHours
+            totalDuration: effectiveHours,
+            isLate: day.isLate === true,
+            lateMinutes: day.lateMinutes || 0
           };
         });
 
@@ -1259,9 +1237,35 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                     const today = isToday(day.date);
                     const isWeekend = day.isWeekend || false;
 
+                    // ✅ Shift-aware lateness — read from API, do NOT recompute.
+                    const dayIsLate = day.isLate === true;
+                    const dayLateMinutes = day.lateMinutes || 0;
+
                     let outDisplay = '—';
                     if (!isWeekend && !isHolidayDay) {
                       outDisplay = day.punchOutUTC ? formatTimeDisplay(day.punchOutUTC) : 'No Out Punch';
+                    }
+
+                    // Arrival label derived from persisted lateness
+                    let arrivalLabel = '—';
+                    let arrivalClass = 'text-emerald-600';
+
+                    if (isHolidayDay) {
+                      arrivalLabel = '🎉';
+                      arrivalClass = 'text-purple-600';
+                    } else if (isWeekend) {
+                      arrivalLabel = '—';
+                      arrivalClass = 'text-slate-400';
+                    } else if (day.punchInUTC) {
+                      if (dayIsLate) {
+                        arrivalLabel = dayLateMinutes > 0
+                          ? `${dayLateMinutes}m late`
+                          : 'Late';
+                        arrivalClass = 'text-amber-600';
+                      } else {
+                        arrivalLabel = 'On Time';
+                        arrivalClass = 'text-emerald-600';
+                      }
                     }
 
                     return (
@@ -1319,8 +1323,8 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                           </span>
                         </td>
                         <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-medium ${isHolidayDay ? 'text-purple-600' : day.status === 'late' ? 'text-amber-600' : 'text-emerald-600'}`}>
-                            {isHolidayDay ? '🎉' : (isWeekend ? '—' : getArrivalStatus(day.punchInUTC))}
+                          <span className={`text-[10px] font-medium ${arrivalClass}`}>
+                            {arrivalLabel}
                           </span>
                         </td>
                       </tr>

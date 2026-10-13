@@ -40,15 +40,54 @@ const employeePunchLogSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     default: null
+  },
+
+  // ============================================
+  // Shift-based late marking (Option B)
+  // ============================================
+
+  // Snapshot of the shift that was active on THIS log's date,
+  // expressed as minutes-of-day in IST (e.g. 10:30 AM IST = 630).
+  // Persisted at write time so historical evaluation never changes
+  // when HR edits a user's shift mid-month.
+  shiftStartMinutesUsed: {
+    type: Number,
+    default: null
+  },
+
+  // Server-authoritative late-ness for this log.
+  // Every reader (dashboards, timelines, reports) must use these
+  // values instead of recomputing on the fly.
+  isLate: {
+    type: Boolean,
+    default: false
+  },
+  lateMinutes: {
+    type: Number,
+    default: 0
+  },
+  lateEvaluatedAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true
 });
 
+// ============================================
+// INDEXES
+// ============================================
+
+// One log per employee per day
 employeePunchLogSchema.index({ employeeId: 1, date: 1 }, { unique: true });
 
+// Fast lookup for HR dashboards: "who is late today?"
+employeePunchLogSchema.index({ date: 1, isLate: 1 });
+
+// ============================================
+// PRE-SAVE HOOK
 // Derive punchIn/punchOut from sessions before save
-// FIXED: Use function declaration with next parameter
+// ============================================
 employeePunchLogSchema.pre('save', function(next) {
   if (this.sessions && this.sessions.length > 0) {
     const firstSession = this.sessions[0];

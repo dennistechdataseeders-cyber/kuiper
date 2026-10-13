@@ -1,9 +1,11 @@
-// backend/routes/employeeRoutes.js - COMPLETE FIXED VERSION
-// ✅ Fixed: Time is displayed as-is from the database (no timezone conversion)
-// ✅ Fixed: 10:09 AM and 10:17 AM are now correctly marked as ON TIME (not late)
-// ✅ Fixed: Half-day leave support with isHalfDay and halfDayType fields
-// ✅ Fixed: Extended date range to fetch more data
-// ✅ Fixed: Added debug logging
+// backend/routes/employeeRoutes.js - COMPLETE UPDATED VERSION
+// ✅ Shift-based late evaluation (Option B — ShiftHistory)
+//    - Late-ness is now READ from EmployeePunchLog (isLate / lateMinutes),
+//      never recomputed on the fly using a hardcoded 10:45 AM cutoff.
+//    - Falls back to on-the-fly evaluation ONLY if the punch log
+//      was never evaluated (e.g. legacy data not yet backfilled).
+// ✅ Kept: Half-day leave support, extended timeline range, debug endpoint
+// ✅ PROFILE ROUTE: shift changes through /profile now record ShiftHistory
 
 const express = require('express');
 const router = express.Router();
@@ -16,14 +18,23 @@ const MissedPunchRequest = require('../models/MissedPunchRequest');
 const User = require('../models/User');
 const LeaveType = require('../models/LeaveType');
 
+// Import shift service (Option B — ShiftHistory)
+const {
+  getISTDateString,
+  getShiftStartMinutesForDate,
+  evaluateLateness,
+  evaluateAndPersistLateness,
+  recordShiftChange,
+  toShiftStartMinutes
+} = require('../services/shiftService');
+
 // ============================================
-// HELPER: Get date string from any date (preserving the original time)
+// HELPER: Get date string preserving stored time (UTC as-is)
 // ============================================
 const getDateString = (date) => {
   if (!date) return null;
   const d = new Date(date);
   if (isNaN(d.getTime())) return null;
-  // Use UTC methods to preserve the stored time as-is
   const year = d.getUTCFullYear();
   const month = String(d.getUTCMonth() + 1).padStart(2, '0');
   const day = String(d.getUTCDate()).padStart(2, '0');
@@ -31,18 +42,7 @@ const getDateString = (date) => {
 };
 
 // ============================================
-// HELPER: Get IST date string (for display purposes only)
-// ============================================
-const getISTDateString = (date) => {
-  if (!date) return null;
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return null;
-  // Use toLocaleDateString with IST timezone for display
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-};
-
-// ============================================
-// HELPER: Get start and end of day in UTC (for database queries)
+// HELPER: Get start and end of day in UTC (for DB queries)
 // ============================================
 const getUTCDayRange = (dateStr) => {
   if (!dateStr) return null;
@@ -53,44 +53,36 @@ const getUTCDayRange = (dateStr) => {
 };
 
 // ============================================
-// HELPER: Check if punch is late (after 10:45 AM)
-// Uses the stored time as-is (no timezone conversion)
+// HELPER: Resolve { isLate, lateMinutes } for a punch log.
+//
+// Priority order:
+//   1. If the log was already evaluated (lateEvaluatedAt set),
+//      trust the persisted fields.
+//   2. Otherwise, evaluate on the fly using ShiftHistory for the
+//      log's IST date, and persist the result (self-healing backfill).
 // ============================================
-const isLatePunch = (punchTime) => {
-  if (!punchTime) return false;
-  
-  const punchDate = new Date(punchTime);
-  if (isNaN(punchDate.getTime())) return false;
-  
-  // Use UTC methods to read the stored time as-is
-  const hours = punchDate.getUTCHours();
-  const minutes = punchDate.getUTCMinutes();
-  
-  // Office starts at 10:45 AM
-  // Late if AFTER 10:45 AM (i.e., 10:46 or later)
-  // 10:45 is ON TIME (grace period ends at 10:45)
-  // 10:44, 10:45 are ON TIME
-  // 10:46+ are LATE
-  return hours > 10 || (hours === 10 && minutes > 45);
-};
+const resolveLateness = async (log) => {
+  if (!log) return { isLate: false, lateMinutes: 0 };
 
-// ============================================
-// HELPER: Get late minutes (if late)
-// Uses the stored time as-is (no timezone conversion)
-// ============================================
-const getLateMinutes = (punchTime) => {
-  if (!punchTime) return 0;
-  
-  const punchDate = new Date(punchTime);
-  if (isNaN(punchDate.getTime())) return 0;
-  
-  // Use UTC methods to read the stored time as-is
-  const hours = punchDate.getUTCHours();
-  const minutes = punchDate.getUTCMinutes();
-  const totalMinutes = hours * 60 + minutes;
-  const officeMinutes = 10 * 60 + 45; // 10:45 AM
-  
-  return Math.max(0, totalMinutes - officeMinutes);
+  if (log.lateEvaluatedAt) {
+    return {
+      isLate: !!log.isLate,
+      lateMinutes: log.lateMinutes || 0
+    };
+  }
+
+  // Not yet evaluated — evaluate & persist so subsequent reads are fast.
+  try {
+    await evaluateAndPersistLateness(log);
+    return {
+      isLate: !!log.isLate,
+      lateMinutes: log.lateMinutes || 0
+    };
+  } catch (e) {
+    // Never let lateness resolution crash the endpoint.
+    console.error('resolveLateness fallback error:', e.message);
+    return { isLate: false, lateMinutes: 0 };
+  }
 };
 
 // ============================================
@@ -99,51 +91,50 @@ const getLateMinutes = (punchTime) => {
 router.use(protect);
 
 // ============================================
-// ATTENDANCE ROUTES FOR EMPLOYEES
+// GET /api/employee/attendance/today
 // ============================================
-
-// GET /api/employee/attendance/today - Get today's attendance status
 router.get('/attendance/today', async (req, res) => {
   try {
     const userId = req.user._id;
-    
-    // Get today's date in IST
+
     const todayStr = getISTDateString(new Date());
     const { start, end } = getUTCDayRange(todayStr);
-    
+
     const punchLogs = await EmployeePunchLog.find({
       employeeId: userId,
       date: { $gte: start, $lte: end }
     });
-    
+
     const punchLog = punchLogs.length > 0 ? punchLogs[punchLogs.length - 1] : null;
-    
+
     const onLeave = await LeaveApplication.findOne({
       employeeId: userId,
       startDate: { $lte: end },
       endDate: { $gte: start },
       status: 'approved'
     });
-    
+
     let status = 'absent';
     let statusMessage = 'Not Punched In';
     let punchInTime = null;
     let punchOutTime = null;
     let isLate = false;
     let lateMinutes = 0;
-    
+    let shiftStartMinutesUsed = null;
+
     if (onLeave) {
       status = 'on_leave';
       statusMessage = `On Leave (${onLeave.leaveType})`;
     } else if (punchLog) {
       punchInTime = punchLog.punchIn;
       punchOutTime = punchLog.punchOut;
-      
+
       if (punchLog.punchIn) {
-        // Check if late using the stored time as-is
-        isLate = isLatePunch(punchLog.punchIn);
-        lateMinutes = getLateMinutes(punchLog.punchIn);
-        
+        const lateness = await resolveLateness(punchLog);
+        isLate = lateness.isLate;
+        lateMinutes = lateness.lateMinutes;
+        shiftStartMinutesUsed = punchLog.shiftStartMinutesUsed ?? null;
+
         if (isLate) {
           status = 'late';
           statusMessage = 'Punched In (Late)';
@@ -152,7 +143,7 @@ router.get('/attendance/today', async (req, res) => {
           statusMessage = 'Punched In (On Time)';
         }
       }
-      
+
       if (punchLog.punchOut) {
         status = 'completed';
         statusMessage = 'Shift Completed';
@@ -160,7 +151,7 @@ router.get('/attendance/today', async (req, res) => {
         statusMessage = 'Working (Punched In)';
       }
     }
-    
+
     res.json({
       success: true,
       data: {
@@ -169,8 +160,9 @@ router.get('/attendance/today', async (req, res) => {
         punchInTime,
         punchOutTime,
         onLeave: !!onLeave,
-        isLate: isLate,
-        lateMinutes: lateMinutes
+        isLate,
+        lateMinutes,
+        shiftStartMinutesUsed
       }
     });
   } catch (error) {
@@ -179,14 +171,16 @@ router.get('/attendance/today', async (req, res) => {
   }
 });
 
-// GET /api/employee/attendance/monthly-stats - Get monthly attendance stats
+// ============================================
+// GET /api/employee/attendance/monthly-stats
+// ============================================
 router.get('/attendance/monthly-stats', async (req, res) => {
   try {
     const userId = req.user._id;
     const { month, year } = req.query;
-    
+
     let startOfMonth, endOfMonth;
-    
+
     if (month && year) {
       const monthNum = parseInt(month) - 1;
       const yearNum = parseInt(year);
@@ -198,14 +192,12 @@ router.get('/attendance/monthly-stats', async (req, res) => {
       startOfMonth = new Date(Date.UTC(yearNum, monthNum - 1, 1, 0, 0, 0));
       endOfMonth = new Date(Date.UTC(yearNum, monthNum, 0, 23, 59, 59, 999));
     }
-    
-    // Get all punch logs for the month
+
     const punchLogs = await EmployeePunchLog.find({
       employeeId: userId,
       date: { $gte: startOfMonth, $lte: endOfMonth }
     });
-    
-    // Get all approved leaves for the month
+
     const leaves = await LeaveApplication.find({
       employeeId: userId,
       status: 'approved',
@@ -215,8 +207,7 @@ router.get('/attendance/monthly-stats', async (req, res) => {
         { startDate: { $lte: startOfMonth }, endDate: { $gte: endOfMonth } }
       ]
     });
-    
-    // Create a map of punch logs by date (using the stored date as-is)
+
     const punchMap = new Map();
     punchLogs.forEach(log => {
       const dateStr = getDateString(log.date);
@@ -224,8 +215,7 @@ router.get('/attendance/monthly-stats', async (req, res) => {
         punchMap.set(dateStr, log);
       }
     });
-    
-    // Create a map of leave days (using IST date string for display)
+
     const leaveMap = new Map();
     leaves.forEach(leave => {
       const start = new Date(leave.startDate);
@@ -239,14 +229,13 @@ router.get('/attendance/monthly-stats', async (req, res) => {
         current.setDate(current.getDate() + 1);
       }
     });
-    
-    // Calculate stats
+
     let workingDays = 0;
     const days = [];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
+
     const todayStr = getISTDateString(new Date());
-    
+
     const current = new Date(startOfMonth);
     while (current <= endOfMonth) {
       const dateStr = getDateString(current);
@@ -254,36 +243,30 @@ router.get('/attendance/monthly-stats', async (req, res) => {
         current.setUTCDate(current.getUTCDate() + 1);
         continue;
       }
-      
-      // Skip future dates (IST)
+
       if (dateStr > todayStr) {
         current.setUTCDate(current.getUTCDate() + 1);
         continue;
       }
-      
+
       const dayOfWeek = current.getUTCDay();
       const isWorkingDay = dayOfWeek >= 1 && dayOfWeek <= 5;
-      
-      // Get punch log for this day
+
       const punchLog = punchMap.get(dateStr) || null;
-      
-      // Check if on leave
       const onLeave = leaveMap.get(dateStr) || null;
-      
-      // Determine status
+
       let status = 'absent';
       let punchIn = null;
       let punchOut = null;
       let isLate = false;
       let lateMinutes = 0;
-      
+
       if (!isWorkingDay) {
         status = 'weekend';
       } else if (onLeave) {
         status = 'leave';
         workingDays++;
       } else if (punchLog) {
-        // Get punch times from the log
         if (punchLog.sessions && punchLog.sessions.length > 0) {
           const firstSession = punchLog.sessions[0];
           const lastSession = punchLog.sessions[punchLog.sessions.length - 1];
@@ -293,12 +276,13 @@ router.get('/attendance/monthly-stats', async (req, res) => {
           punchIn = punchLog.punchIn;
           punchOut = punchLog.punchOut;
         }
-        
-        // Check if late using the stored time as-is
+
         if (punchIn) {
-          isLate = isLatePunch(punchIn);
-          lateMinutes = getLateMinutes(punchIn);
-          
+          // ✅ Read persisted lateness (self-heals if missing)
+          const lateness = await resolveLateness(punchLog);
+          isLate = lateness.isLate;
+          lateMinutes = lateness.lateMinutes;
+
           if (isLate) {
             status = 'late';
           } else if (punchOut) {
@@ -309,36 +293,34 @@ router.get('/attendance/monthly-stats', async (req, res) => {
         } else if (punchOut) {
           status = 'partial';
         }
-        
+
         workingDays++;
       } else {
-        // No punch log, no leave - absent
         if (isWorkingDay) {
           workingDays++;
         }
       }
-      
+
       days.push({
         date: dateStr,
         dayName: dayNames[dayOfWeek],
-        status: status,
-        punchIn: punchIn,
-        punchOut: punchOut,
+        status,
+        punchIn,
+        punchOut,
         isWeekend: !isWorkingDay,
         leaveType: onLeave?.leaveType || null,
-        isLate: isLate,
-        lateMinutes: lateMinutes
+        isLate,
+        lateMinutes
       });
-      
+
       current.setUTCDate(current.getUTCDate() + 1);
     }
-    
-    // Calculate totals
+
     const presentDays = days.filter(d => d.status === 'present' || d.status === 'late');
     const absentDays = days.filter(d => d.status === 'absent');
     const lateDays = days.filter(d => d.status === 'late');
     const leaveDays = days.filter(d => d.status === 'leave');
-    
+
     res.json({
       success: true,
       data: {
@@ -348,47 +330,43 @@ router.get('/attendance/monthly-stats', async (req, res) => {
         leaveDays: leaveDays.length,
         lateDays: lateDays.length,
         totalPunches: punchLogs.length,
-        days: days,
+        days,
         lateCount: lateDays.length
       }
     });
-    
   } catch (error) {
     console.error('Error fetching monthly stats:', error);
     res.status(500).json({ error: 'Failed to fetch monthly stats' });
   }
 });
 
+// ============================================
+// GET /api/employee/attendance/timeline
+// ============================================
 router.get('/attendance/timeline', async (req, res) => {
   try {
     const userId = req.user._id;
     const { months = 12 } = req.query;
-    
+
     console.log(`📊 Fetching attendance timeline for user ${userId} with ${months} months`);
-    
+
     const todayStr = getISTDateString(new Date());
     const [year, month, day] = todayStr.split('-').map(Number);
-    
+
     const endDate = new Date(Date.UTC(year, month - 1, day, 23, 59, 59, 999));
     const startDate = new Date(endDate);
     startDate.setUTCMonth(startDate.getUTCMonth() - parseInt(months));
     startDate.setUTCHours(0, 0, 0, 0);
-    
+
     console.log(`📅 Date range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
-    
+
     const punchLogs = await EmployeePunchLog.find({
       employeeId: userId,
       date: { $gte: startDate, $lte: endDate }
     }).sort({ date: 1 });
-    
+
     console.log(`📊 Found ${punchLogs.length} punch logs for user`);
-    
-    // ✅ DEBUG: Log what's in the database
-    if (punchLogs.length > 0) {
-      console.log('📋 Sample log from DB:', JSON.stringify(punchLogs[0], null, 2));
-    }
-    
-    // ✅ Get leaves with isHalfDay and halfDayType
+
     const leaves = await LeaveApplication.find({
       employeeId: userId,
       status: 'approved',
@@ -398,9 +376,9 @@ router.get('/attendance/timeline', async (req, res) => {
         { startDate: { $lte: startDate }, endDate: { $gte: endDate } }
       ]
     });
-    
+
     console.log(`📊 Found ${leaves.length} approved leaves`);
-    
+
     const punchMap = {};
     punchLogs.forEach(log => {
       const dateStr = getDateString(log.date);
@@ -408,8 +386,7 @@ router.get('/attendance/timeline', async (req, res) => {
         punchMap[dateStr] = log;
       }
     });
-    
-    // ✅ Build leave map with full leave objects
+
     const leaveMap = {};
     leaves.forEach(leave => {
       const start = new Date(leave.startDate);
@@ -423,10 +400,10 @@ router.get('/attendance/timeline', async (req, res) => {
         current.setDate(current.getDate() + 1);
       }
     });
-    
+
     const days = [];
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    
+
     const current = new Date(startDate);
     while (current <= endDate) {
       const dateStr = getDateString(current);
@@ -434,99 +411,100 @@ router.get('/attendance/timeline', async (req, res) => {
         current.setUTCDate(current.getUTCDate() + 1);
         continue;
       }
-      
+
       const dayOfWeek = current.getUTCDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      
+
       const dayLog = punchMap[dateStr] || null;
       const onLeave = leaveMap[dateStr] || null;
-      
+
       let status = 'absent';
       let punchInUTC = null;
       let punchOutUTC = null;
       let sessions = [];
       let isLate = false;
       let lateMinutes = 0;
-     if (isWeekend) {
-  status = 'weekend';
-} else if (dayLog) {
-  const dbSessions = dayLog.sessions || [];
 
-  if (dbSessions.length > 0) {
-    sessions = dbSessions.map(session => ({
-      punchInUTC: session.punchIn ? session.punchIn.toISOString() : null,
-      punchOutUTC: session.punchOut ? session.punchOut.toISOString() : null
-    }));
+      if (isWeekend) {
+        status = 'weekend';
+      } else if (dayLog) {
+        const dbSessions = dayLog.sessions || [];
 
-    const firstSession = dbSessions[0];
-    const lastSession = dbSessions[dbSessions.length - 1];
+        if (dbSessions.length > 0) {
+          sessions = dbSessions.map(session => ({
+            punchInUTC: session.punchIn ? session.punchIn.toISOString() : null,
+            punchOutUTC: session.punchOut ? session.punchOut.toISOString() : null
+          }));
 
-    if (firstSession && firstSession.punchIn) {
-      punchInUTC = firstSession.punchIn.toISOString();
-    }
-    if (lastSession && lastSession.punchOut) {
-      punchOutUTC = lastSession.punchOut.toISOString();
-    }
-  } else if (dayLog.punchIn) {
-    punchInUTC = dayLog.punchIn.toISOString();
-    punchOutUTC = dayLog.punchOut ? dayLog.punchOut.toISOString() : null;
-    sessions = [{ punchInUTC, punchOutUTC }];
-  }
+          const firstSession = dbSessions[0];
+          const lastSession = dbSessions[dbSessions.length - 1];
 
-  if (onLeave) {
-    // keep leave as the headline status, but sessions/punchInUTC are now populated
-    status = 'leave';
-  } else if (punchInUTC) {
-    isLate = isLatePunch(punchInUTC);
-    lateMinutes = getLateMinutes(punchInUTC);
-    status = isLate ? 'late' : 'present';
-  }
-} else if (onLeave) {
-  status = 'leave';
-}
-      
+          if (firstSession && firstSession.punchIn) {
+            punchInUTC = firstSession.punchIn.toISOString();
+          }
+          if (lastSession && lastSession.punchOut) {
+            punchOutUTC = lastSession.punchOut.toISOString();
+          }
+        } else if (dayLog.punchIn) {
+          punchInUTC = dayLog.punchIn.toISOString();
+          punchOutUTC = dayLog.punchOut ? dayLog.punchOut.toISOString() : null;
+          sessions = [{ punchInUTC, punchOutUTC }];
+        }
+
+        if (onLeave) {
+          status = 'leave';
+        } else if (punchInUTC) {
+          // ✅ Read persisted lateness (self-heals if missing)
+          const lateness = await resolveLateness(dayLog);
+          isLate = lateness.isLate;
+          lateMinutes = lateness.lateMinutes;
+          status = isLate ? 'late' : 'present';
+        }
+      } else if (onLeave) {
+        status = 'leave';
+      }
+
       days.push({
         date: dateStr,
         dayName: dayNames[dayOfWeek],
-        status: status,
-        isWeekend: isWeekend,
-        punchInUTC: punchInUTC,
-        punchOutUTC: punchOutUTC,
-        sessions: sessions,
+        status,
+        isWeekend,
+        punchInUTC,
+        punchOutUTC,
+        sessions,
         leaveType: onLeave?.leaveType || null,
         isHalfDay: onLeave?.isHalfDay || false,
         halfDayType: onLeave?.halfDayType || null,
         leaveId: onLeave?._id || null,
-        isLate: isLate,
-        lateMinutes: lateMinutes
+        isLate,
+        lateMinutes
       });
-      
+
       current.setUTCDate(current.getUTCDate() + 1);
     }
-    
+
     console.log(`📊 Processed ${days.length} days for timeline`);
-    console.log(`📊 Days with punch data: ${days.filter(d => d.punchInUTC).length}`);
-    
+
     const workingDays = days.filter(d => !d.isWeekend);
     const presentDays = workingDays.filter(d => d.status === 'present' || d.status === 'late');
     const absentDays = workingDays.filter(d => d.status === 'absent');
     const leaveDays = workingDays.filter(d => d.status === 'leave');
     const lateDays = workingDays.filter(d => d.status === 'late');
-    
+
     let totalEffectiveHours = 0;
     let totalGrossHours = 0;
-    
+
     presentDays.forEach(day => {
       if (day.sessions && day.sessions.length > 0) {
         let effectiveHours = 0;
         let firstIn = null;
         let lastOut = null;
-        
+
         day.sessions.forEach(session => {
           if (session.punchInUTC) {
             const inTime = new Date(session.punchInUTC);
             if (!firstIn || inTime < firstIn) firstIn = inTime;
-            
+
             if (session.punchOutUTC) {
               const outTime = new Date(session.punchOutUTC);
               effectiveHours += (outTime - inTime) / (1000 * 60 * 60);
@@ -534,11 +512,11 @@ router.get('/attendance/timeline', async (req, res) => {
             }
           }
         });
-        
+
         if (firstIn && lastOut) {
           totalGrossHours += (lastOut - firstIn) / (1000 * 60 * 60);
         }
-        
+
         totalEffectiveHours += effectiveHours;
       } else if (day.punchInUTC && day.punchOutUTC) {
         const inTime = new Date(day.punchInUTC);
@@ -547,15 +525,15 @@ router.get('/attendance/timeline', async (req, res) => {
         totalGrossHours += (outTime - inTime) / (1000 * 60 * 60);
       }
     });
-    
+
     const avgEffectiveHours = presentDays.length > 0 ? totalEffectiveHours / presentDays.length : 0;
     const avgGrossHours = presentDays.length > 0 ? totalGrossHours / presentDays.length : 0;
     const latePercentage = presentDays.length > 0 ? (lateDays.length / presentDays.length) * 100 : 0;
-    
+
     res.json({
       success: true,
       data: {
-        days: days,
+        days,
         summary: {
           totalDays: days.length,
           workingDays: workingDays.length,
@@ -564,15 +542,14 @@ router.get('/attendance/timeline', async (req, res) => {
           onLeave: leaveDays.length,
           weekends: days.filter(d => d.isWeekend).length,
           late: lateDays.length,
-          totalEffectiveHours: totalEffectiveHours,
-          totalGrossHours: totalGrossHours,
+          totalEffectiveHours,
+          totalGrossHours,
           averageEffectiveHours: avgEffectiveHours,
           averageGrossHours: avgGrossHours,
-          latePercentage: latePercentage
+          latePercentage
         }
       }
     });
-    
   } catch (error) {
     console.error('Error fetching attendance timeline:', error);
     res.status(500).json({ error: 'Failed to fetch attendance timeline' });
@@ -580,32 +557,29 @@ router.get('/attendance/timeline', async (req, res) => {
 });
 
 // ============================================
-// DEBUG ENDPOINT - Check what logs exist for a user
+// DEBUG ENDPOINT
 // ============================================
 router.get('/attendance/debug', async (req, res) => {
   try {
     const userId = req.user._id;
-    
+
     console.log(`🔍 Debug: Fetching all punch logs for user ${userId}`);
-    
-    // Get all punch logs for this user (no date filter)
+
     const allLogs = await EmployeePunchLog.find({ employeeId: userId })
       .sort({ date: -1 })
       .limit(100);
-    
-    // Get user info
+
     const user = await User.findById(userId).select('name email employeeCode');
-    
-    // Get count of logs by month
+
     const logsByMonth = {};
     allLogs.forEach(log => {
       const dateStr = getDateString(log.date);
       if (dateStr) {
-        const monthKey = dateStr.substring(0, 7); // YYYY-MM
+        const monthKey = dateStr.substring(0, 7);
         logsByMonth[monthKey] = (logsByMonth[monthKey] || 0) + 1;
       }
     });
-    
+
     res.json({
       success: true,
       user: {
@@ -615,13 +589,17 @@ router.get('/attendance/debug', async (req, res) => {
         employeeCode: user?.employeeCode || 'Not set'
       },
       logCount: allLogs.length,
-      logsByMonth: logsByMonth,
+      logsByMonth,
       logs: allLogs.map(log => ({
         date: log.date,
         punchIn: log.punchIn,
         punchOut: log.punchOut,
         sessionCount: log.sessions?.length || 0,
-        isManualCorrection: log.isManualCorrection || false
+        isManualCorrection: log.isManualCorrection || false,
+        isLate: log.isLate || false,
+        lateMinutes: log.lateMinutes || 0,
+        shiftStartMinutesUsed: log.shiftStartMinutesUsed ?? null,
+        lateEvaluatedAt: log.lateEvaluatedAt || null
       }))
     });
   } catch (error) {
@@ -631,24 +609,22 @@ router.get('/attendance/debug', async (req, res) => {
 });
 
 // ============================================
-// LEAVE MANAGEMENT (Employee)
+// POST /api/employee/leave/apply
 // ============================================
-
-// POST /api/employee/leave/apply - Apply for leave
 router.post('/leave/apply', async (req, res) => {
   try {
     const { leaveType, startDate, endDate, isHalfDay, halfDayType, reason } = req.body;
     const userId = req.user._id;
-    
+
     if (!leaveType || !startDate || !endDate || !reason) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    
+
     const leaveTypeConfig = await LeaveType.findOne({ name: leaveType, isActive: true });
     if (!leaveTypeConfig) {
       return res.status(400).json({ error: 'Invalid or inactive leave type' });
     }
-    
+
     const overlapping = await LeaveApplication.findOne({
       employeeId: userId,
       status: { $in: ['pending', 'approved'] },
@@ -658,18 +634,18 @@ router.post('/leave/apply', async (req, res) => {
         { endDate: { $gte: new Date(startDate), $lte: new Date(endDate) } }
       ]
     });
-    
+
     if (overlapping) {
-      return res.status(400).json({ 
-        error: 'You already have a leave request overlapping with these dates' 
+      return res.status(400).json({
+        error: 'You already have a leave request overlapping with these dates'
       });
     }
-    
+
     const user = await User.findById(userId);
     const currentBalance = user.leaveBalances.get(leaveType) || 0;
     const daysDiff = Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1;
     const daysToDeduct = isHalfDay ? 0.5 : daysDiff;
-    
+
     if (currentBalance < daysToDeduct) {
       return res.status(400).json({
         error: 'Insufficient leave balance',
@@ -677,29 +653,28 @@ router.post('/leave/apply', async (req, res) => {
         requested: daysToDeduct
       });
     }
-    
-    // ✅ FIX: Save halfDayType properly
+
     const leaveApplication = new LeaveApplication({
       employeeId: userId,
       leaveType,
       startDate: new Date(startDate),
       endDate: new Date(endDate),
       isHalfDay: isHalfDay || false,
-      halfDayType: isHalfDay ? (halfDayType || 'first') : null, // ✅ Save the half day type
+      halfDayType: isHalfDay ? (halfDayType || 'first') : null,
       reason: reason.trim(),
       status: 'pending'
     });
-    
+
     await leaveApplication.save();
-    
+
     const hrUsers = await User.find({ role: 'HR' });
     for (const hr of hrUsers) {
       await hr.addNotification({
         type: 'leave_request',
-        message: `${user.name} has requested ${leaveType} leave from ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`,
+        message: `${user.name} has requested ${leaveType} leave from ${new Date(startDate).toLocaleDateString()} to ${new Date(endDate).toLocaleDateString()}`
       });
     }
-    
+
     const io = req.app.get('io');
     if (io) {
       hrUsers.forEach(hr => {
@@ -711,7 +686,7 @@ router.post('/leave/apply', async (req, res) => {
         });
       });
     }
-    
+
     res.status(201).json({
       success: true,
       data: leaveApplication,
@@ -723,36 +698,37 @@ router.post('/leave/apply', async (req, res) => {
   }
 });
 
-// GET /api/employee/leave/history - Get employee's leave history
+// ============================================
+// GET /api/employee/leave/history
+// ============================================
 router.get('/leave/history', async (req, res) => {
   try {
     const userId = req.user._id;
     const { status, year } = req.query;
-    
+
     let filter = { employeeId: userId };
     if (status) filter.status = status;
-    
+
     if (year) {
       const start = new Date(year, 0, 1);
       const end = new Date(year, 11, 31);
       filter.startDate = { $gte: start, $lte: end };
     }
-    
-    const leaves = await LeaveApplication.find(filter)
-      .sort({ appliedAt: -1 });
-    
+
+    const leaves = await LeaveApplication.find(filter).sort({ appliedAt: -1 });
+
     const leaveTypes = await LeaveType.find({ isActive: true });
     const maxDaysMap = {};
     leaveTypes.forEach(lt => {
       maxDaysMap[lt.name] = lt.maxDays;
     });
-    
+
     const enhancedLeaves = leaves.map(leave => ({
       ...leave.toObject(),
       maxDays: maxDaysMap[leave.leaveType] || 0,
       daysRequested: Math.ceil((leave.endDate - leave.startDate) / (1000 * 60 * 60 * 24)) + 1
     }));
-    
+
     res.json({ success: true, data: enhancedLeaves });
   } catch (error) {
     console.error('Error fetching leave history:', error);
@@ -760,15 +736,17 @@ router.get('/leave/history', async (req, res) => {
   }
 });
 
-// GET /api/employee/leave/balance - Get employee's leave balances
+// ============================================
+// GET /api/employee/leave/balance
+// ============================================
 router.get('/leave/balance', async (req, res) => {
   try {
     const user = await User.findById(req.user._id).select('leaveBalances');
-    
+
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
+
     const balances = {};
     if (user.leaveBalances && typeof user.leaveBalances === 'object') {
       if (user.leaveBalances instanceof Map) {
@@ -781,56 +759,55 @@ router.get('/leave/balance', async (req, res) => {
         });
       }
     }
-    
+
     const leaveTypes = await LeaveType.find({ isActive: true });
     const maxDays = {};
     leaveTypes.forEach(lt => {
       maxDays[lt.name] = lt.maxDays;
     });
-    
+
     leaveTypes.forEach(lt => {
       if (!(lt.name in balances)) {
         balances[lt.name] = 0;
       }
     });
-    
+
     res.json({
       success: true,
-      data: {
-        balances,
-        maxDays
-      }
+      data: { balances, maxDays }
     });
   } catch (error) {
     console.error('Error fetching leave balance:', error);
-    res.status(500).json({ 
+    res.status(500).json({
       error: 'Failed to fetch leave balance',
-      details: error.message 
+      details: error.message
     });
   }
 });
 
-// POST /api/employee/timesheet/missed-punch - Report a missed punch
+// ============================================
+// POST /api/employee/timesheet/missed-punch
+// ============================================
 router.post('/timesheet/missed-punch', async (req, res) => {
   try {
     const { date, type, expectedTime, reason } = req.body;
     const userId = req.user._id;
-    
+
     if (!date || !type || !expectedTime || !reason) {
       return res.status(400).json({ error: 'All fields are required' });
     }
-    
+
     const existing = await MissedPunchRequest.findOne({
       employeeId: userId,
       date: new Date(date),
       type,
       status: 'pending'
     });
-    
+
     if (existing) {
       return res.status(400).json({ error: 'You already have a pending request for this date and type' });
     }
-    
+
     const missedPunch = new MissedPunchRequest({
       employeeId: userId,
       date: new Date(date),
@@ -839,18 +816,18 @@ router.post('/timesheet/missed-punch', async (req, res) => {
       reason: reason.trim(),
       status: 'pending'
     });
-    
+
     await missedPunch.save();
-    
+
     const user = await User.findById(userId);
     const hrUsers = await User.find({ role: 'HR' });
     for (const hr of hrUsers) {
       await hr.addNotification({
         type: 'missed_punch_request',
-        message: `${user.name} has reported a missed ${type === 'in' ? 'punch-in' : 'punch-out'} for ${new Date(date).toLocaleDateString()}`,
+        message: `${user.name} has reported a missed ${type === 'in' ? 'punch-in' : 'punch-out'} for ${new Date(date).toLocaleDateString()}`
       });
     }
-    
+
     res.status(201).json({
       success: true,
       data: missedPunch,
@@ -862,13 +839,15 @@ router.post('/timesheet/missed-punch', async (req, res) => {
   }
 });
 
-// GET /api/employee/profile - Get employee profile
+// ============================================
+// GET /api/employee/profile
+// ============================================
 router.get('/profile', async (req, res) => {
   try {
     const user = await User.findById(req.user._id)
       .select('-password')
       .populate('organizationId', 'companyName website address');
-    
+
     const profile = {
       id: user._id,
       name: user.name,
@@ -893,7 +872,7 @@ router.get('/profile', async (req, res) => {
       } : null,
       leaveBalances: Object.fromEntries(user.leaveBalances || new Map())
     };
-    
+
     res.json({ success: true, data: profile });
   } catch (error) {
     console.error('Error fetching profile:', error);
@@ -901,13 +880,16 @@ router.get('/profile', async (req, res) => {
   }
 });
 
-// PUT /api/employee/profile - Update employee profile
+// ============================================
+// PUT /api/employee/profile
+// ✅ Shift changes now recorded in ShiftHistory
+// ============================================
 router.put('/profile', async (req, res) => {
   try {
-    const { 
-      phoneNumber, 
-      department, 
-      designation, 
+    const {
+      phoneNumber,
+      department,
+      designation,
       name,
       dateOfJoining,
       dateOfBirth,
@@ -918,32 +900,60 @@ router.put('/profile', async (req, res) => {
       shiftMinute,
       shiftAmPm
     } = req.body;
-    
+
     const user = await User.findById(req.user._id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
-    
-    // Existing fields
+
     if (name) user.name = name;
     if (phoneNumber) user.phoneNumber = phoneNumber;
     if (department && user.role !== 'Client') user.department = department;
     if (designation && user.role !== 'Client') user.designation = designation;
-    
-    // NEW FIELDS - Only for non-Admin, non-Super Admin, non-Client
+
     if (user.role !== 'Admin' && user.role !== 'Super Admin' && user.role !== 'Client') {
       if (dateOfJoining !== undefined) user.dateOfJoining = dateOfJoining || null;
       if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth || null;
       if (contactNumber !== undefined) user.contactNumber = contactNumber || '';
       if (emergencyContact !== undefined) user.emergencyContact = emergencyContact || '';
       if (address !== undefined) user.address = address || '';
-      if (shiftHour !== undefined) user.shiftHour = parseInt(shiftHour) || 9;
-      if (shiftMinute !== undefined) user.shiftMinute = parseInt(shiftMinute) || 0;
-      if (shiftAmPm !== undefined) user.shiftAmPm = shiftAmPm || 'AM';
+
+      // ------------------------------------------------------------
+      // ✅ Shift handling — capture -> history -> commit
+      // ------------------------------------------------------------
+      const parsedShiftHour = shiftHour !== undefined ? parseInt(shiftHour) : undefined;
+      const parsedShiftMinute = shiftMinute !== undefined ? parseInt(shiftMinute) : undefined;
+      const parsedShiftAmPm = shiftAmPm !== undefined ? shiftAmPm : undefined;
+
+      const prevHour = user.shiftHour ?? 9;
+      const prevMinute = user.shiftMinute ?? 0;
+      const prevAmPm = user.shiftAmPm ?? 'AM';
+
+      const shiftChanging =
+        (parsedShiftHour !== undefined && parsedShiftHour !== prevHour) ||
+        (parsedShiftMinute !== undefined && parsedShiftMinute !== prevMinute) ||
+        (parsedShiftAmPm !== undefined && parsedShiftAmPm !== prevAmPm);
+
+      if (shiftChanging) {
+        const nextHour = parsedShiftHour !== undefined ? parsedShiftHour : prevHour;
+        const nextMinute = parsedShiftMinute !== undefined ? parsedShiftMinute : prevMinute;
+        const nextAmPm = parsedShiftAmPm !== undefined ? parsedShiftAmPm : prevAmPm;
+
+        await recordShiftChange(
+          user._id,
+          { hour: nextHour, minute: nextMinute, ampm: nextAmPm },
+          req.user._id,
+          `Shift updated by self via profile`
+        );
+
+        user.shiftHour = nextHour;
+        user.shiftMinute = nextMinute;
+        user.shiftAmPm = nextAmPm;
+      }
     }
-    
+
     await user.save();
-    
+
     res.json({
       success: true,
       data: {
@@ -967,13 +977,10 @@ router.put('/profile', async (req, res) => {
     res.status(500).json({ error: 'Failed to update profile' });
   }
 });
-// ... (existing imports)
 
 // ============================================
-// TEAM & CULTURE ENDPOINT
+// GET /api/employee/team-culture
 // ============================================
-
-// GET /api/employee/team-culture - Get upcoming birthdays, new hires, and anniversaries
 router.get('/team-culture', async (req, res) => {
   try {
     const now = new Date();
@@ -984,7 +991,6 @@ router.get('/team-culture', async (req, res) => {
     const oneMonthAgo = new Date(now);
     oneMonthAgo.setUTCMonth(oneMonthAgo.getUTCMonth() - 1);
 
-    // Fetch all active users, excluding clients
     const users = await User.find({
       isActive: true,
       role: { $ne: 'Client' }
@@ -995,7 +1001,6 @@ router.get('/team-culture', async (req, res) => {
     const newHires = [];
 
     users.forEach((user) => {
-      // --- Check for Birthdays ---
       if (user.dateOfBirth) {
         const birthDate = new Date(user.dateOfBirth);
         if (
@@ -1012,7 +1017,6 @@ router.get('/team-culture', async (req, res) => {
         }
       }
 
-      // --- Check for Work Anniversaries ---
       if (user.dateOfJoining) {
         const joinDate = new Date(user.dateOfJoining);
         const years = currentYear - joinDate.getUTCFullYear();
@@ -1032,7 +1036,6 @@ router.get('/team-culture', async (req, res) => {
         }
       }
 
-      // --- Check for New Hires ---
       if (user.dateOfJoining) {
         const joinDate = new Date(user.dateOfJoining);
         if (joinDate >= oneMonthAgo && joinDate <= now) {
@@ -1048,10 +1051,9 @@ router.get('/team-culture', async (req, res) => {
       }
     });
 
-    // Sort results
     birthdays.sort((a, b) => new Date(a.date).getUTCDate() - new Date(b.date).getUTCDate());
     anniversaries.sort((a, b) => new Date(a.date).getUTCDate() - new Date(b.date).getUTCDate());
-    newHires.sort((a, b) => new Date(b.date) - new Date(a.date)); // Most recent first
+    newHires.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.json({
       success: true,
@@ -1061,7 +1063,6 @@ router.get('/team-culture', async (req, res) => {
         newHires: newHires.slice(0, 5)
       }
     });
-
   } catch (error) {
     console.error('Error fetching team culture data:', error);
     res.status(500).json({ error: 'Failed to fetch team culture data' });

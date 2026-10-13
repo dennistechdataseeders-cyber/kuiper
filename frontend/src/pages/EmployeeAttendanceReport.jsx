@@ -19,7 +19,6 @@ import toast from 'react-hot-toast';
 // ============================================================
 
 const IST_OFFSET_MINUTES = 5 * 60 + 30; // +05:30
-const OFFICE_START_MINUTES = 10 * 60 + 45; // 10:45 AM IST cutoff
 
 const formatTime = (dateString) => {
   if (!dateString) return '00:00';
@@ -71,20 +70,16 @@ const minutesFraction = (minutes) => {
   return totalSeconds / 86400;
 };
 
-const getLateMinutes = (punchInUTC) => {
-  if (!punchInUTC) return 0;
-  try {
-    const d = new Date(punchInUTC);
-    if (isNaN(d.getTime())) return 0;
-
-    let total = d.getUTCHours() * 60 + d.getUTCMinutes() + IST_OFFSET_MINUTES;
-    total = ((total % 1440) + 1440) % 1440;
-
-    if (total <= OFFICE_START_MINUTES) return 0;
-    return total - OFFICE_START_MINUTES;
-  } catch (e) {
-    return 0;
-  }
+/**
+ * ✅ Shift-based lateness (Option B — ShiftHistory)
+ * Reads the persisted `lateMinutes` field from the API response.
+ * The backend computes this once at write-time using the shift that
+ * was active on that specific date. The frontend NEVER recomputes it.
+ */
+const getRecordLateMinutes = (rec) => {
+  if (!rec) return 0;
+  const v = Number(rec.lateMinutes);
+  return Number.isFinite(v) && v > 0 ? v : 0;
 };
 
 const formatMinutesToHHMM = (minutes) => {
@@ -108,8 +103,20 @@ const getStatusInfo = (status) => {
     case 'Leave': return { code: 'L', color: 'bg-indigo-100 text-indigo-700' };
     case 'Weekend': return { code: 'WO', color: 'bg-slate-100 text-slate-500' };
     case 'Partial': return { code: '½P', color: 'bg-blue-100 text-blue-700' };
+    case 'Holiday': return { code: 'H', color: 'bg-red-100 text-red-700' };
     default: return { code: '?', color: 'bg-slate-100 text-slate-700' };
   }
+};
+
+/**
+ * ✅ Whole-day column tint helper.
+ * When the record is a company holiday, the entire column for that
+ * day is tinted red across all rows of the table.
+ */
+const getDayColumnClass = (rec) => {
+  if (!rec) return '';
+  if (rec.holiday) return 'bg-red-100 text-red-800';
+  return '';
 };
 
 const getWorkingDays = (year, month, leaveCount = 0) => {
@@ -136,7 +143,8 @@ const countDailyBreaks = (rec) => {
   if (
     rec.status === 'Weekend' ||
     rec.status === 'Leave' ||
-    rec.status === 'Absent'
+    rec.status === 'Absent' ||
+    rec.status === 'Holiday'
   ) {
     return 0;
   }
@@ -223,6 +231,9 @@ const EmployeeAttendanceReport = () => {
   //   - totalBreakMinutes = gross − effective (informational)
   // (Summary strip removed from UI — kept only for the Excel
   //  header line.)
+  //
+  // ✅ Lateness totals come from the persisted `lateMinutes`
+  //    field on each record (Option B — ShiftHistory).
   // ============================================================
   const groupedAndSummarizedData = useMemo(() => {
     if (!reportData || reportData.length === 0) {
@@ -265,7 +276,8 @@ const EmployeeAttendanceReport = () => {
             break;
           case 'Late':
             totalPresent += 1;
-            totalLateMinutes += getLateMinutes(record.punchInUTC);
+            // ✅ Persisted lateness only — no local recompute
+            totalLateMinutes += getRecordLateMinutes(record);
             break;
           case 'Partial':
             totalPresent += 0.5;
@@ -333,6 +345,12 @@ const EmployeeAttendanceReport = () => {
   //   - Keeps per-day "Breaks" (count) and "Break Duration" rows
   //   - Keeps the compact per-employee summary line above the grid
   //   - REMOVED the trailing "Monthly totals summary" block
+  //
+  // ✅ "Late By" row now reads persisted `lateMinutes` from the
+  //    API record. No local 10:45 cutoff.
+  // ✅ Holiday days export as blank cells with "H" status.
+  //    (SheetJS community edition cannot color cells — the
+  //     on-screen table is where visual tinting happens.)
   // ============================================================
   const exportToExcel = () => {
     if (groupedAndSummarizedData.length === 0) {
@@ -411,7 +429,8 @@ const EmployeeAttendanceReport = () => {
         // ---- In Time row ----
         const inTimeRow = ['In Time'];
         employee.records.forEach((rec, idx) => {
-          const fraction = timeFractionIST(rec.punchInUTC);
+          // Holidays → blank
+          const fraction = rec.holiday ? null : timeFractionIST(rec.punchInUTC);
           inTimeRow.push(fraction);
           if (fraction !== null) {
             timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
@@ -422,7 +441,7 @@ const EmployeeAttendanceReport = () => {
         // ---- Out Time row ----
         const outTimeRow = ['Out Time'];
         employee.records.forEach((rec, idx) => {
-          const fraction = timeFractionIST(rec.punchOutUTC);
+          const fraction = rec.holiday ? null : timeFractionIST(rec.punchOutUTC);
           outTimeRow.push(fraction);
           if (fraction !== null) {
             timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
@@ -431,9 +450,10 @@ const EmployeeAttendanceReport = () => {
         wsData.push(outTimeRow);
 
         // ---- Late By row ----
+        // ✅ Reads persisted lateMinutes from the API record.
         const lateByRow = ['Late By'];
         employee.records.forEach((rec, idx) => {
-          const fraction = minutesFraction(getLateMinutes(rec.punchInUTC));
+          const fraction = rec.holiday ? null : minutesFraction(getRecordLateMinutes(rec));
           lateByRow.push(fraction);
           if (fraction !== null) {
             timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
@@ -451,7 +471,7 @@ const EmployeeAttendanceReport = () => {
         // ---- T Duration row ----
         const tDurationRow = ['T Duration'];
         employee.records.forEach((rec, idx) => {
-          const fraction = durationFraction(rec.effectiveHours);
+          const fraction = rec.holiday ? null : durationFraction(rec.effectiveHours);
           tDurationRow.push(fraction);
           if (fraction !== null) {
             timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
@@ -462,7 +482,7 @@ const EmployeeAttendanceReport = () => {
         // ---- Gross Duration row ----
         const grossDurationRow = ['Gross Duration'];
         employee.records.forEach((rec, idx) => {
-          const fraction = durationFraction(rec.grossHours);
+          const fraction = rec.holiday ? null : durationFraction(rec.grossHours);
           grossDurationRow.push(fraction);
           if (fraction !== null) {
             timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
@@ -473,13 +493,17 @@ const EmployeeAttendanceReport = () => {
         // ---- Breaks (count) row ----
         const breakCountRow = ['Breaks'];
         employee.records.forEach((rec) => {
-          breakCountRow.push(countDailyBreaks(rec));
+          breakCountRow.push(rec.holiday ? null : countDailyBreaks(rec));
         });
         wsData.push(breakCountRow);
 
         // ---- Break Duration row ----
         const breakDurationRow = ['Break Duration'];
         employee.records.forEach((rec, idx) => {
+          if (rec.holiday) {
+            breakDurationRow.push(null);
+            return;
+          }
           const eff = rec.effectiveHours || 0;
           const gross = rec.grossHours || 0;
           const breakHours = Math.max(0, gross - eff);
@@ -683,7 +707,10 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map((rec, index) => (
                         <th
                           key={`day-${index}`}
-                          className="px-2 py-1.5 text-center font-black uppercase text-slate-400 tracking-wider min-w-[50px]"
+                          className={`px-2 py-1.5 text-center font-black uppercase tracking-wider min-w-[50px] ${
+                            rec.holiday ? 'bg-red-100 text-red-700' : 'text-slate-400'
+                          }`}
+                          title={rec.holiday ? rec.holidayName : undefined}
                         >
                           Day{index + 1}
                         </th>
@@ -696,7 +723,10 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <th
                           key={`date-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-bold text-slate-500"
+                          className={`px-2 py-1.5 text-center font-bold ${
+                            rec.holiday ? 'bg-red-100 text-red-700' : 'text-slate-500'
+                          }`}
+                          title={rec.holiday ? rec.holidayName : undefined}
                         >
                           {rec.date.split('-')[2]}-{monthNames[selectedMonth - 1].substring(0, 3)}
                         </th>
@@ -709,7 +739,10 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <th
                           key={`weekday-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-bold text-slate-400 italic"
+                          className={`px-2 py-1.5 text-center font-bold italic ${
+                            rec.holiday ? 'bg-red-100 text-red-700' : 'text-slate-400'
+                          }`}
+                          title={rec.holiday ? rec.holidayName : undefined}
                         >
                           {rec.day ? rec.day.substring(0, 3) : ''}
                         </th>
@@ -717,6 +750,7 @@ const EmployeeAttendanceReport = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
+                    {/* In Time — yellow when late, red column when holiday */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         In Time
@@ -724,12 +758,27 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <td
                           key={`in-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-mono text-slate-700"
+                          className={`px-2 py-1.5 text-center font-mono ${
+                            rec.holiday
+                              ? 'bg-red-100 text-red-800'
+                              : rec.isLate
+                              ? 'bg-amber-200 text-amber-900 font-bold'
+                              : 'text-slate-700'
+                          }`}
+                          title={
+                            rec.holiday
+                              ? rec.holidayName
+                              : rec.isLate
+                              ? `Late by ${rec.lateMinutes} min (shift: ${rec.shiftStartMinutesUsed}m)`
+                              : undefined
+                          }
                         >
-                          {formatTime(rec.punchInUTC)}
+                          {rec.holiday ? '—' : formatTime(rec.punchInUTC)}
                         </td>
                       ))}
                     </tr>
+
+                    {/* Out Time */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Out Time
@@ -737,12 +786,16 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <td
                           key={`out-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-mono text-slate-700"
+                          className={`px-2 py-1.5 text-center font-mono ${getDayColumnClass(rec)} ${
+                            rec.holiday ? '' : 'text-slate-700'
+                          }`}
                         >
-                          {formatTime(rec.punchOutUTC)}
+                          {rec.holiday ? '—' : formatTime(rec.punchOutUTC)}
                         </td>
                       ))}
                     </tr>
+
+                    {/* Late By */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Late By
@@ -750,12 +803,16 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <td
                           key={`late-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-mono text-amber-600"
+                          className={`px-2 py-1.5 text-center font-mono ${getDayColumnClass(rec)} ${
+                            rec.holiday ? '' : 'text-amber-600'
+                          }`}
                         >
-                          {formatMinutesToHHMM(getLateMinutes(rec.punchInUTC))}
+                          {rec.holiday ? '—' : formatMinutesToHHMM(getRecordLateMinutes(rec))}
                         </td>
                       ))}
                     </tr>
+
+                    {/* Early By */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Early By
@@ -763,12 +820,16 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <td
                           key={`early-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-mono text-slate-400"
+                          className={`px-2 py-1.5 text-center font-mono ${getDayColumnClass(rec)} ${
+                            rec.holiday ? '' : 'text-slate-400'
+                          }`}
                         >
-                          00:00
+                          {rec.holiday ? '—' : '00:00'}
                         </td>
                       ))}
                     </tr>
+
+                    {/* T Duration */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         T Duration
@@ -776,13 +837,16 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <td
                           key={`tdur-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-bold font-mono text-slate-700"
+                          className={`px-2 py-1.5 text-center font-bold font-mono ${getDayColumnClass(rec)} ${
+                            rec.holiday ? '' : 'text-slate-700'
+                          }`}
                         >
-                          {formatHoursToHHMM(rec.effectiveHours)}
+                          {rec.holiday ? '—' : formatHoursToHHMM(rec.effectiveHours)}
                         </td>
                       ))}
                     </tr>
 
+                    {/* Gross Duration */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Gross Duration
@@ -790,13 +854,16 @@ const EmployeeAttendanceReport = () => {
                       {employee.records.map(rec => (
                         <td
                           key={`gdur-${rec.date}`}
-                          className="px-2 py-1.5 text-center font-bold font-mono text-slate-700"
+                          className={`px-2 py-1.5 text-center font-bold font-mono ${getDayColumnClass(rec)} ${
+                            rec.holiday ? '' : 'text-slate-700'
+                          }`}
                         >
-                          {formatHoursToHHMM(rec.grossHours)}
+                          {rec.holiday ? '—' : formatHoursToHHMM(rec.grossHours)}
                         </td>
                       ))}
                     </tr>
 
+                    {/* Breaks */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Breaks
@@ -806,22 +873,27 @@ const EmployeeAttendanceReport = () => {
                         return (
                           <td
                             key={`brk-${rec.date}`}
-                            className="px-2 py-1.5 text-center"
+                            className={`px-2 py-1.5 text-center ${getDayColumnClass(rec)}`}
                           >
-                            <span
-                              className={`inline-flex items-center justify-center min-w-[24px] h-5 rounded-md text-[9px] font-black ${
-                                dailyBreaks === 0
-                                  ? 'bg-slate-100 text-slate-400'
-                                  : 'bg-indigo-100 text-indigo-700'
-                              }`}
-                            >
-                              {dailyBreaks}
-                            </span>
+                            {rec.holiday ? (
+                              '—'
+                            ) : (
+                              <span
+                                className={`inline-flex items-center justify-center min-w-[24px] h-5 rounded-md text-[9px] font-black ${
+                                  dailyBreaks === 0
+                                    ? 'bg-slate-100 text-slate-400'
+                                    : 'bg-indigo-100 text-indigo-700'
+                                }`}
+                              >
+                                {dailyBreaks}
+                              </span>
+                            )}
                           </td>
                         );
                       })}
                     </tr>
 
+                    {/* Break Duration */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Break Duration
@@ -833,14 +905,17 @@ const EmployeeAttendanceReport = () => {
                         return (
                           <td
                             key={`bdur-${rec.date}`}
-                            className="px-2 py-1.5 text-center font-bold font-mono text-slate-500"
+                            className={`px-2 py-1.5 text-center font-bold font-mono ${getDayColumnClass(rec)} ${
+                              rec.holiday ? '' : 'text-slate-500'
+                            }`}
                           >
-                            {formatHoursToHHMM(breakHours)}
+                            {rec.holiday ? '—' : formatHoursToHHMM(breakHours)}
                           </td>
                         );
                       })}
                     </tr>
 
+                    {/* Status — H code + red column for holiday */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Status
@@ -850,10 +925,11 @@ const EmployeeAttendanceReport = () => {
                         return (
                           <td
                             key={`status-${rec.date}`}
-                            className="px-2 py-1.5 text-center"
+                            className={`px-2 py-1.5 text-center ${getDayColumnClass(rec)}`}
                           >
                             <span
                               className={`inline-flex items-center justify-center w-6 h-5 rounded-md text-[9px] font-black ${statusInfo.color}`}
+                              title={rec.holiday ? rec.holidayName : undefined}
                             >
                               {statusInfo.code}
                             </span>

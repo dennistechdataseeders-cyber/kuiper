@@ -6,7 +6,9 @@ const path = require('path');
 const EmployeePunchLog = require('../models/EmployeePunchLog');
 const User = require('../models/User');
 
-// ✅ FIX: Load environment variables with correct path
+// ✅ Shift-aware late evaluation
+const { evaluateAndPersistLateness } = require('../services/shiftService');
+
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 class BiometricSyncService {
@@ -26,13 +28,10 @@ class BiometricSyncService {
 
     try {
       const MONGO_URI = process.env.MONGO_URI;
-      if (!MONGO_URI) {
-        throw new Error('MONGO_URI not found in environment variables');
-      }
+      if (!MONGO_URI) throw new Error('MONGO_URI not found in environment variables');
 
       console.log('🔄 Connecting to MongoDB...');
 
-      // Use the same connection options as server.js
       await mongoose.connect(MONGO_URI, {
         serverSelectionTimeoutMS: 30000,
         socketTimeoutMS: 45000,
@@ -139,7 +138,6 @@ class BiometricSyncService {
         if (currentSession) {
           currentSession.punchOut = logTime;
           sessions.push(currentSession);
-          console.log(`⚠️ Consecutive IN without OUT: closing previous session at ${logTime.toISOString()}`);
         }
         currentSession = { punchIn: logTime, punchOut: null };
       } else if (direction === 'out' || direction === '2') {
@@ -148,7 +146,6 @@ class BiometricSyncService {
           sessions.push(currentSession);
           currentSession = null;
         } else {
-          console.log(`⚠️ Orphan OUT log detected: creating session at ${logTime.toISOString()}`);
           sessions.push({ punchIn: logTime, punchOut: logTime });
         }
       } else {
@@ -170,10 +167,6 @@ class BiometricSyncService {
     const lastSession = sessions.length > 0 ? sessions[sessions.length - 1] : null;
     const lastOut = lastSession ? lastSession.punchOut : null;
 
-    if (sessions.length > 1) {
-      console.log(`📊 Built ${sessions.length} sessions from ${sortedLogs.length} logs`);
-    }
-
     return {
       sessions,
       punchIn: firstIn,
@@ -193,10 +186,8 @@ class BiometricSyncService {
     console.log(`🔄 Starting biometric sync at ${new Date().toISOString()}`);
 
     try {
-      // ✅ FIX: Ensure database connection is established
       await this.connectDB();
 
-      // Get all active users with employee codes
       const users = await User.find({
         employeeCode: { $ne: null, $ne: '' },
         isActive: true
@@ -210,7 +201,6 @@ class BiometricSyncService {
 
       console.log(`👤 Found ${users.length} users with employee codes`);
 
-      // Build employee code map
       const userMap = {};
       users.forEach(u => {
         userMap[String(u.employeeCode)] = u;
@@ -232,7 +222,6 @@ class BiometricSyncService {
 
       console.log(`📊 Found ${logs.length} total logs`);
 
-      // Group logs by employee code
       const logsByEmployee = {};
       let unmatchedLogs = 0;
 
@@ -257,7 +246,6 @@ class BiometricSyncService {
         logsByEmployee[empCode].push(log);
       });
 
-      // Log unmatched codes for debugging
       const unmatchedCodes = Object.keys(logsByEmployee).filter(k => k.startsWith('_unmatched_'));
       if (unmatchedCodes.length > 0) {
         console.log(`⚠️ Found ${unmatchedLogs} logs for unknown employee codes:`,
@@ -270,7 +258,6 @@ class BiometricSyncService {
       let totalUpdated = 0;
       let totalSkipped = 0;
 
-      // Process each employee's logs
       for (const [empCode, employeeLogs] of Object.entries(logsByEmployee)) {
         if (empCode.startsWith('_unmatched_')) continue;
 
@@ -299,13 +286,14 @@ class BiometricSyncService {
 
           if (sessions.length === 0) continue;
 
-          // Check if record exists for this date
           const existing = await EmployeePunchLog.findOne({
             employeeId: user._id,
             date: date
           });
 
           const note = `Auto-synced: ${sessionCount} sessions from ${logCount} logs`;
+
+          let touchedLog = null;
 
           if (existing) {
             existing.sessions = sessions;
@@ -314,15 +302,10 @@ class BiometricSyncService {
             existing.isManualCorrection = false;
             existing.correctionNote = note;
             await existing.save();
+            touchedLog = existing;
             totalUpdated++;
-
-            if (sessionCount > 1) {
-              console.log(`🔄 Updated ${user.name} (${empCode}) for ${dateStr} (${sessionCount} sessions, ${logCount} logs)`);
-            } else {
-              console.log(`🔄 Updated ${user.name} (${empCode}) for ${dateStr} (1 session, ${logCount} logs)`);
-            }
           } else {
-            await EmployeePunchLog.create({
+            touchedLog = await EmployeePunchLog.create({
               employeeId: user._id,
               date: date,
               sessions: sessions,
@@ -333,11 +316,17 @@ class BiometricSyncService {
               createdBy: null
             });
             totalCreated++;
+          }
 
-            if (sessionCount > 1) {
-              console.log(`✅ Created ${user.name} (${empCode}) for ${dateStr} (${sessionCount} sessions, ${logCount} logs)`);
-            } else {
-              console.log(`✅ Created ${user.name} (${empCode}) for ${dateStr} (1 session, ${logCount} logs)`);
+          // ✅ Shift-aware late evaluation
+          if (touchedLog && touchedLog.punchIn) {
+            try {
+              await evaluateAndPersistLateness(touchedLog);
+            } catch (lateErr) {
+              console.error(
+                `⚠️ Failed to evaluate lateness for ${user.name} on ${dateStr}:`,
+                lateErr.message
+              );
             }
           }
         }
@@ -347,19 +336,15 @@ class BiometricSyncService {
 
     } catch (error) {
       console.error('❌ Sync error:', error.message);
-      if (error.stack) {
-        console.error('Stack trace:', error.stack);
-      }
+      if (error.stack) console.error('Stack trace:', error.stack);
     } finally {
       this.isRunning = false;
     }
   }
 }
 
-// Create singleton instance
 const syncService = new BiometricSyncService();
 
-// ✅ FIX: Connect to database before starting cron
 async function initialize() {
   try {
     console.log('🚀 Initializing Biometric Sync Service...');
@@ -368,7 +353,6 @@ async function initialize() {
     console.log('✅ Biometric Sync Service initialized successfully');
     console.log('⏰ Biometric sync scheduled every 15 minutes');
 
-    // Run initial sync after 30 seconds
     setTimeout(() => {
       console.log('🚀 Running initial biometric sync...');
       syncService.syncAttendance();
@@ -380,7 +364,6 @@ async function initialize() {
   }
 }
 
-// Schedule sync every 15 minutes
 cron.schedule('*/15 * * * *', async () => {
   console.log('⏰ Running scheduled biometric sync...');
   await syncService.syncAttendance();
@@ -388,7 +371,6 @@ cron.schedule('*/15 * * * *', async () => {
   timezone: "Asia/Kolkata"
 });
 
-// Start the service
 initialize();
 
 module.exports = syncService;
