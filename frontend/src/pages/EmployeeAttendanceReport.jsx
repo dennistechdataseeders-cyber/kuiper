@@ -229,8 +229,6 @@ const EmployeeAttendanceReport = () => {
   //   - breakDaysCount    = days with at least 1 break
   //   - avgBreaksPerDay   = totalBreaksCount / breakDaysCount
   //   - totalBreakMinutes = gross − effective (informational)
-  // (Summary strip removed from UI — kept only for the Excel
-  //  header line.)
   //
   // ✅ Lateness totals come from the persisted `lateMinutes`
   //    field on each record (Option B — ShiftHistory).
@@ -344,13 +342,10 @@ const EmployeeAttendanceReport = () => {
   // Excel export
   //   - Keeps per-day "Breaks" (count) and "Break Duration" rows
   //   - Keeps the compact per-employee summary line above the grid
-  //   - REMOVED the trailing "Monthly totals summary" block
   //
   // ✅ "Late By" row now reads persisted `lateMinutes` from the
   //    API record. No local 10:45 cutoff.
   // ✅ Holiday days export as blank cells with "H" status.
-  //    (SheetJS community edition cannot color cells — the
-  //     on-screen table is where visual tinting happens.)
   // ============================================================
   const exportToExcel = () => {
     if (groupedAndSummarizedData.length === 0) {
@@ -522,7 +517,7 @@ const EmployeeAttendanceReport = () => {
         });
         wsData.push(statusRow);
 
-        // Spacing between employees (NO totals block)
+        // Spacing between employees
         wsData.push([]);
         wsData.push([]);
       });
@@ -692,8 +687,6 @@ const EmployeeAttendanceReport = () => {
                   Present Days / Working Days - {employee.summary.totalPresent} /{' '}
                   {getWorkingDays(selectedYear, selectedMonth, employee.summary.totalLeave)}
                 </div>
-
-                {/* Break summary stats strip REMOVED */}
               </div>
 
               {/* Daily Breakdown Table */}
@@ -750,7 +743,7 @@ const EmployeeAttendanceReport = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {/* In Time — yellow when late, red column when holiday */}
+                    {/* In Time */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         In Time
@@ -915,7 +908,7 @@ const EmployeeAttendanceReport = () => {
                       })}
                     </tr>
 
-                    {/* Status — H code + red column for holiday */}
+                    {/* Status */}
                     <tr className="hover:bg-slate-50/50">
                       <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
                         Status
