@@ -1,6 +1,6 @@
 // frontend/src/pages/WorkReport.jsx - FULL UPDATED
 // - Supports "All Developers" mode (loops over every dev in parallel)
-// - Hides feeds/tickets with zero logged time
+// - Shows zero-time auto-stopped feeds/tickets as "0s · Auto-stopped"
 // - Per-developer expand/collapse + tab state
 
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
@@ -90,6 +90,19 @@ const SystemBadge = ({ title }) => (
 );
 
 // ============================================
+// AUTO-STOPPED (ZERO TIME) BADGE
+// ============================================
+const AutoStoppedBadge = () => (
+  <span
+    className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase inline-flex items-center gap-1"
+    title="This timer was abandoned and auto-stopped by the system. No work time was recorded."
+  >
+    <AlertTriangle size={8} />
+    Auto-stopped · 0 work
+  </span>
+);
+
+// ============================================
 // EMPTY STATE
 // ============================================
 const EmptyState = ({ text, icon: Icon = BarChart3 }) => (
@@ -109,17 +122,22 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
   const [expandedTicket, setExpandedTicket] = useState(null);
 
   // ============================================
-  // FILTER: drop zero-time feeds/tickets (defensive)
+  // ✅ KEEP zero-time items IF they contain an abandoned entry
+  //    This is what surfaces the "0s · Auto-stopped" rows.
   // ============================================
   const perFeed = useMemo(() => {
     return (report.perFeed || []).filter(
-      f => (f.totalSeconds ?? Math.round((f.totalHours || 0) * 3600)) > 0
+      f =>
+        (f.totalSeconds ?? Math.round((f.totalHours || 0) * 3600)) > 0 ||
+        f.hasAbandoned
     );
   }, [report]);
 
   const perTicket = useMemo(() => {
     return (report.perTicket || []).filter(
-      t => (t.totalSeconds ?? Math.round((t.totalHours || 0) * 3600)) > 0
+      t =>
+        (t.totalSeconds ?? Math.round((t.totalHours || 0) * 3600)) > 0 ||
+        t.hasAbandoned
     );
   }, [report]);
 
@@ -166,6 +184,10 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
       const intervals = [];
       (items || []).forEach((item) => {
         (item.entries || []).forEach((entry) => {
+          // ✅ Skip abandoned/zero-time entries — they contribute nothing to actual time
+          const seconds = entry.seconds ?? Math.round((entry.hours || 0) * 3600);
+          if (seconds <= 0) return;
+
           if (entry.startTime && entry.endTime) {
             intervals.push({
               start: new Date(entry.startTime).getTime(),
@@ -173,8 +195,8 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
             });
             return;
           }
-          const seconds = entry.seconds ?? Math.round((entry.hours || 0) * 3600);
-          if (!entry.date || seconds <= 0) return;
+
+          if (!entry.date) return;
           const dayStart = new Date(`${entry.date}T00:00:00`).getTime();
           intervals.push({
             start: dayStart,
@@ -203,11 +225,23 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 
   const systemStoppedCount = useMemo(() => {
     const feedCount = perFeed.reduce(
-      (sum, f) => sum + (f.entries || []).filter(e => e.stoppedBySystem).length,
+      (sum, f) => sum + (f.entries || []).filter(e => e.stoppedBySystem || e.abandoned).length,
       0
     );
     const ticketCount = perTicket.reduce(
-      (sum, t) => sum + (t.entries || []).filter(e => e.stoppedBySystem).length,
+      (sum, t) => sum + (t.entries || []).filter(e => e.stoppedBySystem || e.abandoned).length,
+      0
+    );
+    return feedCount + ticketCount;
+  }, [perFeed, perTicket]);
+
+  const abandonedCount = useMemo(() => {
+    const feedCount = perFeed.reduce(
+      (sum, f) => sum + (f.entries || []).filter(e => e.abandoned).length,
+      0
+    );
+    const ticketCount = perTicket.reduce(
+      (sum, t) => sum + (t.entries || []).filter(e => e.abandoned).length,
       0
     );
     return feedCount + ticketCount;
@@ -345,6 +379,26 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
         </div>
       )}
 
+      {abandonedCount > 0 && (
+        <div className="px-4 pb-4">
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={14} className="text-amber-600 mt-0.5" />
+              <div>
+                <p className="text-[9px] font-black text-amber-700">
+                  {abandonedCount} abandoned timer{abandonedCount === 1 ? '' : 's'} on this date
+                </p>
+                <p className="text-[8px] text-amber-600 mt-0.5">
+                  These sessions were never stopped by the developer and were force-closed by the system.
+                  They contribute <strong>0s</strong> to the total time. Any earlier paused sessions on the
+                  same feed/ticket are still counted.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ============================================
           NO ACTIVITY
           ============================================ */}
@@ -363,11 +417,10 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
       )}
 
       {/* ============================================
-          TABS + CONTENT (only if activity exists)
+          TABS + CONTENT
           ============================================ */}
       {hasAnyActivity && (
         <>
-          {/* TABS */}
           <div className="flex gap-2 px-4 border-b border-slate-200">
             <button
               onClick={() => { setActiveTab('feed'); setSearchTerm(''); }}
@@ -417,7 +470,8 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                 filteredFeeds.map((feed) => {
                   const isExpanded = expandedFeed === feed.feedId;
                   const hasSystemStop =
-                    (feed.entries || []).some(e => e.stoppedBySystem);
+                    (feed.entries || []).some(e => e.stoppedBySystem || e.abandoned);
+                  const isZeroTime = feed.totalSeconds === 0;
 
                   return (
                     <div
@@ -431,7 +485,11 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                         className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-10 h-10 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            isZeroTime
+                              ? 'bg-amber-100 text-amber-600'
+                              : 'bg-emerald-100 text-emerald-600'
+                          }`}>
                             <Rss size={16} />
                           </div>
                           <div className="min-w-0">
@@ -439,7 +497,8 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                               <p className="text-sm font-black text-slate-800 truncate">
                                 {feed.feedName}
                               </p>
-                              {hasSystemStop && <SystemBadge />}
+                              {isZeroTime && feed.hasAbandoned && <AutoStoppedBadge />}
+                              {hasSystemStop && !isZeroTime && <SystemBadge />}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
@@ -454,11 +513,15 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                         </div>
                         <div className="flex items-center gap-4 flex-shrink-0">
                           <div className="text-right">
-                            <p className="text-sm font-black text-emerald-700 font-mono">
+                            <p className={`text-sm font-black font-mono ${
+                              isZeroTime ? 'text-amber-700' : 'text-emerald-700'
+                            }`}>
                               {feed.totalFormatted}
                             </p>
                             <p className="text-[9px] font-bold text-slate-400">
-                              {feed.totalHours} hrs
+                              {isZeroTime && feed.hasAbandoned
+                                ? 'no work recorded'
+                                : `${feed.totalHours} hrs`}
                             </p>
                           </div>
                           {isExpanded ? (
@@ -476,35 +539,53 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                           </p>
                           <div className="space-y-2">
                             {feed.entries
-                              .filter(e => (e.seconds ?? Math.round((e.hours || 0) * 3600)) > 0)
-                              .map((e, idx) => (
-                                <div
-                                  key={idx}
-                                  className="bg-white rounded-lg border border-slate-200 p-3"
-                                >
-                                  <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                        <Hash size={10} className="text-slate-400" />
-                                        {e.date}
+                              // ✅ Keep zero-time entries IF they're abandoned
+                              .filter(e =>
+                                (e.seconds ?? Math.round((e.hours || 0) * 3600)) > 0 ||
+                                e.abandoned
+                              )
+                              .map((e, idx) => {
+                                const entryZero =
+                                  (e.seconds ?? Math.round((e.hours || 0) * 3600)) === 0;
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className={`rounded-lg border p-3 ${
+                                      entryZero && e.abandoned
+                                        ? 'bg-amber-50/50 border-amber-200'
+                                        : 'bg-white border-slate-200'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                          <Hash size={10} className="text-slate-400" />
+                                          {e.date}
+                                        </span>
+                                        {e.abandoned && <AutoStoppedBadge />}
+                                        {e.stoppedBySystem && !e.abandoned && <SystemBadge />}
+                                      </div>
+                                      <span className={`text-xs font-black font-mono ${
+                                        entryZero && e.abandoned
+                                          ? 'text-amber-700'
+                                          : 'text-emerald-700'
+                                      }`}>
+                                        {e.formatted}
                                       </span>
-                                      {e.stoppedBySystem && <SystemBadge />}
                                     </div>
-                                    <span className="text-xs font-black text-emerald-700 font-mono">
-                                      {e.formatted}
-                                    </span>
+                                    {e.description ? (
+                                      <p className="text-[11px] text-slate-600 whitespace-pre-wrap bg-white p-2 rounded mt-1">
+                                        {e.description}
+                                      </p>
+                                    ) : (
+                                      <p className="text-[10px] italic text-slate-400 mt-1">
+                                        No description recorded
+                                      </p>
+                                    )}
                                   </div>
-                                  {e.description ? (
-                                    <p className="text-[11px] text-slate-600 whitespace-pre-wrap bg-slate-50 p-2 rounded mt-1">
-                                      {e.description}
-                                    </p>
-                                  ) : (
-                                    <p className="text-[10px] italic text-slate-400 mt-1">
-                                      No description recorded
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
+                                );
+                              })}
                           </div>
                         </div>
                       )}
@@ -526,7 +607,8 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                 filteredTickets.map((ticket) => {
                   const isExpanded = expandedTicket === ticket.ticketId;
                   const hasSystemStop =
-                    (ticket.entries || []).some(e => e.stoppedBySystem);
+                    (ticket.entries || []).some(e => e.stoppedBySystem || e.abandoned);
+                  const isZeroTime = ticket.totalSeconds === 0;
 
                   return (
                     <div
@@ -540,7 +622,11 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                         className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-10 h-10 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                            isZeroTime
+                              ? 'bg-amber-100 text-amber-600'
+                              : 'bg-purple-100 text-purple-600'
+                          }`}>
                             <TicketIcon size={16} />
                           </div>
                           <div className="min-w-0">
@@ -548,7 +634,8 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                               <p className="text-sm font-black text-slate-800 truncate">
                                 #{ticket.ticketNumber} — {ticket.ticketTitle}
                               </p>
-                              {hasSystemStop && <SystemBadge />}
+                              {isZeroTime && ticket.hasAbandoned && <AutoStoppedBadge />}
+                              {hasSystemStop && !isZeroTime && <SystemBadge />}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                               <span className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
@@ -568,11 +655,15 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                         </div>
                         <div className="flex items-center gap-4 flex-shrink-0">
                           <div className="text-right">
-                            <p className="text-sm font-black text-purple-700 font-mono">
+                            <p className={`text-sm font-black font-mono ${
+                              isZeroTime ? 'text-amber-700' : 'text-purple-700'
+                            }`}>
                               {ticket.totalFormatted}
                             </p>
                             <p className="text-[9px] font-bold text-slate-400">
-                              {ticket.totalHours} hrs
+                              {isZeroTime && ticket.hasAbandoned
+                                ? 'no work recorded'
+                                : `${ticket.totalHours} hrs`}
                             </p>
                           </div>
                           {isExpanded ? (
@@ -590,35 +681,52 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                           </p>
                           <div className="space-y-2">
                             {ticket.entries
-                              .filter(e => (e.seconds ?? Math.round((e.hours || 0) * 3600)) > 0)
-                              .map((e, idx) => (
-                                <div
-                                  key={idx}
-                                  className="bg-white rounded-lg border border-slate-200 p-3"
-                                >
-                                  <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
-                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                      <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                        <Hash size={10} className="text-slate-400" />
-                                        {e.date}
+                              .filter(e =>
+                                (e.seconds ?? Math.round((e.hours || 0) * 3600)) > 0 ||
+                                e.abandoned
+                              )
+                              .map((e, idx) => {
+                                const entryZero =
+                                  (e.seconds ?? Math.round((e.hours || 0) * 3600)) === 0;
+
+                                return (
+                                  <div
+                                    key={idx}
+                                    className={`rounded-lg border p-3 ${
+                                      entryZero && e.abandoned
+                                        ? 'bg-amber-50/50 border-amber-200'
+                                        : 'bg-white border-slate-200'
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                                          <Hash size={10} className="text-slate-400" />
+                                          {e.date}
+                                        </span>
+                                        {e.abandoned && <AutoStoppedBadge />}
+                                        {e.stoppedBySystem && !e.abandoned && <SystemBadge />}
+                                      </div>
+                                      <span className={`text-xs font-black font-mono ${
+                                        entryZero && e.abandoned
+                                          ? 'text-amber-700'
+                                          : 'text-purple-700'
+                                      }`}>
+                                        {e.formatted}
                                       </span>
-                                      {e.stoppedBySystem && <SystemBadge />}
                                     </div>
-                                    <span className="text-xs font-black text-purple-700 font-mono">
-                                      {e.formatted}
-                                    </span>
+                                    {e.description ? (
+                                      <p className="text-[11px] text-slate-600 whitespace-pre-wrap bg-white p-2 rounded mt-1">
+                                        {e.description}
+                                      </p>
+                                    ) : (
+                                      <p className="text-[10px] italic text-slate-400 mt-1">
+                                        No description recorded
+                                      </p>
+                                    )}
                                   </div>
-                                  {e.description ? (
-                                    <p className="text-[11px] text-slate-600 whitespace-pre-wrap bg-slate-50 p-2 rounded mt-1">
-                                      {e.description}
-                                    </p>
-                                  ) : (
-                                    <p className="text-[10px] italic text-slate-400 mt-1">
-                                      No description recorded
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
+                                );
+                              })}
                           </div>
                         </div>
                       )}
@@ -649,9 +757,7 @@ const WorkReport = () => {
   const [loading, setLoading] = useState(false);
   const [loadingDevs, setLoadingDevs] = useState(true);
 
-  // Single-dev report
   const [report, setReport] = useState(null);
-  // All-devs reports (array)
   const [allReports, setAllReports] = useState([]);
 
   const isAllMode = selectedDeveloper === '__all__';
@@ -695,6 +801,7 @@ const WorkReport = () => {
 
   // ============================================
   // FETCH ALL DEVS REPORT (parallel)
+  //   ✅ Keep devs who have ANY logged work OR any abandoned entry
   // ============================================
   const fetchAllReports = useCallback(async (date) => {
     if (developers.length === 0) return [];
@@ -702,13 +809,20 @@ const WorkReport = () => {
     const promises = developers.map(async (dev) => {
       try {
         const data = await fetchSingleReport(dev._id, date);
-        // Only keep devs who have any activity
-        const hasFeed = (data.perFeed || []).some(
-          f => (f.totalSeconds ?? Math.round((f.totalHours || 0) * 3600)) > 0
-        );
-        const hasTicket = (data.perTicket || []).some(
-          t => (t.totalSeconds ?? Math.round((t.totalHours || 0) * 3600)) > 0
-        );
+
+        const hasFeed =
+          (data.perFeed || []).some(
+            f =>
+              (f.totalSeconds ?? Math.round((f.totalHours || 0) * 3600)) > 0 ||
+              f.hasAbandoned
+          );
+        const hasTicket =
+          (data.perTicket || []).some(
+            t =>
+              (t.totalSeconds ?? Math.round((t.totalHours || 0) * 3600)) > 0 ||
+              t.hasAbandoned
+          );
+
         return hasFeed || hasTicket ? data : null;
       } catch (err) {
         console.error(`Failed to fetch report for ${dev.name}:`, err.message);
@@ -768,7 +882,6 @@ const WorkReport = () => {
     fetchSingleReport
   ]);
 
-  // Auto-fetch when developer changes
   useEffect(() => {
     if (selectedDeveloper) {
       fetchReport();
@@ -778,6 +891,8 @@ const WorkReport = () => {
 
   // ============================================
   // COMBINED STATS (for "All" mode banner)
+  //   ✅ Sums only entries with actual time (abandoned = 0 anyway)
+  //   ✅ Counts ALL abandoned entries for the "System Stops" metric
   // ============================================
   const combinedStats = useMemo(() => {
     if (!isAllMode || allReports.length === 0) return null;
@@ -789,19 +904,15 @@ const WorkReport = () => {
     allReports.forEach(r => {
       (r.perFeed || []).forEach(f => {
         const s = f.totalSeconds ?? Math.round((f.totalHours || 0) * 3600);
-        if (s > 0) {
-          totalSeconds += s;
-          feeds++;
-          sysStops += (f.entries || []).filter(e => e.stoppedBySystem).length;
-        }
+        if (s > 0) totalSeconds += s;
+        if (s > 0 || f.hasAbandoned) feeds++;
+        sysStops += (f.entries || []).filter(e => e.abandoned || e.stoppedBySystem).length;
       });
       (r.perTicket || []).forEach(t => {
         const s = t.totalSeconds ?? Math.round((t.totalHours || 0) * 3600);
-        if (s > 0) {
-          totalSeconds += s;
-          tickets++;
-          sysStops += (t.entries || []).filter(e => e.stoppedBySystem).length;
-        }
+        if (s > 0) totalSeconds += s;
+        if (s > 0 || t.hasAbandoned) tickets++;
+        sysStops += (t.entries || []).filter(e => e.abandoned || e.stoppedBySystem).length;
       });
     });
 
@@ -824,9 +935,6 @@ const WorkReport = () => {
     }
   };
 
-  // ============================================
-  // RENDER
-  // ============================================
   return (
     <div
       className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6 transition-all duration-300 ${
@@ -856,7 +964,6 @@ const WorkReport = () => {
       {/* FILTERS */}
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {/* Developer */}
           <div>
             <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
               <Users size={11} /> Developer
@@ -870,12 +977,9 @@ const WorkReport = () => {
               <option value="">
                 {loadingDevs ? 'Loading...' : 'Select a developer'}
               </option>
-
-              {/* ✅ NEW: All developers option */}
               <option value="__all__">
                 📊 All Developers ({developers.length})
               </option>
-
               {developers.map((d) => (
                 <option key={d._id} value={d._id}>
                   {d.name} {d.employeeCode ? `(${d.employeeCode})` : ''}
@@ -884,7 +988,6 @@ const WorkReport = () => {
             </select>
           </div>
 
-          {/* Single Date */}
           <div>
             <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
               <Calendar size={11} /> Date
@@ -897,7 +1000,6 @@ const WorkReport = () => {
             />
           </div>
 
-          {/* Actions */}
           <div className="flex items-end gap-2">
             <button
               onClick={fetchReport}
@@ -957,7 +1059,6 @@ const WorkReport = () => {
           ============================================ */}
       {isAllMode && !loading && allReports.length > 0 && (
         <>
-          {/* Combined Summary Card */}
           <div className="bg-gradient-to-br from-slate-900 to-slate-700 text-white rounded-2xl shadow-sm p-5 mb-5">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
@@ -1021,7 +1122,6 @@ const WorkReport = () => {
             </div>
           </div>
 
-          {/* Per-Developer Blocks */}
           <div className="space-y-5">
             {allReports
               .slice()

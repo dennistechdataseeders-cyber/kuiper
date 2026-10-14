@@ -1,16 +1,4 @@
-// backend/routes/workReportRoutes.js - UPDATED (v3)
-// ✅ Timing aligned with the Worklog page:
-//    - Respects `stoppedBySystem` (auto-stop at 23:55 IST = 0 seconds)
-//    - Skips the LAST block when the log was auto-stopped by the system,
-//      because the cron fabricates its endTime but stores duration=0.
-//    - Fallback heuristic: any closed block with duration=0 and a span
-//      > 5 seconds is treated as system-zeroed (covers legacy records).
-//    - Only counts an "open" block up to `now` if it belongs to TODAY and
-//      the timer is genuinely still running (not abandoned).
-//
-// ✅ v3 CHANGE: system-stopped feeds/tickets are STILL LISTED with 0s so
-//    the PM can audit "this timer existed but was auto-closed". They no
-//    longer silently disappear from the report.
+// backend/routes/workReportRoutes.js
 
 const express = require('express');
 const router = express.Router();
@@ -29,12 +17,14 @@ const { authorize } = require('../middleware/roleCheck');
 
 // ============================================
 // HELPER: Calculate NET time from time blocks
+//   - Closed blocks with duration > 0 count toward the total
+//   - Closed blocks with duration === 0 (system auto-stop) contribute nothing
+//   - Open blocks on a RUNNING timer count live up to now
+//   - Open blocks on a STOPPED timer (abandoned) contribute nothing
 // ============================================
-function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedBySystem) {
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-
+function calculateNetSeconds(timeBlocks, isRunning, startedAt) {
   if (!timeBlocks || timeBlocks.length === 0) {
-    if (isRunning && startedAt && logDate === todayStr && !stoppedBySystem) {
+    if (isRunning && startedAt) {
       const elapsed = Math.floor((Date.now() - new Date(startedAt).getTime()) / 1000);
       return Math.max(0, elapsed);
     }
@@ -43,45 +33,36 @@ function calculateNetSeconds(timeBlocks, isRunning, startedAt, logDate, stoppedB
 
   const intervals = [];
   const now = Date.now();
-  const lastIndex = timeBlocks.length - 1;
 
-  timeBlocks.forEach((block, idx) => {
-    if (!block || !block.startTime) return;
-
-    const start = new Date(block.startTime).getTime();
-    if (!Number.isFinite(start)) return;
-
-    // ✅ Skip the LAST block if the log was auto-stopped by the system
-    if (stoppedBySystem && idx === lastIndex) {
-      return;
-    }
-
-    // ---------- CLOSED BLOCK ----------
-    if (block.endTime) {
-      const end = new Date(block.endTime).getTime();
-      if (!Number.isFinite(end) || end <= start) return;
-
-      const storedDuration = Number(block.duration) || 0;
-      const spanSeconds = Math.floor((end - start) / 1000);
-
-      // Legacy safety net for records zeroed before the flag existed
-      if (storedDuration === 0 && spanSeconds > 5) {
+  timeBlocks.forEach(block => {
+    if (block.startTime && block.endTime) {
+      // ✅ Respect an explicitly-zeroed duration (system auto-stop).
+      //    If the persisted duration is 0, treat the block as contributing 0
+      //    even though start/end times exist.
+      const persistedDuration = Number(block.duration);
+      if (Number.isFinite(persistedDuration) && persistedDuration === 0) {
         return;
       }
-
-      intervals.push({ start, end });
-      return;
+      intervals.push({
+        start: new Date(block.startTime).getTime(),
+        end: new Date(block.endTime).getTime()
+      });
+    } else if (block.startTime && !block.endTime && isRunning) {
+      intervals.push({
+        start: new Date(block.startTime).getTime(),
+        end: now
+      });
     }
-
-    // ---------- OPEN BLOCK ----------
-    if (stoppedBySystem) return;
-
-    if (isRunning && logDate === todayStr) {
-      intervals.push({ start, end: now });
-      return;
-    }
-    // abandoned → 0
+    // else: open block on a stopped timer → abandoned → skip
   });
+
+  if (isRunning && startedAt) {
+    const start = new Date(startedAt).getTime();
+    const alreadyOpen = timeBlocks.some(b => b.startTime && !b.endTime);
+    if (!alreadyOpen) {
+      intervals.push({ start, end: now });
+    }
+  }
 
   if (intervals.length === 0) return 0;
 
@@ -144,6 +125,36 @@ async function pmCanViewDeveloper(pmUserId, developerId) {
 }
 
 // ============================================
+// HELPER: detect if a log has any abandoned (open) block
+//   An abandoned block = startTime present, endTime present, duration 0
+//   (this is what worklogService.stopAllRunningTimers writes)
+// ============================================
+function hasAbandonedBlock(log) {
+  if (!log || !Array.isArray(log.timeBlocks)) return false;
+
+  return log.timeBlocks.some(block => {
+    if (!block || !block.startTime) return false;
+    // Block that was force-closed at duration 0
+    if (block.endTime && Number(block.duration) === 0) return true;
+    // Block still open on a stopped timer
+    if (!block.endTime && !log.isRunning) return true;
+    return false;
+  });
+}
+
+// ============================================
+// HELPER: safely coerce an ObjectId / populated doc / string to a string
+// ============================================
+function toIdStr(val) {
+  if (!val) return null;
+  if (typeof val === 'object') {
+    const inner = val._id || val;
+    return inner ? inner.toString() : null;
+  }
+  return val.toString();
+}
+
+// ============================================
 // CORE: Build a single developer's report
 // ============================================
 async function buildDeveloperReport(developer, startDate, endDate) {
@@ -166,6 +177,20 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 
   // ============================================
   // FETCH TICKET WORKLOGS
+  //
+  // ✅ FIXED: We now populate `createdBy` and `watchers` in
+  //    addition to `assignedTo`, and the filter below keeps any
+  //    log where the developer has a legitimate stake in the
+  //    ticket (assignedTo OR createdBy OR watcher).
+  //
+  //    Previously, only logs where the developer was the
+  //    ticket's `assignedTo` were kept — which silently hid
+  //    timers that a PM / Team Lead / collaborator had started
+  //    on tickets they were not formally assigned to.
+  //
+  //    The Mongo query above already guarantees
+  //    log.developerId === developerId, so we can never leak
+  //    another developer's timer into this report.
   // ============================================
   const allTicketLogs = await TicketWorkLog.find({
     developerId,
@@ -173,33 +198,36 @@ async function buildDeveloperReport(developer, startDate, endDate) {
   })
     .populate({
       path: 'ticketId',
-      select: 'ticketNumber title status priority projectId assignedTo',
+      select:
+        'ticketNumber title status priority projectId assignedTo createdBy watchers',
       populate: { path: 'projectId', select: 'name projectCustomId' }
     })
     .sort({ date: -1 });
 
-const ticketLogs = allTicketLogs.filter((log) => {
-  if (!log.ticketId) return false;
+  const devIdStr = developerId.toString();
 
-  // ✅ System-stopped tickets are ALWAYS kept for audit,
-  //    regardless of who the ticket is currently assigned to.
-  if (log.stoppedBySystem) return true;
+  const ticketLogs = allTicketLogs.filter((log) => {
+    const ticket = log.ticketId;
 
-  // Otherwise apply the strict "assigned to this developer" rule
-  // so we don't inflate real-time numbers with tickets the dev
-  // never actually worked on.
-  const assigned = log.ticketId?.assignedTo;
-  if (!assigned) return false;
+    // Ticket must still exist (not deleted / orphaned)
+    if (!ticket) return false;
 
-  const assignedId =
-    typeof assigned === 'object'
-      ? (assigned._id || assigned).toString()
-      : assigned.toString();
+    const assignedTo = toIdStr(ticket.assignedTo);
+    const createdBy = toIdStr(ticket.createdBy);
 
-  return assignedId === developerId.toString();
-});
+    const watchers = Array.isArray(ticket.watchers)
+      ? ticket.watchers.map(toIdStr).filter(Boolean)
+      : [];
+
+    return (
+      assignedTo === devIdStr ||
+      createdBy === devIdStr ||
+      watchers.includes(devIdStr)
+    );
+  });
+
   // ============================================
-  // FETCH DESCRIPTIONS
+  // FETCH DESCRIPTIONS (for the same range)
   // ============================================
   const descriptions = await WorkDescription.find({
     developer: developerId,
@@ -214,6 +242,8 @@ const ticketLogs = allTicketLogs.filter((log) => {
 
   // ============================================
   // AGGREGATE: PER FEED
+  //   ✅ Zero-time feeds are KEPT if they have an abandoned block,
+  //      otherwise they are dropped.
   // ============================================
   const feedMap = new Map();
 
@@ -221,21 +251,17 @@ const ticketLogs = allTicketLogs.filter((log) => {
     if (!log.feedId) return;
 
     const feedKey = log.feedId._id.toString();
-
     const netSeconds = calculateNetSeconds(
       log.timeBlocks,
       log.isRunning,
-      log.startedAt,
-      log.date,
-      log.stoppedBySystem
+      log.startedAt
     );
 
-    // ✅ v3 CHANGE: system-stopped entries are kept (with 0s), everything
-    //    else with 0 seconds is dropped.
-    const hasRealTime = netSeconds > 0;
-    const isSystemStop = !!log.stoppedBySystem;
+    const abandoned = hasAbandonedBlock(log);
 
-    if (!hasRealTime && !isSystemStop) return;
+    // ✅ Skip only if there's no net time AND no abandoned block.
+    //    This is what keeps "0s · auto-stopped" rows visible.
+    if (netSeconds <= 0 && !abandoned) return;
 
     if (!feedMap.has(feedKey)) {
       feedMap.set(feedKey, {
@@ -251,7 +277,7 @@ const ticketLogs = allTicketLogs.filter((log) => {
     }
 
     const entry = feedMap.get(feedKey);
-    entry.totalSeconds += netSeconds;           // adds 0 for system stops
+    entry.totalSeconds += netSeconds;
     if (log.date) entry.daysWorked.add(log.date);
 
     entry.entries.push({
@@ -262,7 +288,8 @@ const ticketLogs = allTicketLogs.filter((log) => {
       description:
         descriptionsByFeedDate[`${feedKey}_${log.date}`] || '',
       isRunning: !!log.isRunning,
-      stoppedBySystem: isSystemStop
+      stoppedBySystem: !!log.stoppedBySystem,
+      abandoned: abandoned
     });
   });
 
@@ -272,10 +299,12 @@ const ticketLogs = allTicketLogs.filter((log) => {
       daysWorked: f.daysWorked.size,
       totalFormatted: formatSeconds(f.totalSeconds),
       totalHours: toHours(f.totalSeconds),
-      entries: f.entries.sort((a, b) => (a.date < b.date ? 1 : -1))
+      entries: f.entries.sort((a, b) => (a.date < b.date ? 1 : -1)),
+      hasAbandoned: f.entries.some(e => e.abandoned),
+      allZero: f.totalSeconds === 0
     }))
-    // ✅ v3 CHANGE: keep any feed that has at least one entry (real or system-stop)
-    .filter(f => f.entries.length > 0)
+    // ✅ Keep entries that either logged real time OR contain an abandoned block
+    .filter(f => f.totalSeconds > 0 || f.hasAbandoned)
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
   // ============================================
@@ -287,20 +316,16 @@ const ticketLogs = allTicketLogs.filter((log) => {
     if (!log.ticketId) return;
 
     const ticketKey = log.ticketId._id.toString();
-
     const netSeconds = calculateNetSeconds(
       log.timeBlocks,
       log.isRunning,
-      log.startedAt,
-      log.date,
-      log.stoppedBySystem
+      log.startedAt
     );
 
-    // ✅ v3 CHANGE: same rule as feeds
-    const hasRealTime = netSeconds > 0;
-    const isSystemStop = !!log.stoppedBySystem;
+    const abandoned = hasAbandonedBlock(log);
 
-    if (!hasRealTime && !isSystemStop) return;
+    // ✅ Same rule as feeds
+    if (netSeconds <= 0 && !abandoned) return;
 
     if (!ticketMap.has(ticketKey)) {
       ticketMap.set(ticketKey, {
@@ -329,7 +354,8 @@ const ticketLogs = allTicketLogs.filter((log) => {
       hours: toHours(netSeconds),
       description: log.description || '',
       isRunning: !!log.isRunning,
-      stoppedBySystem: isSystemStop
+      stoppedBySystem: !!log.stoppedBySystem,
+      abandoned: abandoned
     });
   });
 
@@ -339,9 +365,11 @@ const ticketLogs = allTicketLogs.filter((log) => {
       daysWorked: t.daysWorked.size,
       totalFormatted: formatSeconds(t.totalSeconds),
       totalHours: toHours(t.totalSeconds),
-      entries: t.entries.sort((a, b) => (a.date < b.date ? 1 : -1))
+      entries: t.entries.sort((a, b) => (a.date < b.date ? 1 : -1)),
+      hasAbandoned: t.entries.some(e => e.abandoned),
+      allZero: t.totalSeconds === 0
     }))
-    .filter(t => t.entries.length > 0)
+    .filter(t => t.totalSeconds > 0 || t.hasAbandoned)
     .sort((a, b) => b.totalSeconds - a.totalSeconds);
 
   // ============================================
@@ -351,21 +379,20 @@ const ticketLogs = allTicketLogs.filter((log) => {
   const totalTicketSeconds = perTicket.reduce((s, t) => s + t.totalSeconds, 0);
   const totalSeconds = totalFeedSeconds + totalTicketSeconds;
 
+  // Unique days worked (union of feed days + ticket days)
   const allDates = new Set();
   feedLogs.forEach(l => l.date && allDates.add(l.date));
   ticketLogs.forEach(l => l.date && allDates.add(l.date));
 
-  // ✅ v3: expose a count of system-stopped entries so the UI can show
-  //        a top-level indicator (optional but useful).
-  const systemStopCount =
-    perFeed.reduce(
-      (s, f) => s + f.entries.filter(e => e.stoppedBySystem).length,
-      0
-    ) +
-    perTicket.reduce(
-      (s, t) => s + t.entries.filter(e => e.stoppedBySystem).length,
-      0
-    );
+  // Count of abandoned entries (for the "System Stop" badge on the header)
+  const abandonedFeedCount = perFeed.reduce(
+    (sum, f) => sum + f.entries.filter(e => e.abandoned).length,
+    0
+  );
+  const abandonedTicketCount = perTicket.reduce(
+    (sum, t) => sum + t.entries.filter(e => e.abandoned).length,
+    0
+  );
 
   return {
     success: true,
@@ -396,8 +423,8 @@ const ticketLogs = allTicketLogs.filter((log) => {
       ticketsWorkedOn: perTicket.length,
       activeDays: allDates.size,
 
-      // ✅ v3: useful for the UI to show "1 System Stop" badge at the top
-      systemStopCount
+      // How many entries were auto-stopped (any where netSeconds > 0 or not)
+      abandonedEntries: abandonedFeedCount + abandonedTicketCount
     },
     perFeed,
     perTicket
@@ -447,10 +474,6 @@ router.get(
 
 // ============================================
 // GET /api/work-report
-// Query params:
-//   developerId - required. Single dev id OR 'all'
-//   startDate   - YYYY-MM-DD (optional)
-//   endDate     - YYYY-MM-DD (optional)
 // ============================================
 router.get(
   '/',
@@ -492,13 +515,14 @@ router.get(
           developers.map(async (dev) => {
             try {
               const report = await buildDeveloperReport(dev, startDate, endDate);
-
-              // ✅ v3: keep any dev who has real activity OR any system-stop
-              const hasActivity =
+              // ✅ Keep devs who have ANY logged work OR any abandoned entry
+              if (
                 report.summary.totalSeconds > 0 ||
-                report.summary.systemStopCount > 0;
-
-              return hasActivity ? report : null;
+                report.summary.abandonedEntries > 0
+              ) {
+                return report;
+              }
+              return null;
             } catch (err) {
               console.error(`Failed to build report for ${dev.name}:`, err.message);
               return null;
