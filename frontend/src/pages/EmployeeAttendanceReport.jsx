@@ -10,7 +10,6 @@ import {
   FileText,
   Users,
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
@@ -73,8 +72,6 @@ const minutesFraction = (minutes) => {
 /**
  * ✅ Shift-based lateness (Option B — ShiftHistory)
  * Reads the persisted `lateMinutes` field from the API response.
- * The backend computes this once at write-time using the shift that
- * was active on that specific date. The frontend NEVER recomputes it.
  */
 const getRecordLateMinutes = (rec) => {
   if (!rec) return 0;
@@ -108,11 +105,6 @@ const getStatusInfo = (status) => {
   }
 };
 
-/**
- * ✅ Whole-day column tint helper.
- * When the record is a company holiday, the entire column for that
- * day is tinted red across all rows of the table.
- */
 const getDayColumnClass = (rec) => {
   if (!rec) return '';
   if (rec.holiday) return 'bg-red-100 text-red-800';
@@ -129,13 +121,6 @@ const getWorkingDays = (year, month, leaveCount = 0) => {
   return totalDays - weekendCount - (leaveCount || 0);
 };
 
-/**
- * ✅ Counts "break sessions" for a single day from the sessions array.
- *   sessions = [{ punchInUTC, punchOutUTC }, ...]
- *   1 session  → 0 breaks
- *   2 sessions → 1 break
- *   N sessions → N − 1 breaks
- */
 const countDailyBreaks = (rec) => {
   if (!rec) return 0;
 
@@ -153,6 +138,19 @@ const countDailyBreaks = (rec) => {
   if (sessions.length <= 1) return 0;
 
   return sessions.length - 1;
+};
+
+// ============================================================
+// ✅ Excel Color Constants (match frontend)
+// ============================================================
+const COLOR = {
+  lateFill:    { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF3C7' } }, // amber-200 / yellow
+  lateFont:    { color: { argb: 'FF78350F' }, bold: true },                         // amber-900
+  holidayFill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }, // red-100
+  holidayFont: { color: { argb: 'FF991B1B' }, bold: true },                         // red-800
+  headerFill:  { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } }, // slate-100
+  headerFont:  { bold: true, color: { argb: 'FF64748B' } },                         // slate-500
+  labelFont:   { bold: true, color: { argb: 'FF475569' } },                         // slate-600
 };
 
 // ============================================================
@@ -224,14 +222,7 @@ const EmployeeAttendanceReport = () => {
   };
 
   // ============================================================
-  // Break metrics:
-  //   - totalBreaksCount  = sum of daily break session counts
-  //   - breakDaysCount    = days with at least 1 break
-  //   - avgBreaksPerDay   = totalBreaksCount / breakDaysCount
-  //   - totalBreakMinutes = gross − effective (informational)
-  //
-  // ✅ Lateness totals come from the persisted `lateMinutes`
-  //    field on each record (Option B — ShiftHistory).
+  // Group + summarize
   // ============================================================
   const groupedAndSummarizedData = useMemo(() => {
     if (!reportData || reportData.length === 0) {
@@ -274,7 +265,6 @@ const EmployeeAttendanceReport = () => {
             break;
           case 'Late':
             totalPresent += 1;
-            // ✅ Persisted lateness only — no local recompute
             totalLateMinutes += getRecordLateMinutes(record);
             break;
           case 'Partial':
@@ -339,15 +329,14 @@ const EmployeeAttendanceReport = () => {
   }, [reportData]);
 
   // ============================================================
-  // Excel export
-  //   - Keeps per-day "Breaks" (count) and "Break Duration" rows
-  //   - Keeps the compact per-employee summary line above the grid
+  // Excel export (ExcelJS — supports cell fills/fonts/formatting)
   //
-  // ✅ "Late By" row now reads persisted `lateMinutes` from the
-  //    API record. No local 10:45 cutoff.
-  // ✅ Holiday days export as blank cells with "H" status.
+  // Color rules (match the frontend):
+  //   - Late day  → yellow fill on the "In Time" cell
+  //   - Holiday   → red fill on the entire day column (all rows)
+  //                 and "—" instead of a value
   // ============================================================
-  const exportToExcel = () => {
+  const exportToExcel = async () => {
     if (groupedAndSummarizedData.length === 0) {
       toast.error('No data to export');
       return;
@@ -355,7 +344,15 @@ const EmployeeAttendanceReport = () => {
 
     setExporting(true);
     try {
-      const wb = XLSX.utils.book_new();
+      // Lazy-load heavy deps so they don't bloat the main bundle
+      const ExcelJS = (await import('exceljs')).default;
+      const { saveAs } = await import('file-saver');
+
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Work Duration Report', {
+        views: [{ state: 'frozen', xSplit: 1, ySplit: 0 }],
+      });
+
       const monthName = monthNames[selectedMonth - 1];
       const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
       const period = `01-${monthName.substring(0, 3)}-${selectedYear} To ${lastDay}-${monthName.substring(0, 3)}-${selectedYear}`;
@@ -368,47 +365,46 @@ const EmployeeAttendanceReport = () => {
         hour12: true
       });
 
-      const timeCellFormats = [];
-      const wsData = [];
+      // Track the widest row we ever write so we can size columns at the end
+      let maxColsUsed = 1;
+      const trackCols = (count) => {
+        if (count > maxColsUsed) maxColsUsed = count;
+      };
 
-      // Title block
-      wsData.push(['Techdataseeders']);
-      wsData.push(['Work Duration Report']);
-      wsData.push([period]);
-      wsData.push([]);
-      wsData.push([`Generated On: ${generatedOn}`]);
-      wsData.push([]);
+      // ---------- Title block ----------
+      ws.addRow(['Techdataseeders']);
+      ws.addRow(['Work Duration Report']);
+      ws.addRow([period]);
+      ws.addRow([]);
+      ws.addRow([`Generated On: ${generatedOn}`]);
+      ws.addRow([]);
+      trackCols(1);
 
-      groupedAndSummarizedData.forEach((employee) => {
-        // Employee header block
-        wsData.push(['Department:-', 'DefaultDepartment']);
-        wsData.push([
+      // ---------- Per employee ----------
+      for (const employee of groupedAndSummarizedData) {
+        // ----- Header block -----
+        ws.addRow(['Department:-', 'DefaultDepartment']);
+
+        const codeNameRow = ws.addRow([
           `Employee Code:- ${employee.employeeCode || 'N/A'}`,
-          '',
-          '',
-          '',
-          '',
-          '',
-          '',
+          '', '', '', '', '', '',
           `Employee Name:- ${employee.employeeName}`
         ]);
+        trackCols(8);
 
         const leaveCount = employee.summary.totalLeave || 0;
         const workingDays = getWorkingDays(selectedYear, selectedMonth, leaveCount);
         const presentDays = employee.summary.totalPresent;
 
-        wsData.push([`Present Days / Working Days - ${presentDays} / ${workingDays}`]);
-
-        // Break summary line — kept in the header only
-        wsData.push([
+        ws.addRow([`Present Days / Working Days - ${presentDays} / ${workingDays}`]);
+        ws.addRow([
           `Total Breaks: ${employee.summary.totalBreaksCount} session(s) across ${employee.summary.breakDaysCount} day(s)  |  Total Break Time: ${employee.summary.totalBreakFormatted}  |  Avg Breaks/Day: ${employee.summary.avgBreaksPerDay}`
         ]);
+        ws.addRow([]);
 
-        wsData.push([]);
-
-        // ---- Header rows ----
-        const dayHeaderRow = ['Day'];
-        const dateHeaderRow = ['Days'];
+        // ----- Day / Date / Weekday header rows -----
+        const dayHeaderRow     = ['Day'];
+        const dateHeaderRow    = ['Days'];
         const weekdayHeaderRow = [''];
 
         employee.records.forEach((rec, idx) => {
@@ -417,130 +413,164 @@ const EmployeeAttendanceReport = () => {
           weekdayHeaderRow.push(rec.day ? rec.day.substring(0, 3) : '');
         });
 
-        wsData.push(dayHeaderRow);
-        wsData.push(dateHeaderRow);
-        wsData.push(weekdayHeaderRow);
+        const rDay  = ws.addRow(dayHeaderRow);
+        const rDate = ws.addRow(dateHeaderRow);
+        const rWeek = ws.addRow(weekdayHeaderRow);
+        trackCols(dayHeaderRow.length);
 
-        // ---- In Time row ----
-        const inTimeRow = ['In Time'];
-        employee.records.forEach((rec, idx) => {
-          // Holidays → blank
-          const fraction = rec.holiday ? null : timeFractionIST(rec.punchInUTC);
-          inTimeRow.push(fraction);
-          if (fraction !== null) {
-            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
-          }
+        // Style those 3 header rows: gray header, red for holiday columns
+        [rDay, rDate, rWeek].forEach((row) => {
+          row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+            if (colNumber === 1) return; // skip label column
+            const rec = employee.records[colNumber - 2];
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
+            if (rec?.holiday) {
+              cell.fill = COLOR.holidayFill;
+              cell.font = COLOR.holidayFont;
+            } else {
+              cell.fill = COLOR.headerFill;
+              cell.font = COLOR.headerFont;
+            }
+          });
         });
-        wsData.push(inTimeRow);
 
-        // ---- Out Time row ----
-        const outTimeRow = ['Out Time'];
-        employee.records.forEach((rec, idx) => {
-          const fraction = rec.holiday ? null : timeFractionIST(rec.punchOutUTC);
-          outTimeRow.push(fraction);
-          if (fraction !== null) {
-            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
-          }
-        });
-        wsData.push(outTimeRow);
+        // Helper to write a data row with per-record styling
+        const writeRow = (label, cells, opts = {}) => {
+          const row = ws.addRow([label, ...cells]);
+          trackCols(row.cellCount);
 
-        // ---- Late By row ----
-        // ✅ Reads persisted lateMinutes from the API record.
-        const lateByRow = ['Late By'];
-        employee.records.forEach((rec, idx) => {
-          const fraction = rec.holiday ? null : minutesFraction(getRecordLateMinutes(rec));
-          lateByRow.push(fraction);
-          if (fraction !== null) {
-            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
-          }
-        });
-        wsData.push(lateByRow);
+          // Style label cell
+          row.getCell(1).font = COLOR.labelFont;
+          row.getCell(1).alignment = { vertical: 'middle' };
 
-        // ---- Early By row (placeholder) ----
-        const earlyByRow = ['Early By'];
-        employee.records.forEach(() => {
-          earlyByRow.push(null);
-        });
-        wsData.push(earlyByRow);
+          employee.records.forEach((rec, idx) => {
+            const cell = row.getCell(idx + 2);
+            cell.alignment = { horizontal: 'center', vertical: 'middle' };
 
-        // ---- T Duration row ----
-        const tDurationRow = ['T Duration'];
-        employee.records.forEach((rec, idx) => {
-          const fraction = rec.holiday ? null : durationFraction(rec.effectiveHours);
-          tDurationRow.push(fraction);
-          if (fraction !== null) {
-            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
-          }
-        });
-        wsData.push(tDurationRow);
+            if (rec.holiday) {
+              cell.fill = COLOR.holidayFill;
+              cell.font = COLOR.holidayFont;
+              return;
+            }
 
-        // ---- Gross Duration row ----
-        const grossDurationRow = ['Gross Duration'];
-        employee.records.forEach((rec, idx) => {
-          const fraction = rec.holiday ? null : durationFraction(rec.grossHours);
-          grossDurationRow.push(fraction);
-          if (fraction !== null) {
-            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
-          }
-        });
-        wsData.push(grossDurationRow);
+            // per-row extra styling (like numFmt)
+            if (opts.numFmt) cell.numFmt = opts.numFmt;
+            if (opts.font) cell.font = opts.font;
 
-        // ---- Breaks (count) row ----
-        const breakCountRow = ['Breaks'];
-        employee.records.forEach((rec) => {
-          breakCountRow.push(rec.holiday ? null : countDailyBreaks(rec));
-        });
-        wsData.push(breakCountRow);
+            // Late highlight only on the In Time column
+            if (opts.highlightLate && rec.isLate) {
+              cell.fill = COLOR.lateFill;
+              cell.font = COLOR.lateFont;
+            }
+          });
 
-        // ---- Break Duration row ----
-        const breakDurationRow = ['Break Duration'];
-        employee.records.forEach((rec, idx) => {
-          if (rec.holiday) {
-            breakDurationRow.push(null);
-            return;
-          }
-          const eff = rec.effectiveHours || 0;
-          const gross = rec.grossHours || 0;
-          const breakHours = Math.max(0, gross - eff);
-          const fraction = durationFraction(breakHours);
-          breakDurationRow.push(fraction);
-          if (fraction !== null) {
-            timeCellFormats.push({ row: wsData.length, col: idx + 1, format: 'hh:mm:ss' });
-          }
-        });
-        wsData.push(breakDurationRow);
+          return row;
+        };
 
-        // ---- Status row ----
-        const statusRow = ['Status'];
-        employee.records.forEach(rec => {
-          statusRow.push(getStatusInfo(rec.status).code);
-        });
-        wsData.push(statusRow);
+        // ----- In Time -----
+        writeRow(
+          'In Time',
+          employee.records.map((rec) =>
+            rec.holiday ? '—' : timeFractionIST(rec.punchInUTC)
+          ),
+          { numFmt: 'hh:mm:ss', highlightLate: true }
+        );
+
+        // ----- Out Time -----
+        writeRow(
+          'Out Time',
+          employee.records.map((rec) =>
+            rec.holiday ? '—' : timeFractionIST(rec.punchOutUTC)
+          ),
+          { numFmt: 'hh:mm:ss' }
+        );
+
+        // ----- Late By -----
+        writeRow(
+          'Late By',
+          employee.records.map((rec) =>
+            rec.holiday ? '—' : minutesFraction(getRecordLateMinutes(rec))
+          ),
+          { numFmt: 'hh:mm' }
+        );
+
+        // ----- Early By (placeholder) -----
+        writeRow(
+          'Early By',
+          employee.records.map((rec) => (rec.holiday ? '—' : null)),
+          { numFmt: 'hh:mm' }
+        );
+
+        // ----- T Duration -----
+        writeRow(
+          'T Duration',
+          employee.records.map((rec) =>
+            rec.holiday ? '—' : durationFraction(rec.effectiveHours)
+          ),
+          { numFmt: 'hh:mm' }
+        );
+
+        // ----- Gross Duration -----
+        writeRow(
+          'Gross Duration',
+          employee.records.map((rec) =>
+            rec.holiday ? '—' : durationFraction(rec.grossHours)
+          ),
+          { numFmt: 'hh:mm' }
+        );
+
+        // ----- Breaks count -----
+        writeRow(
+          'Breaks',
+          employee.records.map((rec) =>
+            rec.holiday ? '—' : countDailyBreaks(rec)
+          ),
+          { numFmt: '0' }
+        );
+
+        // ----- Break Duration -----
+        writeRow(
+          'Break Duration',
+          employee.records.map((rec) => {
+            if (rec.holiday) return '—';
+            const eff = rec.effectiveHours || 0;
+            const gross = rec.grossHours || 0;
+            return durationFraction(Math.max(0, gross - eff));
+          }),
+          { numFmt: 'hh:mm' }
+        );
+
+        // ----- Status -----
+        writeRow(
+          'Status',
+          employee.records.map((rec) =>
+            rec.holiday ? 'H' : getStatusInfo(rec.status).code
+          ),
+          {}
+        );
 
         // Spacing between employees
-        wsData.push([]);
-        wsData.push([]);
-      });
-
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-      const maxCols = Math.max(...wsData.map(row => row.length));
-      ws['!cols'] = [];
-      for (let i = 0; i < maxCols; i++) {
-        ws['!cols'].push({ wch: i === 0 ? 30 : 12 });
+        ws.addRow([]);
+        ws.addRow([]);
       }
 
-      timeCellFormats.forEach(({ row, col, format }) => {
-        const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-        if (ws[cellRef]) {
-          ws[cellRef].z = format;
-        }
-      });
+      // ---------- Column widths ----------
+      // Column A = labels + header info; columns B..N = per-day cells
+      ws.getColumn(1).width = 24;
+      for (let i = 2; i <= maxColsUsed; i++) {
+        ws.getColumn(i).width = 11;
+      }
 
-      XLSX.utils.book_append_sheet(wb, ws, 'Work Duration Report');
-
+      // ---------- Save ----------
+      const buffer = await wb.xlsx.writeBuffer();
       const filename = `Work_Duration_Report_${monthName}_${selectedYear}.xlsx`;
-      XLSX.writeFile(wb, filename);
+      saveAs(
+        new Blob([buffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }),
+        filename
+      );
+
       toast.success(`Report exported successfully: ${filename}`);
     } catch (error) {
       console.error('Export error:', error);
