@@ -14,195 +14,24 @@ import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
-const TICKET_CATEGORIES = {
-  'Finance': {
-    icon: '💰',
-    color: 'emerald',
-    role: 'Finance',
-    subcategories: {
-      'Reimbursement': [
-        'Employee Expense Claim',
-        'Client Meeting Expense',
-        'Travel Expense',
-        'Internet/Mobile Expense',
-        'Office Purchase Expense'
-      ],
-      'Payment Requests': [
-        'Vendor Payment',
-        'Advance Payment',
-        'Contractor Payment'
-      ],
-      'Invoice Management': [
-        'Generate Invoice',
-        'Revise Invoice',
-        'Client Billing Query'
-      ]
-    }
-  },
-  'HR': {
-    icon: '👥',
-    color: 'pink',
-    role: 'HR',
-    subcategories: {
-      'Employee Documents': [
-        'Employment Letter',
-        'Salary Certificate',
-        'Experience Letter'
-      ],
-      'Attendance & Leave': [
-        'Attendance Correction',
-        'Leave Regularization',
-        'Leave Approval'
-      ],
-      'Employee Management': [
-        'Onboarding',
-        'Exit Process',
-        'Promotion Request'
-      ]
-    }
-  },
-  'Payroll': {
-    icon: '💳',
-    color: 'blue',
-    role: 'Finance',
-    subcategories: {
-      'Salary': [
-        'Salary Query',
-        'Salary Correction',
-        'Missing Salary'
-      ],
-      'Incentives': [
-        'Bonus',
-        'Incentive Calculation',
-        'Commission Query'
-      ],
-      'Tax & Deductions': [
-        'TDS Query',
-        'PF Query'
-      ]
-    }
-  },
-  'Sales': {
-    icon: '📊',
-    color: 'orange',
-    role: 'Sales',
-    subcategories: {
-      'Lead Management': [
-        'Lead Assignment',
-        'Lead Designation'
-      ],
-      'Proposal & Pricing': [
-        'Proposal Creation',
-        'Pricing Approval',
-        'Dispute Agreement'
-      ],
-      'Client Support': [
-        'Contact Review',
-        'VDA Request',
-        'Client Escalation'
-      ]
-    }
-  },
-  'Production': {
-    icon: '⚙️',
-    color: 'red',
-    role: 'Developer',
-    subcategories: {
-      'Data Extraction': [
-        'Feed Not Working',
-        'Feed Missing Data',
-        'Feed Shortage Outage',
-        'Scripts Issues',
-        'Proxy'
-      ],
-      'Data Quality': [
-        'Duplicate Records',
-        'Missing Fields',
-        'Incorrect Shipping'
-      ],
-      'Delivery': [
-        'Delivery Delayed',
-        'Delivery Failed',
-        'API Delivery Issue'
-      ],
-      'Maintenance': [
-        'New Feed Request',
-        'Editing Feed Enhancement'
-      ],
-      'Feasibility': [],
-      'Others': [],
-      'KUIPER': [
-        'Report Bug',
-        'Latency',
-        'Request New Feature',
-        'Login Issue',
-        'Forget Password',
-        'Forget Username'
-      ]
-    }
-  },
-  'Admin': {
-    icon: '🛠️',
-    color: 'gray',
-    role: 'Admin',
-    subcategories: {
-      'Agency': [
-        'Lease Request',
-        'Uptime Delay',
-        'Asset Return'
-      ],
-      'Procurement': [
-        'Machine Purchase',
-        'Software Purchase'
-      ],
-      'Facilities': [
-        'Internet Link',
-        'Office Workstation'
-      ],
-      'IT': [
-        'Asset Management',
-        'Email Access',
-        'Database Access',
-        'Server Access'
-      ],
-      'Technical Support': [
-        'System Reset'
-      ]
-    }
-  },
-  'IT': {
-    icon: '💻',
-    color: 'cyan',
-    role: 'IT',
-    subcategories: {
-      'Access Management': [
-        'Email Access',
-        'Database Access',
-        'Server Access'
-      ],
-      'Technical/Support': [
-        'System Reset'
-      ],
-      'Software Tools': [
-        'Hardware Issues'
-      ]
-    }
-  },
-  'Development': {
-    icon: '🚀',
-    color: 'violet',
-    role: 'Developer',
-    subcategories: {
-      'New Feature Request': [
-        'Requirements Request',
-        'Bug Report'
-      ]
-    }
-  }
-};
-
-const CLIENT_CATEGORIES = {
-  'Production': TICKET_CATEGORIES['Production']
+// ============================================
+// Categories now come from the backend (/api/ticket-categories) so an
+// Admin / Super Admin can edit them. This turns the API list into the
+// { name: { icon, color, role, subcategories: { sub: [items] } } } shape
+// the form uses. Clients only see categories/subcategories flagged for them.
+// ============================================
+const buildCategoryMap = (list, forClient) => {
+  const out = {};
+  (list || []).forEach(c => {
+    if (forClient && !c.clientVisible) return;
+    const subs = {};
+    (c.subcategories || []).forEach(sub => {
+      if (forClient && sub.clientVisible === false) return;
+      subs[sub.name] = sub.items || [];
+    });
+    out[c.name] = { icon: c.icon, color: c.color, role: c.role, subcategories: subs };
+  });
+  return out;
 };
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -281,6 +110,8 @@ const CreateTicket = () => {
   const [developers, setDevelopers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [isSubcategoryOpen, setIsSubcategoryOpen] = useState(false);
+  const [categoriesData, setCategoriesData] = useState([]);
+  const [loadingCategories, setLoadingCategories] = useState(true);
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
@@ -308,17 +139,49 @@ const CreateTicket = () => {
   const fileInputRef = useRef(null);
 
   const isClient = userRole === 'Client';
-  const isDeveloper = userRole === 'Developer';
   const canSeeProjectFeed = userRole === 'Client' || userRole === 'Project Manager' || userRole === 'Team Lead';
-  const isSpecialSubcategory = (formData.category === 'Production' && 
-    (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others'));
-  
-  const getAvailableCategories = () => {
-    if (isClient) {
-      return CLIENT_CATEGORIES;
-    }
-    return TICKET_CATEGORIES;
+  const selectedCategoryRaw = categoriesData.find(c => c.name === formData.category);
+  const selectedSubRaw = selectedCategoryRaw?.subcategories?.find(sub => sub.name === formData.subcategory);
+  // "special" subcategories (Production > Feasibility / Others): no Specific Issue,
+  // Project & Feed forced to General, assignee picked from a developer pool
+  const isSpecialSubcategory = !!selectedSubRaw?.special;
+
+  // Which role should this ticket be assigned to? subcategory override > category override > category role
+  const resolveAssignRole = () => {
+    if (!selectedCategoryRaw) return { role: '', viaOverride: false };
+    const hit = (list) => (list || []).find(o => (o.creatorRoles || []).includes(userRole));
+    const subHit = hit(selectedSubRaw?.assignOverrides);
+    if (subHit) return { role: subHit.assignRole, viaOverride: true };
+    const catHit = hit(selectedCategoryRaw.assignOverrides);
+    if (catHit) return { role: catHit.assignRole, viaOverride: true };
+    return { role: selectedCategoryRaw.role || '', viaOverride: false };
   };
+  const { role: assignRole, viaOverride: assignViaOverride } = resolveAssignRole();
+  const isPMAssign = assignRole === 'Project Manager';
+  // wording for the special (developer-pool) block
+  const poolNoun = assignRole === 'Developer' || !assignRole ? 'developer' : assignRole;
+  const poolTitle = assignRole === 'Developer' || !assignRole ? 'Developer' : assignRole;
+
+  const getAvailableCategories = () => buildCategoryMap(categoriesData, isClient);
+
+  // Load the dynamic category tree
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const res = await axios.get(`${API_BASE_URL}/api/ticket-categories`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setCategoriesData(res.data || []);
+      } catch (error) {
+        console.error('Error loading ticket categories:', error);
+        toast.error('Could not load ticket categories. Please refresh.');
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+    loadCategories();
+  }, []);
 
   // ============================================
   // Fetch users for watchers - EXCLUDE Admin AND Client
@@ -551,10 +414,9 @@ const CreateTicket = () => {
     return uploadedUrls;
   };
 
-  // ✅ FIX: Only fetch department users if NOT a client
-  // For Developers creating Production tickets, fetch Team Leads instead of Developers
-  const fetchDepartmentUsers = async (category, subcategory = '') => {
-    // ✅ Skip if user is Client - they don't need to assign tickets
+  // Fetch the users that can receive this ticket (role comes from the category config,
+  // e.g. Developer / Team Lead / Project Manager). Skipped for clients.
+  const fetchDepartmentUsers = async (roleToFetch) => {
     if (isClient) {
       setDepartmentUsers([]);
       setSelectedPerson('');
@@ -568,55 +430,21 @@ const CreateTicket = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const categories = getAvailableCategories();
-      const categoryConfig = categories[category];
-      
-      if (!categoryConfig) {
-        console.log('No category config found for:', category);
+      if (!roleToFetch) {
         setDepartmentUsers([]);
-        setLoadingDepartmentUsers(false);
         return;
       }
 
-      let roleToFetch = categoryConfig.role;
-
-      if (category === 'Production') {
-        if (subcategory === 'Feasibility' || subcategory === 'Others') {
-          console.log('Special subcategory - using developer dropdown instead');
-          setDepartmentUsers([]);
-          setLoadingDepartmentUsers(false);
-          return;
-        }
-        roleToFetch = 'Developer';
-        
-        // ✅ FIX: If current user is a Developer, show Team Leads instead
-        // Developers should raise tickets TO Team Leads, not to other Developers
-        if (isDeveloper) {
-          roleToFetch = 'Team Lead';
-          console.log('🔍 Developer profile detected - fetching Team Leads for assignment');
-        }
-      }
-
-      if (category === 'Payroll') {
-        roleToFetch = 'Finance';
-      }
-
-      console.log(`🔍 Fetching users with role: ${roleToFetch} for category: ${category}`);
-
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${roleToFetch}`, {
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${encodeURIComponent(roleToFetch)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      console.log(`✅ Found ${res.data.length} users with role ${roleToFetch}:`, res.data.map(u => u.name));
 
       setDepartmentUsers(res.data);
 
       if (res.data.length === 1) {
         setSelectedPerson(res.data[0]._id);
         setFormData(prev => ({ ...prev, assignedTo: res.data[0]._id }));
-        console.log('✅ Auto-selected:', res.data[0].name);
       }
-
     } catch (error) {
       console.error('Error fetching department users:', error);
       setDepartmentUsers([]);
@@ -625,76 +453,49 @@ const CreateTicket = () => {
     }
   };
 
-  // ✅ Only fetch department users when category changes AND user is not client
+  // Re-fetch whenever category / subcategory / resolved role changes
   useEffect(() => {
-    if (!isClient && formData.category) {
-      fetchDepartmentUsers(formData.category, formData.subcategory);
+    if (!isClient && formData.category && assignRole && !isSpecialSubcategory) {
+      fetchDepartmentUsers(assignRole);
     } else {
       setDepartmentUsers([]);
       setSelectedPerson('');
     }
-  }, [formData.category, formData.subcategory, isClient]);
+  }, [formData.category, formData.subcategory, isClient, assignRole, isSpecialSubcategory]);
 
-  // ✅ Only fetch developers if user is not client
-  // For Developers, fetch Team Leads instead (for Feasibility/Others subcategories)
+  // Special subcategories use their own pool dropdown (developers / team leads)
   useEffect(() => {
     if (!isClient && isSpecialSubcategory) {
       fetchDevelopers();
     }
-  }, [isSpecialSubcategory, isClient]);
+  }, [isSpecialSubcategory, isClient, assignRole]);
 
   const getSubcategories = () => {
     if (!formData.category) return [];
     const categories = getAvailableCategories();
-    const subcategories = Object.keys(categories[formData.category]?.subcategories || {});
-    
-    // If client, filter out Feasibility and Others
-    if (isClient && formData.category === 'Production') {
-      return subcategories.filter(sub => sub !== 'Feasibility' && sub !== 'Others');
-    }
-    
-    return subcategories;
+    return Object.keys(categories[formData.category]?.subcategories || {});
   };
 
   const getSubItems = () => {
     if (!formData.category || !formData.subcategory) return [];
     const categories = getAvailableCategories();
     const subcategory = categories[formData.category]?.subcategories[formData.subcategory];
-    if (Array.isArray(subcategory)) {
-      return subcategory;
-    }
-    return subcategory || [];
+    return Array.isArray(subcategory) ? subcategory : [];
   };
 
   const hasSubItems = () => {
-    if (!formData.category || !formData.subcategory) return false;
-    if (formData.category === 'Production' && 
-        (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others')) {
-      return false;
-    }
-    const categories = getAvailableCategories();
-    const subcategory = categories[formData.category]?.subcategories[formData.subcategory];
-    return Array.isArray(subcategory) && subcategory.length > 0;
+    if (!formData.category || !formData.subcategory || isSpecialSubcategory) return false;
+    return getSubItems().length > 0;
   };
 
-  const shouldShowDeveloperAssignment = () => {
-    return formData.category === 'Production' && 
-      (formData.subcategory === 'Feasibility' || formData.subcategory === 'Others');
-  };
+  // Subcategory is only mandatory when the category actually has some
+  const subcategoryRequired = getSubcategories().length > 0;
 
-  // ✅ Only show person dropdown if user is NOT client
+  // ✅ Show the assignee dropdown once the subcategory is known (the role can depend on it)
   const shouldShowPersonDropdown = () => {
     if (isClient) return false;
-    if (!formData.category) return false;
-    if (formData.category === 'Production') {
-      if (formData.subcategory && 
-          formData.subcategory !== 'Feasibility' && 
-          formData.subcategory !== 'Others') {
-        return true;
-      }
-      return false;
-    }
-    return true;
+    if (!formData.category || isSpecialSubcategory) return false;
+    return !!formData.subcategory || !subcategoryRequired;
   };
 
   // ✅ Show watcher section only for non-client users
@@ -702,14 +503,14 @@ const CreateTicket = () => {
     return !isClient;
   };
 
-  // Helper to get the display label for the assignee role
-  // Developers see "Team Lead", others see their category name
+  // "Team Lead" / "Project Manager" when an override applies, otherwise the category name
   const getAssigneeLabel = () => {
-    if (isDeveloper && formData.category === 'Production') {
-      return 'Team Lead';
-    }
+    if (assignViaOverride && assignRole) return assignRole;
     return formData.category;
   };
+  // Field title: Sales on Development > Feasibility sees "Assign to Project Manager *"
+  const assigneeFieldLabel = isPMAssign ? 'Project Manager' : `${getAssigneeLabel()} Team Member`;
+  const assigneeNoun = isPMAssign ? 'Project Manager' : `${getAssigneeLabel()} team member`;
 
   useEffect(() => {
     if (formData.category && formData.subcategory && formData.subItem) {
@@ -718,17 +519,10 @@ const CreateTicket = () => {
         ticketType: formData.subItem
       }));
     } else if (formData.category && formData.subcategory) {
-      if (formData.category === 'Production' && formData.subcategory === 'Feasibility') {
+      if (isSpecialSubcategory) {
         setFormData(prev => ({
           ...prev,
-          ticketType: 'Feasibility',
-          projectId: null,
-          feedId: null
-        }));
-      } else if (formData.category === 'Production' && formData.subcategory === 'Others') {
-        setFormData(prev => ({
-          ...prev,
-          ticketType: 'Others',
+          ticketType: formData.subcategory,
           projectId: null,
           feedId: null
         }));
@@ -744,7 +538,7 @@ const CreateTicket = () => {
         ticketType: formData.category
       }));
     }
-  }, [formData.category, formData.subcategory, formData.subItem]);
+  }, [formData.category, formData.subcategory, formData.subItem, isSpecialSubcategory]);
 
   useEffect(() => {
     if (isSpecialSubcategory) {
@@ -816,23 +610,16 @@ const CreateTicket = () => {
     }
   };
 
-  // ✅ FIX: For Developers, fetch Team Leads instead of Developers
-  // This is used for Feasibility/Others subcategories
+  // Pool of users for special subcategories (role from category config, e.g. Developer / Team Lead)
   const fetchDevelopers = async () => {
     try {
       const token = localStorage.getItem('token');
-      
-      // If current user is a Developer, fetch Team Leads instead
-      const roleToFetch = isDeveloper ? 'Team Lead' : 'Developer';
-      
-      console.log(`🔍 Fetching users with role: ${roleToFetch} for special subcategory assignment`);
-      
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${roleToFetch}`, {
+      const roleToFetch = assignRole || 'Developer';
+
+      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${encodeURIComponent(roleToFetch)}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      console.log(`✅ Found ${res.data.length} users with role ${roleToFetch}:`, res.data.map(u => u.name));
-      
+
       setDevelopers(res.data || []);
     } catch (error) {
       console.error('Error fetching developers:', error);
@@ -878,13 +665,12 @@ const CreateTicket = () => {
     
     // ✅ Skip person dropdown validation for clients
     if (shouldShowPersonDropdown() && !selectedPerson && !isSpecialSubcategory) {
-      const categoryName = getAssigneeLabel() || 'department';
-      toast.error(`Please select a ${categoryName} team member for this ticket`);
+      toast.error(`Please select a ${assigneeNoun} for this ticket`);
       return;
     }
     
     if (isSpecialSubcategory && !formData.assignedTo) {
-      toast.error(`Please assign a ${isDeveloper ? 'Team Lead' : 'developer'} for this ticket`);
+      toast.error(`Please assign a ${poolNoun} for this ticket`);
       return;
     }
     
@@ -1050,12 +836,12 @@ const CreateTicket = () => {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-purple-800">
-                      {formData.subcategory === 'Feasibility' ? 'Feasibility Request' : 'Others Request'}
+                      {formData.subcategory} Request
                     </p>
                     <p className="text-xs text-purple-700 mt-0.5">
-                      This ticket is for {formData.subcategory === 'Feasibility' ? 'feasibility assessment' : 'general other requests'}. 
+                      This ticket is a {formData.subcategory.toLowerCase()} request. 
                       Project and Feed will be set to <span className="font-medium">General</span>.
-                      Please assign a {isDeveloper ? 'Team Lead' : 'developer'}.
+                      Please assign a {poolNoun}.
                     </p>
                   </div>
                 </div>
@@ -1146,7 +932,7 @@ const CreateTicket = () => {
                       }}
                       className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
                     >
-                      <option value="">Select Category</option>
+                      <option value="">{loadingCategories ? 'Loading categories...' : 'Select Category'}</option>
                       {Object.keys(availableCategories).map(cat => (
                         <option key={cat} value={cat}>
                           {availableCategories[cat]?.icon} {cat}
@@ -1160,7 +946,7 @@ const CreateTicket = () => {
                       Subcategory
                     </label>
                     <select
-                      required
+                      required={subcategoryRequired}
                       value={formData.subcategory}
                       onChange={(e) => {
                         setFormData({ 
@@ -1210,9 +996,7 @@ const CreateTicket = () => {
                   {isSpecialSubcategory && (
                     <div className="flex items-center justify-center bg-purple-50 border-2 border-purple-200 rounded-xl p-3">
                       <span className="text-xs font-medium text-purple-700">
-                        {formData.subcategory === 'Feasibility' 
-                          ? 'No specific issue selection needed' 
-                          : `General other request - assign ${isDeveloper ? 'Team Lead' : 'developer'}`}
+                        {`No specific issue needed - assign ${poolNoun}`}
                       </span>
                     </div>
                   )}
@@ -1239,7 +1023,7 @@ const CreateTicket = () => {
                       )}
                       {isSpecialSubcategory && (
                         <span className="text-[8px] font-black text-purple-600 bg-purple-100 px-2 py-1 rounded-lg">
-                          {formData.subcategory === 'Feasibility' ? 'Feasibility Assessment' : 'Other Request'}
+                          {formData.subcategory}
                         </span>
                       )}
                     </div>
@@ -1253,8 +1037,8 @@ const CreateTicket = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <Users size={18} className="text-blue-600" />
                     <label className="text-sm font-semibold text-slate-700">
-                      {/* ✅ FIX: Show "Team Lead" label for Developers */}
-                      Assign to {getAssigneeLabel()} Team Member <span className="text-red-500">*</span>
+                      {/* e.g. "Assign to Development Team Member *" or, for Sales on Feasibility, "Assign to Project Manager *" */}
+                      Assign to {assigneeFieldLabel} <span className="text-red-500">*</span>
                     </label>
                     {loadingDepartmentUsers && (
                       <div className="ml-2">
@@ -1277,8 +1061,8 @@ const CreateTicket = () => {
                       {loadingDepartmentUsers 
                         ? 'Loading team members...' 
                         : departmentUsers.length === 0 
-                          ? `No ${getAssigneeLabel()} team members available` 
-                          : `Select a ${getAssigneeLabel()} team member...`}
+                          ? `No ${assigneeNoun} available` 
+                          : `Select a ${assigneeNoun}...`}
                     </option>
                     {departmentUsers.map(user => (
                       <option key={user._id} value={user._id}>
@@ -1312,7 +1096,7 @@ const CreateTicket = () => {
                   )}
                   
                   <p className="text-[8px] text-slate-400 mt-2">
-                    This ticket will be assigned to the selected {getAssigneeLabel()} team member
+                    This ticket will be assigned to the selected {assigneeNoun}
                   </p>
                 </div>
               )}
@@ -1322,8 +1106,7 @@ const CreateTicket = () => {
                   <div className="flex items-center gap-2 mb-3">
                     <UserCheck size={18} className="text-purple-600" />
                     <label className="text-sm font-semibold text-purple-700">
-                      {/* ✅ FIX: Show "Team Lead" label for Developers */}
-                      Assign {isDeveloper ? 'Team Lead' : 'Developer'} <span className="text-red-500">*</span>
+                      Assign {poolTitle} <span className="text-red-500">*</span>
                     </label>
                   </div>
                   
@@ -1334,11 +1117,11 @@ const CreateTicket = () => {
                     className="w-full px-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
                   >
                     <option value="">
-                      Select a {isDeveloper ? 'Team Lead' : 'developer'} for {formData.subcategory.toLowerCase()} request
+                      Select a {poolNoun} for {formData.subcategory.toLowerCase()} request
                     </option>
                     {developers.length === 0 ? (
                       <option value="" disabled>
-                        No {isDeveloper ? 'Team Leads' : 'developers'} available
+                        No {poolNoun}s available
                       </option>
                     ) : (
                       developers.map(dev => (
@@ -1363,13 +1146,13 @@ const CreateTicket = () => {
                         </div>
                       )}
                       <span className="text-xs text-slate-400 ml-auto">
-                        {isDeveloper ? 'Team Lead' : 'Developer'} will be assigned to this ticket
+                        {poolTitle} will be assigned to this ticket
                       </span>
                     </div>
                   )}
                   
                   <p className="text-[8px] text-purple-500 mt-2">
-                    Select a {isDeveloper ? 'Team Lead' : 'developer'} who will handle this {formData.subcategory.toLowerCase()} request
+                    Select a {poolNoun} who will handle this {formData.subcategory.toLowerCase()} request
                   </p>
                 </div>
               )}
@@ -1471,7 +1254,7 @@ const CreateTicket = () => {
                   <div>
                     <p className="text-sm font-semibold text-purple-800">Project & Feed: General</p>
                     <p className="text-xs text-purple-600">
-                      This {formData.subcategory.toLowerCase()} ticket will be assigned to the general pool and handled by the selected {isDeveloper ? 'Team Lead' : 'developer'}.
+                      This {formData.subcategory.toLowerCase()} ticket will be assigned to the general pool and handled by the selected {poolNoun}.
                     </p>
                   </div>
                 </div>
@@ -1732,13 +1515,13 @@ const CreateTicket = () => {
                 
                 {!isClient && isSpecialSubcategory && !formData.assignedTo && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    Please assign a {isDeveloper ? 'Team Lead' : 'developer'} to create this {formData.subcategory.toLowerCase()} ticket
+                    Please assign a {poolNoun} to create this {formData.subcategory.toLowerCase()} ticket
                   </p>
                 )}
                 
                 {!isClient && shouldShowPersonDropdown() && !selectedPerson && departmentUsers.length > 0 && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    Please select a {getAssigneeLabel()} team member to assign this ticket
+                    Please select a {assigneeNoun} to assign this ticket
                   </p>
                 )}
                 

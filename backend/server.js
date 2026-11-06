@@ -1,4 +1,4 @@
-// backend/server.js - UPDATED with leaveBucketRoutes + autoStopWorklogs
+// backend/server.js - UPDATED with leaveBucketRoutes + autoStopWorklogs + feedGitSync
 
 const express = require('express');
 const mongoose = require('mongoose');
@@ -89,6 +89,18 @@ try {
 }
 
 // =========================================================
+// ✅ NEW: FEED GIT SYNC (Daily, 2:00 AM IST)
+// Stores each feed folder's last Git commit date on the Feed
+// document so the Project Manager feeds page loads instantly.
+// =========================================================
+try {
+  require(path.join(__dirname, 'cron', 'feedGitSync'));
+  console.log('⏰ Feed Git Sync initialized (daily, 2:00 AM IST)');
+} catch (err) {
+  console.log('⚠️ Notice: Feed Git Sync not loaded:', err.message);
+}
+
+// =========================================================
 // CREATE UPLOADS DIRECTORY STRUCTURE IF NOT EXISTS
 // =========================================================
 
@@ -148,6 +160,10 @@ const leaveRoutes = require('./routes/leaveRoutes');
 const announcementRoutes = require('./routes/announcementRoutes');
 const holidayRoutes = require('./routes/holidayRoutes');
 const workReportRoutes = require('./routes/workReportRoutes');
+const leadRoutes = require('./routes/leadRoutes');
+const dealRoutes = require('./routes/dealRoutes');
+const moduleFieldRoutes = require('./routes/moduleFieldRoutes');
+const SalesNotificationService = require('./services/salesNotificationService');
 
 // ✅ IMPORT THE LEAVE BUCKET ROUTES
 let leaveBucketRoutes;
@@ -396,7 +412,9 @@ app.use('/api/auth', authRoutes);
 // CONTROL AUTHORIZED SECURE ENDPOINTS
 app.use('/api/admin', protect, adminRoutes);
 app.use('/api/orgs', protect, organizationRoutes);
-app.use('/api/leads', protect, leadGenRoutes);
+// NOTE: '/api/leads' belongs to leadRoutes (Lead model, mounted below).
+// leadGenRoutes is served ONLY at '/api/lead-generation'. Mounting it here too
+// shadowed leadRoutes, so POST/GET /api/leads hit the old LeadGen handler.
 app.use('/api/lead-generation', protect, leadGenRoutes);
 app.use('/api/prospects', protect, prospectRoutes);
 app.use('/api/dev', protect, developerRoutes);
@@ -405,6 +423,7 @@ app.use('/api/dev/worklog', protect, workDescriptionRoutes);
 app.use('/api/resource-analytics', resourceAnalyticsRoutes);
 app.use('/api/email-campaign', emailCampaignRoutes);
 app.use('/api/tickets', ticketRoutes);
+app.use('/api/ticket-categories', require('./routes/ticketCategoryRoutes')); // dynamic Category/Subcategory/Specific Issue
 app.use('/api/comments', protect, commentRoutes);
 app.use('/api/teamlead', protect, teamLeadRoutes);
 app.use('/api/admin', protect, ticketAssignmentRoutes);
@@ -416,7 +435,13 @@ app.use('/api/employee', employeeRoutes);
 app.use('/api/announcements', announcementRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/work-report', workReportRoutes);
-
+app.use('/api/leads', leadRoutes);
+app.use('/api/lead-activities', require('./routes/leadActivityRoutes'));
+app.use('/api/deals', dealRoutes);   // next to app.use('/api/leads', leadRoutes)
+app.use('/api/task-stages', require('./routes/taskStageRoutes'));
+app.use('/api/deal-stages', require('./routes/dealStageRoutes'));
+app.use('/api/module-fields', moduleFieldRoutes);
+app.use('/api/dashboard-config', require('./routes/dashboardConfigRoutes'));
 // =========================================================
 // ✅ LEAVE ROUTES - Both old and new systems
 // =========================================================
@@ -470,10 +495,17 @@ mongoose.connect(MONGO_URI)
       console.log('  ✅ Announcement Automation');
       console.log('  ✅ Holiday Reminder');
       console.log('  ✅ Leave Bucket Accrual');
-      console.log('  ✅ Auto-Stop Worklogs (11:55 PM IST)'); // ← NEW
+      console.log('  ✅ Auto-Stop Worklogs (11:55 PM IST)');
+      console.log('  ✅ Feed Git Sync (daily, 2:00 AM IST)'); // ← NEW
       console.log('  ✅ Socket.IO Server');
       console.log('  ✅ REST API Routes');
       console.log('  ✅ File Upload Service');
+
+      // ✅ NEW: Initialize and start sales notifications
+      const salesNotifier = new SalesNotificationService(io);
+      salesNotifier.startRealtimeNotifications();
+      salesNotifier.startDailyEmailJob();
+      console.log('  ✅ Sales Notifications (real-time + daily email)');
     });
   })
   .catch((err) => {

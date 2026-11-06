@@ -1,3 +1,4 @@
+// frontend/src/App.jsx
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
@@ -35,6 +36,7 @@ import TeamLeadProjects from './pages/TeamLeadProjects';
 import TeamLeadDevelopers from './pages/TeamLeadDevelopers';
 import TeamLeadFeeds from './pages/TeamLeadFeeds';
 import TicketAssignmentRules from './pages/TicketAssignmentRules';
+import TicketCategoriesManager from './pages/TicketCategoriesManager';
 import FeedDeliveryDashboard from './pages/FeedDeliveryDashboard';
 import ProjectFeedStatus from './pages/ProjectFeedStatus';
 import ClientFeedDetails from './pages/ClientFeedDetails';
@@ -48,6 +50,19 @@ import EmployeeAttendanceReport from './pages/EmployeeAttendanceReport';
 import Announcements from './pages/Announcements';
 import HolidayList from './pages/HolidayList';
 import WorkReport from './pages/WorkReport';
+import Leads from './pages/Leads';
+import Accounts from './pages/Accounts';
+import Contacts from './pages/Contacts'; 
+import CreateAccount from './pages/CreateAccount';
+import Deals from './pages/Deals';
+import CustomizeModules from './pages/CustomizeModules';
+
+// ============================================
+// ✅ ACTIVITIES IMPORTS (Notes feature shows inside Leads)
+// ============================================
+import ActivitiesTasks from './pages/ActivitiesTasks';
+import ActivitiesMeetings from './pages/ActivitiesMeetings';
+import ActivitiesCalls from './pages/ActivitiesCalls';
 
 // ============================================
 // HRMS IMPORTS
@@ -62,6 +77,9 @@ import HrLeaveDashboard from './pages/HrLeaveDashboard';
 
 // Import the Notification component
 import NotificationBell from './components/NotificationBell';
+
+// ✅ NEW: Import the SalesNotifier component
+import SalesNotifier from './components/SalesNotifier';
 
 import { AnimatePresence } from 'framer-motion';
 import { useSidebar } from './context/SidebarContext';
@@ -370,15 +388,12 @@ function AppContent() {
     };
   }, [token, userId]);
 
-  // ============================================
-  // CONNECTION STATUS INDICATOR (optional)
-  // ============================================
-  // You can use socketConnected to show a connection status indicator
-
   return (
     <SessionManager>
+      {/* ✅ NEW: Mount the SalesNotifier component globally */}
+      <SalesNotifier />
       <AnimatePresence mode="wait">
-        <Routes location={location} key={location.pathname}>
+        <Routes location={location} key={location.pathname === '/login' ? 'login' : 'app'}>
           <Route 
             path="/login" 
             element={token ? <Navigate to={landingPath} replace /> : <Login />} 
@@ -391,7 +406,7 @@ function AppContent() {
                 <main className={`flex-1 w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
                   isCollapsed ? 'pl-[84px]' : 'pl-[28px]'
                 }`}>
-                  <Routes>
+                  <Routes key={location.pathname}>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
 
                     {/* ============================================
@@ -403,9 +418,21 @@ function AppContent() {
                         <TicketAssignmentRules />
                       </ProtectedRoute>
                     } />
+                    <Route path="/admin/ticket-categories" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin']}>
+                        <TicketCategoriesManager />
+                      </ProtectedRoute>
+                    } />
                     <Route path="/admin/project-clients" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Admin']}>
                         <AdminProjectClients />
+                      </ProtectedRoute>
+                    } />
+
+                    {/* ✅ NEW: CUSTOMIZE MODULES ROUTE */}
+                    <Route path="/admin/customize" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Sales', 'Sales Manager']}>
+                        <CustomizeModules />
                       </ProtectedRoute>
                     } />
                     
@@ -418,12 +445,37 @@ function AppContent() {
                         SALES
                         ============================================ */}
                     <Route path="/sales" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
+                    <Route path="/sales/leads" element={<Leads />} />
                     <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
                     <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
                     <Route path="/sales/prospects" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><Prospects /></ProtectedRoute>} />
+                    <Route path="/sales/accounts" element={<Accounts />} />
+                    <Route path="/sales/deals" element={<Deals />} />   
+                    <Route path="/sales/accounts/new" element={<CreateAccount />} />
+                    <Route path="/sales/contacts" element={<Contacts />} />
+                    
                     <Route path="/sales/email-trigger" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
                         <EmailTrigger />
+                      </ProtectedRoute>
+                    } />
+
+                    {/* ============================================
+                        ✅ ACTIVITIES (NOTES FEATURE — ZOHO STYLE)
+                        ============================================ */}
+                    <Route path="/sales/activities/tasks" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
+                        <ActivitiesTasks />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/sales/activities/meetings" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
+                        <ActivitiesMeetings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/sales/activities/calls" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
+                        <ActivitiesCalls />
                       </ProtectedRoute>
                     } />
                     
@@ -537,26 +589,26 @@ function AppContent() {
                     } />
                     
                     {/* ============================================
-                        TICKETS ROUTES - UPDATED WITH HR & FINANCE
+                        TICKETS ROUTES - UPDATED WITH HR, FINANCE & SALES
                         ============================================ */}
                     
                     {/* Ticket Dashboard - HR & Finance can view all their tickets */}
                     <Route path="/tickets" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
                         <TicketDashboard />
                       </ProtectedRoute>
                     } />
                     
                     {/* Create Ticket - HR & Finance can create tickets */}
                     <Route path="/tickets/create" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
                         <CreateTicket />
                       </ProtectedRoute>
                     } />
                     
                     {/* Ticket Details - HR & Finance can view ticket details */}
                     <Route path="/tickets/:id" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
                         <TicketDetails />
                       </ProtectedRoute>
                     } />
@@ -600,7 +652,7 @@ function AppContent() {
                       </ProtectedRoute>
                     } />
                     <Route path="/knowledge" element={
-                        <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance']}>
+                        <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance','Sales','Sales Manager']}>
                           <KnowledgeBase />
                         </ProtectedRoute>
                       } />

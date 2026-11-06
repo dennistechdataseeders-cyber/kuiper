@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const customFieldSchema = require('./customFieldSchema');
 
 // Sub-schema for multiple Points of Contact
 const pocSubSchema = new mongoose.Schema({
@@ -6,6 +7,8 @@ const pocSubSchema = new mongoose.Schema({
   pocEmail: { type: String },
   pocPhone: { type: String },
   linkedin: { type: String },
+  title: { type: String },
+  mobile: { type: String },
   isPrimary: { type: Boolean, default: false },
   department: { 
     type: String, 
@@ -13,6 +16,8 @@ const pocSubSchema = new mongoose.Schema({
     default: 'Other' 
   },
   notes: { type: String },
+  // values of fields created in Customize Modules → Contacts
+  customFields: [customFieldSchema],
   addedAt: { type: Date, default: Date.now }
 });
 
@@ -25,12 +30,20 @@ const organizationSchema = new mongoose.Schema({
   },
   website: { type: String },
   address: { type: String },
+  // Extra account details captured by the Leads form
+  phone: { type: String },
+  industry: { type: String },
+  noOfEmployees: { type: Number },
+  addressDetails: { type: mongoose.Schema.Types.Mixed },
   salesRepId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   status: { 
     type: String, 
     enum: ['New', 'Contacted', 'Converted', 'Active', 'Inactive'], 
     default: 'New' 
   },
+  // values of fields created in Customize Modules → Accounts
+  customFields: [customFieldSchema],
+
   // Multiple POCs array
   pointsOfContact: [pocSubSchema],
   

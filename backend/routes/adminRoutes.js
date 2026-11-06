@@ -17,6 +17,7 @@ const Prospect = require('../models/Prospect');
 const LeadGen = require('../models/LeadGen');
 const Organization = require('../models/Organization');
 const ProjectClient = require('../models/ProjectClient');
+const { syncProjectFeeds } = require('../services/feedGitSyncService');
 
 const { register, login, forgotPassword, resetPassword } = require('../controllers/authController');
 // --- MIDDLEWARE ---
@@ -92,7 +93,7 @@ router.get('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales
 // ============================================
 // GET USERS BY ROLE - FOR TICKET ASSIGNMENT
 // ============================================
-router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance','Developer'), async (req, res) => {
+router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance','Developer', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { role } = req.params;
     
@@ -103,7 +104,7 @@ router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'P
     }
     
     // Find users with the specified role
-    const users = await User.find({ role: role })
+    const users = await User.find({ role: role, isActive: { $ne: false } })
       .select('name email _id role githubUsername githubLinked')
       .sort({ name: 1 });
     
@@ -2319,7 +2320,13 @@ router.get('/users/:userId/leave-history', protect, authorize('Super Admin', 'Ad
     res.status(500).json({ error: 'Failed to fetch leave history' });
   }
 });
-
+router.post('/projects/:id/sync-git-dates', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+  try {
+    res.json(await syncProjectFeeds(req.params.id));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 // ============================================
 // COUNTRY MAP
 // ============================================

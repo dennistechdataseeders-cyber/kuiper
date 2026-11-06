@@ -235,6 +235,18 @@ class NotificationManager {
     });
   }
 
+  // ✅ NEW: Notify for upcoming activities (meetings/calls)
+  notifyUpcomingActivity(data) {
+    return this.show({
+      title: `🔔 Upcoming ${data.type}`,
+      body: data.message,
+      tag: `activity-${data.activityId}-${data.type}`,
+      data: { url: `/sales/activities/${data.type}s` }, // Navigate to the respective activities page
+      priority: 'urgent', // Plays the urgent sound
+      requireInteraction: true, // Stays on screen
+    });
+  }
+
   // Reset audio context on user interaction
   initAudio() {
     if (!this.audioContext && window.AudioContext) {

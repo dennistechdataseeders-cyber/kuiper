@@ -6,6 +6,8 @@ const Project = require('../models/Project');
 const Feed = require('../models/Feed');
 const User = require('../models/User');
 const Organization = require('../models/Organization');
+const TicketCategory = require('../models/TicketCategory');
+const { resolveAssignRole } = require('../utils/ticketCategoryUtils');
 const sendEmail = require('../services/zohoMailer');
 const {
   getTicketCreatedTemplate,
@@ -896,11 +898,31 @@ exports.createTicket = async (req, res) => {
     
     // Determine assignee
     let finalAssignedTo = null;
+    let finalAssignedPM = null;
     
     if (assignedTo) {
       const user = await User.findById(assignedTo);
       if (user) {
         finalAssignedTo = user._id;
+      }
+    }
+
+    // ============================================
+    // Dynamic assignee rule (e.g. Sales raising Development > Feasibility
+    // must pick a Project Manager instead of a developer)
+    // ============================================
+    if (category) {
+      const catDoc = await TicketCategory.findOne({ name: category }).lean();
+      const { role: requiredRole, viaOverride } = resolveAssignRole(catDoc, subcategory, userRole);
+      if (viaOverride && requiredRole === 'Project Manager') {
+        if (!finalAssignedTo) {
+          return res.status(400).json({ error: 'Please assign a Project Manager for this ticket.' });
+        }
+        const pmUser = await User.findById(finalAssignedTo).select('role isActive');
+        if (!pmUser || pmUser.role !== 'Project Manager') {
+          return res.status(400).json({ error: 'Selected assignee must be a Project Manager.' });
+        }
+        finalAssignedPM = pmUser._id;   // assignedTo is also the PM, so the ticket lands in their bucket
       }
     }
     
@@ -980,6 +1002,7 @@ exports.createTicket = async (req, res) => {
       feedId: finalFeedId,
       createdBy: req.user.id,
       assignedTo: finalAssignedTo,
+      assignedPM: finalAssignedPM,
       isInternal: shouldBeInternal,
       category: category || '',
       subcategory: subcategory || '',
@@ -1181,7 +1204,7 @@ exports.addWatcher = async (req, res) => {
     }
     
     // Check if already a watcher
-    if (ticket.watchers && ticket.watchers.includes(userId)) {
+    if ((ticket.watchers || []).some(w => w.toString() === userId.toString())) {
       return res.status(400).json({ error: 'User is already a watcher of this ticket' });
     }
     
@@ -1227,18 +1250,36 @@ exports.addWatcher = async (req, res) => {
 
 exports.removeWatcher = async (req, res) => {
   try {
-    const { userId } = req.body;
+    // The frontend calls DELETE /:id/watchers/:userId, so the id is in the URL (body kept as fallback)
+    const userId = (req.params.userId || req.body?.userId || '').toString();
     const ticket = await Ticket.findById(req.params.id);
     
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
     }
     
-    if (!ticket.watchers || !ticket.watchers.includes(userId)) {
+    if (!userId) {
+      return res.status(400).json({ error: 'userId is required' });
+    }
+
+    // Who may remove a watcher: Admin / Super Admin, the ticket creator,
+    // PM / Team Lead, or the watcher removing themselves
+    const me = req.user.id.toString();
+    const isCreator = ticket.createdBy?.toString() === me;
+    const canRemove =
+      ['Admin', 'Super Admin', 'Project Manager', 'Team Lead'].includes(req.user.role) ||
+      isCreator ||
+      userId === me;
+    if (!canRemove) {
+      return res.status(403).json({ error: 'You are not allowed to remove watchers from this ticket' });
+    }
+    
+    const isWatcher = (ticket.watchers || []).some(w => w.toString() === userId);
+    if (!isWatcher) {
       return res.status(400).json({ error: 'User is not a watcher of this ticket' });
     }
     
-    ticket.watchers = ticket.watchers.filter(id => id.toString() !== userId);
+    ticket.watchers = ticket.watchers.filter(w => w.toString() !== userId);
     await ticket.save();
     
     const populatedTicket = await Ticket.findById(ticket._id)
@@ -1250,7 +1291,7 @@ exports.removeWatcher = async (req, res) => {
     
     const io = req.app.get('io');
     if (io) {
-      io.to(userId.toString()).emit('ticket_updated', populatedTicket);
+      io.to(userId).emit('ticket_updated', populatedTicket);
       io.emit('ticket_updated', populatedTicket);
     }
     
@@ -1443,6 +1484,7 @@ exports.getTickets = async (req, res) => {
           },
           { createdBy: userId },
           { assignedTo: userId },
+          { assignedPM: userId }, // ✅ tickets a Sales user assigned to this PM
           { watchers: userId } // ✅ ADD THIS
         ]
       };
@@ -1485,13 +1527,31 @@ exports.getTickets = async (req, res) => {
           { assignedTo: { $in: financeUsers } }
         ]
       };
-    } else if (userRole === 'Admin') {
+    } else if (userRole === 'Sales' || userRole === 'Sales Manager') {
+      // Sales: only tickets they raised, are assigned to, or are watching
+      filter = {
+        $or: [
+          { createdBy: userId },
+          { assignedTo: userId },
+          { watchers: userId }
+        ]
+      };
+    } else if (userRole === 'Admin' || userRole === 'Super Admin') {
       filter = {};
+    } else {
+      // Safe default for any other role: only their own tickets
+      filter = {
+        $or: [
+          { createdBy: userId },
+          { assignedTo: userId }
+        ]
+      };
     }
 
     const tickets = await Ticket.find(filter)
       .populate('createdBy', 'name email role')
       .populate('assignedTo', 'name email')
+      .populate('assignedPM', 'name email')
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name')
       .populate('watchers', 'name email')
@@ -1513,12 +1573,24 @@ exports.getTicketById = async (req, res) => {
     const ticket = await Ticket.findById(req.params.id)
       .populate('createdBy', 'name email role')
       .populate('assignedTo', 'name email')
+      .populate('assignedPM', 'name email')
       .populate('projectId', 'name projectCustomId')
       .populate('feedId', 'name')
       .populate('comments.userId', 'name');
     
     if (!ticket) {
       return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    // Sales / Sales Manager can only open tickets they created, are assigned to, or watch
+    if (req.user.role === 'Sales' || req.user.role === 'Sales Manager') {
+      const uid = req.user.id.toString();
+      const isCreator = (ticket.createdBy?._id || ticket.createdBy)?.toString() === uid;
+      const isAssignee = (ticket.assignedTo?._id || ticket.assignedTo)?.toString() === uid;
+      const isWatcher = (ticket.watchers || []).some(w => (w._id || w).toString() === uid);
+      if (!isCreator && !isAssignee && !isWatcher) {
+        return res.status(403).json({ error: 'Not authorized to view this ticket' });
+      }
     }
     
     res.json(ticket);
@@ -1546,7 +1618,7 @@ exports.updateStatus = async (req, res) => {
       req.user.role === 'Project Manager' ||
       req.user.role === 'Team Lead' ||
       ticket.createdBy.toString() === req.user.id ||
-      (req.user.role === 'Developer' && ticket.assignedTo?.toString() === req.user.id);
+      ticket.assignedTo?.toString() === req.user.id; // any assignee (Developer, Sales, etc.)
 
     if (!canUpdate) {
       return res.status(403).json({ error: 'Not authorized to update this ticket' });

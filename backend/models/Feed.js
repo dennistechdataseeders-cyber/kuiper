@@ -1,4 +1,4 @@
-// backend/models/Feed.js - UPDATED with files support in comments
+// backend/models/Feed.js - UPDATED with files support in comments + stored Git last-updated
 
 const mongoose = require('mongoose');
 
@@ -134,6 +134,23 @@ const FeedSchema = new mongoose.Schema({
       'Closed'
     ],
     default: 'New'
+  },
+
+  // ✅ NEW: Git last-updated data, filled by the weekly cron (cron/feedGitSync.js)
+  // so the Project Manager feeds page doesn't call GitHub on every load.
+  gitLastUpdated: {
+    type: Date,
+    default: null
+  },
+
+  gitLastCommitSha: {
+    type: String,
+    default: null
+  },
+
+  gitLastSyncedAt: {
+    type: Date,
+    default: null
   },
 
   // ✅ UPDATED: Comments field with file attachments support

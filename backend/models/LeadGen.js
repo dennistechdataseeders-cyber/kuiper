@@ -17,9 +17,7 @@ const leadGenSchema = new mongoose.Schema({
   pocName: { 
     type: String, 
     required: true, 
-    unique: true,
-    trim: true,
-    index: true 
+    trim: true
   },
   pocPhone: { type: String },
   pocEmail: { type: String },
@@ -59,6 +57,9 @@ const leadGenSchema = new mongoose.Schema({
   feasibilityCompletedAt: { type: Date, default: null }
 
 }, { timestamps: true });
+
+// Same POC name may exist at different organizations (uniqueness is enforced per-org in the route)
+leadGenSchema.index({ organizationId: 1, pocName: 1 });
 
 // AUTO-INCREMENT LOGIC
 leadGenSchema.pre('save', async function (next) {

@@ -5,8 +5,7 @@ const ticketAssignmentRuleSchema = new mongoose.Schema({
   // Which category this rule applies to
   category: {
     type: String,
-    required: true,
-    enum: ['Finance', 'HR', 'Payroll', 'Sales', 'Production', 'Admin', 'IT', 'Development']
+    required: true   // enum removed - categories are dynamic (TicketCategory)
   },
   
   // Subcategory (optional - for more granular matching)

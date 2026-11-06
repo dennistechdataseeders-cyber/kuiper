@@ -1,24 +1,23 @@
-import React, { useState, useRef, useEffect } from 'react';
+// frontend/src/components/Sidebar.jsx
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
 import {
-  LayoutDashboard,
+  LayoutDashboard, FingerprintPattern,
   Users,
   File,
-  FolderTree,
   Activity,
   LogOut,
   Briefcase,
   UserPlus,
-  ChevronLeft,
-  ChevronRight,
-  Inbox,
   Mail,
+  Layers,
   AlertTriangle,
   User,
   FileText,
   Settings,
   ChevronUp,
+  ChevronDown,
   FolderKanban,
   TrendingUp,
   Building2,
@@ -31,7 +30,6 @@ import {
   GitFork,
   FolderOpen,
   Calendar,
-  Clock,
   BarChart3,
   Camera,
   X,
@@ -40,44 +38,438 @@ import {
   UserCheck,
   Megaphone,
   CalendarDays,
-  Pencil // ADDED for edit profile icon
+  ListTodo,
+  Video,
+  Phone,
+  Handshake,
+  SlidersHorizontal,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
-import UpdateProfileModal from './UpdateProfileModal'; // ADDED
 import API_BASE_URL from '../config';
 import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
 import io from 'socket.io-client';
 
+// ============================================
+// NAVIGATION GROUPS  (Zoho-style)
+// ============================================
+const buildMenuGroups = (role) => {
+  const SALES_GROUP = {
+    key: 'sales',
+    label: 'Sales',
+    icon: <Briefcase size={18} />,
+    items: [
+      { path: '/sales/leads', icon: <Target size={16} />, label: 'Leads' },
+      { name: 'Contacts', path: '/sales/contacts', icon: <User size={18} />, label: 'Contacts' },
+      { name: 'Accounts', path: '/sales/accounts', icon: <Building2 size={18} />, label: 'Accounts' },
+      { path: '/sales/deals', icon: <Handshake size={16} />, label: 'Deals' },
+    ],
+  };
+
+  const ACTIVITIES_GROUP = {
+    key: 'activities',
+    label: 'Activities',
+    icon: <Activity size={18} />,
+    items: [
+      { path: '/tickets', icon: <Ticket size={16} />, label: 'Tickets' },
+      { path: '/announcements', icon: <Megaphone size={16} />, label: 'Announcements' },
+      { path: '/knowledge', icon: <FolderOpen size={16} />, label: 'Knowledge Base' },
+    ],
+  };
+
+  const SALES_ACTIVITIES_GROUP = {
+    key: 'sales-activities',
+    label: 'Activities',
+    icon: <Activity size={18} />,
+    items: [
+      { path: '/sales/activities/tasks', icon: <ListTodo size={16} />, label: 'Tasks' },
+      { path: '/sales/activities/meetings', icon: <Video size={16} />, label: 'Meetings' },
+      { path: '/sales/activities/calls', icon: <Phone size={16} />, label: 'Calls' },
+    ],
+  };
+
+  const GENERAL_GROUP = { ...ACTIVITIES_GROUP, key: 'general', label: 'General' };
+
+  const OTHERS_GROUP = {
+    key: 'others',
+    label: 'Attendence',
+    icon: <FingerprintPattern size={18} />,
+    items: [
+      { path: '/employee', icon: <UserCog size={16} />, label: 'People Ops' },
+    ],
+  };
+
+  // ---------------- Super Admin ----------------
+  if (role === 'Super Admin') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+        { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+      ]},
+      { ...SALES_GROUP, items: [
+        ...SALES_GROUP.items,
+        { path: '/sales-manager', icon: <LayoutDashboard size={16} />, label: 'Sales Manager' },
+      ]},
+      SALES_ACTIVITIES_GROUP,
+      {
+        key: 'projects',
+        label: 'Projects & Feeds',
+        icon: <FolderKanban size={18} />,
+        items: [
+          { path: '/admin/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/admin/project-clients', icon: <Users size={16} />, label: 'Project Clients' },
+          { path: '/pm/feeds', icon: <Logs size={16} />, label: 'Feed Management' },
+          { path: '/pm/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
+          { path: '/pm/resource-analytics', icon: <ChartBar size={16} />, label: 'Resource Analytics' },
+          { path: '/pm/work-report', icon: <BarChart3 size={16} />, label: 'Work Report' },
+        ],
+      },
+      {
+        key: 'feasibility',
+        label: 'Feasibility',
+        icon: <FileText size={18} />,
+        items: [
+          { path: '/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
+          { path: '/pm/feasibility', icon: <FileText size={16} />, label: 'PM Feasibility' },
+        ],
+      },
+      {
+        key: 'hr',
+        label: 'HR',
+        icon: <UsersRound size={18} />,
+        items: [
+          { path: '/hr', icon: <UsersRound size={16} />, label: 'HR Dashboard' },
+          { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
+          { path: '/hr/leaves', icon: <Calendar size={16} />, label: 'Leave Management' },
+          { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
+          { path: '/hr/employee-attendance', icon: <UserCheck size={16} />, label: 'Employee Attendance' },
+          { path: '/hr/employee-attendance-report', icon: <FileText size={16} />, label: 'Attendance Report' },
+        ],
+      },
+      { ...GENERAL_GROUP, items: [
+        ...GENERAL_GROUP.items,
+        { path: '/admin/ticket-rules', icon: <Mail size={16} />, label: 'Ticket Rules' },
+        { path: '/admin/ticket-categories', icon: <Layers size={16} />, label: 'Ticket Categories' },
+      ]},
+      {
+        key: 'developer',
+        label: 'Developer',
+        icon: <LayoutDashboard size={18} />,
+        items: [
+          { path: '/developer', icon: <LayoutDashboard size={16} />, label: 'Dev Dashboard' },
+          { path: '/developer/worklog', icon: <FileText size={16} />, label: 'Worklog' },
+          { path: '/developer/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/developer/feeds', icon: <File size={16} />, label: 'Feeds' },
+          { path: '/developer/git-feeds', icon: <GitFork size={16} />, label: 'Git Feeds' },
+        ],
+      },
+      {
+        key: 'pm',
+        label: 'Project Manager',
+        icon: <LayoutDashboard size={18} />,
+        items: [
+          { path: '/pm/dashboard', icon: <LayoutDashboard size={16} />, label: 'PM Dashboard' },
+          { path: '/pm/git-manager', icon: <GitFork size={16} />, label: 'Git Manager' },
+        ],
+      },
+      {
+        key: 'setup',
+        label: 'Setup',
+        icon: <Settings size={18} />,
+        items: [
+          { path: '/admin/customize', icon: <SlidersHorizontal size={16} />, label: 'Customize Modules' },
+        ],
+      },
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Admin ----------------
+  if (role === 'Admin') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+        { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
+      ]},
+      SALES_GROUP,
+      SALES_ACTIVITIES_GROUP,
+      {
+        key: 'projects',
+        label: 'Projects',
+        icon: <FolderKanban size={18} />,
+        items: [
+          { path: '/admin/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/admin/users', icon: <Users size={16} />, label: 'Users' },
+          { path: '/admin/project-clients', icon: <Users size={16} />, label: 'Project Clients' },
+          { path: '/pm/feeds', icon: <Logs size={16} />, label: 'Feed' },
+          { path: '/pm/resource-analytics', icon: <ChartBar size={16} />, label: 'Resource Analytics' },
+          { path: '/pm/work-report', icon: <BarChart3 size={16} />, label: 'Work Report' },
+        ],
+      },
+      GENERAL_GROUP,
+      {
+        key: 'hr',
+        label: 'HR',
+        icon: <UsersRound size={18} />,
+        items: [
+          { path: '/hr', icon: <UsersRound size={16} />, label: 'HR Dashboard' },
+          { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
+          { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
+          { path: '/admin/ticket-rules', icon: <Mail size={16} />, label: 'Ticket Rules' },
+          { path: '/admin/ticket-categories', icon: <Layers size={16} />, label: 'Ticket Categories' },
+        ],
+      },
+      {
+        key: 'setup',
+        label: 'Setup',
+        icon: <Settings size={18} />,
+        items: [
+          { path: '/admin/customize', icon: <SlidersHorizontal size={16} />, label: 'Customize Modules' },
+        ],
+      },
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Sales Manager ----------------
+  if (role === 'Sales Manager') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      ]},
+      SALES_GROUP,
+      SALES_ACTIVITIES_GROUP,
+      {
+        key: 'team',
+        label: 'Team',
+        icon: <UserPlus size={18} />,
+        items: [
+          { path: '/admin/users', icon: <UserPlus size={16} />, label: 'Team' },
+        ],
+      },
+      GENERAL_GROUP,
+      {
+        key: 'setup',
+        label: 'Setup',
+        icon: <Settings size={18} />,
+        items: [
+          { path: '/admin/customize', icon: <SlidersHorizontal size={16} />, label: 'Customize Modules' },
+        ],
+      },
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Sales ----------------
+  if (role === 'Sales') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      ]},
+      SALES_GROUP,
+      SALES_ACTIVITIES_GROUP,
+      {
+        key: 'feasibility',
+        label: 'Feasibility',
+        icon: <FileText size={18} />,
+        items: [
+          { path: '/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
+        ],
+      },
+      GENERAL_GROUP,
+      {
+        key: 'setup',
+        label: 'Setup',
+        icon: <Settings size={18} />,
+        items: [
+          { path: '/admin/customize', icon: <SlidersHorizontal size={16} />, label: 'Customize Modules' },
+        ],
+      },
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Project Manager ----------------
+  if (role === 'Project Manager') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      ]},
+      {
+        key: 'projects',
+        label: 'Projects',
+        icon: <FolderKanban size={18} />,
+        items: [
+          { path: '/admin/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/pm/feeds', icon: <Logs size={16} />, label: 'Feed' },
+          { path: '/pm/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
+          { path: '/pm/work-report', icon: <BarChart3 size={16} />, label: 'Work Report' },
+          { path: '/pm/resource-analytics', icon: <ChartBar size={16} />, label: 'Resource Analytics' },
+          { path: '/pm/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
+          { path: '/pm/git-manager', icon: <GitFork size={16} />, label: 'Git Manager' },
+        ],
+      },
+      ACTIVITIES_GROUP,
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Team Lead ----------------
+  if (role === 'Team Lead') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      ]},
+      {
+        key: 'projects',
+        label: 'Projects',
+        icon: <FolderKanban size={18} />,
+        items: [
+          { path: '/teamlead/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/teamlead/feeds', icon: <Activity size={16} />, label: 'Feed Management' },
+          { path: '/teamlead/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
+          { path: '/teamlead/developers', icon: <Users size={16} />, label: 'Team' },
+        ],
+      },
+      ACTIVITIES_GROUP,
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Developer ----------------
+  if (role === 'Developer') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
+      ]},
+      {
+        key: 'projects',
+        label: 'Projects',
+        icon: <FolderKanban size={18} />,
+        items: [
+          { path: '/developer/worklog', icon: <FileText size={16} />, label: 'Worklog' },
+          { path: '/developer/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/developer/feeds', icon: <File size={16} />, label: 'Feeds' },
+          { path: '/developer/git-feeds', icon: <GitFork size={16} />, label: 'Git Feeds' },
+          { path: '/developer/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
+        ],
+      },
+      ACTIVITIES_GROUP,
+      OTHERS_GROUP,
+    ];
+  }
+
+  // ---------------- Client ----------------
+  if (role === 'Client') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
+        { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
+      ]},
+    ];
+  }
+
+  // ---------------- HR ----------------
+  if (role === 'HR') {
+    return [
+      { key: 'main', label: 'Home', icon: null, items: [
+        { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
+      ]},
+      {
+        key: 'hr',
+        label: 'HR Management',
+        icon: <UsersRound size={18} />,
+        items: [
+          { path: '/admin/users', icon: <Users size={16} />, label: 'Users' },
+          { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
+          { path: '/hr/leaves', icon: <Calendar size={16} />, label: 'Leave Management' },
+          { path: '/hr/employee-attendance', icon: <UserCheck size={16} />, label: 'Employee Attendance' },
+          { path: '/hr/employee-attendance-report', icon: <FileText size={16} />, label: 'Attendance Report' },
+          { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
+        ],
+      },
+      ACTIVITIES_GROUP,
+    ];
+  }
+
+  // ---------------- Finance ----------------
+  if (role === 'Finance') {
+    return [
+      ACTIVITIES_GROUP,
+      OTHERS_GROUP,
+    ];
+  }
+
+  return [];
+};
+
+// ============================================
+// SIDEBAR COMPONENT
+// ============================================
 const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // GLOBAL SIDEBAR STATE
   const { isCollapsed, toggleSidebar } = useSidebar();
 
-  // LOCAL STATES
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [ticketCount, setTicketCount] = useState(0);
   const [announcementCount, setAnnouncementCount] = useState(0);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  
-  // PROFILE IMAGE STATES
+
+  // PROFILE IMAGE
   const [profileImage, setProfileImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImageUploadModal, setShowImageUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
-  
+
   // ============================================
-  // PROFILE UPDATE MODAL STATE - ADDED
+  // EXPANDED GROUP STATE
   // ============================================
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [profileUpdated, setProfileUpdated] = useState(0);
+  const menuGroups = useMemo(
+    () => buildMenuGroups(localStorage.getItem('role') || 'User'),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [localStorage.getItem('role')]
+  );
+
+  const [openGroups, setOpenGroups] = useState(() => {
+    const initial = {};
+    menuGroups.forEach((group) => {
+      const isAnyActive = group.items.some(
+        (item) =>
+          location.pathname === item.path ||
+          location.pathname.startsWith(item.path + '/')
+      );
+      initial[group.key] = isAnyActive;
+    });
+    return initial;
+  });
+
+  useEffect(() => {
+    setOpenGroups((prev) => {
+      const next = { ...prev };
+      menuGroups.forEach((group) => {
+        const isAnyActive = group.items.some(
+          (item) =>
+            location.pathname === item.path ||
+            location.pathname.startsWith(item.path + '/')
+        );
+        if (isAnyActive) next[group.key] = true;
+      });
+      return next;
+    });
+  }, [location.pathname, menuGroups]);
+
+  const toggleGroup = (key) => {
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
 
   const menuRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -87,31 +479,24 @@ const Sidebar = () => {
   const userName = localStorage.getItem('userName') || 'User';
   const userId = localStorage.getItem('userId');
 
-  // CLOSE MENU ON OUTSIDE CLICK
+  // CLOSE USER MENU ON OUTSIDE CLICK
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
         setShowUserMenu(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // HANDLE RESIZE FOR MOBILE DETECTION
+  // HANDLE RESIZE
   useEffect(() => {
     const handleResize = () => {
       const mobile = window.innerWidth < 768;
       setIsMobile(mobile);
-      if (mobile && !isCollapsed) {
-        toggleSidebar();
-      }
+      if (mobile && !isCollapsed) toggleSidebar();
     };
-    
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, [isCollapsed, toggleSidebar]);
@@ -122,127 +507,87 @@ const Sidebar = () => {
       try {
         const token = localStorage.getItem('token');
         if (!token || !userId) return;
-        
         const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
-        
-        const user = res.data.find(u => u._id === userId);
-        if (user && user.profileImage) {
-          setProfileImage(user.profileImage);
-        }
+        const user = res.data.find((u) => u._id === userId);
+        if (user && user.profileImage) setProfileImage(user.profileImage);
       } catch (error) {
         console.error('Error fetching profile image:', error);
       }
     };
-    
     fetchProfileImage();
-  }, [profileUpdated, userId]); // ADDED profileUpdated dependency
+  }, [userId]);
 
-  // FETCH TICKET COUNT (non-closed tickets)
+  // FETCH TICKET COUNT
   useEffect(() => {
     const fetchTicketCount = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        
         const res = await axios.get(`${API_BASE_URL}/api/tickets`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
-        
-        const nonClosedTickets = res.data.filter(ticket => ticket.status !== 'Closed');
+        const nonClosedTickets = res.data.filter((t) => t.status !== 'Closed');
         setTicketCount(nonClosedTickets.length);
       } catch (error) {
         console.error('Error fetching ticket count:', error);
       }
     };
-    
     fetchTicketCount();
-    
     const interval = setInterval(fetchTicketCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // FETCH ANNOUNCEMENT COUNT (unviewed announcements)
+  // FETCH ANNOUNCEMENT COUNT
   useEffect(() => {
     const fetchAnnouncementCount = async () => {
       try {
         const token = localStorage.getItem('token');
         if (!token) return;
-        
         const res = await axios.get(`${API_BASE_URL}/api/announcements/unviewed/count`, {
-          headers: { Authorization: `Bearer ${token}` }
+          headers: { Authorization: `Bearer ${token}` },
         });
-        
         setAnnouncementCount(res.data.count || 0);
       } catch (error) {
-        console.error('Error fetching announcement count:', error);
         setAnnouncementCount(0);
       }
     };
-    
     fetchAnnouncementCount();
-    
     const interval = setInterval(fetchAnnouncementCount, 30000);
     return () => clearInterval(interval);
   }, []);
 
-  // SOCKET CONNECTION FOR REAL-TIME ANNOUNCEMENT UPDATES
+  // SOCKET
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (!token) return;
-
     socketRef.current = io(API_BASE_URL, {
       transports: ['websocket'],
-      auth: { token }
+      auth: { token },
     });
-
     socketRef.current.on('connect', () => {
-      console.log('🔔 Sidebar socket connected');
       socketRef.current.emit('join-user-room', userId);
     });
-
-    socketRef.current.on('new_announcement', (data) => {
-      console.log('📢 New announcement received in sidebar:', data);
-      setAnnouncementCount(prev => prev + 1);
+    socketRef.current.on('new_announcement', () => {
+      setAnnouncementCount((prev) => prev + 1);
     });
-
     socketRef.current.on('announcement_count_update', (data) => {
-      console.log('📢 Announcement count update:', data);
       setAnnouncementCount(data.count || 0);
     });
-
     return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-      }
+      if (socketRef.current) socketRef.current.disconnect();
     };
   }, [userId]);
 
-  // ============================================
-  // PROFILE UPDATE HANDLER - ADDED
-  // ============================================
-  const handleProfileUpdated = () => {
-    setProfileUpdated(prev => prev + 1);
-    toast.success('Profile updated successfully!');
-  };
-
   // LOGOUT
   const handleLogout = () => {
-    const itemsToClear = [
-      'token',
-      'role',
-      'userName',
-      'userId',
-      'lastActive',
-    ];
-
-    itemsToClear.forEach((item) => localStorage.removeItem(item));
-
+    ['token', 'role', 'userName', 'userId', 'lastActive'].forEach((i) =>
+      localStorage.removeItem(i)
+    );
     navigate('/login');
   };
 
-  // DOWNLOAD GUIDE
   const handleDownloadGuide = () => {
     window.open(
       'https://res.cloudinary.com/dhcwcyqke/image/upload/v1789479854/KUIPER_Client_User_Guide_cmyt08.pdf',
@@ -250,410 +595,174 @@ const Sidebar = () => {
     );
   };
 
-  // HANDLE FILE SELECTION
+  // FILE SELECT
   const handleFileSelect = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowed.includes(file.type)) {
       toast.error('Please select a valid image file (JPEG, PNG, GIF, WEBP)');
       return;
     }
-    
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size must be less than 5MB');
+      toast.error('Image must be under 5MB');
       return;
     }
-    
     setSelectedFile(file);
     const reader = new FileReader();
-    reader.onload = (e) => {
-      setImagePreview(e.target.result);
-    };
+    reader.onload = (ev) => setImagePreview(ev.target.result);
     reader.readAsDataURL(file);
     setShowImageUploadModal(true);
   };
 
-  // UPLOAD PROFILE IMAGE
   const uploadProfileImage = async () => {
     if (!selectedFile) return;
-    
     setUploadingImage(true);
     const formData = new FormData();
     formData.append('profileImage', selectedFile);
-    
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(`${API_BASE_URL}/api/admin/upload-profile-image`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      
       if (res.data.success) {
         setProfileImage(res.data.profileImage);
         setShowImageUploadModal(false);
         setSelectedFile(null);
         setImagePreview(null);
-        toast.success('Profile image updated successfully!');
+        toast.success('Profile image updated!');
         setTimeout(() => window.location.reload(), 500);
       } else {
-        toast.error(res.data.message || 'Failed to upload profile image');
+        toast.error(res.data.message || 'Upload failed');
       }
     } catch (error) {
-      console.error('Upload error:', error);
-      const errorMessage = error.response?.data?.error || 'Failed to upload profile image';
-      toast.error(errorMessage);
+      toast.error(error.response?.data?.error || 'Upload failed');
     } finally {
       setUploadingImage(false);
     }
   };
 
-  // REMOVE PROFILE IMAGE
   const removeProfileImage = async () => {
     if (!profileImage) return;
-    if (!window.confirm('Are you sure you want to remove your profile picture?')) return;
-    
+    if (!window.confirm('Remove your profile picture?')) return;
     try {
       const token = localStorage.getItem('token');
       const res = await axios.delete(`${API_BASE_URL}/api/admin/remove-profile-image`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
-      
       if (res.data.success) {
         setProfileImage(null);
         setShowImageUploadModal(false);
         toast.success('Profile image removed');
         setTimeout(() => window.location.reload(), 500);
-      } else {
-        toast.error(res.data.message || 'Failed to remove profile image');
       }
     } catch (error) {
-      console.error('Remove error:', error);
-      const errorMessage = error.response?.data?.error || 'Failed to remove profile image';
-      toast.error(errorMessage);
+      toast.error(error.response?.data?.error || 'Remove failed');
     }
   };
 
-  // HANDLE VIDEO LOGO CLICK
   const handleVideoLogoClick = () => {
     window.open('https://techdataseeders.com/', '_blank');
   };
 
-  // ============================================
-  // ROLE BADGE COLORS
-  // ============================================
+  // ROLE BADGE STYLES
   const getRoleStyles = (role) => {
     switch (role) {
-      case 'Super Admin':
-        return 'from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-400/20';
-      case 'Admin':
-        return 'from-red-500/20 to-orange-500/20 text-orange-300 border-orange-400/20';
-      case 'Sales Manager':
-        return 'from-purple-500/20 to-blue-500/20 text-purple-300 border-purple-400/20';
-      case 'Sales':
-        return 'from-emerald-500/20 to-teal-500/20 text-emerald-300 border-emerald-400/20';
-      case 'Project Manager':
-        return 'from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-400/20';
-      case 'Developer':
-        return 'from-blue-500/20 to-indigo-500/20 text-blue-300 border-blue-400/20';
-      case 'Team Lead':
-        return 'from-indigo-500/20 to-purple-500/20 text-indigo-300 border-indigo-400/20';
-      case 'HR':
-        return 'from-pink-500/20 to-rose-500/20 text-pink-300 border-pink-400/20';
-      case 'Finance':
-        return 'from-green-500/20 to-emerald-500/20 text-green-300 border-green-400/20';
-      default:
-        return 'from-blue-500/20 to-purple-500/20 text-blue-300 border-blue-400/20';
+      case 'Super Admin': return 'from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-400/20';
+      case 'Admin': return 'from-red-500/20 to-orange-500/20 text-orange-300 border-orange-400/20';
+      case 'Sales Manager': return 'from-purple-500/20 to-blue-500/20 text-purple-300 border-purple-400/20';
+      case 'Sales': return 'from-emerald-500/20 to-teal-500/20 text-emerald-300 border-emerald-400/20';
+      case 'Project Manager': return 'from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-400/20';
+      case 'Developer': return 'from-blue-500/20 to-indigo-500/20 text-blue-300 border-blue-400/20';
+      case 'Team Lead': return 'from-indigo-500/20 to-purple-500/20 text-indigo-300 border-indigo-400/20';
+      case 'HR': return 'from-pink-500/20 to-rose-500/20 text-pink-300 border-pink-400/20';
+      case 'Finance': return 'from-green-500/20 to-emerald-500/20 text-green-300 border-green-400/20';
+      default: return 'from-blue-500/20 to-purple-500/20 text-blue-300 border-blue-400/20';
     }
   };
 
-  // ============================================
-  // ROLE DISPLAY NAME
-  // ============================================
-  const getRoleDisplayName = (role) => {
-    switch (role) {
-      case 'Super Admin': return 'Super Admin';
-      case 'Admin': return 'Admin';
-      case 'Sales Manager': return 'Sales Manager';
-      case 'Sales': return 'Sales';
-      case 'Project Manager': return 'Project Manager';
-      case 'Developer': return 'Developer';
-      case 'Team Lead': return 'Team Lead';
-      case 'HR': return 'HR';
-      case 'Finance': return 'Finance';
-      default: return role;
-    }
-  };
+  const getRoleDisplayName = (role) => role;
 
-  // ============================================
-  // MENU ITEMS - WITH HOLIDAY LIST & ANNOUNCEMENTS
-  // ============================================
-  const menuItems = {
-    'Super Admin': [
-  // ============================================
-  // DASHBOARDS & OVERVIEW
-  // ============================================
-  { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-  { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
-  
-  // ============================================
-  // PROJECTS & FEEDS
-  // ============================================
-  { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-  { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' },
-  { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed Management' },
-  { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-  { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
-  { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
-  
-  // ============================================
-  // SALES & LEAD MANAGEMENT
-  // ============================================
-  { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Sales Dashboard' },
-  { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Sales Manager' },
-  { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
-  { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-  { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
-  
-  // ============================================
-  // FEASIBILITY
-  // ============================================
-  { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
-  { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'PM Feasibility' },
-  
-  // ============================================
-  // HR & LEAVE MANAGEMENT
-  // ============================================
-  { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-  { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
-  { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
-  { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
-  { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
-  { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
-  
-  // ============================================
-  // TICKETS
-  // ============================================
-  { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-  { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
-  
-  // ============================================
-  // DEVELOPER
-  // ============================================
-  { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dev Dashboard' },
-  { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
-  { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-  { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
-  { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
-  
-  
-  // ============================================
-  // PROJECT MANAGER
-  // ============================================
-  { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'PM Dashboard' },
-  { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
-  
-  // ============================================
-  // CLIENT
-  // ============================================
-  { path: '/client', icon: <Activity size={18} />, label: 'Client View' },
-    
-  // ============================================
-  // KNOWLEDGE & COMMUNICATION
-  // ============================================
-  { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'Knowledge Base' },
-  { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-  
-],
+  // BADGE HELPERS
+  const shouldShowBadge = (label) => label === 'Tickets' && ticketCount > 0;
+  const shouldShowAnnouncementBadge = (label) =>
+    label === 'Announcements' && announcementCount > 0;
 
-    Admin: [
-      { path: '/admin', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
-      { path: '/view_analytics', icon: <TrendingUp size={18} />, label: 'Analytics' },
-      { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
-      { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/admin/project-clients', icon: <Users size={18} />, label: 'Project Clients' }, 
-      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
-      { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
-      { path: '/admin/ticket-rules', icon: <Mail size={18} />, label: 'Ticket Rules' },
-      { path: '/hr', icon: <UsersRound size={18} />, label: 'HR Dashboard' },
-      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-    ],
-
-    'Sales Manager': [
-      { path: '/sales-manager', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/admin/users', icon: <UserPlus size={18} />, label: 'Team' },
-      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
-      { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-    ],
-
-    Sales: [
-      { path: '/sales', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/sales/prospects', icon: <Target size={18} />, label: 'Prospects' },
-      { path: '/sales/add_org', icon: <Building2 size={18} />, label: 'Organizations' },
-      { path: '/sales/lead_generation', icon: <Briefcase size={18} />, label: 'Lead Generation' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-    ],
-
-    'Project Manager': [
-      { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },  
-      { path: '/admin/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/pm/feeds', icon: <Logs size={18} />, label: 'Feed' },
-      { path: '/pm/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/pm/work-report', icon: <BarChart3 size={18} />, label: 'Work Report' },
-      { path: '/pm/resource-analytics', icon: <ChartBar size={18} />, label: 'Resource Analytics' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/pm/feasibility', icon: <FileText size={18} />, label: 'Feasibility' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/pm/git-manager', icon: <GitFork size={18} />, label: 'Git Manager' },
-    ],
-
-    'Team Lead': [
-      { path: '/teamlead', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/teamlead/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/teamlead/feeds', icon: <Activity size={18} />, label: 'Feed Management' },
-      { path: '/teamlead/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      { path: '/teamlead/developers', icon: <Users size={18} />, label: 'Team' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-    ],
-
-    Developer: [
-      { path: '/developer', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-      { path: '/developer/worklog', icon: <FileText size={18} />, label: 'Worklog' },
-      { path: '/developer/projects', icon: <FolderKanban size={18} />, label: 'Projects' },
-      { path: '/developer/feeds', icon: <File size={18} />, label: 'Feeds' },
-      { path: '/developer/git-feeds', icon: <GitFork size={18} />, label: 'Git Feeds' },
-      { path: '/developer/feed-status', icon: <Activity size={18} />, label: 'Feed Status' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-    ],
-
-    Client: [
-      { path: '/client', icon: <Activity size={18} />, label: 'Feed Delivery' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'My Tickets' },
-    ],
-
-    HR: [
-      { path: '/hr', icon: <UsersRound size={18} />, label: 'Dashboard' },
-      { path: '/admin/users', icon: <Users size={18} />, label: 'Users' },
-      { path: '/hr/holidays', icon: <CalendarDays size={18} />, label: 'Holiday List' },
-      
-      { path: '/hr/leaves', icon: <Calendar size={18} />, label: 'Leave Management' },
-      { path: '/hr/employee-attendance', icon: <UserCheck size={18} />, label: 'Employee Attendance' },
-      { path: '/hr/employee-attendance-report', icon: <FileText size={18} />, label: 'Attendance Report' },
-      { path: '/hr/attendance-sync', icon: <RefreshCw size={18} />, label: 'Attendance Sync' },
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/profile', icon: <User size={18} />, label: 'Profile' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-    ],
-    
-    Finance: [
-      { path: '/tickets', icon: <Ticket size={18} />, label: 'Tickets' },
-      { path: '/knowledge', icon: <FolderOpen size={18} />, label: 'One Knowledge' },
-      { path: '/profile', icon: <User size={18} />, label: 'Profile' },
-      { path: '/employee', icon: <UserCog size={18} />, label: 'People Ops' },
-      { path: '/announcements', icon: <Megaphone size={18} />, label: 'Announcements' },
-    ],
-  };
-
-  const links = menuItems[userRole] || [];
-
-  // ============================================
-  // ACTIVE ROUTE LOGIC
-  // ============================================
   const isRouteActive = (path) => {
-    const exactMatchPaths = [
-      '/sales', '/sales-manager', '/developer', '/admin', '/teamlead',
-      '/knowledge', '/hr', '/employee', '/pm/feasibility', '/pm/dashboard',
-      '/pm/feeds', '/pm/git-manager', '/pm/resource-analytics', '/pm/feed-status',
-      '/pm/work-report',
-      '/client', '/tickets', '/profile', '/hr/leaves', '/hr/employee-attendance',
-      '/hr/employee-attendance-report', '/hr/attendance-sync', '/admin/projects',
-      '/admin/users', '/admin/project-clients', '/admin/ticket-rules',
-      '/view_analytics', '/sales/add_org', '/sales/lead_generation',
-      '/sales/prospects', '/sales/email-trigger', '/developer/projects',
-      '/developer/feeds', '/developer/git-feeds', '/developer/feed-status',
-      '/developer/worklog', '/developer/bucket', '/teamlead/projects',
-      '/teamlead/developers', '/teamlead/feeds', '/teamlead/feed-status',
-      '/client/projects', '/client/feeds', '/feasibility', '/announcements',
-      '/hr/holidays'
-    ];
-    
-    if (exactMatchPaths.includes(path)) {
+    if (path === '/sales' || path === '/sales-manager' || path === '/admin' || path === '/hr' ||
+        path === '/pm/dashboard' || path === '/teamlead' || path === '/developer' ||
+        path === '/client' || path === '/tickets') {
       return location.pathname === path;
     }
-    
-    return location.pathname.startsWith(path);
+    return (
+      location.pathname === path ||
+      location.pathname.startsWith(path + '/')
+    );
   };
 
-  // Helper to check if a menu item should show a badge
-  const shouldShowBadge = (item) => {
-    return item.label === 'Tickets' && ticketCount > 0;
-  };
-
-  // Helper to check if announcement badge should show
-  const shouldShowAnnouncementBadge = (item) => {
-    return item.label === 'Announcements' && announcementCount > 0;
-  };
-
-  // Determine sidebar classes based on mobile state
   const getSidebarClasses = () => {
-    const baseClasses = 'fixed top-0 left-0 h-screen bg-black text-slate-400 border-r border-slate-800 shadow-2xl transition-all duration-300 ease-in-out z-50';
-    
+    const base = 'fixed top-0 left-0 h-screen bg-black text-slate-400 border-r border-slate-800 shadow-2xl transition-[width,transform,opacity] duration-300 ease-in-out z-50';
     if (isMobile) {
-      return `${baseClasses} ${isCollapsed ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100 w-64'}`;
+      return `${base} ${isCollapsed ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100 w-64'}`;
     }
-    
-    return `${baseClasses} ${isCollapsed ? 'w-[80px]' : 'w-[264px]'}`;
+    return `${base} ${isCollapsed ? 'w-[80px]' : 'w-[264px]'}`;
   };
 
   return (
     <>
-      {/* Mobile backdrop overlay */}
+      {/* Mobile backdrop */}
       {isMobile && !isCollapsed && (
-        <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 transition-opacity duration-300"
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
           onClick={toggleSidebar}
         />
       )}
 
-      {/* SIDEBAR */}
       <aside className={getSidebarClasses()}>
-        {/* HEADER */}
-        <div
-          className={`border-b border-slate-800 transition-all duration-300 ${
-            isMobile ? 'p-3' : isCollapsed && !isMobile ? 'p-6 px-3' : 'p-6'
-          }`}
-        >
-          <div className={`flex items-center ${isCollapsed && !isMobile ? 'justify-center' : ''}`}>
-            <KuiperLogo isExpanded={!isCollapsed || isMobile} />
-          </div>
-        </div>
+       {/* HEADER — logo on top, collapse arrow on its own row underneath */}
+<div
+  className={`border-b border-slate-800 transition-all duration-300 ${
+    isMobile ? 'px-3 pt-3 pb-2' : isCollapsed ? 'px-3 pt-6 pb-4' : 'px-5 pt-4 pb-3'
+  }`}
+>
+  {/* Row 1: logo (animation lives here) */}
+  <div className={isCollapsed && !isMobile ? 'flex justify-center' : ''}>
+    <KuiperLogo isExpanded={!isCollapsed || isMobile} />
+  </div>
 
-        {/* NOTIFICATIONS SECTION */}
+  {/* Row 2: collapse arrow, right-aligned, BELOW the animation */}
+  {!isMobile && !isCollapsed && (
+    <div className="mt-2 flex justify-end">
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Collapse sidebar"
+        title="Collapse sidebar"
+        className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+      >
+        <PanelLeftClose size={16} />
+      </button>
+    </div>
+  )}
+
+  {/* Row 2 (collapsed state): expand arrow, centered, BELOW the animation */}
+  {!isMobile && isCollapsed && (
+    <button
+      type="button"
+      onClick={toggleSidebar}
+      aria-label="Expand sidebar"
+      title="Expand sidebar"
+      className="mt-3 mx-auto flex items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+    >
+      <PanelLeftOpen size={18} />
+    </button>
+  )}
+</div>
+
+        {/* NOTIFICATIONS */}
         <div className={`${isCollapsed && !isMobile ? 'px-2' : 'px-3'} mt-3`}>
           <div className={`flex items-center ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'} px-2.5 py-1.5 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10`}>
             {(!isCollapsed || isMobile) && (
@@ -665,154 +774,165 @@ const Sidebar = () => {
           </div>
         </div>
 
-        {/* NAVIGATION */}
+        {/* NAVIGATION (GROUPED) */}
         <nav
           className={`p-2 space-y-1 overflow-y-auto overflow-x-visible no-scrollbar ${
             isCollapsed && !isMobile
-              ? 'h-[calc(100vh-90px)]'
+              ? 'h-[calc(100vh-160px)]'
               : isMobile
               ? 'h-[calc(100vh-320px)]'
-              : 'h-[calc(100vh-380px)]'
+              : 'h-[calc(100vh-360px)]'
           }`}
         >
-          {links.map((item) => {
-            const active = isRouteActive(item.path);
-            const showBadge = shouldShowBadge(item);
-            const showAnnBadge = shouldShowAnnouncementBadge(item);
+          {menuGroups.map((group) => {
+            // A "Home" pseudo-group has null icon — render items flat
+            if (!group.icon) {
+              return group.items.map((item) => {
+                const active = isRouteActive(item.path);
+                return (
+                  <NavLink
+                    key={item.path}
+                    to={item.path}
+                    className={`relative flex items-center gap-2 p-2 rounded-xl transition-all duration-200 group ${
+                      active
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-900/40'
+                        : 'hover:bg-slate-800/70 hover:text-slate-200 text-slate-400'
+                    } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+                    title={isCollapsed && !isMobile ? item.label : ''}
+                    onClick={() => isMobile && toggleSidebar()}
+                  >
+                    <span className="flex-shrink-0">{item.icon}</span>
+                    {(!isCollapsed || isMobile) && (
+                      <span className="text-[12px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                        {item.label}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              });
+            }
+
+            const isOpen = openGroups[group.key];
+            const anyActive = group.items.some((i) => isRouteActive(i.path));
 
             return (
-              <NavLink
-                key={item.path}
-                to={item.path}
-                className={`relative flex items-center gap-2 p-1.5 rounded-xl transition-all duration-200 group ${
-                  active
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/40'
-                    : 'hover:bg-slate-800 hover:text-slate-200 text-slate-400'
-                } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
-                title={isCollapsed && !isMobile ? item.label : ''}
-                onClick={() => {
-                  if (isMobile && !isCollapsed) {
-                    toggleSidebar();
-                  }
-                  // Reset announcement badge when clicking announcements
-                  if (item.label === 'Announcements') {
-                    setAnnouncementCount(0);
-                  }
-                }}
-              >
-                <span className="flex-shrink-0">{item.icon}</span>
-                {(!isCollapsed || isMobile) && (
-                  <>
-                    <span className="text-[11px] font-semibold tracking-tight whitespace-nowrap flex-1">
-                      {item.label}
-                    </span>
-                    {showBadge && (
-                      <span className="ml-auto bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center">
-                        {ticketCount > 99 ? '99+' : ticketCount}
+              <div key={group.key} className="pb-1">
+                {/* Group header (clickable) */}
+                <button
+                  onClick={() => {
+                    if (isCollapsed && !isMobile) {
+                      toggleSidebar();
+                    }
+                    toggleGroup(group.key);
+                  }}
+                  className={`w-full flex items-center gap-2 p-2 rounded-xl transition-all duration-200 group ${
+                    anyActive
+                      ? 'text-blue-300 bg-slate-800/60'
+                      : 'hover:bg-slate-800/70 hover:text-slate-200 text-slate-400'
+                  } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+                  title={isCollapsed && !isMobile ? group.label : ''}
+                >
+                  <span className="flex-shrink-0">{group.icon}</span>
+                  {(!isCollapsed || isMobile) && (
+                    <>
+                      <span className="text-[10px] font-black uppercase tracking-[0.18em] whitespace-nowrap flex-1 text-left text-slate-500 group-hover:text-slate-300">
+                        {group.label}
                       </span>
-                    )}
-                    {showAnnBadge && (
-                      <span className="ml-1 bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse">
-                        {announcementCount > 99 ? '99+' : announcementCount}
-                      </span>
-                    )}
-                  </>
+                      <ChevronDown
+                        size={12}
+                        className={`transition-transform duration-200 flex-shrink-0 text-slate-500 ${
+                          isOpen ? 'rotate-0' : '-rotate-90'
+                        }`}
+                      />
+                    </>
+                  )}
+                </button>
+
+                {/* Group items */}
+                {isOpen && (!isCollapsed || isMobile) && (
+                  <div className="mt-1 ml-3 pl-3 border-l border-slate-800 space-y-0.5 animate-in slide-in-from-top-1 duration-200">
+                    {group.items.map((item) => {
+                      const active = isRouteActive(item.path);
+                      const showBadge = shouldShowBadge(item.label);
+                      const showAnnBadge = shouldShowAnnouncementBadge(item.label);
+
+                      return (
+                        <NavLink
+                          key={item.path}
+                          to={item.path}
+                          className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-200 ${
+                            active
+                              ? 'bg-blue-600/90 text-white shadow-md shadow-blue-900/30'
+                              : 'hover:bg-slate-800/70 text-slate-400 hover:text-slate-100'
+                          }`}
+                          onClick={() => {
+                            if (isMobile) toggleSidebar();
+                            if (item.label === 'Announcements') setAnnouncementCount(0);
+                          }}
+                        >
+                          {/* Left accent bar for active sub-item */}
+                          {active && (
+                            <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-blue-400" />
+                          )}
+                          <span className="flex-shrink-0">{item.icon}</span>
+                          <span className="text-[11.5px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                            {item.label}
+                          </span>
+                          {showBadge && (
+                            <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center tabular-nums">
+                              {ticketCount > 99 ? '99+' : ticketCount}
+                            </span>
+                          )}
+                          {showAnnBadge && (
+                            <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse tabular-nums">
+                              {announcementCount > 99 ? '99+' : announcementCount}
+                            </span>
+                          )}
+                        </NavLink>
+                      );
+                    })}
+                  </div>
                 )}
-                {isCollapsed && !isMobile && showBadge && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md">
-                    {ticketCount > 99 ? '99+' : ticketCount}
-                  </span>
+
+                {/* Collapsed-mode active dot */}
+                {isCollapsed && !isMobile && anyActive && (
+                  <div className="flex justify-center mt-0.5">
+                    <div className="w-1 h-1 rounded-full bg-blue-400" />
+                  </div>
                 )}
-                {isCollapsed && !isMobile && showAnnBadge && (
-                  <span className="absolute -top-1 -right-6 bg-red-500 text-white text-[7px] font-bold px-1 py-0.5 rounded-full min-w-[14px] text-center shadow-md animate-pulse">
-                    {announcementCount > 99 ? '99+' : announcementCount}
-                  </span>
-                )}
-              </NavLink>
+              </div>
             );
           })}
         </nav>
 
-        {/* ACCOUNT SECTION */}
-        <div
-          className={`absolute bottom-0 left-0 right-0 p-2 border-t border-slate-800 ${
-            isCollapsed && !isMobile ? 'px-2' : ''
-          }`}
-          ref={menuRef}
-        >
+        {/* ACCOUNT */}
+        <div className={`absolute bottom-0 left-0 right-0 p-2 border-t border-slate-800 ${
+          isCollapsed && !isMobile ? 'px-2' : ''
+        }`} ref={menuRef}>
           {/* VIDEO LOGO */}
-          {(!isCollapsed || isMobile) && (
-            <div 
-              className="flex items-center justify-center gap-2 mb-2 px-2 cursor-pointer "
-              title="Visit TechDataSeeders"
-            >
+          {(!isCollapsed || isMobile) ? (
+            <div className="flex items-center justify-center gap-2 mb-2 px-2 cursor-pointer" title="Visit TechDataSeeders">
               <div className="flex items-center gap-2" onClick={handleVideoLogoClick}>
                 <div className="w-15 h-15 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
-                  <video
-                    src={companyLogoVideo}
-                    autoPlay
-                    loop
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
+                  <video src={companyLogoVideo} autoPlay loop muted playsInline className="w-full h-full object-cover" />
                 </div>
               </div>
             </div>
-          )}
-
-          {/* Collapsed version - smaller video icon only */}
-          {isCollapsed && !isMobile && (
-            <div 
-              className="flex justify-center mb-2 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={handleVideoLogoClick}
-              title="Visit TechDataSeeders"
-            >
-              <div className="w-8 h-8 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
-                <video
-                  src={companyLogoVideo}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="w-full h-full object-cover"
-                />
+          ) : (
+            <div className="flex justify-center mb-2 cursor-pointer hover:opacity-80" onClick={handleVideoLogoClick} title="Visit TechDataSeeders">
+              <div className="w-8 h-8 rounded-full bg-black/80 border border-blue-500/20 overflow-hidden">
+                <video src={companyLogoVideo} autoPlay loop muted playsInline className="w-full h-full object-cover" />
               </div>
             </div>
           )}
 
-          {/* Hidden file input */}
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileSelect}
-            className="hidden"
-          />
+          <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileSelect} className="hidden" />
 
           {/* USER MENU */}
           {showUserMenu && (
-            <div
-              className={`absolute bottom-full left-3 mb-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-2 min-w-[180px] animate-in slide-in-from-bottom-4 duration-200 z-[60] ${
-                isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
-              }`}
-            >
-              {/* ============================================
-                  UPDATE PROFILE BUTTON - ADDED
-                  ============================================ */}
-              {/* <button
-                onClick={() => {
-                  setShowProfileModal(true);
-                  setShowUserMenu(false);
-                }}
-                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
-              >
-                <Pencil size={13} className="text-emerald-400" />
-                <span>Update Profile</span>
-              </button> */}
-
-              <div className="h-px bg-white/5 my-1 mx-1" />
-
+            <div className={`absolute bottom-full left-3 mb-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-2 min-w-[180px] animate-in slide-in-from-bottom-4 duration-200 z-[60] ${
+              isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
+            }`}>
               <button
                 onClick={() => {
                   setShowImageUploadModal(true);
@@ -880,11 +1000,7 @@ const Sidebar = () => {
           >
             <div className="relative flex-shrink-0 group">
               {profileImage ? (
-                <img
-                  src={profileImage}
-                  alt={userName}
-                  className="w-10 h-10 rounded-full object-cover border-2 border-blue-500/30"
-                />
+                <img src={profileImage} alt={userName} className="w-10 h-10 rounded-full object-cover border-2 border-blue-500/30" />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
                   {userName.charAt(0).toUpperCase()}
@@ -900,9 +1016,7 @@ const Sidebar = () => {
 
             {(!isCollapsed || isMobile) && (
               <div className="flex-1 min-w-0 text-left">
-                <p className="text-sm font-bold text-white truncate">
-                  {userName}
-                </p>
+                <p className="text-sm font-bold text-white truncate">{userName}</p>
                 <p className={`text-[10px] font-semibold uppercase tracking-wider ${getRoleStyles(userRole).split(' ')[2] || 'text-slate-400'}`}>
                   {getRoleDisplayName(userRole)}
                 </p>
@@ -913,27 +1027,15 @@ const Sidebar = () => {
               <ChevronUp
                 size={14}
                 className={`transition-transform duration-300 flex-shrink-0 ${
-                  showUserMenu ? 'rotate-0' : 'rotate-180'
-                } ${showUserMenu ? 'text-blue-400' : 'text-slate-500'}`}
+                  showUserMenu ? 'rotate-0 text-blue-400' : 'rotate-180 text-slate-500'
+                }`}
               />
             )}
           </button>
         </div>
       </aside>
 
-      {/* TOGGLE BUTTON */}
-      {!isMobile && (
-        <button
-          onClick={toggleSidebar}
-          className={`fixed top-10 bg-blue-600 text-white rounded-full p-1.5 border-4 border-slate-900 hover:bg-blue-500 transition-all duration-300 z-[60] shadow-xl ${
-            isCollapsed ? 'left-[68px]' : 'left-[252px]'
-          }`}
-        >
-          {isCollapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-        </button>
-      )}
-
-      {/* Mobile toggle button */}
+      {/* TOGGLE BUTTON - MOBILE (unchanged) */}
       {isMobile && (
         <button
           onClick={toggleSidebar}
@@ -967,11 +1069,7 @@ const Sidebar = () => {
             {imagePreview ? (
               <div className="flex flex-col items-center gap-4">
                 <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-blue-500/30">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
                 </div>
                 <div className="flex gap-3 w-full">
                   <button
@@ -980,14 +1078,14 @@ const Sidebar = () => {
                       setImagePreview(null);
                       fileInputRef.current.click();
                     }}
-                    className="flex-1 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-700 transition-all"
+                    className="flex-1 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-700"
                   >
                     Change Photo
                   </button>
                   <button
                     onClick={uploadProfileImage}
                     disabled={uploadingImage}
-                    className="flex-1 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 transition-all disabled:opacity-50"
+                    className="flex-1 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 disabled:opacity-50"
                   >
                     {uploadingImage ? 'Uploading...' : 'Upload'}
                   </button>
@@ -997,11 +1095,7 @@ const Sidebar = () => {
               <div className="flex flex-col items-center gap-4 py-8">
                 {profileImage ? (
                   <div className="w-32 h-32 rounded-full overflow-hidden border-2 border-blue-500/30">
-                    <img
-                      src={profileImage}
-                      alt="Current profile"
-                      className="w-full h-full object-cover"
-                    />
+                    <img src={profileImage} alt="Current profile" className="w-full h-full object-cover" />
                   </div>
                 ) : (
                   <div className="w-32 h-32 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-4xl font-bold">
@@ -1010,38 +1104,25 @@ const Sidebar = () => {
                 )}
                 <button
                   onClick={() => fileInputRef.current.click()}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all"
+                  className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700"
                 >
                   Choose Image
                 </button>
                 {profileImage && (
                   <button
                     onClick={removeProfileImage}
-                    className="px-6 py-2 bg-red-600/20 text-red-400 rounded-xl font-bold text-sm hover:bg-red-600/30 transition-all"
+                    className="px-6 py-2 bg-red-600/20 text-red-400 rounded-xl font-bold text-sm hover:bg-red-600/30"
                   >
                     Remove Photo
                   </button>
                 )}
                 <p className="text-xs text-slate-400 text-center">
-                  Supported formats: JPEG, PNG, GIF, WEBP<br />
-                  Max size: 5MB
+                  Supported formats: JPEG, PNG, GIF, WEBP<br />Max size: 5MB
                 </p>
               </div>
             )}
           </div>
         </div>
-      )}
-
-      {/* ============================================
-          UPDATE PROFILE MODAL - ADDED
-          ============================================ */}
-      {showProfileModal && (
-        <UpdateProfileModal
-          isOpen={showProfileModal}
-          onClose={() => setShowProfileModal(false)}
-          userId={userId}
-          onProfileUpdated={handleProfileUpdated}
-        />
       )}
 
       {/* LOGOUT MODAL */}
@@ -1052,12 +1133,9 @@ const Sidebar = () => {
               <div className="p-3 bg-red-500/10 rounded-2xl mb-4 border border-red-500/20">
                 <AlertTriangle size={28} className="text-red-500" />
               </div>
-              <h2 className="text-xl font-black text-white mb-2 tracking-tight">
-                Confirm Logout
-              </h2>
+              <h2 className="text-xl font-black text-white mb-2 tracking-tight">Confirm Logout</h2>
               <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed px-3">
-                Are you sure you want to exit? You will be required to
-                authenticate again to access the portal.
+                Are you sure you want to exit? You will need to authenticate again.
               </p>
               <div className="flex w-full gap-2">
                 <button

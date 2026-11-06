@@ -30,23 +30,21 @@ const TicketAssignmentRules = () => {
     isActive: true
   });
 
-  const categories = ['Finance', 'HR', 'Payroll', 'Sales', 'Production', 'Admin', 'IT', 'Development'];
-  const subcategories = {
-    'Finance': ['Reimbursement', 'Payment Requests', 'Invoice Management'],
-    'HR': ['Employee Documents', 'Attendance & Leave', 'Employee Management'],
-    'Payroll': ['Salary', 'Incentives', 'Tax & Deductions'],
-    'Sales': ['Lead Management', 'Proposal & Pricing', 'Client Support'],
-    'Production': ['Data Extraction', 'Data Quality', 'Delivery', 'Maintenance', 'Feasibility', 'KUIPER'],
-    'Admin': ['Agency', 'Procurement', 'Facilities', 'IT', 'Technical Support'],
-    'IT': ['Access Management', 'Technical/Support', 'Software Tools'],
-    'Development': ['New Feature Request']
-  };
+  // Category / subcategory options come from the dynamic Ticket Categories list
+  const [categoryTree, setCategoryTree] = useState([]);
+  const categories = categoryTree.map(c => c.name);
+  const subcategories = Object.fromEntries(
+    categoryTree.map(c => [c.name, (c.subcategories || []).map(sub => sub.name)])
+  );
 
   const token = localStorage.getItem('token');
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
   useEffect(() => {
     fetchRules();
+    axios.get(`${API_BASE_URL}/api/ticket-categories?all=true`, authHeader)
+      .then(res => setCategoryTree(res.data || []))
+      .catch(() => toast.error('Failed to load categories'));
   }, []);
 
   const fetchRules = async () => {

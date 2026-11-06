@@ -13,7 +13,11 @@ router.post('/', authorize('Admin', 'Sales', 'Sales Manager','Project Manager'),
       companyName, 
       website, 
       address,
+      phone,
+      industry,
+      noOfEmployees,
       pointsOfContact,
+      customFields,
       createClientAccount,
       clientEmail,
       clientPassword
@@ -36,7 +40,11 @@ router.post('/', authorize('Admin', 'Sales', 'Sales Manager','Project Manager'),
       companyName: companyName || req.body.name,
       website,
       address,
+      phone,
+      industry,
+      noOfEmployees: noOfEmployees ? Number(noOfEmployees) : undefined,
       pointsOfContact: pointsOfContact || [],
+      customFields: Array.isArray(customFields) ? customFields : [],
       salesRepId: req.user._id,
       status: 'New',
       // Backward compatibility fields
@@ -130,6 +138,7 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, r
     // ✅ REMOVED the salesRepId filter - ALL sales people can see ALL organizations
     const organizations = await Organization.find({})
       .populate('clientUserId', 'name email githubUsername')
+      .populate('salesRepId', 'name email')
       .sort({ createdAt: -1 })
       .select('-__v');
     
@@ -204,7 +213,7 @@ router.get('/:id', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req
 // --- PUT: Update Organization ---
 router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
-    const { pointsOfContact, companyName, website, address, clientUserId } = req.body;
+    const { pointsOfContact, companyName, website, address, clientUserId, customFields } = req.body;
     
     // ✅ No salesRepId filter - ANY sales person can update ANY organization
     const organization = await Organization.findById(req.params.id);
@@ -228,6 +237,11 @@ router.put('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res
       linkedin: primaryPOC?.linkedin
     };
     
+    // Custom fields (Customize Modules) – only touched when the caller sends them
+    if (Array.isArray(customFields)) {
+      updateData.customFields = customFields;
+    }
+
     // Update client user reference if provided
     if (clientUserId) {
       updateData.clientUserId = clientUserId;
@@ -306,7 +320,7 @@ router.post('/check-duplicate', authorize('Admin', 'Sales', 'Sales Manager','HR'
 // --- POST: Add POC to existing organization (ALL sales people can add to ANY organization) ---
 router.post('/:id/add-poc', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
-    const { pocName, pocEmail, pocPhone, linkedin, department, isPrimary } = req.body;
+    const { pocName, pocEmail, pocPhone, linkedin, department, isPrimary, title, mobile, customFields } = req.body;
     
     if (!pocName) {
       return res.status(400).json({ error: "POC name is required" });
@@ -325,8 +339,11 @@ router.post('/:id/add-poc', authorize('Admin', 'Sales', 'Sales Manager'), async 
       pocEmail,
       pocPhone,
       linkedin,
+      title,
+      mobile,
       department: department || 'Other',
       isPrimary: isPrimary || false,
+      customFields: Array.isArray(customFields) ? customFields : [],
       addedAt: new Date()
     };
     

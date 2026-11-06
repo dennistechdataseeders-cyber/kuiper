@@ -324,4 +324,62 @@ const emailTemplates = {
 
 };
 
-module.exports = emailTemplates;
+// ✅ NEW: Template for Daily Sales Activity Reminder
+const getActivityReminderTemplate = (user, activities, tasks, frontendUrl) => {
+  const activityRows = activities.map(a => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">
+        <strong>${a.type.toUpperCase()}</strong>
+      </td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">
+        ${a.title} (${a.leadId?.companyName || 'No Lead'})
+      </td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">
+        ${new Date(a.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </td>
+    </tr>
+  `).join('');
+
+  const taskRows = tasks.map(t => `
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;" colspan="2">
+        <strong>TASK:</strong> ${t.title} (${t.leadId?.companyName || 'No Lead'})
+      </td>
+      <td style="padding: 8px; border-bottom: 1px solid #eee;">
+        ${t.dueAt ? new Date(t.dueAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'No time set'}
+      </td>
+    </tr>
+  `).join('');
+
+  return `
+    <div style="font-family: Arial, sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #ddd; border-radius: 8px; overflow: hidden;">
+      <div style="background-color: #0f172a; color: white; padding: 20px; text-align: center;">
+        <h2 style="margin: 0;">Your Daily Schedule</h2>
+        <p style="margin: 5px 0 0 0;">Hello ${user.name}, here's what's on your plate today.</p>
+      </div>
+      <div style="padding: 20px;">
+        ${activities.length > 0 ? `
+          <h3 style="color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px;">Upcoming Activities</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            ${activityRows}
+          </table>
+        ` : '<p>No meetings or calls scheduled.</p>'}
+        
+        ${tasks.length > 0 ? `
+          <h3 style="color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; margin-top: 20px;">Tasks Due Today</h3>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            ${taskRows}
+          </table>
+        ` : '<p>No tasks due today.</p>'}
+      </div>
+      <div style="background-color: #f8fafc; color: #64748b; text-align: center; padding: 15px; font-size: 12px;">
+        <p>This is an automated reminder from KUIPER.</p>
+      </div>
+    </div>
+  `;
+};
+
+module.exports = {
+  ...emailTemplates,
+  getActivityReminderTemplate
+};

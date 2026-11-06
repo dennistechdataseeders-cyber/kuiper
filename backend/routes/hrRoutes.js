@@ -1807,7 +1807,16 @@ router.get('/attendance/employee-report', async (req, res) => {
 
           // ✅ NEW: holiday flags per record
           holiday: isHoliday,
-          holidayName: holidayName || null
+          holidayName: holidayName || null,
+
+          // ✅ NEW: leave details used by the monthly salary summary.
+          // leaveDays is only non-zero on a day the report shows as "Leave"
+          // (never on weekends / holidays); half-day leaves count as 0.5.
+          leaveType: status === 'leave' && onLeave ? onLeave.leaveType : null,
+          leaveDays:
+            status === 'leave' && onLeave && !isHoliday
+              ? (onLeave.isHalfDay ? 0.5 : 1)
+              : 0
         });
 
         current.setUTCDate(current.getUTCDate() + 1);

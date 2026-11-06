@@ -88,7 +88,7 @@ const Announcements = () => {
     }
   }, [location, navigate]);
 
-  // Fetch announcements (page 1 replaces the list; later pages append for infinite scroll)
+  // Fetch announcements
   const fetchAnnouncements = async (pageNum = 1, append = false) => {
     if (append) {
       setLoadingMore(true);
@@ -123,8 +123,7 @@ const Announcements = () => {
     fetchAnnouncements(1, false);
   }, []);
 
-  // Infinite scroll: observe a sentinel just past the last card and load
-  // the next page in once it enters the viewport.
+  // Infinite scroll
   useEffect(() => {
     if (!hasMore || loading) return undefined;
     const sentinel = loadMoreRef.current;
@@ -160,7 +159,6 @@ const Announcements = () => {
     document.body.style.overflow = 'unset';
   };
 
-  // Handle keyboard escape for modal
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === 'Escape' && imageModalOpen) {
@@ -241,7 +239,7 @@ const Announcements = () => {
   };
 
   // ============================================
-  // LIKE / UNLIKE - UPDATED
+  // LIKE / UNLIKE
   // ============================================
   const handleLike = async (announcementId) => {
     try {
@@ -275,7 +273,7 @@ const Announcements = () => {
   };
 
   // ============================================
-  // GET LIKED USERS WITH REAL NAMES
+  // GET LIKED USERS
   // ============================================
   const getLikedUsers = (announcement) => {
     if (!announcement.likes || announcement.likes.length === 0) return [];
@@ -500,7 +498,7 @@ const Announcements = () => {
   };
 
   // ============================================
-  // CHECK IF USER CAN DELETE ANNOUNCEMENT
+  // CHECK IF USER CAN DELETE
   // ============================================
   const canDeleteAnnouncement = (announcement) => {
     if (announcement.isAutomated) {
@@ -510,9 +508,6 @@ const Announcements = () => {
     return isAdmin || isOwner;
   };
 
-  // ============================================
-  // CHECK IF USER CAN DELETE COMMENT
-  // ============================================
   const canDeleteComment = (comment, announcement) => {
     if (announcement?.isAutomated) {
       return isAdmin;
@@ -600,14 +595,20 @@ const Announcements = () => {
             const isAutomated = announcement.isAutomated;
             const isBirthday = announcement.automatedType === 'birthday';
             const isWorkAnniversary = announcement.automatedType === 'work_anniversary';
+            const isHoliday = announcement.automatedType === 'holiday_reminder';
             const creator = announcement.createdBy || {};
             
             let creatorName = announcement.createdByName || creator.name || 'Unknown';
             let creatorRole = announcement.createdByRole || creator.role || '';
             
             if (isAutomated) {
-              creatorName = 'HR';
-              creatorRole = 'HR';
+              if (isHoliday) {
+                creatorName = 'System Alert';
+                creatorRole = 'Automated';
+              } else {
+                creatorName = 'HR';
+                creatorRole = 'HR';
+              }
             }
             
             const creatorAvatar = announcement.createdByAvatar || creator.profileImage || null;
@@ -632,6 +633,8 @@ const Announcements = () => {
                   isAutomated 
                     ? isBirthday 
                       ? 'border-pink-200 bg-gradient-to-br from-pink-50/50 to-white' 
+                      : isHoliday
+                      ? 'border-red-200 bg-gradient-to-br from-red-50/50 to-white'
                       : 'border-emerald-200 bg-gradient-to-br from-emerald-50/50 to-white'
                     : 'border-slate-200'
                 }`}
@@ -641,18 +644,16 @@ const Announcements = () => {
                   <div className={`px-4 py-1.5 text-xs font-bold flex items-center gap-2 ${
                     isBirthday 
                       ? 'bg-pink-100 text-pink-700' 
+                      : isHoliday
+                      ? 'bg-red-100 text-red-700'
                       : 'bg-emerald-100 text-emerald-700'
                   }`}>
                     {isBirthday ? (
-                      <>
-                        <Calendar size={14} />
-                        🎉 Birthday Celebration
-                      </>
+                      <><Calendar size={14} /> 🎉 Birthday Celebration</>
+                    ) : isWorkAnniversary ? (
+                      <><Award size={14} /> 🎊 Work Anniversary</>
                     ) : (
-                      <>
-                        <Award size={14} />
-                        🎊 Work Anniversary
-                      </>
+                      <><Shield size={14} /> 🏖️ Official Holiday Notice</>
                     )}
                   </div>
                 )}
@@ -661,8 +662,14 @@ const Announcements = () => {
                 <div className="p-6 pb-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gradient-to-br from-blue-500 to-indigo-500 flex-shrink-0">
-                        {avatarUrl ? (
+                      <div className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-sm ${
+                        isHoliday 
+                          ? 'bg-red-500' 
+                          : 'bg-gradient-to-br from-blue-500 to-indigo-500'
+                      }`}>
+                        {isHoliday ? (
+                          <Shield size={18} />
+                        ) : avatarUrl ? (
                           <img
                             src={avatarUrl}
                             alt={creatorName}
@@ -687,7 +694,6 @@ const Announcements = () => {
                               HR
                             </span>
                           )}
-                         
                         </p>
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <span>{creatorRole || 'Team Member'}</span>
@@ -907,7 +913,7 @@ const Announcements = () => {
           })
         )}
 
-        {/* Infinite scroll sentinel + loading / end-of-list states */}
+        {/* Infinite scroll sentinel */}
         {announcements.length > 0 && (
           <div ref={loadMoreRef} className="py-6 flex items-center justify-center">
             {loadingMore ? (
@@ -922,15 +928,12 @@ const Announcements = () => {
         )}
       </div>
 
-      {/* ============================================
-          IMAGE MODAL - Full screen image viewer
-          ============================================ */}
+      {/* IMAGE MODAL */}
       {imageModalOpen && selectedImage && (
         <div 
           className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4"
           onClick={closeImageModal}
         >
-          {/* Close button */}
           <button
             onClick={closeImageModal}
             className="absolute top-4 right-4 text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all z-10"
@@ -939,7 +942,6 @@ const Announcements = () => {
             <X size={28} />
           </button>
 
-          {/* Download button */}
           <a
             href={selectedImage}
             download
@@ -952,7 +954,6 @@ const Announcements = () => {
             <Download size={24} />
           </a>
 
-          {/* Image container */}
           <div 
             className="relative max-w-[90vw] max-h-[85vh] flex items-center justify-center"
             onClick={(e) => e.stopPropagation()}
@@ -968,14 +969,12 @@ const Announcements = () => {
             />
           </div>
 
-          {/* Image info */}
           {imageAlt && (
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 text-white/60 text-sm font-medium bg-black/50 backdrop-blur-sm px-4 py-2 rounded-lg max-w-[80%] text-center">
               {imageAlt}
             </div>
           )}
 
-          {/* Click to close hint */}
           <div className="absolute bottom-20 text-white/20 text-xs font-medium animate-pulse">
             Click outside to close
           </div>

@@ -89,10 +89,6 @@ const ProjectFeeds = () => {
   // State for expanded feed row (for detailed view)
   const [expandedFeedId, setExpandedFeedId] = useState(null);
 
-  // State for Git last updated dates
-  const [gitLastUpdated, setGitLastUpdated] = useState({});
-  const [loadingGitDates, setLoadingGitDates] = useState(false);
-
   const [feedForm, setFeedForm] = useState({
     name: '',
     assignedDevelopers: [],
@@ -305,68 +301,6 @@ const ProjectFeeds = () => {
     }
   };
 
-  // Fetch Git last updated date for a feed folder
-  const fetchGitLastUpdated = async (feed) => {
-    if (!feed.gitRepoName || !feed.gitRepoUrl) return null;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const feedFolderName = feed.name
-        .toLowerCase()
-        .replace(/[^a-z0-9-]/g, '-')
-        .replace(/-+/g, '-')
-        .replace(/^-|-$/g, '');
-      
-      // Use GitHub API to get the last commit date for the feed folder
-      const response = await axios.get(
-        `${API_BASE_URL}/api/admin/projects/${feed.projectId}/repo-folder-last-updated`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { folderPath: feedFolderName }
-        }
-      );
-      
-      if (response.data.success && response.data.lastUpdated) {
-        return response.data.lastUpdated;
-      }
-      return null;
-    } catch (error) {
-      console.error(`Error fetching Git last updated for feed ${feed.name}:`, error);
-      return null;
-    }
-  };
-
-  // Fetch Git last updated dates for all feeds
-  const fetchAllGitLastUpdated = async (feedsList) => {
-    if (!feedsList || feedsList.length === 0) return;
-    
-    setLoadingGitDates(true);
-    const updates = {};
-    
-    // Process feeds in batches to avoid rate limiting
-    const batchSize = 5;
-    for (let i = 0; i < feedsList.length; i += batchSize) {
-      const batch = feedsList.slice(i, i + batchSize);
-      await Promise.all(
-        batch.map(async (feed) => {
-          if (feed.gitRepoName && feed.gitRepoUrl) {
-            const date = await fetchGitLastUpdated(feed);
-            if (date) {
-              updates[feed._id] = date;
-            }
-          }
-        })
-      );
-      // Small delay between batches
-      if (i + batchSize < feedsList.length) {
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-    }
-    
-    setGitLastUpdated(prev => ({ ...prev, ...updates }));
-    setLoadingGitDates(false);
-  };
-
   // Get human-readable time difference
   const getTimeAgo = (dateString) => {
     if (!dateString) return 'Never';
@@ -505,13 +439,6 @@ const ProjectFeeds = () => {
       }
     }
   }, [projects, location.state]);
-
-  // Fetch Git last updated dates when feeds change
-  useEffect(() => {
-    if (feeds.length > 0) {
-      fetchAllGitLastUpdated(feeds);
-    }
-  }, [feeds]);
 
   // RESET PAGE
   useEffect(() => {
@@ -770,7 +697,7 @@ const filteredFeeds = useMemo(() => {
                   const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
                   const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                   const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
-                  const lastUpdated = gitLastUpdated[feed._id];
+                  const lastUpdated = feed.gitLastUpdated; // stored in DB, synced weekly
                   
                   return (
                     <div key={feed._id} className="p-3 hover:bg-slate-50/60 transition-all">
@@ -967,7 +894,7 @@ const filteredFeeds = useMemo(() => {
                       const hasMoreDevelopers = developerNames.length > 2;
                       const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                       const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
-                      const lastUpdated = gitLastUpdated[feed._id];
+                      const lastUpdated = feed.gitLastUpdated; // stored in DB, synced weekly
                       
                       return (
                         <React.Fragment key={feed._id}>
@@ -1024,9 +951,7 @@ const filteredFeeds = useMemo(() => {
                             </td>
 
                             <td className="px-4 py-3">
-                              {loadingGitDates ? (
-                                <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                              ) : lastUpdated ? (
+                              {lastUpdated ? (
                                 <div className="flex items-center gap-1.5">
                                   <GitBranch size={12} className="text-blue-500" />
                                   <span className="text-[9px] font-medium text-slate-600" title={formatDate(lastUpdated)}>

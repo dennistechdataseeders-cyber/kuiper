@@ -99,6 +99,7 @@ leaveBucketSchema.statics.getFinancialYearEnd = function(date) {
 // tells Mongoose to wait for it to be invoked.
 leaveBucketSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
+  
 });
 
 // Instance methods

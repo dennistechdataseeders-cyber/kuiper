@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import LeaveBalanceEditor from '../components/LeaveBalanceEditor';
 
 // ============================================
 // HrDashboard
@@ -1575,6 +1576,9 @@ const HrDashboard = () => {
                   </p>
                 </div>
               </div>
+              {/* Edit Paid Leave Balance (same as the Edit Paid Leaves tab) */}
+              <LeaveBalanceEditor leave={selectedLeave} />
+
               <div>
                 <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
                   Rejection Reason (if rejecting)

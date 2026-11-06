@@ -138,7 +138,91 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'),
 });
 
 // ============================================
-// POST: Create a Lead (with auto-created Feasibility org)
+// HELPERS: Lead form -> Account (Organization) + Contact (POC)
+// ============================================
+const escapeRegex = (str = '') => String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Lead Source (Zoho-style dropdown) -> LeadGen.leadType enum
+const mapLeadSourceToType = (src) => {
+  switch (src) {
+    case 'Cold Call': return 'Cold Call';
+    case 'Employee Referral':
+    case 'External Referral': return 'Reference';
+    case 'Web Research': return 'Outbound';
+    case 'Sales Email Alias': return 'Email Marketing';
+    default: return 'Inbound';
+  }
+};
+
+const buildAddressString = (a = {}) =>
+  [a.flatHouse, a.streetAddress, a.city, a.stateProvince, a.zipPostalCode, a.countryRegion]
+    .map(v => (v || '').toString().trim()).filter(Boolean).join(', ');
+
+/**
+ * Finds the Account for the typed company (case-insensitive) or creates it,
+ * then makes sure the person exists as a Contact (POC) on that Account.
+ * Returns { org, created }.
+ */
+async function findOrCreateAccountFromForm(body, user) {
+  const companyName = (body.company || body.companyName || '').trim();
+  const firstName = (body.firstName || '').trim();
+  const lastName = (body.lastName || '').trim();
+  const pocName = (body.pocName || [firstName, lastName].filter(Boolean).join(' ') || companyName).trim();
+  const pocEmail = (body.pocEmail || body.email || '').trim();
+  const pocPhone = (body.pocPhone || body.phone || body.mobile || '').trim();
+
+  const contact = {
+    pocName,
+    pocEmail,
+    pocPhone,
+    title: body.title || undefined,
+    mobile: body.mobile || undefined,
+    linkedin: body.linkedin || undefined,
+    department: 'Other'
+  };
+
+  let org = await Organization.findOne({
+    companyName: { $regex: new RegExp(`^${escapeRegex(companyName)}$`, 'i') }
+  });
+  let created = false;
+
+  if (!org) {
+    const address = body.address || {};
+    org = await Organization.create({
+      companyName,
+      website: body.website || '',
+      address: buildAddressString(address),
+      addressDetails: address,
+      phone: body.phone || body.mobile || '',
+      industry: body.industry || undefined,
+      noOfEmployees: body.noOfEmployees ? Number(body.noOfEmployees) : undefined,
+      salesRepId: user._id,
+      status: 'New',
+      pointsOfContact: [{ ...contact, isPrimary: true }]
+    });
+    created = true;
+  } else {
+    const alreadyThere = (org.pointsOfContact || []).some(p =>
+      (p.pocName || '').toLowerCase() === pocName.toLowerCase() ||
+      (pocEmail && (p.pocEmail || '').toLowerCase() === pocEmail.toLowerCase())
+    );
+    if (!alreadyThere) {
+      const isFirst = !org.pointsOfContact || org.pointsOfContact.length === 0;
+      // $push (not save) so we don't trigger the Organization pre-save hook
+      await Organization.updateOne(
+        { _id: org._id },
+        { $push: { pointsOfContact: { ...contact, isPrimary: isFirst } } }
+      );
+    }
+  }
+
+  return { org, created, pocName, pocEmail, pocPhone, contact };
+}
+
+// ============================================
+// POST: Create a Lead
+//  - Leads form (sends `company`)  -> Account + Contact + LeadGen
+//  - Legacy callers (organizationId / none) -> unchanged behaviour
 // ============================================
 router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
   try {
@@ -149,15 +233,30 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
       pocName,
       pocEmail,
       pocPhone,
-      linkedin
+      linkedin,
+      company,
+      description
     } = req.body;
+
+    // ============================================
+    // NEW: Lead form -> create/find Account (Organization) + Contact (POC)
+    // ============================================
+    let formAccount = null;
+    let resolvedOrgId = organizationId;
+    if (!organizationId && company && company.trim()) {
+      if (!(req.body.lastName || '').trim()) {
+        return res.status(400).json({ error: 'Last Name is required' });
+      }
+      formAccount = await findOrCreateAccountFromForm(req.body, req.user);
+      resolvedOrgId = formAccount.org._id;
+    }
 
     // ============================================
     // Auto-create a Feasibility organization if none provided
     // ============================================
-    let finalOrgId = organizationId;
+    let finalOrgId = resolvedOrgId;
     
-    if (!organizationId) {
+    if (!resolvedOrgId) {
       // Find or create a "Feasibility" organization
       let feasibilityOrg = await Organization.findOne({ 
         companyName: { $regex: /^Feasibility$/i } 
@@ -186,9 +285,9 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
       return res.status(404).json({ error: "Organization not found" });
     }
 
-    const finalPocName = pocName || org.pocName || 'Feasibility Task';
-    const finalPocEmail = pocEmail || org.pocEmail || '';
-    const finalPocPhone = pocPhone || org.pocPhone || '';
+    const finalPocName = (formAccount && formAccount.pocName) || pocName || org.pocName || 'Feasibility Task';
+    const finalPocEmail = (formAccount && formAccount.pocEmail) || pocEmail || org.pocEmail || '';
+    const finalPocPhone = (formAccount && formAccount.pocPhone) || pocPhone || org.pocPhone || '';
     const finalLinkedin = linkedin || org.linkedin || '';
 
     if (!finalPocName) {
@@ -198,7 +297,7 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
     // Check for duplicate lead
     const existingLead = await LeadGen.findOne({
       organizationId: org._id,
-      pocName: { $regex: new RegExp(`^${finalPocName}$`, 'i') }
+      pocName: { $regex: new RegExp(`^${escapeRegex(finalPocName)}$`, 'i') }
     });
 
     if (existingLead) {
@@ -213,8 +312,9 @@ router.post('/', authorize('Admin', 'Sales'), async (req, res) => {
       pocEmail: finalPocEmail,
       pocPhone: finalPocPhone,
       linkedin: finalLinkedin,
-      leadType: leadType || 'Inbound',
-      referredBy: leadType === 'Reference' ? referredBy : undefined,
+      leadType: leadType || mapLeadSourceToType(req.body.leadSource),
+      referredBy: (leadType || mapLeadSourceToType(req.body.leadSource)) === 'Reference' ? referredBy : undefined,
+      lastInteractionDesc: description || undefined,
       salesRepId: req.user._id,
       status: 'New'
     });
