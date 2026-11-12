@@ -1,5 +1,5 @@
 // frontend/src/pages/ActivitiesCalls.jsx
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import axios from 'axios';
 import { Phone, PhoneIncoming, PhoneOutgoing, Loader2 } from 'lucide-react';
 import API_BASE_URL from '../config';
@@ -8,6 +8,8 @@ import toast from 'react-hot-toast';
 import AlphabetFilter from '../components/AlphabetFilter';
 import Pagination from '../components/Pagination';
 import useAlphaPagination, { getActivityLeadName } from '../utils/useAlphaPagination';
+import useDashboardFilter, { filterActivities } from '../utils/useDashboardFilter';
+import DashboardFilterBanner from '../components/DashboardFilterBanner';
 
 const ActivitiesCalls = () => {
   const { isCollapsed } = useSidebar();
@@ -16,13 +18,15 @@ const ActivitiesCalls = () => {
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const list = useAlphaPagination(items); // A–Z filter + pagination
+  const dash = useDashboardFilter(); // ?rep=…&focus=today&team=1 (set by the Sales Command dashboard)
+  const visibleItems = useMemo(() => filterActivities(items, dash), [items, dash]);
+  const list = useAlphaPagination(visibleItems); // A–Z filter + pagination
 
   const fetchItems = async () => {
     try {
       setLoading(true);
       const res = await axios.get(
-        `${API_BASE_URL}/api/lead-activities?type=call&scope=mine`,
+        `${API_BASE_URL}/api/lead-activities?type=call&scope=${dash.team ? 'team' : 'mine'}`,
         authHeader
       );
       setItems(res.data.data || []);
@@ -34,7 +38,7 @@ const ActivitiesCalls = () => {
     }
   };
 
-  useEffect(() => { fetchItems(); }, []);
+  useEffect(() => { fetchItems(); }, [dash.team]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className={`min-h-screen bg-white transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
@@ -46,14 +50,15 @@ const ActivitiesCalls = () => {
       </div>
 
       <div className="pl-10 pr-6 pt-[88px] pb-12">
+        <DashboardFilterBanner filter={dash} label={dash.focus === 'today' ? 'Calls today' : ''} className="mb-4" />
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 size={32} className="text-blue-600 animate-spin" />
           </div>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center">
             <Phone size={36} className="mx-auto text-slate-300 mb-3" />
-            <p className="text-sm font-bold text-slate-500">No calls logged yet</p>
+            <p className="text-sm font-bold text-slate-500">{dash.active ? 'No calls match this filter' : 'No calls logged yet'}</p>
             <p className="text-xs text-slate-400 mt-1">
               Open a lead and use <b>Activity → Add call</b> to log one.
             </p>
@@ -63,7 +68,7 @@ const ActivitiesCalls = () => {
             <div className="flex items-center gap-3 mb-5">
               <AlphabetFilter value={list.letter} onChange={list.setLetter} />
               <div className="ml-auto text-xs font-bold text-slate-400">
-                {list.totalItems} of {items.length} calls
+                {list.totalItems} of {visibleItems.length} calls
               </div>
             </div>
 

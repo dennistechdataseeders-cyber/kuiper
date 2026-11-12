@@ -11,6 +11,8 @@ import {
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import Pagination from '../components/Pagination';
+import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
+import DashboardFilterBanner from '../components/DashboardFilterBanner';
 
 // These are the only stages the lead-side logic treats as "closed".
 // Everything else is a normal movable stage.
@@ -33,6 +35,7 @@ export default function Deals() {
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
   const canEdit = EDIT_ROLES.includes(localStorage.getItem('role') || '');
+  const dash = useDashboardFilter(); // ?rep=…&focus=open|won (set by the Sales Command dashboard)
 
   const [stages, setStages] = useState([]);
   const [deals, setDeals] = useState([]);
@@ -93,14 +96,19 @@ export default function Deals() {
   // ---------- derived ----------
   const filtered = useMemo(() => {
     const s = q.toLowerCase();
-    if (!s) return deals;
-    return deals.filter((d) =>
-      (d.dealName || '').toLowerCase().includes(s) ||
-      (d.organizationId?.companyName || '').toLowerCase().includes(s) ||
-      (d.contactName || '').toLowerCase().includes(s) ||
-      (d.owner?.name || '').toLowerCase().includes(s)
-    );
-  }, [deals, q]);
+    return deals.filter((d) => {
+      if (dash.rep && idOf(d.owner) !== dash.rep) return false;
+      if (dash.focus === 'open' && CLOSED_STAGE_NAMES.includes(d.stage)) return false;
+      if (dash.focus === 'won' && d.stage !== 'Closed Won') return false;
+      if (!s) return true;
+      return (
+        (d.dealName || '').toLowerCase().includes(s) ||
+        (d.organizationId?.companyName || '').toLowerCase().includes(s) ||
+        (d.contactName || '').toLowerCase().includes(s) ||
+        (d.owner?.name || '').toLowerCase().includes(s)
+      );
+    });
+  }, [deals, q, dash.rep, dash.focus]);
 
   const columns = useMemo(() => {
     const map = Object.fromEntries(stageNames.map((n) => [n, []]));
@@ -234,6 +242,11 @@ export default function Deals() {
           <p className="text-sm text-slate-500">
             {filtered.length} deal{filtered.length === 1 ? '' : 's'} · drag a card to change its stage
           </p>
+          <DashboardFilterBanner
+            filter={dash}
+            label={dash.focus === 'won' ? 'Won deals' : dash.focus === 'open' ? 'Open deals' : ''}
+            className="mt-2"
+          />
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <div className="relative flex-1 sm:w-72">

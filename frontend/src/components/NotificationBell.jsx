@@ -292,7 +292,7 @@ const NotificationBell = () => {
     // ============================================
     // HANDLE ACTIVITY REMINDERS (meeting / call / task)
     // ============================================
-    if (notification.type === 'activity_reminder') {
+    if (['activity_reminder', 'task_assigned', 'task_update'].includes(notification.type)) {
       const reminderId = String(notification._id || '');
       setNotifications(prev => prev.filter(n => String(n._id) !== reminderId));
       setNotificationCount(prev => Math.max(0, prev - 1));
@@ -307,7 +307,7 @@ const NotificationBell = () => {
         console.error('Error marking reminder as read:', error);
       }
 
-      navigate(notification.link || '/sales/activities/meetings');
+      navigate(notification.link || (notification.type === 'activity_reminder' ? '/sales/activities/meetings' : '/sales/activities/tasks'));
       setTimeout(fetchNotificationCount, 500);
       return;
     }
@@ -498,6 +498,8 @@ const NotificationBell = () => {
       case 'open_ticket': return '📌';
       case 'new_announcement': return '📢';
       case 'activity_reminder': return '⏰';
+      case 'task_assigned': return '📝';
+      case 'task_update': return '✅';
       default: return '🔔';
     }
   };

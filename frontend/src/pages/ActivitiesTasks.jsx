@@ -8,6 +8,8 @@ import {
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import { getActivityLeadName } from '../utils/useAlphaPagination';
+import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
+import DashboardFilterBanner from '../components/DashboardFilterBanner';
 
 // "Completed" is a built-in stage (locked on the server): the Lead page treats it as finished.
 const DONE_STAGE = 'Completed';
@@ -22,11 +24,17 @@ const isOverdue = (task, stageName) => {
   return end < new Date();
 };
 
+const isClosedTask = (t) => t.status === DONE_STAGE || t.status === 'Cancelled';
+
 export default function ActivitiesTasks() {
   const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
   const canEdit = EDIT_ROLES.includes(localStorage.getItem('role') || '');
+  // Sales Manager sees the whole team's tasks (incl. ones they assigned); reps see their own + assigned to them.
+  const taskScope = localStorage.getItem('role') === 'Sales Manager' ? 'team' : 'mine';
+  const myId = localStorage.getItem('userId');
+  const dash = useDashboardFilter(); // ?rep=…&focus=open|overdue (set by the Sales Command dashboard)
 
   const [stages, setStages] = useState([]);   // [{ _id, name, locked, taskCount }]
   const [items, setItems] = useState([]);     // tasks
@@ -56,7 +64,7 @@ export default function ActivitiesTasks() {
       setLoading(true);
       const [s, t] = await Promise.all([
         axios.get(`${API_BASE_URL}/api/task-stages`, authHeader),
-        axios.get(`${API_BASE_URL}/api/lead-activities?type=task&scope=mine`, authHeader),
+        axios.get(`${API_BASE_URL}/api/lead-activities?type=task&scope=${taskScope}`, authHeader),
       ]);
       setStages(s.data?.data || []);
       setItems(t.data?.data || []);
@@ -82,14 +90,19 @@ export default function ActivitiesTasks() {
   // ---------- derived ----------
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    if (!s) return items;
-    return items.filter((i) =>
-      (i.title || '').toLowerCase().includes(s) ||
-      (i.content || '').toLowerCase().includes(s) ||
-      getActivityLeadName(i).toLowerCase().includes(s) ||
-      (i.leadId?.companyName || '').toLowerCase().includes(s)
-    );
-  }, [items, q]);
+    return items.filter((i) => {
+      if (dash.rep && idOf(ownerOf(i)) !== dash.rep) return false;
+      if (dash.focus === 'open' && isClosedTask(i)) return false;
+      if (dash.focus === 'overdue' && (isClosedTask(i) || !isOverdue(i, i.status))) return false;
+      if (!s) return true;
+      return (
+        (i.title || '').toLowerCase().includes(s) ||
+        (i.content || '').toLowerCase().includes(s) ||
+        getActivityLeadName(i).toLowerCase().includes(s) ||
+        (i.leadId?.companyName || '').toLowerCase().includes(s)
+      );
+    });
+  }, [items, q, dash.rep, dash.focus]);
 
   const columns = useMemo(() => {
     const map = Object.fromEntries(stageNames.map((n) => [n, []]));
@@ -218,6 +231,12 @@ export default function ActivitiesTasks() {
         </div>
       </div>
 
+      <DashboardFilterBanner
+        filter={dash}
+        label={dash.focus === 'overdue' ? 'Overdue tasks' : dash.focus === 'open' ? 'Open tasks' : ''}
+        className="mb-4"
+      />
+
       {loading ? (
         <div className="flex justify-center py-24"><Loader2 className="animate-spin text-blue-600" size={28} /></div>
       ) : (
@@ -318,6 +337,13 @@ export default function ActivitiesTasks() {
                         <p className="truncate">{leadName}</p>
                         {company && company !== leadName && <p className="truncate">{company}</p>}
                         <p className="font-semibold text-slate-700">{t.priority || 'Medium'} priority</p>
+                        {t.assignedTo && (
+                          <p className="text-[12px] font-semibold text-blue-600 truncate">
+                            {String(t.assignedTo._id) === String(myId)
+                              ? `Assigned by ${t.assignedBy?.name || 'your manager'}`
+                              : `Assigned to ${t.assignedTo.name}`}
+                          </p>
+                        )}
                       </div>
                       <p className={`text-[13px] mt-1 ${late ? 'text-red-500 font-semibold' : 'text-slate-500'}`}>
                         {fmtDate(t.dueAt)}

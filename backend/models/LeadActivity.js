@@ -7,10 +7,15 @@ const customFieldSchema = require('./customFieldSchema');
 const TASK_STAGES = ['Not Started', 'Deferred', 'In Progress', 'Completed', 'Waiting for input'];
 
 const leadActivitySchema = new mongoose.Schema({
+  // A lead is required for notes / meetings / calls / normal tasks.
+  // A task a Sales Manager assigns to a rep can stand on its own (no lead).
   leadId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Lead',
-    required: true,
+    required: function () {
+      return !(this.type === 'task' && this.assignedTo);
+    },
+    default: null,
     index: true
   },
 
@@ -22,8 +27,8 @@ const leadActivitySchema = new mongoose.Schema({
   },
 
   // Common
-  title:   { type: String, default: '' },      // short summary (used by task/meeting/call)
-  content: { type: String, default: '' },      // note body / description
+  title:   { type: String, default: '' },
+  content: { type: String, default: '' },
 
   // Scheduling (task / meeting / call)
   scheduledAt: { type: Date, default: null },
@@ -32,7 +37,7 @@ const leadActivitySchema = new mongoose.Schema({
 
   // Meeting-specific
   location:  { type: String, default: '' },
-  attendees: [{ type: String }],               // email or free text
+  attendees: [{ type: String }],
 
   // Call-specific
   callOutcome: {
@@ -48,9 +53,7 @@ const leadActivitySchema = new mongoose.Schema({
 
   // Status
   //  - meetings / calls use:  Open, Completed, Cancelled
-  //  - tasks use the NAME of a stage from the TaskStage collection (editable on the board)
-  //  - legacy tasks may still be 'Open' / 'Cancelled' (the board shows them in the
-  //    first stage / "Deferred")
+  //  - tasks use the NAME of a stage from the TaskStage collection
   status: { type: String, default: 'Open', trim: true },
 
   priority: {
@@ -62,12 +65,16 @@ const leadActivitySchema = new mongoose.Schema({
   // values of fields created in Customize Modules → Tasks / Meetings / Calls
   customFields: [customFieldSchema],
 
-  // Reminder bookkeeping — written by services/salesNotificationService.js so a
-  // reminder is sent exactly once, even across server restarts. Reset automatically
-  // (see pre-save hook below) when the meeting/call time or task due date changes.
+  // Reminder bookkeeping — written by services/salesNotificationService.js
   reminders: {
-    sent: { type: [Number], default: [] },   // minutes-before offsets already notified (0 = at start time)
+    sent: { type: [Number], default: [] },
   },
+
+  // ---------- Task assignment (Sales Manager → Sales rep) ----------
+  // Who has to DO the activity. null = the creator (old behaviour).
+  assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+  assignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  assignedAt: { type: Date, default: null },
 
   // Owner / audit
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -75,12 +82,13 @@ const leadActivitySchema = new mongoose.Schema({
 }, { timestamps: true });
 
 leadActivitySchema.index({ createdBy: 1, type: 1, createdAt: -1 });
+leadActivitySchema.index({ assignedTo: 1, type: 1, dueAt: 1 });
 leadActivitySchema.index({ type: 1, scheduledAt: 1 });
 leadActivitySchema.index({ type: 1, dueAt: 1 });
 
-// Re-arm reminders when an activity is rescheduled.
+// Re-arm reminders when an activity is rescheduled or handed to someone else.
 leadActivitySchema.pre('save', function (next) {
-  if (!this.isNew && (this.isModified('scheduledAt') || this.isModified('dueAt'))) {
+  if (!this.isNew && (this.isModified('scheduledAt') || this.isModified('dueAt') || this.isModified('assignedTo'))) {
     this.reminders = { sent: [] };
   }
 });

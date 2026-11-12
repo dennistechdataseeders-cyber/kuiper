@@ -437,6 +437,7 @@ app.use('/api/holidays', holidayRoutes);
 app.use('/api/work-report', workReportRoutes);
 app.use('/api/leads', leadRoutes);
 app.use('/api/lead-activities', require('./routes/leadActivityRoutes'));
+app.use('/api/sales-manager', protect, require('./routes/salesManagerRoutes')); // Sales Manager team overview
 app.use('/api/deals', dealRoutes);   // next to app.use('/api/leads', leadRoutes)
 app.use('/api/task-stages', require('./routes/taskStageRoutes'));
 app.use('/api/deal-stages', require('./routes/dealStageRoutes'));

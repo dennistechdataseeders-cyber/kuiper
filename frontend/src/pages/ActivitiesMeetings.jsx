@@ -21,6 +21,8 @@ import toast from 'react-hot-toast';
 import AlphabetFilter from '../components/AlphabetFilter';
 import Pagination from '../components/Pagination';
 import useAlphaPagination, { getActivityLeadName } from '../utils/useAlphaPagination';
+import useDashboardFilter, { filterActivities } from '../utils/useDashboardFilter';
+import DashboardFilterBanner from '../components/DashboardFilterBanner';
 
 // ============================================
 // HELPERS
@@ -127,7 +129,9 @@ const ActivitiesMeetings = () => {
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
-  const list = useAlphaPagination(items); // A–Z filter + pagination
+  const dash = useDashboardFilter(); // ?rep=…&focus=today&team=1 (set by the Sales Command dashboard)
+  const visibleItems = useMemo(() => filterActivities(items, dash), [items, dash]);
+  const list = useAlphaPagination(visibleItems); // A–Z filter + pagination
 
   // ---------------- modal state ----------------
   const [detail, setDetail] = useState(null); // the meeting being viewed
@@ -143,7 +147,7 @@ const ActivitiesMeetings = () => {
     try {
       setLoading(true);
       const res = await axios.get(
-        `${API_BASE_URL}/api/lead-activities?type=meeting&scope=mine`,
+        `${API_BASE_URL}/api/lead-activities?type=meeting&scope=${dash.team ? 'team' : 'mine'}`,
         authHeader
       );
       setItems(res.data.data || []);
@@ -153,7 +157,7 @@ const ActivitiesMeetings = () => {
     } finally {
       setLoading(false);
     }
-  }, [authHeader]);
+  }, [authHeader, dash.team]);
 
   useEffect(() => {
     fetchItems();
@@ -309,14 +313,15 @@ const ActivitiesMeetings = () => {
       </div>
 
       <div className="pl-10 pr-6 pt-[88px] pb-12">
+        <DashboardFilterBanner filter={dash} label={dash.focus === 'today' ? 'Meetings today' : ''} className="mb-4" />
         {loading ? (
           <div className="flex justify-center py-20">
             <Loader2 size={32} className="text-blue-600 animate-spin" />
           </div>
-        ) : items.length === 0 ? (
+        ) : visibleItems.length === 0 ? (
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-12 text-center">
             <Calendar size={36} className="mx-auto text-slate-300 mb-3" />
-            <p className="text-sm font-bold text-slate-500">No meetings yet</p>
+            <p className="text-sm font-bold text-slate-500">{dash.active ? 'No meetings match this filter' : 'No meetings yet'}</p>
             <p className="text-xs text-slate-400 mt-1">
               Open a lead and use <b>Activity → Add meeting</b> to schedule one.
             </p>
@@ -326,7 +331,7 @@ const ActivitiesMeetings = () => {
             <div className="flex items-center gap-3 mb-5">
               <AlphabetFilter value={list.letter} onChange={list.setLetter} />
               <div className="ml-auto text-xs font-bold text-slate-400">
-                {list.totalItems} of {items.length} meetings
+                {list.totalItems} of {visibleItems.length} meetings
               </div>
             </div>
 

@@ -191,15 +191,18 @@ class SalesNotificationService {
 
       if (!candidates.length) return;
 
+      // The person who has to DO the activity: the rep it was assigned to, else its creator.
+      const recipientOf = (a) => a.assignedTo || a.createdBy;
+
       const activeCreators = new Set(
         (await User.find({
-          _id: { $in: [...new Set(candidates.map((a) => String(a.createdBy)))] },
+          _id: { $in: [...new Set(candidates.map((a) => String(recipientOf(a))))] },
           isActive: { $ne: false },
         }).select('_id')).map((u) => String(u._id))
       );
 
       for (const activity of candidates) {
-        if (!activeCreators.has(String(activity.createdBy))) continue;
+        if (!activeCreators.has(String(recipientOf(activity)))) continue;
 
         const when = getRemindAt(activity);
         if (!when) continue;
@@ -227,10 +230,10 @@ class SalesNotificationService {
         try {
           await SalesNotificationService.deliver(
             this.io,
-            activity.createdBy,
+            recipientOf(activity),
             buildPayload(activity, latest, when.at, when.dateOnly)
           );
-          console.log(`🔔 reminder (-${latest}m) → user ${activity.createdBy}: ${activity.type} "${activity.title}"`);
+          console.log(`🔔 reminder (-${latest}m) → user ${recipientOf(activity)}: ${activity.type} "${activity.title}"`);
         } catch (err) {
           console.error('Reminder delivery failed, will retry next pass:', err.message);
           await LeadActivity.updateOne(
@@ -273,14 +276,17 @@ class SalesNotificationService {
         const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
         for (const user of salesUsers) {
+          // activities this rep has to do: assigned to them, or created by them and not handed off
+          const mine = { $or: [{ assignedTo: user._id }, { assignedTo: null, createdBy: user._id }] };
+
           const todaysActivities = await LeadActivity.find({
-            createdBy: user._id,
+            ...mine,
             scheduledAt: { $gte: startOfDay, $lte: endOfDay },
             status: { $nin: ['Completed', 'Cancelled'] }
           }).sort({ scheduledAt: 'asc' }).populate('leadId', 'companyName');
 
           const todaysTasks = await LeadActivity.find({
-            createdBy: user._id,
+            ...mine,
             type: 'task',
             dueAt: { $gte: startOfDay, $lte: endOfDay },
             status: { $nin: ['Completed', 'Cancelled'] }

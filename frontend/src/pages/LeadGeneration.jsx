@@ -1,4 +1,6 @@
 import { useLocation } from 'react-router-dom';
+import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
+import DashboardFilterBanner from '../components/DashboardFilterBanner';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useSidebar } from '../context/SidebarContext';
@@ -533,7 +535,10 @@ const LeadGeneration = () => {
   const [isOrgDropdownOpen, setIsOrgDropdownOpen] = useState(false);
   const orgDropdownRef = useRef(null);
 
-  const [filterStatus, setFilterStatus] = useState('Follow-up Scheduled');
+  const dash = useDashboardFilter(); // ?rep=…&focus=converted (set by the Sales Command dashboard)
+  const [filterStatus, setFilterStatus] = useState(
+    dash.focus === 'converted' ? 'Production Ready' : 'Follow-up Scheduled'
+  );
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -1020,10 +1025,11 @@ const handleProductionSubmit = async (e) => {
 
   const filteredLeads = generatedLeads.filter((lead) => {
     const matchesStatus = filterStatus === 'All' ? true : lead.status === filterStatus;
+    const matchesRep = !dash.rep || idOf(lead.salesRepId) === dash.rep;
     const formattedId = formatId(lead.leadNumber).toLowerCase();
     const pocName = lead.pocName?.toLowerCase() || "";
     const search = searchTerm.toLowerCase();
-    return matchesStatus && (pocName.includes(search) || formattedId.includes(search));
+    return matchesRep && matchesStatus && (pocName.includes(search) || formattedId.includes(search));
   });
 
   const indexOfLastItem = currentPage * itemsPerPage;
@@ -1118,6 +1124,12 @@ const handleProductionSubmit = async (e) => {
           New Lead
         </button>
       </div>
+
+      {dash.active && (
+        <div className="max-w-6xl mx-auto mb-4">
+          <DashboardFilterBanner filter={dash} label={dash.focus === 'converted' ? 'Converted leads' : ''} />
+        </div>
+      )}
 
       {/* SEARCH */}
       <div className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row gap-4 items-center">

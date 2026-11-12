@@ -65,6 +65,30 @@ const SalesNotifier = () => {
       });
     });
 
+    // A Sales Manager assigned (or nudged you about) a task → toast, desktop alert, voice,
+    // and refresh the bell + the "Assigned to you" panel on the dashboard.
+    socket.on('sales:task-assigned', (data) => {
+      window.dispatchEvent(new CustomEvent('notifications:refresh'));
+      window.dispatchEvent(new CustomEvent('tasks:refresh'));
+
+      if (!markSeen(data.notificationId)) return;
+
+      toast(data.message, { icon: '📝', duration: 10000, position: 'top-center' });
+
+      notificationManager.notifyUpcomingActivity(data, () => {
+        navigateRef.current(data.link || '/sales/activities/tasks');
+      });
+    });
+
+    // A rep completed a task the manager assigned → quiet toast + live refresh.
+    socket.on('sales:task-update', (data) => {
+      window.dispatchEvent(new CustomEvent('notifications:refresh'));
+      window.dispatchEvent(new CustomEvent('tasks:refresh'));
+
+      if (!markSeen(data.notificationId)) return;
+      toast.success(data.message, { duration: 6000, position: 'top-center' });
+    });
+
     return () => {
       socket.off('connect', joinRoom);
       socket.disconnect();

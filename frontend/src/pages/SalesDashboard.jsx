@@ -26,6 +26,7 @@ import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import { WidgetFrame, ViewAll, MoreLink } from '../components/dashboard/DashboardParts';
 import AnalyticsBuilderModal from '../components/dashboard/AnalyticsBuilderModal';
+import AssignedToMePanel from '../components/AssignedToMePanel';
 import {
   usePeriod, dayKey, fmtDate, fmtTime, fmtAmount, buildAllRecords, runAnalytics, autoTitle,
   MODULE_LIST, MODULE_ROUTE, DEFAULT_WIDGETS, chartColor,
@@ -626,6 +627,9 @@ const SalesDashboard = () => {
             {dirty && <span className="font-black text-amber-600">Unsaved changes</span>}
           </div>
         )}
+
+        {/* TASKS ASSIGNED BY THE SALES MANAGER */}
+        {!editing && <AssignedToMePanel />}
 
         {/* WIDGET GRID */}
         {visibleWidgets.length === 0 ? (

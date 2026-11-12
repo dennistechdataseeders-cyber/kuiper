@@ -647,7 +647,7 @@ function AppContent() {
                     <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/notifications" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Client', 'HR', 'Finance']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Client', 'HR', 'Finance','Sales Manager','Team Lead']}>
                         <NotificationSettings />
                       </ProtectedRoute>
                     } />

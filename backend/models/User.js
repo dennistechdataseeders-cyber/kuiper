@@ -192,7 +192,9 @@ const UserSchema = new mongoose.Schema({
         'new_announcement',
         'leave_balance_updated',
         'system', // ✅ Added for probation notifications
-        'activity_reminder' // ✅ Sales meeting / call / task reminders
+        'activity_reminder', // ✅ Sales meeting / call / task reminders
+        'task_assigned',     // ✅ Sales Manager assigned you a task
+        'task_update'        // ✅ A rep completed a task you assigned
       ]
     },
     ticketId: {
