@@ -191,7 +191,8 @@ const UserSchema = new mongoose.Schema({
         'leave_rejected',
         'new_announcement',
         'leave_balance_updated',
-        'system' // ✅ Added for probation notifications
+        'system', // ✅ Added for probation notifications
+        'activity_reminder' // ✅ Sales meeting / call / task reminders
       ]
     },
     ticketId: {
@@ -202,6 +203,13 @@ const UserSchema = new mongoose.Schema({
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Announcement'
     },
+    // activity_reminder fields
+    activityId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'LeadActivity'
+    },
+    activityType: { type: String, enum: ['meeting', 'call', 'task'] },
+    link: { type: String },
     message: {
       type: String,
       required: true

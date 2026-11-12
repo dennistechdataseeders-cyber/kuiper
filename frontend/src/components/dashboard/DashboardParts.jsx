@@ -4,7 +4,7 @@ import {
   ChevronLeft, ChevronRight, Loader2, List, Hash, BarChart3, PieChart, Filter,
   GripVertical, Pencil, Trash2, EyeOff,
 } from 'lucide-react';
-import { PALETTE, fmtAmount, fmtNumber } from './dashboardUtils';
+import { chartColor, fmtAmount, fmtNumber, fmtCompact } from './dashboardUtils';
 
 // ============================================
 // view types
@@ -144,45 +144,90 @@ const Bars = ({ rows, fmt }) => {
   );
 };
 
-const Donut = ({ rows, total, fmt }) => {
+// Every non-zero entry gets at least this share of the ring so tiny values stay visible
+// (the legend and tooltips still show the true percentage).
+const MIN_SLICE = 0.012;
+
+const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+const truncate = (str, n) => (str.length > n ? `${str.slice(0, n - 1)}…` : str);
+
+const Donut = ({ rows, total, fmt, money }) => {
+  const [active, setActive] = React.useState(null);
+
   const positive = rows.filter((r) => r.value > 0);
   const sum = positive.reduce((s, r) => s + r.value, 0);
   if (!sum) return <Empty text="No data for this period" />;
 
+  const pct = (v) => {
+    const p = (v / sum) * 100;
+    return p > 0 && p < 1 ? '<1%' : `${Math.round(p)}%`;
+  };
+
+  // Ring geometry
   const R = 42;
+  const STROKE = 16;
   const C = 2 * Math.PI * R;
+  const HOLE_WIDTH = 2 * (R - STROKE / 2) - 8; // usable width inside the ring
+
+  const shares = positive.map((r) => Math.max(r.value / sum, MIN_SLICE));
+  const shareSum = shares.reduce((a, b) => a + b, 0);
   let offset = 0;
+  const slices = positive.map((r, i) => {
+    const len = (shares[i] / shareSum) * C;
+    const slice = { r, len, offset };
+    offset += len;
+    return slice;
+  });
+
+  // Centre label: compact so it always fits the hole, and it follows the hovered slice.
+  const shown = active !== null ? positive[active] : null;
+  const main = fmtCompact(shown ? shown.value : total);
+  const sub = shown ? truncate(shown.label, 14) : money ? 'Rs. total' : 'Total';
+  const mainSize = clamp(HOLE_WIDTH / (main.length * 0.62), 8, 16);
 
   return (
     <div className="flex flex-wrap items-center gap-4">
       <svg viewBox="0 0 120 120" className="w-36 h-36 flex-shrink-0">
-        <circle cx="60" cy="60" r={R} fill="none" stroke="#f1f5f9" strokeWidth="16" />
-        {positive.map((r) => {
-          const len = (r.value / sum) * C;
-          const el = (
-            <circle
-              key={r.label}
-              cx="60" cy="60" r={R} fill="none"
-              stroke={r.color} strokeWidth="16"
-              strokeDasharray={`${len} ${C - len}`}
-              strokeDashoffset={-offset}
-              transform="rotate(-90 60 60)"
-            />
-          );
-          offset += len;
-          return el;
-        })}
-        <text x="60" y="64" textAnchor="middle" className="fill-slate-800" style={{ fontSize: 13, fontWeight: 900 }}>
-          {fmt(total)}
-        </text>
+        <circle cx="60" cy="60" r={R} fill="none" stroke="#f1f5f9" strokeWidth={STROKE} />
+        {slices.map(({ r, len, offset: off }, i) => (
+          <circle
+            key={`${r.label}-${i}`}
+            cx="60" cy="60" r={R} fill="none"
+            stroke={r.color}
+            strokeWidth={active === i ? STROKE + 3 : STROKE}
+            strokeDasharray={`${len} ${C - len}`}
+            strokeDashoffset={-off}
+            transform="rotate(-90 60 60)"
+            opacity={active === null || active === i ? 1 : 0.45}
+            style={{ transition: 'opacity 150ms, stroke-width 150ms', cursor: 'pointer' }}
+            onMouseEnter={() => setActive(i)}
+            onMouseLeave={() => setActive(null)}
+          >
+            <title>{`${r.label}: ${r.extra || fmt(r.value)} (${pct(r.value)})`}</title>
+          </circle>
+        ))}
+        <g pointerEvents="none">
+          <text x="60" y="60" textAnchor="middle" className="fill-slate-800" style={{ fontSize: mainSize, fontWeight: 900 }}>
+            {main}
+          </text>
+          <text x="60" y="72" textAnchor="middle" className="fill-slate-400" style={{ fontSize: 7.5, fontWeight: 700 }}>
+            {sub}
+          </text>
+        </g>
+        <title>{fmt(total)}</title>
       </svg>
       <div className="flex-1 min-w-[140px] space-y-1.5 max-h-40 overflow-y-auto pr-1">
-        {positive.map((r) => (
-          <div key={r.label} className="flex items-center gap-2 text-[11px]">
+        {positive.map((r, i) => (
+          <div
+            key={`${r.label}-${i}`}
+            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 transition-colors ${active === i ? 'bg-slate-50' : ''}`}
+            onMouseEnter={() => setActive(i)}
+            onMouseLeave={() => setActive(null)}
+          >
             <span className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ background: r.color }} />
             <span className="font-bold text-slate-700 truncate flex-1" title={r.label}>{r.label}</span>
             <span className="text-slate-500 whitespace-nowrap">
-              {r.extra || fmt(r.value)} · {Math.round((r.value / sum) * 100)}%
+              {r.extra || fmt(r.value)} · {pct(r.value)}
             </span>
           </div>
         ))}
@@ -226,11 +271,11 @@ const Funnel = ({ rows, fmt }) => {
 
 export const ChartView = ({ view, rows = [], total = 0, money = false, numberLabel }) => {
   const fmt = money ? fmtAmount : fmtNumber;
-  const colored = rows.map((r, i) => ({ ...r, color: r.color || PALETTE[i % PALETTE.length] }));
+  const colored = rows.map((r, i) => ({ ...r, color: r.color || chartColor(i) }));
 
   if (view === 'number') return <BigNumber value={fmt(total)} label={numberLabel} />;
   if (!colored.length) return <Empty text="No data for this period" />;
-  if (view === 'pie') return <Donut rows={colored} total={total} fmt={fmt} />;
+  if (view === 'pie') return <Donut rows={colored} total={total} fmt={fmt} money={money} />;
   if (view === 'funnel') return <Funnel rows={colored} fmt={fmt} />;
   return <Bars rows={colored} fmt={fmt} />;
 };

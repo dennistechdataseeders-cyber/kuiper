@@ -6,6 +6,7 @@ const { protect } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Announcement = require('../models/Announcement');
+const SalesNotificationService = require('../services/salesNotificationService');
 
 // ============================================
 // GET notification count - ONLY unread
@@ -424,6 +425,29 @@ router.get('/unread-count', protect, async (req, res) => {
   } catch (error) {
     console.error('Error fetching unread count:', error);
     res.status(500).json({ error: 'Failed to fetch unread count' });
+  }
+});
+
+// ============================================
+// POST /api/notifications/test-reminder
+// Sends a sample reminder to the logged-in user so the whole chain
+// (bucket entry + desktop notification + voice) can be checked without waiting.
+// ============================================
+router.post('/test-reminder', protect, async (req, res) => {
+  try {
+    await SalesNotificationService.deliver(global.io, req.user._id, {
+      stage: 'due',
+      type: 'meeting',
+      title: 'Meeting starting now',
+      message: 'Meeting "Test reminder" is starting now',
+      speech: 'Reminder. Meeting test reminder is starting now.',
+      link: '/sales/activities/meetings',
+      remindAt: new Date(),
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error sending test reminder:', error);
+    res.status(500).json({ error: 'Failed to send test reminder' });
   }
 });
 

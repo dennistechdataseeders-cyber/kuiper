@@ -235,16 +235,75 @@ class NotificationManager {
     });
   }
 
-  // ✅ NEW: Notify for upcoming activities (meetings/calls)
-  notifyUpcomingActivity(data) {
-    return this.show({
-      title: `🔔 Upcoming ${data.type}`,
+  // ---------------------------------------------------------------
+  // Voice (Web Speech API)
+  // ---------------------------------------------------------------
+  isVoiceEnabled() {
+    try {
+      return localStorage.getItem('notif_voice') !== 'off';
+    } catch {
+      return true;
+    }
+  }
+
+  setVoiceEnabled(enabled) {
+    try {
+      localStorage.setItem('notif_voice', enabled ? 'on' : 'off');
+    } catch { /* storage unavailable – setting just won't persist */ }
+  }
+
+  // Prefer an Indian-English voice, then any English voice, else the browser default.
+  pickVoice() {
+    const voices = window.speechSynthesis.getVoices() || [];
+    return (
+      voices.find((v) => v.lang === 'en-IN') ||
+      voices.find((v) => v.lang && v.lang.toLowerCase().startsWith('en')) ||
+      null
+    );
+  }
+
+  // Speak a short phrase. `force` bypasses the mute setting (used by the test button).
+  speak(text, { repeat = 1, force = false } = {}) {
+    if (!text || !('speechSynthesis' in window)) return false;
+    if (!force && !this.isVoiceEnabled()) return false;
+
+    try {
+      const synth = window.speechSynthesis;
+      for (let i = 0; i < repeat; i += 1) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-IN';
+        utterance.rate = 0.95;
+        utterance.volume = 1;
+        const voice = this.pickVoice();
+        if (voice) utterance.voice = voice;
+        synth.speak(utterance); // utterances queue, so repeats play back to back
+      }
+      return true;
+    } catch (error) {
+      console.log('Speech not supported:', error);
+      return false;
+    }
+  }
+
+  // ✅ Upcoming / due activity (meeting, call, task): desktop notification + chime + voice
+  notifyUpcomingActivity(data, onClick) {
+    const notification = this.show({
+      title: `🔔 ${data.title || `Upcoming ${data.type}`}`,
       body: data.message,
-      tag: `activity-${data.activityId}-${data.type}`,
-      data: { url: `/sales/activities/${data.type}s` }, // Navigate to the respective activities page
-      priority: 'urgent', // Plays the urgent sound
-      requireInteraction: true, // Stays on screen
+      tag: `activity-${data.activityId}-${data.offset ?? data.stage ?? 'early'}`,
+      data: { url: data.link },
+      priority: 'urgent', // Plays the urgent chime
+      requireInteraction: true, // Stays on screen until dismissed
+      onClick,
     });
+
+    // Voice works even when desktop-notification permission was not granted.
+    // Slight delay so it does not talk over the chime.
+    setTimeout(() => {
+      this.speak(data.speech || data.message, { repeat: data.stage === 'due' ? 2 : 1 });
+    }, 450);
+
+    return notification;
   }
 
   // Reset audio context on user interaction

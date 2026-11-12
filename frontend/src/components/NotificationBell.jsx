@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock, Megaphone } from 'lucide-react';
+import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock, Megaphone, Volume2, VolumeX } from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
 import notificationManager from '../utils/notifications';
@@ -25,6 +25,10 @@ const NotificationBell = () => {
   const dropdownRef = useRef(null);
   const buttonRef = useRef(null);
   const currentUserId = localStorage.getItem('userId');
+  const canTestReminders = ['Sales', 'Sales Manager'].includes(localStorage.getItem('role'));
+  const [voiceOn, setVoiceOn] = useState(() => notificationManager.isVoiceEnabled());
+  const showDropdownRef = useRef(false);
+  showDropdownRef.current = showDropdown;
 
   // Handle resize for mobile detection
   useEffect(() => {
@@ -50,6 +54,17 @@ const NotificationBell = () => {
     const interval = setInterval(fetchNotificationCount, 30000);
     
     return () => clearInterval(interval);
+  }, []);
+
+  // Meeting / call / task reminders arrive through SalesNotifier and are already stored
+  // in the bucket – it just tells us to reload the count (and the list if it is open).
+  useEffect(() => {
+    const refresh = () => {
+      fetchNotificationCount();
+      if (showDropdownRef.current) fetchNotifications();
+    };
+    window.addEventListener('notifications:refresh', refresh);
+    return () => window.removeEventListener('notifications:refresh', refresh);
   }, []);
 
   // Socket listener for real-time announcement updates
@@ -217,9 +232,10 @@ const NotificationBell = () => {
 
   // Handle bell click
   const handleBellClick = () => {
-    if (permission !== 'granted') {
+    // Ask for desktop-notification permission the first time, but always open the bucket –
+    // reminders are stored there even when desktop alerts are off.
+    if (permission === 'default') {
       requestNotificationPermission();
-      return;
     }
     
     const newShowState = !showDropdown;
@@ -273,6 +289,29 @@ const NotificationBell = () => {
       return;
     }
     
+    // ============================================
+    // HANDLE ACTIVITY REMINDERS (meeting / call / task)
+    // ============================================
+    if (notification.type === 'activity_reminder') {
+      const reminderId = String(notification._id || '');
+      setNotifications(prev => prev.filter(n => String(n._id) !== reminderId));
+      setNotificationCount(prev => Math.max(0, prev - 1));
+      setShowDropdown(false);
+
+      try {
+        const token = localStorage.getItem('token');
+        await axios.patch(`${API_BASE_URL}/api/notifications/${reminderId}/read`, {}, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (error) {
+        console.error('Error marking reminder as read:', error);
+      }
+
+      navigate(notification.link || '/sales/activities/meetings');
+      setTimeout(fetchNotificationCount, 500);
+      return;
+    }
+
     // ============================================
     // HANDLE TICKET NOTIFICATIONS
     // ============================================
@@ -406,6 +445,30 @@ const NotificationBell = () => {
     }
   };
 
+  const toggleVoice = () => {
+    const next = !voiceOn;
+    notificationManager.setVoiceEnabled(next);
+    setVoiceOn(next);
+    if (next) {
+      notificationManager.speak('Voice reminders are on.', { force: true });
+    } else if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+  };
+
+  // Sends a sample reminder through the real pipeline (bucket + desktop alert + voice)
+  const sendTestReminder = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API_BASE_URL}/api/notifications/test-reminder`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (error) {
+      console.error('Error sending test reminder:', error);
+      toast.error('Could not send test reminder');
+    }
+  };
+
   // Request notification permission
   const requestNotificationPermission = async () => {
     const granted = await notificationManager.requestPermission();
@@ -434,6 +497,7 @@ const NotificationBell = () => {
       case 'ticket_closed': return '✅';
       case 'open_ticket': return '📌';
       case 'new_announcement': return '📢';
+      case 'activity_reminder': return '⏰';
       default: return '🔔';
     }
   };
@@ -462,7 +526,7 @@ const NotificationBell = () => {
 
   // Render dropdown
   const renderDropdown = () => {
-    if (!showDropdown || permission !== 'granted') return null;
+    if (!showDropdown) return null;
 
     const dropdownWidth = isMobile ? window.innerWidth - 32 : 380;
     const maxWidth = Math.min(dropdownWidth, 400);
@@ -502,15 +566,49 @@ const NotificationBell = () => {
                 </span>
               )}
             </div>
-            {(notificationCount + announcementCount) > 0 && (
+            <div className="flex items-center gap-2">
+              {canTestReminders && (
+                <button
+                  onClick={sendTestReminder}
+                  className="text-[10px] text-gray-500 hover:text-gray-800 font-medium border border-gray-200 rounded px-1.5 py-0.5"
+                  title="Send a sample meeting reminder to check desktop alert and voice"
+                >
+                  Test
+                </button>
+              )}
               <button
-                onClick={markAllAsRead}
-                className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                onClick={toggleVoice}
+                className={`p-1 rounded ${voiceOn ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                title={voiceOn ? 'Voice reminders on (click to mute)' : 'Voice reminders muted'}
               >
-                Clear all
+                {voiceOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
               </button>
-            )}
+              {(notificationCount + announcementCount) > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
           </div>
+
+          {/* Desktop-alert permission hint */}
+          {isSupported && permission !== 'granted' && (
+            <div className="px-3 py-2 bg-amber-50 border-b border-amber-100 text-xs text-amber-800 flex items-center justify-between gap-2">
+              {permission === 'denied' ? (
+                <span>Desktop alerts are blocked. Allow notifications for this site in your browser settings.</span>
+              ) : (
+                <>
+                  <span>Turn on desktop alerts for meeting reminders.</span>
+                  <button onClick={requestNotificationPermission} className="font-semibold text-amber-900 underline whitespace-nowrap">
+                    Enable
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           
           {/* Notifications List */}
           <div className="flex-1 overflow-y-auto">

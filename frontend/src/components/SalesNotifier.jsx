@@ -1,62 +1,77 @@
 // frontend/src/components/SalesNotifier.jsx
-import { useEffect } from 'react';
+//
+// Listens for meeting / call / task reminders pushed by the server and, for each one:
+//   • shows a desktop notification (OS-level, works while the tab is in the background)
+//   • speaks the reminder aloud
+//   • shows an in-app toast
+//   • asks the NotificationBell to refresh (the reminder is already stored in the bucket)
+//
+// Mounted once in App.jsx.
+import { useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
+import { useLocation, useNavigate } from 'react-router-dom';
 import notificationManager from '../utils/notifications';
 import API_BASE_URL from '../config';
-import { useNavigate } from 'react-router-dom';
+
+// Roles that can create meetings / calls / tasks (see backend leadActivityRoutes).
+const ACTIVITY_ROLES = ['Sales', 'Sales Manager', 'Admin', 'Super Admin', 'Project Manager'];
+const SEEN_KEY = 'reminder_seen_ids';
+
+// With several tabs open every tab gets the event; only the first one should speak.
+const markSeen = (id) => {
+  if (!id) return true;
+  try {
+    const seen = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]');
+    if (seen.includes(id)) return false;
+    localStorage.setItem(SEEN_KEY, JSON.stringify([...seen, id].slice(-50)));
+  } catch {
+    /* storage unavailable – fall through and notify */
+  }
+  return true;
+};
 
 const SalesNotifier = () => {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
+
+  // Re-render on every route change so a login that happens inside the SPA
+  // (localStorage is written, then we navigate) is picked up without a page refresh.
+  useLocation();
+  const token = localStorage.getItem('token');
+  const userId = localStorage.getItem('userId');
+  const role = localStorage.getItem('role');
+  const enabled = Boolean(token && userId && ACTIVITY_ROLES.includes(role));
 
   useEffect(() => {
-    const userRole = localStorage.getItem('role');
-    const userId = localStorage.getItem('userId');
-    const token = localStorage.getItem('token');
+    if (!enabled) return undefined;
 
-    if (userRole !== 'Sales' || !userId || !token) {
-      return;
-    }
+    const socket = io(API_BASE_URL, { auth: { token } });
 
-    const socket = io(API_BASE_URL, {
-      auth: { token },
-    });
-
-    socket.on('connect', () => {
-      console.log('🔌 SalesNotifier socket connected');
-      socket.emit('join-user-room', userId);
-    });
+    const joinRoom = () => socket.emit('join-user-room', userId); // also runs on every reconnect
+    socket.on('connect', joinRoom);
 
     socket.on('sales:upcoming-activity', (data) => {
-      console.log('📢 Received upcoming activity:', data);
+      // Always refresh the bell – the reminder is already in the bucket.
+      window.dispatchEvent(new CustomEvent('notifications:refresh'));
 
-      // 1. Show an in-app toast
-      toast.success(data.message, {
-        icon: '⏰',
-        duration: 8000, // Keep it visible longer
-        position: 'top-center',
+      if (!markSeen(data.notificationId)) return;
+
+      toast(data.message, { icon: '⏰', duration: 10000, position: 'top-center' });
+
+      notificationManager.notifyUpcomingActivity(data, () => {
+        navigateRef.current(data.link || '/sales/activities/meetings');
       });
-
-      // 2. Trigger the desktop notification
-      const notification = notificationManager.notifyUpcomingActivity(data);
-      if (notification) {
-        notification.onclick = () => {
-          window.focus();
-          navigate('/sales/activities/meetings'); // Or navigate to a specific detail view
-          notification.close();
-        };
-      }
     });
-    
-    // Optional: Also listen for "sales:daily-alert" if you want an in-app banner
-    // socket.on('sales:daily-alert', (data) => { ... });
 
     return () => {
+      socket.off('connect', joinRoom);
       socket.disconnect();
     };
-  }, [navigate]);
+  }, [enabled, token, userId]);
 
-  return null; // This component doesn't render anything
+  return null; // renders nothing
 };
 
 export default SalesNotifier;

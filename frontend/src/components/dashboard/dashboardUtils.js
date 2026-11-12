@@ -10,6 +10,23 @@ export const PALETTE = [
   '#f59e0b', '#f97316', '#ec4899', '#22c55e', '#64748b',
 ];
 
+// Colour for the i-th series. The fixed palette is used first; beyond it, colours are
+// generated with the golden angle so any number of stages/entries stay visually distinct
+// (PALETTE[i % length] would start repeating colours after 10 entries).
+export const chartColor = (i) =>
+  i < PALETTE.length ? PALETTE[i] : `hsl(${Math.round((i * 137.508) % 360)} 62% 50%)`;
+
+// Compact Indian-style number for tight spaces: 12,300 Cr / 4.5 L / 25 K
+export const fmtCompact = (n) => {
+  const v = Number(n || 0);
+  const a = Math.abs(v);
+  const f = (x) => x.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  if (a >= 1e7) return `${f(v / 1e7)} Cr`;
+  if (a >= 1e5) return `${f(v / 1e5)} L`;
+  if (a >= 1e3) return `${f(v / 1e3)} K`;
+  return f(v);
+};
+
 export const MODULE_LIST = ['Leads', 'Contacts', 'Accounts', 'Deals', 'Tasks', 'Meetings', 'Calls'];
 
 export const MODULE_ROUTE = {

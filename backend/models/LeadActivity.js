@@ -62,12 +62,28 @@ const leadActivitySchema = new mongoose.Schema({
   // values of fields created in Customize Modules → Tasks / Meetings / Calls
   customFields: [customFieldSchema],
 
+  // Reminder bookkeeping — written by services/salesNotificationService.js so a
+  // reminder is sent exactly once, even across server restarts. Reset automatically
+  // (see pre-save hook below) when the meeting/call time or task due date changes.
+  reminders: {
+    sent: { type: [Number], default: [] },   // minutes-before offsets already notified (0 = at start time)
+  },
+
   // Owner / audit
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
 
 }, { timestamps: true });
 
 leadActivitySchema.index({ createdBy: 1, type: 1, createdAt: -1 });
+leadActivitySchema.index({ type: 1, scheduledAt: 1 });
+leadActivitySchema.index({ type: 1, dueAt: 1 });
+
+// Re-arm reminders when an activity is rescheduled.
+leadActivitySchema.pre('save', function (next) {
+  if (!this.isNew && (this.isModified('scheduledAt') || this.isModified('dueAt'))) {
+    this.reminders = { sent: [] };
+  }
+});
 
 module.exports =
   mongoose.models.LeadActivity ||

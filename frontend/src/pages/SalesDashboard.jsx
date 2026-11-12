@@ -28,7 +28,7 @@ import { WidgetFrame, ViewAll, MoreLink } from '../components/dashboard/Dashboar
 import AnalyticsBuilderModal from '../components/dashboard/AnalyticsBuilderModal';
 import {
   usePeriod, dayKey, fmtDate, fmtTime, fmtAmount, buildAllRecords, runAnalytics, autoTitle,
-  MODULE_LIST, MODULE_ROUTE, DEFAULT_WIDGETS, PALETTE,
+  MODULE_LIST, MODULE_ROUTE, DEFAULT_WIDGETS, chartColor,
 } from '../components/dashboard/dashboardUtils';
 
 // ---------- constants ----------
@@ -102,13 +102,13 @@ const Widget = ({ w, ctx, ed }) => {
   const views = w.kind === 'custom' ? CUSTOM_VIEWS : meta?.views || ['list'];
   const view = views.includes(w.view) ? w.view : views[0];
 
-  const stageColor = (name) => PALETTE[Math.max(0, orderedStages.findIndex((s) => s.name === name)) % PALETTE.length];
+  const stageColor = (name) => chartColor(Math.max(0, orderedStages.findIndex((s) => s.name === name)));
   const buildStageStats = (list) =>
     orderedStages.map((stage, i) => {
       const inStage = list.filter((d) => normalizeStage(d.stage) === stage.name);
       return {
         name: stage.name,
-        color: PALETTE[i % PALETTE.length],
+        color: chartColor(i),
         count: inStage.length,
         amount: inStage.reduce((sum, d) => sum + Number(d.amount || 0), 0),
       };
