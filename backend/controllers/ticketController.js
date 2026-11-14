@@ -1626,15 +1626,31 @@ exports.updateStatus = async (req, res) => {
 
     const oldStatus = ticket.status;
     ticket.status = status;
+    const now = new Date();
     
+    if (status === 'In Progress' && !ticket.startedAt) {
+      ticket.startedAt = now;
+    }
     if (status === 'Resolved') {
-      ticket.resolvedAt = new Date();
+      ticket.resolvedAt = now;
     }
     if (status === 'Closed') {
-      ticket.closedAt = new Date();
+      ticket.closedAt = now;
       if (!ticket.resolvedAt) {
-        ticket.resolvedAt = new Date();
+        ticket.resolvedAt = now;
       }
+    }
+
+    // Keep a timeline of status changes for the Progress bar tooltips
+    if (oldStatus !== status) {
+      ticket.statusHistory = ticket.statusHistory || [];
+      ticket.statusHistory.push({
+        status,
+        from: oldStatus,
+        at: now,
+        by: req.user._id,
+        byName: req.user.name || '',
+      });
     }
     
     await ticket.save();

@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { groupLeaves, leaveActionUrl, LeaveBreakdown } from '../utils/leaveGroups';
 import LeaveBalanceEditor from '../components/LeaveBalanceEditor';
 
 // ============================================
@@ -137,7 +138,7 @@ const HrDashboard = () => {
         pendingCorrections: statsData.pendingCorrections || 0,
         attendanceRate: statsData.attendanceRate || 0
       });
-      setPendingLeaves(leavesRes.data.data || []);
+      setPendingLeaves(groupLeaves(leavesRes.data.data || [])); // one row per leave request
       setPendingCorrections(correctionsRes.data.data || []);
     } catch (error) {
       console.error('Error fetching HR data:', error);
@@ -444,10 +445,11 @@ const HrDashboard = () => {
   const handleApproveLeave = async (leaveId) => {
     setProcessing(true);
     try {
-      await axios.patch(`${API_BASE_URL}/api/leave-bucket/${leaveId}/approve`, {}, authHeader);
+      await axios.patch(leaveActionUrl(API_BASE_URL, leaveId, 'approve'), {}, authHeader);
       toast.success('Leave approved successfully!');
       setShowLeaveModal(false);
       fetchData();
+      fetchAllEmployeesForEdit(); // balance changed → refresh the Paid Leave list
     } catch (error) {
       toast.error(error.response?.data?.error || 'Failed to approve leave');
     } finally {
@@ -463,7 +465,7 @@ const HrDashboard = () => {
     setProcessing(true);
     try {
       await axios.patch(
-        `${API_BASE_URL}/api/leave-bucket/${leaveId}/reject`,
+        leaveActionUrl(API_BASE_URL, leaveId, 'reject'),
         { rejectionReason: rejectionReason.trim() },
         authHeader
       );
@@ -1003,6 +1005,7 @@ const HrDashboard = () => {
                           {leave.leaveType} • {formatDate(leave.startDate)} -{' '}
                           {formatDate(leave.endDate)}
                           {leave.isHalfDay && ' (Half Day)'}
+                          {leave.isGroup && ` • ${leave.totalDays} day(s)`}
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5">
                           {leave.reason}
@@ -1567,6 +1570,7 @@ const HrDashboard = () => {
                     Half Day
                   </div>
                 )}
+                <LeaveBreakdown leave={selectedLeave} className="mt-3 pt-3 border-t border-slate-200" />
                 <div className="mt-3 pt-3 border-t border-slate-200">
                   <p className="text-[10px] font-black text-slate-400 uppercase">
                     Reason

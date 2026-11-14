@@ -317,3 +317,50 @@ exports.adjustEmployeeBalance = async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 };
+
+// ============================================
+// ✅ ONE-SHOT LEAVE REQUEST (paid + unpaid + half days in one go)
+// ============================================
+exports.previewLeave = async (req, res) => {
+  try {
+    const plan = await leaveBucketService.planLeave(req.user._id, req.body || {});
+    res.json({ success: true, data: plan });
+  } catch (error) {
+    console.error('Error previewing leave:', error);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.applyLeaveRequest = async (req, res) => {
+  try {
+    const result = await leaveBucketService.applyLeaveRequest(req.user._id, req.body || {});
+    res.status(201).json({
+      success: true,
+      data: { requestGroupId: result.requestGroupId, totals: result.plan.totals, pieces: result.pieces.length },
+      message: 'Leave request submitted. HR has been notified.',
+    });
+  } catch (error) {
+    console.error('Error applying for leave request:', error.message);
+    res.status(400).json({ error: error.message, plan: error.plan || null });
+  }
+};
+
+exports.approveLeaveGroup = async (req, res) => {
+  try {
+    const result = await leaveBucketService.approveLeaveGroup(req.params.groupId, req.user._id);
+    res.json({ success: true, data: result, message: 'Leave request approved' });
+  } catch (error) {
+    console.error('Error approving leave request:', error.message);
+    res.status(400).json({ error: error.message });
+  }
+};
+
+exports.rejectLeaveGroup = async (req, res) => {
+  try {
+    const result = await leaveBucketService.rejectLeaveGroup(req.params.groupId, req.body?.rejectionReason || '', req.user._id);
+    res.json({ success: true, data: result, message: 'Leave request rejected' });
+  } catch (error) {
+    console.error('Error rejecting leave request:', error.message);
+    res.status(400).json({ error: error.message });
+  }
+};

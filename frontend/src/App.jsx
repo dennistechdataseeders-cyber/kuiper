@@ -55,6 +55,9 @@ import Accounts from './pages/Accounts';
 import Contacts from './pages/Contacts'; 
 import CreateAccount from './pages/CreateAccount';
 import Deals from './pages/Deals';
+import AccountDetail from './pages/AccountDetail';
+import ContactDetail from './pages/ContactDetail';
+import DealDetail from './pages/DealDetail';
 import CustomizeModules from './pages/CustomizeModules';
 
 // ============================================
@@ -63,6 +66,7 @@ import CustomizeModules from './pages/CustomizeModules';
 import ActivitiesTasks from './pages/ActivitiesTasks';
 import ActivitiesMeetings from './pages/ActivitiesMeetings';
 import ActivitiesCalls from './pages/ActivitiesCalls';
+import ActivityDetail from './pages/ActivityDetail';
 
 // ============================================
 // HRMS IMPORTS
@@ -453,6 +457,9 @@ function AppContent() {
                     <Route path="/sales/deals" element={<Deals />} />   
                     <Route path="/sales/accounts/new" element={<CreateAccount />} />
                     <Route path="/sales/contacts" element={<Contacts />} />
+                    <Route path="/sales/accounts/:id" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><AccountDetail /></ProtectedRoute>} />
+                    <Route path="/sales/contacts/:accountId/:pocId" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><ContactDetail /></ProtectedRoute>} />
+                    <Route path="/sales/deals/:id" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><DealDetail /></ProtectedRoute>} />
                     
                     <Route path="/sales/email-trigger" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
@@ -471,6 +478,11 @@ function AppContent() {
                     <Route path="/sales/activities/meetings" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
                         <ActivitiesMeetings />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/sales/activity/:id" element={
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
+                        <ActivityDetail />
                       </ProtectedRoute>
                     } />
                     <Route path="/sales/activities/calls" element={

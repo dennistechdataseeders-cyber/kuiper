@@ -1657,17 +1657,30 @@ router.get('/attendance/employee-report', async (req, res) => {
       punchMap[empId][dateStr] = log;
     });
 
+    // Per employee + date: add up every approved leave piece on that day.
+    // A one-shot request can put ½ Paid + ½ Unpaid on the same date, so we
+    // keep paid / unpaid amounts instead of letting one piece overwrite the other.
     const leaveMap = {};
     leaves.forEach(leave => {
       const empId = leave.employeeId.toString();
       const start = new Date(leave.startDate);
       const end = new Date(leave.endDate);
+      const amount = leave.isHalfDay ? 0.5 : 1;
+      const isUnpaid = String(leave.leaveType || '').toLowerCase().includes('unpaid');
       const cur = new Date(start);
       while (cur <= end) {
         const dateStr = getISTDateStringLocal(cur);
         if (dateStr) {
           if (!leaveMap[empId]) leaveMap[empId] = {};
-          leaveMap[empId][dateStr] = leave;
+          const day = leaveMap[empId][dateStr] || { paid: 0, unpaid: 0, isHalfDay: true, leaveType: null };
+          if (isUnpaid) day.unpaid = Math.min(1, day.unpaid + amount);
+          else day.paid = Math.min(1, day.paid + amount);
+          if (day.paid + day.unpaid > 1) { // never more than one day of leave per date
+            if (isUnpaid) day.unpaid = 1 - day.paid; else day.paid = 1 - day.unpaid;
+          }
+          day.isHalfDay = day.paid + day.unpaid < 1;
+          day.leaveType = day.paid && day.unpaid ? 'Paid + Unpaid' : day.unpaid ? 'Unpaid Leave' : 'Paid Leave';
+          leaveMap[empId][dateStr] = day;
         }
         cur.setDate(cur.getDate() + 1);
       }
@@ -1815,8 +1828,11 @@ router.get('/attendance/employee-report', async (req, res) => {
           leaveType: status === 'leave' && onLeave ? onLeave.leaveType : null,
           leaveDays:
             status === 'leave' && onLeave && !isHoliday
-              ? (onLeave.isHalfDay ? 0.5 : 1)
-              : 0
+              ? onLeave.paid + onLeave.unpaid
+              : 0,
+          // ✅ split per day (e.g. 0.5 paid + 0.5 unpaid on the same date)
+          paidLeaveDays: status === 'leave' && onLeave && !isHoliday ? onLeave.paid : 0,
+          unpaidLeaveDays: status === 'leave' && onLeave && !isHoliday ? onLeave.unpaid : 0
         });
 
         current.setUTCDate(current.getUTCDate() + 1);

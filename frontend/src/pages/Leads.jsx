@@ -11,7 +11,15 @@ import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import LeadDetail, { ActivityModal } from '../components/LeadDetail';
 import EditableSelect from '../components/EditableSelect';
-import LeadFilterBar, { matchesFilters } from '../components/LeadFilterBar';
+import ZohoFilterSidebar, {
+  FilterLayout, FilterToggleButton, EMPTY_FILTERS, applyAllFilters, countActiveFilters,
+} from '../components/ZohoFilterSidebar';
+import useColumnTable from '../utils/useColumnTable';
+import { ColumnHead, ColumnToolbar } from '../components/ColumnTable';
+import useRecordTags, { useRowSelection } from '../utils/useRecordTags';
+import {
+  selectionColumn, tagsColumn, tagFilterField, TagToolbar, TagDialogs, useTagDialogs,
+} from '../components/RecordTags';
 
 // ============================================
 // COUNTRY OPTIONS
@@ -273,6 +281,19 @@ const buildEmptyForm = () => ({
 
 const ALPHABETS = ['All', ...'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')];
 
+// ---- Zoho-style filter panel definitions ----
+// "Touched" = the record was edited after it was created (no activity counter exists on a Lead).
+const isTouched = (l) =>
+  !!l.updatedAt && !!l.createdAt &&
+  new Date(l.updatedAt).getTime() - new Date(l.createdAt).getTime() > 60 * 1000;
+
+const LEAD_SYSTEM_FILTERS = [
+  { key: 'touched',     label: 'Touched Records',   test: (l) => isTouched(l) },
+  { key: 'untouched',   label: 'Untouched Records', test: (l) => !isTouched(l) },
+  { key: 'converted',   label: 'Converted Leads',   test: (l) => !!l.isConverted },
+  { key: 'unconverted', label: 'Unconverted Leads', test: (l) => !l.isConverted },
+];
+
 export default function Leads() {
   const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
@@ -280,6 +301,12 @@ export default function Leads() {
 
   const [view, setView] = useState('list');
   const [selectedLead, setSelectedLead] = useState(null);
+
+  // ---- Zoho-style tags ----
+  const tagsApi = useRecordTags('Leads');
+  const sel = useRowSelection();
+  const tagDialogs = useTagDialogs();
+  const { namesOf: tagNamesOfLead, tagNames: leadTagNames } = tagsApi;
 
   const [quickMenu, setQuickMenu] = useState(null);
   const [quickModal, setQuickModal] = useState(null);
@@ -293,7 +320,8 @@ export default function Leads() {
   // ✅ Filter bar state
   const [filterSchema, setFilterSchema] = useState([]);
   const [filtersLoading, setFiltersLoading] = useState(true);
-  const [filters, setFilters] = useState([]);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [showFilters, setShowFilters] = useState(true);
 
   const [fieldSchema, setFieldSchema] = useState(FALLBACK_FIELDS);
   const [form, setForm] = useState(buildEmptyForm);
@@ -306,6 +334,18 @@ export default function Leads() {
   // ============================================
   // FETCH LEADS
   // ============================================
+  // /sales/leads?open=<leadId> (e.g. "Open lead" on a task / meeting) → open that lead's detail
+  useEffect(() => {
+    const openId = new URLSearchParams(window.location.search).get('open');
+    if (!openId || !leads.length) return;
+    const hit = leads.find((l) => String(l._id) === openId);
+    if (hit) {
+      setSelectedLead(hit);
+      setView('detail');
+      window.history.replaceState(null, '', window.location.pathname);
+    }
+  }, [leads]);
+
   const fetchLeads = async () => {
     try {
       setListLoading(true);
@@ -392,6 +432,43 @@ export default function Leads() {
     return `${p.firstName || ''} ${p.lastName || ''}`.trim() || lead.companyName || '—';
   };
 
+  // value of any filter field for a lead (contact fields come from the primary contact)
+  const getLeadFieldValue = (lead, key) => {
+    if (['firstName', 'lastName', 'email', 'phone', 'mobile', 'title'].includes(key)) {
+      const p = getPrimaryContact(lead);
+      return p ? (p[key] ?? '') : '';
+    }
+    if (key === 'company') return lead.companyName;
+    if (key === 'leadOwner') return lead.leadOwner?.name || 'Unassigned';
+    if (key === 'createdAt') return lead.createdAt;
+    if (key.includes('.')) {
+      const [k, sub] = key.split('.');
+      return lead[k]?.[sub] ?? '';
+    }
+    if (['industry', 'leadSource', 'leadStatus', 'rating', 'website', 'noOfEmployees'].includes(key)) {
+      return lead[key] ?? '';
+    }
+    const dyn = (lead.dynamicFields || []).find((f) => f.fieldKey === key); // custom fields
+    return dyn ? dyn.value : '';
+  };
+
+  const filterFields = useMemo(() => {
+    const fromSchema = (filterSchema || []).map((f) => ({
+      key: f.fieldKey,
+      label: f.label,
+      type: f.type === 'select' ? 'select' : f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text',
+      options: f.type === 'select' ? (f.distinctValues?.length ? f.distinctValues : f.options) : undefined,
+      getValue: (lead) => getLeadFieldValue(lead, f.fieldKey),
+    }));
+    return [
+      ...fromSchema,
+      { key: 'leadOwner', label: 'Lead Owner',   type: 'select', getValue: (l) => getLeadFieldValue(l, 'leadOwner') },
+      { key: 'createdAt', label: 'Created Time', type: 'date',   getValue: (l) => getLeadFieldValue(l, 'createdAt') },
+      tagFilterField({ namesOf: tagNamesOfLead, tagNames: leadTagNames }, (l) => l._id),
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterSchema, tagNamesOfLead, leadTagNames]);
+
   const filteredLeads = useMemo(() => {
     let result = [...leads];
 
@@ -416,12 +493,120 @@ export default function Leads() {
       });
     }
 
-    if (filters && filters.length > 0) {
-      result = result.filter(lead => matchesFilters(lead, filters, getPrimaryContact));
-    }
+    result = applyAllFilters(result, LEAD_SYSTEM_FILTERS, filterFields, filters);
 
     return result.sort((a, b) => getLeadName(a).localeCompare(getLeadName(b)));
-  }, [leads, alphabetFilter, searchTerm, filters]);
+  }, [leads, alphabetFilter, searchTerm, filters, filterFields]);
+
+  // ============================================
+  // Zoho-style per-column menu (sort / pin / filter by / hide)
+  // Runs on top of the left-side filter panel + alphabet + search.
+  // ============================================
+  const LEAD_TH = 'px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500';
+  const leadColumns = [
+    selectionColumn({
+      sel, tagsApi, getId: (l) => l._id, getPageRows: () => leadRows,
+      openTags: tagDialogs.openTags, openManage: tagDialogs.openManage,
+    }),
+    tagsColumn(tagsApi, (l) => l._id), // Tag column first (after the checkbox / quick-action columns)
+    {
+      key: 'quick', label: 'Quick Actions', menu: false, fixed: 'start', width: 120,
+      thClass: 'px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 w-[120px]',
+      tdBase: 'px-4 py-3',
+      stopClick: true,
+      render: (lead) => (
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setQuickModal({ lead, type: 'note' })}
+            title="Add note"
+            className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition"
+          >
+            <StickyNote size={14} />
+          </button>
+          <button
+            onClick={(e) => {
+              const r = e.currentTarget.getBoundingClientRect();
+              setQuickMenu(prev =>
+                prev?.lead._id === lead._id ? null : { lead, top: r.bottom + 4, left: r.left }
+              );
+            }}
+            title="Add activity"
+            className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-slate-500 flex items-center gap-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
+          >
+            <ListTodo size={14} />
+            <ChevronDown size={12} />
+          </button>
+        </div>
+      ),
+    },
+    {
+      key: 'leadName', label: 'Lead Name', type: 'text', width: 220,
+      getValue: (lead) => getLeadName(lead),
+      render: (lead) => (
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-xs font-black shrink-0">
+            {getLeadName(lead).charAt(0).toUpperCase()}
+          </div>
+          <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition truncate">
+            {getLeadName(lead)}
+          </span>
+        </div>
+      ),
+    },
+    {
+      key: 'company', label: 'Company', type: 'text',
+      getValue: (lead) => lead.companyName,
+      render: (lead) => (
+        <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
+          <Building2 size={13} className="text-slate-400" />
+          {lead.companyName || '—'}
+        </div>
+      ),
+    },
+    {
+      key: 'email', label: 'Email', type: 'text',
+      getValue: (lead) => getPrimaryContact(lead)?.email,
+      render: (lead) => (
+        <div className="flex items-center gap-1.5 text-sm text-slate-600">
+          <Mail size={13} className="text-slate-400" />
+          {getPrimaryContact(lead)?.email || '—'}
+        </div>
+      ),
+    },
+    {
+      key: 'phone', label: 'Phone', type: 'phone',
+      getValue: (lead) => { const p = getPrimaryContact(lead); return p?.phone || p?.mobile; },
+      render: (lead) => {
+        const p = getPrimaryContact(lead);
+        return (
+          <div className="flex items-center gap-1.5 text-sm text-slate-600">
+            <Phone size={13} className="text-slate-400" />
+            {p?.phone || p?.mobile || '—'}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'leadSource', label: 'Lead Source', type: 'select',
+      getValue: (lead) => lead.leadSource || 'Web Research',
+      render: (lead) => (
+        <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100">
+          {lead.leadSource || 'Web Research'}
+        </span>
+      ),
+    },
+    {
+      key: 'leadOwner', label: 'Lead Owner', type: 'select',
+      getValue: (lead) => lead.leadOwner?.name || 'Unassigned',
+      render: (lead) => (
+        <span className="text-sm font-semibold text-slate-700">
+          {lead.leadOwner?.name || 'Unassigned'}
+        </span>
+      ),
+    },
+  ];
+  const ct = useColumnTable('leads', leadColumns, filteredLeads, tagsApi.version);
+  const leadRows = ct.rows;
 
   // ============================================
   // FORM HELPERS
@@ -710,6 +895,7 @@ export default function Leads() {
     return (
       <LeadDetail
         lead={selectedLead}
+        tagsApi={tagsApi}
         onBack={() => { setView('list'); setSelectedLead(null); }}
         onUpdated={(updated) => {
           setSelectedLead(updated);
@@ -743,6 +929,7 @@ export default function Leads() {
         <div>
           <div className="flex flex-col gap-3 mb-5">
             <div className="flex flex-col md:flex-row md:items-center gap-3">
+              <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
               <div className="relative">
                 <button
                   onClick={() => setShowAlphabetDropdown(v => !v)}
@@ -790,45 +977,47 @@ export default function Leads() {
               </div>
 
               <div className="md:ml-auto text-xs font-bold text-slate-400">
-                {filteredLeads.length} of {leads.length} leads
+                {leadRows.length} of {leads.length} leads
               </div>
             </div>
 
-            <LeadFilterBar
-              filterSchema={filterSchema}
-              filters={filters}
-              onChange={setFilters}
-              loading={filtersLoading}
-            />
           </div>
 
+          <FilterLayout
+            open={showFilters}
+            sidebar={
+              <ZohoFilterSidebar
+                title="Leads"
+                systemFilters={LEAD_SYSTEM_FILTERS}
+                fields={filterFields}
+                rows={leads}
+                value={filters}
+                onChange={setFilters}
+                loading={filtersLoading}
+              />
+            }
+          >
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <TagToolbar sel={sel} openTags={tagDialogs.openTags} openManage={tagDialogs.openManage} />
+            <ColumnToolbar ct={ct} className="flex-1" />
+          </div>
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[900px] text-left">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 w-[120px]">Quick Actions</th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Lead Name</th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Company</th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Email</th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Phone</th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Lead Source</th>
-                    <th className="px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Lead Owner</th>
-                  </tr>
-                </thead>
+                <ColumnHead ct={ct} thClass={LEAD_TH} />
                 <tbody className="divide-y divide-slate-100">
                   {listLoading ? (
                     <tr>
-                      <td colSpan="7" className="py-16">
+                      <td colSpan={ct.visibleColumns.length} className="py-16">
                         <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
                           <Loader2 size={28} className="animate-spin text-blue-600" />
                           <span className="text-sm font-semibold">Loading leads...</span>
                         </div>
                       </td>
                     </tr>
-                  ) : filteredLeads.length === 0 ? (
+                  ) : leadRows.length === 0 ? (
                     <tr>
-                      <td colSpan="7" className="py-16 text-center">
+                      <td colSpan={ct.visibleColumns.length} className="py-16 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <Users size={36} className="text-slate-300" />
                           <p className="text-sm font-bold text-slate-500">No leads found</p>
@@ -836,7 +1025,8 @@ export default function Leads() {
                             onClick={() => {
                               setAlphabetFilter('All');
                               setSearchTerm('');
-                              setFilters([]);
+                              setFilters(EMPTY_FILTERS);
+                              ct.clearFilters();
                             }}
                             className="text-xs font-bold text-blue-600 hover:underline"
                           >
@@ -846,85 +1036,32 @@ export default function Leads() {
                       </td>
                     </tr>
                   ) : (
-                    filteredLeads.map(lead => {
-                      const primary = getPrimaryContact(lead);
-                      return (
-                        <tr
-                          key={lead._id}
-                          onClick={() => { setSelectedLead(lead); setView('detail'); window.scrollTo({ top: 0 }); }}
-                          className="hover:bg-blue-50/40 transition group cursor-pointer"
-                        >
-                          <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                            <div className="flex items-center gap-1.5">
-                              <button
-                                onClick={() => setQuickModal({ lead, type: 'note' })}
-                                title="Add note"
-                                className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition"
-                              >
-                                <StickyNote size={14} />
-                              </button>
-                              <button
-                                onClick={(e) => {
-                                  const r = e.currentTarget.getBoundingClientRect();
-                                  setQuickMenu(prev =>
-                                    prev?.lead._id === lead._id ? null : { lead, top: r.bottom + 4, left: r.left }
-                                  );
-                                }}
-                                title="Add activity"
-                                className="h-8 px-2 rounded-lg border border-slate-200 bg-white text-slate-500 flex items-center gap-1 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 transition"
-                              >
-                                <ListTodo size={14} />
-                                <ChevronDown size={12} />
-                              </button>
-                            </div>
+                    leadRows.map(lead => (
+                      <tr
+                        key={lead._id}
+                        onClick={() => { setSelectedLead(lead); setView('detail'); window.scrollTo({ top: 0 }); }}
+                        className={`hover:bg-blue-50/40 transition group cursor-pointer ${sel.isSelected(lead._id) ? 'bg-blue-50/60' : ''}`}
+                      >
+                        {ct.visibleColumns.map((col) => (
+                          <td
+                            key={col.key}
+                            {...ct.cellProps(col, `${col.tdBase || 'px-5 py-3'} ${col.tdClass || ''}`)}
+                            onClick={col.stopClick ? (e) => e.stopPropagation() : undefined}
+                          >
+                            {col.render(lead)}
                           </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-xs font-black shrink-0">
-                                {getLeadName(lead).charAt(0).toUpperCase()}
-                              </div>
-                              <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition">
-                                {getLeadName(lead)}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                              <Building2 size={13} className="text-slate-400" />
-                              {lead.companyName || '—'}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                              <Mail size={13} className="text-slate-400" />
-                              {primary?.email || '—'}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                              <Phone size={13} className="text-slate-400" />
-                              {primary?.phone || primary?.mobile || '—'}
-                            </div>
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100">
-                              {lead.leadSource || 'Web Research'}
-                            </span>
-                          </td>
-                          <td className="px-5 py-3">
-                            <span className="text-sm font-semibold text-slate-700">
-                              {lead.leadOwner?.name || 'Unassigned'}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })
+                        ))}
+                      </tr>
+                    ))
                   )}
                 </tbody>
               </table>
             </div>
           </div>
+          </FilterLayout>
         </div>
+
+        <TagDialogs dialogs={tagDialogs} tagsApi={tagsApi} onDone={sel.clear} />
 
         {showAlphabetDropdown && (
           <div className="fixed inset-0 z-40" onClick={() => setShowAlphabetDropdown(false)} />

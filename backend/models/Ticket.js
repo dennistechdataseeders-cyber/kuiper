@@ -127,6 +127,15 @@ const ticketSchema = new mongoose.Schema({
   resolvedAt: Date,
   closedAt: Date,
   startedAt: Date,
+
+  // Every status change (shown on hover in the ticket's Progress bar)
+  statusHistory: [{
+    status: { type: String },
+    from:   { type: String },
+    at:     { type: Date, default: Date.now },
+    by:     { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    byName: { type: String },
+  }],
 }, { timestamps: true });
 
 // Auto-generate ticket number

@@ -6,18 +6,24 @@ import toast from 'react-hot-toast';
 import {
   ArrowLeft, StickyNote, ChevronDown, ListTodo, Video, Phone,
   PhoneIncoming, PhoneOutgoing, X, Loader2, Trash2, CheckCircle2,
-  Clock, MapPin, Save, Handshake,
+  Clock, MapPin, Save, Handshake, Plus, Mail, Globe, UserCircle2, Building2, Tag as TagIcon,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import CustomFieldsSection, { useCustomFields, validateCustomFields, buildCustomFieldsPayload } from './CustomFieldsSection';
 import { useSidebar } from '../context/SidebarContext';
 import ConvertDealModal from './ConvertDealModal';
+import useRecordTags from '../utils/useRecordTags';
+import { TagChip, TagDialogs, useTagDialogs } from './RecordTags';
+import {
+  Cell, cellInput, InlineSelect, InlineCustom, FieldGroup, useUnsavedChanges, FloatingSaveBar,
+} from './InlineEdit';
 
 // ============================================
 // HELPERS
 // ============================================
-const CURRENT_USER_ID = localStorage.getItem('userId') || '';
-const CURRENT_ROLE = localStorage.getItem('role') || '';
+// Read at call time (not when the file first loads) so a fresh login is picked up without a page refresh
+const currentUserId = () => localStorage.getItem('userId') || '';
+const currentRole = () => localStorage.getItem('role') || '';
 
 // An activity is "closed" only when finished or cancelled.
 // Task stages like In Progress / Deferred / Waiting for input are still open.
@@ -74,7 +80,7 @@ const emptyForm = {
 // Shows every lead field as an input — including the fields added in
 // Customize Modules → Leads — and saves them with PUT /api/leads/:id.
 // ============================================
-const CAN_EDIT = ['Admin', 'Super Admin', 'Sales', 'Sales Manager'].includes(CURRENT_ROLE);
+const canEditLead = () => ['Admin', 'Super Admin', 'Sales', 'Sales Manager'].includes(currentRole());
 
 // ✅ Updated Lead Sources to match the new form requirements
 const FALLBACK_LEAD_SOURCES = [
@@ -134,72 +140,16 @@ function leadToForm(lead) {
   };
 }
 
-// One row = fixed-width right-aligned label + input, so every input in the card
-// starts at the same left edge (same pattern as the Create Lead form).
-function FieldBox({ label, required, children }) {
-  return (
-    <div className="grid grid-cols-[104px_minmax(0,1fr)] items-start gap-x-3">
-      <label className="pt-2 text-right text-xs font-semibold leading-snug text-slate-500 break-words">
-        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
-      </label>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-// Full-bleed section band, then the rows underneath
-function Group({ title, children }) {
-  return (
-    <section>
-      <h3 className="-mx-5 mb-3 px-5 py-1.5 bg-slate-50 border-y border-slate-100 text-[10px] font-black uppercase tracking-wider text-slate-500">
-        {title}
-      </h3>
-      <div className="space-y-3">{children}</div>
-    </section>
-  );
-}
-
-function SelectInput({ value, options, onChange, disabled }) {
-  // keep a saved value visible even if it was later removed from the option list
-  const list = value && !options.includes(value) ? [value, ...options] : options;
-  return (
-    <select value={value ?? ''} onChange={(e) => onChange(e.target.value)} disabled={disabled} className={inputCls}>
-      <option value="">-None-</option>
-      {list.map((o) => <option key={o} value={o}>{o}</option>)}
-    </select>
-  );
-}
-
-function CustomInput({ def, value, onChange, disabled }) {
-  const common = { disabled, className: inputCls, placeholder: def.placeholder || '' };
-  switch (def.kind) {
-    case 'textarea':
-      return <textarea rows={3} value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common} />;
-    case 'select':
-      return <SelectInput value={value} options={def.options} onChange={onChange} disabled={disabled} />;
-    case 'checkbox':
-      return (
-        <label className="flex items-center gap-2 py-2 text-sm text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} disabled={disabled} />
-          {def.placeholder || 'Yes'}
-        </label>
-      );
-    case 'date':
-      return <input type="date" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common} />;
-    case 'number':
-      return <input type="number" step="any" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common} />;
-    case 'email':
-      return <input type="email" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common} />;
-    case 'phone':
-      return <input type="tel" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common} />;
-    default:
-      return <input type="text" value={value ?? ''} onChange={(e) => onChange(e.target.value)} {...common} />;
-  }
-}
-
-function LeadDetailsPanel({ lead, authHeader, onSaved }) {
+// ============================================
+// EDITABLE LEAD DETAILS
+// Every field is editable in place. As soon as something changes a save bar
+// floats at the bottom of the screen (Ctrl/Cmd + S also saves), so there is
+// no need to scroll back up to save.
+// ============================================
+function LeadDetailsPanel({ lead, authHeader, onSaved, onDirtyChange, isCollapsed }) {
+  const CAN_EDIT = canEditLead();
   const [form, setForm] = useState(() => leadToForm(lead));
-  const [baseline, setBaseline] = useState(() => JSON.stringify(leadToForm(lead)));
+  const [baseline, setBaseline] = useState(() => leadToForm(lead));
   const [saving, setSaving] = useState(false);
   const [schema, setSchema] = useState({ core: {}, custom: [] });
 
@@ -207,7 +157,7 @@ function LeadDetailsPanel({ lead, authHeader, onSaved }) {
   useEffect(() => {
     const f = leadToForm(lead);
     setForm(f);
-    setBaseline(JSON.stringify(f));
+    setBaseline(f);
   }, [lead]);
 
   // Field definitions: Leads field schema + fields from Customize Modules → Leads
@@ -246,12 +196,19 @@ function LeadDetailsPanel({ lead, authHeader, onSaved }) {
     return () => { alive = false; };
   }, [authHeader]);
 
-  const dirty = JSON.stringify(form) !== baseline;
+  // ---- what changed (also gives Ctrl/Cmd+S and the leave-page warning) ----
+  const saveRef = React.useRef(null);
+  const unsaved = useUnsavedChanges(form, baseline, () => saveRef.current?.());
+  const { dirty, isChanged } = unsaved;
+  const changedIn = (prefix) => unsaved.changedIn(prefix);
+
+  useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
+
   const readOnly = !CAN_EDIT || saving;
 
   const setTop = (k, v) => setForm((p) => ({ ...p, [k]: v }));
   const setNested = (group, k, v) => setForm((p) => ({ ...p, [group]: { ...p[group], [k]: v } }));
-  const discard = () => setForm(JSON.parse(baseline));
+  const discard = () => setForm(baseline);
 
   const save = async () => {
     if (saving || !dirty) return;
@@ -333,97 +290,143 @@ function LeadDetailsPanel({ lead, authHeader, onSaved }) {
     }
   };
 
-  const saveBar = (
-    <div className="flex items-center gap-2">
-      <button
-        onClick={discard}
-        disabled={saving}
-        className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-bold hover:bg-slate-50 disabled:opacity-50"
-      >
-        Discard
-      </button>
-      <button
-        onClick={save}
-        disabled={saving}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-70"
-      >
-        {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
-        {saving ? 'Saving...' : 'Save changes'}
-      </button>
-    </div>
-  );
+  useEffect(() => { saveRef.current = save; });
 
-  const text = (value, onChange, props = {}) => (
-    <input value={value} onChange={(e) => onChange(e.target.value)} disabled={readOnly} className={inputCls} {...props} />
+  const text = (key, value, onChange, props = {}) => (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={readOnly}
+      className={cellInput(isChanged(key), !CAN_EDIT)}
+      {...props}
+    />
+  );
+  const select = (key, value, onChange, options) => (
+    <InlineSelect value={value} onChange={onChange} options={options} disabled={readOnly} changed={isChanged(key)} />
   );
 
   return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-      {/* Sticky header keeps Save / Discard in reach while scrolling a long record */}
-      <div className="sticky top-[73px] z-10 -mx-5 -mt-5 mb-4 px-5 py-3 min-h-[52px] flex items-center justify-between gap-2 bg-white/95 backdrop-blur border-b border-slate-100 rounded-t-xl">
-        <h2 className="text-sm font-black text-slate-800">Lead Information</h2>
-        {CAN_EDIT && dirty && saveBar}
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-100">
+        <h2 className="text-sm font-black text-slate-800">Lead Details</h2>
+        <span className="text-[11px] font-semibold text-slate-400">
+          {CAN_EDIT ? 'Click any field to edit' : 'Read only'}
+        </span>
       </div>
 
-      <div className="space-y-5">
-        <Group title="Lead Information">
-          <FieldBox label="Company" required>{text(form.companyName, (v) => setTop('companyName', v))}</FieldBox>
-          <FieldBox label="Website">{text(form.website, (v) => setTop('website', v))}</FieldBox>
-          <FieldBox label="Lead Source">
-            <SelectInput value={form.leadSource} onChange={(v) => setTop('leadSource', v)} disabled={readOnly}
-              options={schema.core.leadSource?.length ? schema.core.leadSource : FALLBACK_LEAD_SOURCES} />
-          </FieldBox>
-          <FieldBox label="Lead Status">
-            <SelectInput value={form.leadStatus} onChange={(v) => setTop('leadStatus', v)} disabled={readOnly}
-              options={schema.core.leadStatus?.length ? schema.core.leadStatus : FALLBACK_LEAD_STATUSES} />
-          </FieldBox>
-          <FieldBox label="Industry">
-            <SelectInput value={form.industry} onChange={(v) => setTop('industry', v)} disabled={readOnly}
-              options={schema.core.industry?.length ? schema.core.industry : FALLBACK_INDUSTRIES} />
-          </FieldBox>
-          <FieldBox label="No. of Employees">
-            {text(form.noOfEmployees, (v) => setTop('noOfEmployees', v), { type: 'number', min: 0 })}
-          </FieldBox>
-          <FieldBox label="Lead Owner">
-            <input value={lead.leadOwner?.name || ''} readOnly disabled title="Set automatically" className={inputCls} />
-          </FieldBox>
-          
-          {/* ✅ RENDER CUSTOM FIELDS HERE (removes the separate "Custom Fields" section) */}
-          {schema.custom.map((def) => (
-            <FieldBox key={def.fieldKey} label={def.label} required={def.required}>
-              <CustomInput
-                def={def}
-                value={form.custom[def.fieldKey]}
-                onChange={(v) => setNested('custom', def.fieldKey, v)}
-                disabled={readOnly}
-              />
-            </FieldBox>
-          ))}
-        </Group>
+      <FieldGroup id="info" title="Lead Information" count={changedIn('companyName') + changedIn('website') + changedIn('leadSource') + changedIn('leadStatus') + changedIn('industry') + changedIn('noOfEmployees') + changedIn('custom.')}>
+        <Cell label="Company" required changed={isChanged('companyName')}>{text('companyName', form.companyName, (v) => setTop('companyName', v))}</Cell>
+        <Cell label="Website" changed={isChanged('website')}>{text('website', form.website, (v) => setTop('website', v))}</Cell>
+        <Cell label="Lead Status" changed={isChanged('leadStatus')}>
+          {select('leadStatus', form.leadStatus, (v) => setTop('leadStatus', v), schema.core.leadStatus?.length ? schema.core.leadStatus : FALLBACK_LEAD_STATUSES)}
+        </Cell>
+        <Cell label="Lead Source" changed={isChanged('leadSource')}>
+          {select('leadSource', form.leadSource, (v) => setTop('leadSource', v), schema.core.leadSource?.length ? schema.core.leadSource : FALLBACK_LEAD_SOURCES)}
+        </Cell>
+        <Cell label="Industry" changed={isChanged('industry')}>
+          {select('industry', form.industry, (v) => setTop('industry', v), schema.core.industry?.length ? schema.core.industry : FALLBACK_INDUSTRIES)}
+        </Cell>
+        <Cell label="No. of Employees" changed={isChanged('noOfEmployees')}>
+          {text('noOfEmployees', form.noOfEmployees, (v) => setTop('noOfEmployees', v), { type: 'number', min: 0 })}
+        </Cell>
+        <Cell label="Lead Owner">
+          <input value={lead.leadOwner?.name || 'Unassigned'} readOnly disabled title="Set automatically" className={cellInput(false, true)} />
+        </Cell>
+        {schema.custom.map((def) => (
+          <Cell key={def.fieldKey} label={def.label} required={def.required} changed={isChanged(`custom.${def.fieldKey}`)} wide={def.kind === 'textarea'}>
+            <InlineCustom
+              def={def}
+              value={form.custom[def.fieldKey]}
+              onChange={(v) => setNested('custom', def.fieldKey, v)}
+              disabled={readOnly}
+              changed={isChanged(`custom.${def.fieldKey}`)}
+            />
+          </Cell>
+        ))}
+      </FieldGroup>
 
-        <Group title="Contact">
-          <FieldBox label="First Name">{text(form.contact.firstName, (v) => setNested('contact', 'firstName', v))}</FieldBox>
-          <FieldBox label="Last Name">{text(form.contact.lastName, (v) => setNested('contact', 'lastName', v))}</FieldBox>
-          <FieldBox label="Title">{text(form.contact.title, (v) => setNested('contact', 'title', v))}</FieldBox>
-          <FieldBox label="Email">{text(form.contact.email, (v) => setNested('contact', 'email', v), { type: 'email' })}</FieldBox>
-          <FieldBox label="Phone">{text(form.contact.phone, (v) => setNested('contact', 'phone', v), { type: 'tel' })}</FieldBox>
-          <FieldBox label="Mobile">{text(form.contact.mobile, (v) => setNested('contact', 'mobile', v), { type: 'tel' })}</FieldBox>
-        </Group>
+      <FieldGroup id="contact" title="Primary Contact" count={changedIn('contact.')}>
+        <Cell label="First Name" changed={isChanged('contact.firstName')}>{text('contact.firstName', form.contact.firstName, (v) => setNested('contact', 'firstName', v))}</Cell>
+        <Cell label="Last Name" changed={isChanged('contact.lastName')}>{text('contact.lastName', form.contact.lastName, (v) => setNested('contact', 'lastName', v))}</Cell>
+        <Cell label="Title" changed={isChanged('contact.title')}>{text('contact.title', form.contact.title, (v) => setNested('contact', 'title', v))}</Cell>
+        <Cell label="Email" changed={isChanged('contact.email')}>{text('contact.email', form.contact.email, (v) => setNested('contact', 'email', v), { type: 'email' })}</Cell>
+        <Cell label="Phone" changed={isChanged('contact.phone')}>{text('contact.phone', form.contact.phone, (v) => setNested('contact', 'phone', v), { type: 'tel' })}</Cell>
+        <Cell label="Mobile" changed={isChanged('contact.mobile')}>{text('contact.mobile', form.contact.mobile, (v) => setNested('contact', 'mobile', v), { type: 'tel' })}</Cell>
+      </FieldGroup>
 
-        <Group title="Address">
-          <FieldBox label="Country / Region">{text(form.address.countryRegion, (v) => setNested('address', 'countryRegion', v))}</FieldBox>
-          <FieldBox label="Flat / House No.">{text(form.address.flatHouse, (v) => setNested('address', 'flatHouse', v))}</FieldBox>
-          <FieldBox label="Street Address">{text(form.address.streetAddress, (v) => setNested('address', 'streetAddress', v))}</FieldBox>
-          <FieldBox label="City">{text(form.address.city, (v) => setNested('address', 'city', v))}</FieldBox>
-          <FieldBox label="State / Province">{text(form.address.stateProvince, (v) => setNested('address', 'stateProvince', v))}</FieldBox>
-          <FieldBox label="Zip / Postal Code">{text(form.address.zipPostalCode, (v) => setNested('address', 'zipPostalCode', v))}</FieldBox>
-        </Group>
+      <FieldGroup id="address" title="Address" count={changedIn('address.')}>
+        <Cell label="Flat / House No." changed={isChanged('address.flatHouse')}>{text('address.flatHouse', form.address.flatHouse, (v) => setNested('address', 'flatHouse', v))}</Cell>
+        <Cell label="Street Address" changed={isChanged('address.streetAddress')}>{text('address.streetAddress', form.address.streetAddress, (v) => setNested('address', 'streetAddress', v))}</Cell>
+        <Cell label="City" changed={isChanged('address.city')}>{text('address.city', form.address.city, (v) => setNested('address', 'city', v))}</Cell>
+        <Cell label="State / Province" changed={isChanged('address.stateProvince')}>{text('address.stateProvince', form.address.stateProvince, (v) => setNested('address', 'stateProvince', v))}</Cell>
+        <Cell label="Country / Region" changed={isChanged('address.countryRegion')}>{text('address.countryRegion', form.address.countryRegion, (v) => setNested('address', 'countryRegion', v))}</Cell>
+        <Cell label="Zip / Postal Code" changed={isChanged('address.zipPostalCode')}>{text('address.zipPostalCode', form.address.zipPostalCode, (v) => setNested('address', 'zipPostalCode', v))}</Cell>
+      </FieldGroup>
 
-        <Group title="Description">
-          <FieldBox label="Description">
-            <textarea rows={4} value={form.description} onChange={(e) => setTop('description', e.target.value)} disabled={readOnly} className={inputCls} />
-          </FieldBox>
-        </Group>
+      <FieldGroup id="description" title="Description" count={changedIn('description')}>
+        <Cell label="Description" wide changed={isChanged('description')}>
+          <textarea
+            rows={3}
+            value={form.description}
+            onChange={(e) => setTop('description', e.target.value)}
+            disabled={readOnly}
+            className={`${cellInput(isChanged('description'), !CAN_EDIT)} h-auto py-2 resize-y`}
+          />
+        </Cell>
+      </FieldGroup>
+
+      <FloatingSaveBar
+        show={CAN_EDIT && dirty}
+        count={unsaved.count}
+        saving={saving}
+        onSave={save}
+        onDiscard={discard}
+        isCollapsed={isCollapsed}
+      />
+    </div>
+  );
+}
+
+// ============================================
+// QUICK NOTE (type and add without opening a dialog)
+// ============================================
+function QuickNote({ leadId, authHeader, onAdded }) {
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const add = async () => {
+    const content = text.trim();
+    if (!content || busy) return;
+    try {
+      setBusy(true);
+      await axios.post(`${API_BASE_URL}/api/lead-activities`, { leadId, type: 'note', title: '', content, customFields: [] }, authHeader);
+      setText('');
+      toast.success('Note added');
+      onAdded();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to add note');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="rounded-lg border border-slate-200 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition">
+      <textarea
+        rows={2}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); add(); } }}
+        placeholder="Write a note..."
+        className="w-full px-3 pt-2 text-sm outline-none resize-none rounded-lg"
+      />
+      <div className="flex items-center justify-between px-2 pb-2">
+        <span className="text-[10px] text-slate-400 pl-1">Ctrl + Enter to add</span>
+        <button
+          onClick={add}
+          disabled={!text.trim() || busy}
+          className="flex items-center gap-1 px-3 py-1 rounded-md bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-40"
+        >
+          {busy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={12} />} Add
+        </button>
       </div>
     </div>
   );
@@ -432,8 +435,9 @@ function LeadDetailsPanel({ lead, authHeader, onSaved }) {
 // ============================================
 // MAIN COMPONENT
 // ============================================
-export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
+export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsApi: tagsFromList }) {
   const { isCollapsed } = useSidebar();
+  const CAN_EDIT = canEditLead();
   const [lead, setLead] = useState(initialLead); // local copy so edits show immediately
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
@@ -442,15 +446,22 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
     [token]
   );
 
+  // Tags: share the list page's tags so both stay in sync (own copy if opened elsewhere)
+  const ownTags = useRecordTags(tagsFromList ? null : 'Leads');
+  const tagsApi = tagsFromList || ownTags;
+  const tagDialogs = useTagDialogs();
+
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showActivityMenu, setShowActivityMenu] = useState(false);
   const [modalType, setModalType] = useState(null); // 'note' | 'task' | 'meeting' | 'call' | null
   const [showConvert, setShowConvert] = useState(false);
+  const [tab, setTab] = useState('notes'); // notes | open | closed
+  const [dirty, setDirty] = useState(false);
 
   const primary = lead.contacts?.find((c) => c.isPrimary) || lead.contacts?.[0] || null;
   const leadName =
-    (primary && `${primary.firstName || ''} ${primary.lastName || ''}`.trim()) ||
+    (primary && `${primary.firstName || ''} ${primary.lastName === '-' ? '' : primary.lastName || ''}`.trim()) ||
     lead.companyName ||
     '—';
 
@@ -493,6 +504,11 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
     onUpdated?.(updated);
   };
 
+  const goBack = () => {
+    if (dirty && !window.confirm('You have unsaved changes. Leave without saving?')) return;
+    onBack();
+  };
+
   // ---------- actions ----------
   const markCompleted = async (id) => {
     try {
@@ -516,63 +532,81 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
   };
 
   const canDelete = (a) =>
-    String(a.createdBy?._id || a.createdBy) === String(CURRENT_USER_ID) ||
-    CURRENT_ROLE === 'Admin' ||
-    CURRENT_ROLE === 'Super Admin';
+    String(a.createdBy?._id || a.createdBy) === String(currentUserId()) ||
+    currentRole() === 'Admin' ||
+    currentRole() === 'Super Admin';
+
+  const tags = tagsApi.tagsOf(lead._id);
+  const phone = primary?.phone || primary?.mobile;
+  const quick = [
+    primary?.email && { icon: Mail, text: primary.email, href: `mailto:${primary.email}` },
+    phone && { icon: Phone, text: phone, href: `tel:${phone}` },
+    lead.website && { icon: Globe, text: lead.website.replace(/^https?:\/\//, ''), href: /^https?:\/\//i.test(lead.website) ? lead.website : `https://${lead.website}`, external: true },
+    { icon: UserCircle2, text: lead.leadOwner?.name || 'Unassigned' },
+  ].filter(Boolean);
+
+  const TABS = [
+    { id: 'notes', label: 'Notes', count: notes.length },
+    { id: 'open', label: 'Open Activities', count: open.length },
+    { id: 'closed', label: 'Closed', count: closed.length },
+  ];
 
   // ============================================
   // RENDER
   // ============================================
   return (
     <div className={`min-h-screen bg-slate-50 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-      {/* ---------- Top bar ---------- */}
+      {/* ---------- Header ---------- */}
       <div className={`fixed top-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 ${isCollapsed ? 'left-20' : 'left-64'}`}>
-        <div className="px-6 py-4 flex justify-between items-center gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <button
-              onClick={onBack}
-              className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition shrink-0"
-              title="Back to leads"
-            >
-              <ArrowLeft size={16} />
-            </button>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-sm font-black shrink-0">
-              {leadName.charAt(0).toUpperCase()}
+        <div className="px-6 pt-3 pb-2.5 flex items-center gap-4">
+          <button
+            onClick={goBack}
+            className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition shrink-0"
+            title="Back to leads"
+          >
+            <ArrowLeft size={16} />
+          </button>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-sm font-black shrink-0">
+            {leadName.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-xl font-black text-slate-900 truncate">{leadName}</h1>
+              {lead.leadStatus && (
+                <span className="shrink-0 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wide">
+                  {lead.leadStatus}
+                </span>
+              )}
+              {lead.isConverted && (
+                <span className="shrink-0 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wide">
+                  Converted
+                </span>
+              )}
             </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl font-black text-slate-900 truncate">{leadName}</h1>
-              <p className="text-xs font-semibold text-slate-400 truncate">{lead.companyName}</p>
-            </div>
+            <p className="text-xs font-semibold text-slate-500 truncate flex items-center gap-1">
+              <Building2 size={12} className="text-slate-400" />
+              {lead.companyName}
+              {primary?.title && <span className="text-slate-400">· {primary.title}</span>}
+              {lead.leadSource && <span className="text-slate-400">· {lead.leadSource}</span>}
+            </p>
           </div>
 
           {/* Convert Deal + Add Note + Activity dropdown */}
           <div className="flex items-center gap-2 shrink-0">
-            {lead.isConverted ? (
-              <span className="px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 text-sm font-bold">
-                Converted
-              </span>
-            ) : (
+            {!lead.isConverted && (
               <button
                 onClick={() => setShowConvert(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-lg shadow-emerald-200 transition"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition"
               >
                 <Handshake size={14} /> Convert Deal
               </button>
             )}
-
-            <button
-              onClick={() => setModalType('note')}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition"
-            >
-              <StickyNote size={14} /> Add Note
-            </button>
-
             <div className="relative">
               <button
                 onClick={() => setShowActivityMenu((v) => !v)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition"
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm transition"
               >
-                Activity
+                <Plus size={14} /> New
                 <ChevronDown size={14} className={`transition-transform ${showActivityMenu ? 'rotate-180' : ''}`} />
               </button>
 
@@ -581,9 +615,10 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
                   <div className="fixed inset-0 z-40" onClick={() => setShowActivityMenu(false)} />
                   <div className="absolute right-0 top-full mt-1 z-50 w-48 bg-white border border-slate-200 rounded-xl shadow-xl py-1.5">
                     {[
-                      { type: 'task',    label: 'Add activity', icon: ListTodo },
-                      { type: 'meeting', label: 'Add meeting',  icon: Video },
-                      { type: 'call',    label: 'Add call',     icon: Phone },
+                      { type: 'note',    label: 'Note',     icon: StickyNote },
+                      { type: 'task',    label: 'Activity', icon: ListTodo },
+                      { type: 'meeting', label: 'Meeting',  icon: Video },
+                      { type: 'call',    label: 'Call',     icon: Phone },
                     ].map(({ type, label, icon: Icon }) => (
                       <button
                         key={type}
@@ -599,80 +634,132 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
             </div>
           </div>
         </div>
+
+        {/* quick facts + tags */}
+        <div className="px-6 pb-2.5 pl-[112px] flex items-center gap-x-4 gap-y-1.5 flex-wrap">
+          {quick.map(({ icon: Icon, text, href, external }) => (
+            href ? (
+              <a
+                key={text}
+                href={href}
+                target={external ? '_blank' : undefined}
+                rel={external ? 'noreferrer' : undefined}
+                className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-blue-600 max-w-[260px]"
+              >
+                <Icon size={13} className="text-slate-400 shrink-0" />
+                <span className="truncate">{text}</span>
+              </a>
+            ) : (
+              <span key={text} className="flex items-center gap-1.5 text-xs font-semibold text-slate-600">
+                <Icon size={13} className="text-slate-400" /> {text}
+              </span>
+            )
+          ))}
+          <span className="h-4 w-px bg-slate-200" />
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {tags.map((t) => (
+              <TagChip key={t._id} tag={t} onRemove={CAN_EDIT ? () => tagsApi.removeOne(lead._id, t._id) : undefined} />
+            ))}
+            {CAN_EDIT && (
+              <button
+                onClick={() => tagDialogs.openTags('add', [lead._id])}
+                className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-slate-300 text-[11px] font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600"
+              >
+                <TagIcon size={11} /> Add Tags
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ---------- Body ---------- */}
-      <div className="px-6 pt-[96px] pb-12 grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
-        {/* Lead details (editable) */}
-        <div className="xl:col-span-2">
-          <LeadDetailsPanel lead={lead} authHeader={authHeader} onSaved={handleLeadSaved} />
+      <div className="px-6 pt-[124px] pb-24 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+        {/* Lead details (edit in place) */}
+        <div className="xl:col-span-7">
+          <LeadDetailsPanel
+            lead={lead}
+            authHeader={authHeader}
+            onSaved={handleLeadSaved}
+            onDirtyChange={setDirty}
+            isCollapsed={isCollapsed}
+          />
         </div>
 
-        {/* Notes + activities */}
-        <div className="xl:col-span-3 space-y-6">
-          {/* Notes */}
-          <Section
-            title="Notes"
-            count={notes.length}
-            action={
-              <button
-                onClick={() => setModalType('note')}
-                className="text-xs font-bold text-blue-600 hover:underline"
-              >
-                + Add Note
-              </button>
-            }
-          >
-            {loading ? <Spinner /> : notes.length === 0 ? (
-              <Empty text="No notes yet. Click “Add Note” to write one." />
-            ) : (
-              <div className="space-y-3">
-                {notes.map((n) => (
-                  <div key={n._id} className="rounded-lg border border-amber-100 bg-amber-50/60 p-3 group">
-                    <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.content}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-[10px] font-semibold text-slate-400">
-                        {n.createdBy?.name || 'Unknown'} · {fmtDateTime(n.createdAt)}
-                      </span>
-                      {canDelete(n) && (
-                        <button
-                          onClick={() => deleteActivity(n._id)}
-                          className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
-                          title="Delete note"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
+        {/* Notes + activities: stays in view, scrolls inside itself */}
+        <div className="xl:col-span-5 xl:sticky xl:top-[124px]">
+          <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col xl:max-h-[calc(100vh-148px)]">
+            <div className="flex items-center gap-1 px-2 pt-2 border-b border-slate-100">
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 -mb-px transition ${
+                    tab === t.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+                  }`}
+                >
+                  {t.label}
+                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${tab === t.id ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {t.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="p-4 overflow-y-auto">
+              {tab === 'notes' && (
+                <div className="space-y-3">
+                  <QuickNote leadId={lead._id} authHeader={authHeader} onAdded={fetchActivities} />
+                  {loading ? <Spinner /> : notes.length === 0 ? (
+                    <Empty text="No notes yet." />
+                  ) : (
+                    notes.map((n) => (
+                      <div key={n._id} className="rounded-lg border border-amber-100 bg-amber-50/60 p-3 group">
+                        <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.content}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {n.createdBy?.name || 'Unknown'} · {fmtDateTime(n.createdAt)}
+                          </span>
+                          {canDelete(n) && (
+                            <button
+                              onClick={() => deleteActivity(n._id)}
+                              className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                              title="Delete note"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {tab === 'open' && (
+                loading ? <Spinner /> : open.length === 0 ? (
+                  <Empty text="No open activities. Use “New” to add a task, meeting or call." />
+                ) : (
+                  <div className="space-y-5">
+                    <ActivityGroup label="Tasks" items={openTasks} onComplete={markCompleted} onDelete={deleteActivity} canDelete={canDelete} />
+                    <ActivityGroup label="Meetings" items={openMeetings} onComplete={markCompleted} onDelete={deleteActivity} canDelete={canDelete} />
+                    <ActivityGroup label="Calls" items={openCalls} onComplete={markCompleted} onDelete={deleteActivity} canDelete={canDelete} />
                   </div>
-                ))}
-              </div>
-            )}
-          </Section>
+                )
+              )}
 
-          {/* Open activities */}
-          <Section title="Open Activities" count={open.length}>
-            {loading ? <Spinner /> : open.length === 0 ? (
-              <Empty text="No open activities. Use the Activity menu to add a task, meeting or call." />
-            ) : (
-              <div className="space-y-5">
-                <ActivityGroup label="Tasks" items={openTasks} onComplete={markCompleted} onDelete={deleteActivity} canDelete={canDelete} />
-                <ActivityGroup label="Meetings" items={openMeetings} onComplete={markCompleted} onDelete={deleteActivity} canDelete={canDelete} />
-                <ActivityGroup label="Calls" items={openCalls} onComplete={markCompleted} onDelete={deleteActivity} canDelete={canDelete} />
-              </div>
-            )}
-          </Section>
-
-          {/* Closed activities */}
-          {closed.length > 0 && (
-            <Section title="Closed Activities" count={closed.length}>
-              <div className="space-y-2">
-                {closed.map((a) => (
-                  <ActivityCard key={a._id} item={a} onDelete={deleteActivity} canDelete={canDelete(a)} />
-                ))}
-              </div>
-            </Section>
-          )}
+              {tab === 'closed' && (
+                loading ? <Spinner /> : closed.length === 0 ? (
+                  <Empty text="No closed activities yet." />
+                ) : (
+                  <div className="space-y-2">
+                    {closed.map((a) => (
+                      <ActivityCard key={a._id} item={a} onDelete={deleteActivity} canDelete={canDelete(a)} />
+                    ))}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -685,16 +772,18 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
         />
       )}
 
-      {/* ---------- Modal ---------- */}
+      {/* ---------- Note / activity modal ---------- */}
       {modalType && (
         <ActivityModal
           type={modalType}
           leadId={lead._id}
           authHeader={authHeader}
           onClose={() => setModalType(null)}
-          onSaved={() => { setModalType(null); fetchActivities(); }}
+          onSaved={() => { setModalType(null); fetchActivities(); if (modalType === 'note') setTab('notes'); else setTab('open'); }}
         />
       )}
+
+      <TagDialogs dialogs={tagDialogs} tagsApi={tagsApi} />
     </div>
   );
 }
@@ -702,21 +791,6 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated }) {
 // ============================================
 // SMALL PRESENTATIONAL PIECES
 // ============================================
-function Section({ title, count, action, children }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-sm font-black text-slate-800">
-          {title}
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[10px] font-black">{count}</span>
-        </h2>
-        {action}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 const Spinner = () => (
   <div className="flex justify-center py-8">
     <Loader2 size={22} className="text-blue-600 animate-spin" />

@@ -282,12 +282,21 @@ const EmployeeAttendanceReport = () => {
             totalAbsent += 1;
             break;
           case 'Leave': {
-            totalLeave += 1;
-            const leaveType = (record.leaveType || '').toString().toLowerCase();
-            if (leaveType.includes('unpaid')) {
-              totalUnpaidLeave += 1;
+            // Use the per-day amounts from the backend: a day can be ½ paid,
+            // ½ unpaid, or ½ paid + ½ unpaid (one-shot leave requests).
+            if (record.paidLeaveDays !== undefined || record.unpaidLeaveDays !== undefined) {
+              const paid = Number(record.paidLeaveDays) || 0;
+              const unpaid = Number(record.unpaidLeaveDays) || 0;
+              totalPaidLeave += paid;
+              totalUnpaidLeave += unpaid;
+              totalLeave += paid + unpaid;
             } else {
-              totalPaidLeave += 1;
+              // older backend: whole day of the given type
+              const days = Number(record.leaveDays) || 1;
+              totalLeave += days;
+              const leaveType = (record.leaveType || '').toString().toLowerCase();
+              if (leaveType.includes('unpaid')) totalUnpaidLeave += days;
+              else totalPaidLeave += days;
             }
             break;
           }

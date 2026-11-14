@@ -47,6 +47,12 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 
+import {
+  Contact, BookOpen, Gauge, BriefcaseBusiness, Rss, ChartPie, ChartColumn, HeartHandshake,
+  CalendarHeart, CalendarOff, ClipboardList, Workflow, Tags, CodeXml, NotebookPen, FolderGit2,
+  FileCode, GitBranch, LayoutGrid, PanelsTopLeft, ShieldCheck, FolderTree, Radio, Radar,
+  SignalHigh, Truck, CalendarClock, Compass, Boxes, IdCard, Terminal, ClipboardCheck, Wrench, UsersRound as TeamIcon,
+} from 'lucide-react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
@@ -54,6 +60,96 @@ import NotificationBell from './NotificationBell';
 import API_BASE_URL from '../config';
 import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
 import io from 'socket.io-client';
+
+// ============================================
+// ONE ICON PER PAGE
+// Every different page gets its own icon; the same page keeps the same icon
+// in every role's menu. Anything not listed keeps the icon set below.
+// ============================================
+const ITEM_ICONS = {
+  // Sales
+  '/sales':                          PanelsTopLeft,
+  '/sales-manager':                  Gauge,
+  '/sales/leads':                    Target,
+  '/sales/contacts':                 Contact,
+  '/sales/accounts':                 Building2,
+  '/sales/deals':                    Handshake,
+  '/sales/activities/tasks':         ListTodo,
+  '/sales/activities/meetings':      Video,
+  '/sales/activities/calls':         Phone,
+  // General
+  '/tickets':                        Ticket,
+  '/announcements':                  Megaphone,
+  '/knowledge':                      BookOpen,
+  '/employee':                       UserCog,
+  // Admin
+  '/admin':                          LayoutDashboard,
+  '/view_analytics':                 TrendingUp,
+  '/admin/users':                    Users,
+  '/admin/customize':                SlidersHorizontal,
+  '/admin/ticket-rules':             Workflow,
+  '/admin/ticket-categories':        Tags,
+  // Projects & feeds
+  '/admin/projects':                 FolderKanban,
+  '/admin/project-clients':          BriefcaseBusiness,
+  '/pm/dashboard':                   LayoutGrid,
+  '/pm/feeds':                       Rss,
+  '/pm/feed-status':                 Activity,
+  '/pm/resource-analytics':          ChartPie,
+  '/pm/work-report':                 ChartColumn,
+  '/pm/git-manager':                 GitFork,
+  // Team lead
+  '/teamlead':                       ShieldCheck,
+  '/teamlead/projects':              FolderTree,
+  '/teamlead/feeds':                 Radio,
+  '/teamlead/feed-status':           Radar,
+  '/teamlead/developers':            TeamIcon,
+  // Developer
+  '/developer':                      CodeXml,
+  '/developer/worklog':              NotebookPen,
+  '/developer/projects':             FolderGit2,
+  '/developer/feeds':                FileCode,
+  '/developer/git-feeds':            GitBranch,
+  '/developer/feed-status':          SignalHigh,
+  // Client
+  '/client':                         Truck,
+  // HR
+  '/hr':                             HeartHandshake,
+  '/hr/holidays':                    CalendarHeart,
+  '/hr/leaves':                      CalendarOff,
+  '/hr/attendance-sync':             RefreshCw,
+  '/hr/employee-attendance':         UserCheck,
+  '/hr/employee-attendance-report':  ClipboardList,
+};
+
+// Group headers (by group key) — also all different from each other and from the pages
+const GROUP_ICONS = {
+  sales:              Briefcase,
+  'sales-activities': CalendarClock,
+  activities:         Compass,
+  general:            Compass,
+  others:             FingerprintPattern,
+  projects:           Boxes,
+  hr:                 IdCard,
+  developer:          Terminal,
+  pm:                 ClipboardCheck,
+  setup:              Wrench,
+  team:               UserPlus,
+};
+
+const withUniqueIcons = (groups) =>
+  groups.map((g) => {
+    const GroupIcon = GROUP_ICONS[g.key];
+    return {
+      ...g,
+      icon: g.icon && GroupIcon ? <GroupIcon size={18} /> : g.icon,
+      items: (g.items || []).map((item) => {
+        const ItemIcon = ITEM_ICONS[item.path];
+        const size = g.icon ? 16 : 18; // flat "Home" items are a bit larger
+        return ItemIcon ? { ...item, icon: <ItemIcon size={size} /> } : item;
+      }),
+    };
+  });
 
 // ============================================
 // NAVIGATION GROUPS  (Zoho-style)
@@ -127,15 +223,6 @@ const buildMenuGroups = (role) => {
           { path: '/pm/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
           { path: '/pm/resource-analytics', icon: <ChartBar size={16} />, label: 'Resource Analytics' },
           { path: '/pm/work-report', icon: <BarChart3 size={16} />, label: 'Work Report' },
-        ],
-      },
-      {
-        key: 'feasibility',
-        label: 'Feasibility',
-        icon: <FileText size={18} />,
-        items: [
-          { path: '/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
-          { path: '/pm/feasibility', icon: <FileText size={16} />, label: 'PM Feasibility' },
         ],
       },
       {
@@ -273,14 +360,6 @@ const buildMenuGroups = (role) => {
       ]},
       SALES_GROUP,
       SALES_ACTIVITIES_GROUP,
-      {
-        key: 'feasibility',
-        label: 'Feasibility',
-        icon: <FileText size={18} />,
-        items: [
-          { path: '/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
-        ],
-      },
       GENERAL_GROUP,
       {
         key: 'setup',
@@ -310,7 +389,6 @@ const buildMenuGroups = (role) => {
           { path: '/pm/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
           { path: '/pm/work-report', icon: <BarChart3 size={16} />, label: 'Work Report' },
           { path: '/pm/resource-analytics', icon: <ChartBar size={16} />, label: 'Resource Analytics' },
-          { path: '/pm/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
           { path: '/pm/git-manager', icon: <GitFork size={16} />, label: 'Git Manager' },
         ],
       },
@@ -434,41 +512,36 @@ const Sidebar = () => {
   // EXPANDED GROUP STATE
   // ============================================
   const menuGroups = useMemo(
-    () => buildMenuGroups(localStorage.getItem('role') || 'User'),
+    () => withUniqueIcons(buildMenuGroups(localStorage.getItem('role') || 'User')),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [localStorage.getItem('role')]
   );
 
-  const [openGroups, setOpenGroups] = useState(() => {
-    const initial = {};
-    menuGroups.forEach((group) => {
-      const isAnyActive = group.items.some(
-        (item) =>
-          location.pathname === item.path ||
-          location.pathname.startsWith(item.path + '/')
-      );
-      initial[group.key] = isAnyActive;
-    });
-    return initial;
-  });
-
-  useEffect(() => {
-    setOpenGroups((prev) => {
-      const next = { ...prev };
-      menuGroups.forEach((group) => {
-        const isAnyActive = group.items.some(
+  // Accordion: only ONE menu group is open at a time.
+  // The group that holds the current page opens by itself; opening another
+  // group closes the rest.
+  const activeGroupKey = useMemo(() => {
+    const hit = menuGroups.find(
+      (group) =>
+        group.icon &&
+        group.items.some(
           (item) =>
             location.pathname === item.path ||
             location.pathname.startsWith(item.path + '/')
-        );
-        if (isAnyActive) next[group.key] = true;
-      });
-      return next;
-    });
+        )
+    );
+    return hit ? hit.key : null;
   }, [location.pathname, menuGroups]);
 
+  const [openGroups, setOpenGroups] = useState(() => (activeGroupKey ? { [activeGroupKey]: true } : {}));
+
+  // moving to a page in another group → open that group, close the others
+  useEffect(() => {
+    if (activeGroupKey) setOpenGroups({ [activeGroupKey]: true });
+  }, [activeGroupKey]);
+
   const toggleGroup = (key) => {
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+    setOpenGroups((prev) => (prev[key] ? {} : { [key]: true }));
   };
 
   const menuRef = useRef(null);
@@ -722,56 +795,53 @@ const Sidebar = () => {
       )}
 
       <aside className={getSidebarClasses()}>
-       {/* HEADER — logo on top, collapse arrow on its own row underneath */}
-<div
-  className={`border-b border-slate-800 transition-all duration-300 ${
-    isMobile ? 'px-3 pt-3 pb-2' : isCollapsed ? 'px-3 pt-6 pb-4' : 'px-5 pt-4 pb-3'
-  }`}
->
-  {/* Row 1: logo (animation lives here) */}
-  <div className={isCollapsed && !isMobile ? 'flex justify-center' : ''}>
-    <KuiperLogo isExpanded={!isCollapsed || isMobile} />
-  </div>
-
-  {/* Row 2: collapse arrow, right-aligned, BELOW the animation */}
-  {!isMobile && !isCollapsed && (
-    <div className="mt-2 flex justify-end">
-      <button
-        type="button"
-        onClick={toggleSidebar}
-        aria-label="Collapse sidebar"
-        title="Collapse sidebar"
-        className="p-1.5 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
-      >
-        <PanelLeftClose size={16} />
-      </button>
-    </div>
-  )}
-
-  {/* Row 2 (collapsed state): expand arrow, centered, BELOW the animation */}
-  {!isMobile && isCollapsed && (
-    <button
-      type="button"
-      onClick={toggleSidebar}
-      aria-label="Expand sidebar"
-      title="Expand sidebar"
-      className="mt-3 mx-auto flex items-center justify-center w-9 h-9 rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
-    >
-      <PanelLeftOpen size={18} />
-    </button>
-  )}
-</div>
-
-        {/* NOTIFICATIONS */}
-        <div className={`${isCollapsed && !isMobile ? 'px-2' : 'px-3'} mt-3`}>
-          <div className={`flex items-center ${isCollapsed && !isMobile ? 'justify-center' : 'justify-between'} px-2.5 py-1.5 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10`}>
-            {(!isCollapsed || isMobile) && (
-              <span className="text-[7px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                Notifications
-              </span>
-            )}
-            <NotificationBell />
+       {/* HEADER — logo, then one row: notifications + collapse button (right) */}
+        <div
+          className={`border-b border-slate-800 transition-all duration-300 ${
+            isMobile ? 'px-3 pt-3 pb-3' : isCollapsed ? 'px-2 pt-5 pb-3' : 'px-4 pt-4 pb-3'
+          }`}
+        >
+          <div className={isCollapsed && !isMobile ? 'flex justify-center' : ''}>
+            <KuiperLogo isExpanded={!isCollapsed || isMobile} />
           </div>
+
+          {isCollapsed && !isMobile ? (
+            // collapsed: expand button and bell side by side, tight
+            <div className="mt-3 flex items-center justify-center gap-1">
+              <div className="shrink-0 flex items-center justify-center">
+                <NotificationBell />
+              </div>
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                aria-label="Expand sidebar"
+                title="Expand sidebar"
+                className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                <PanelLeftOpen size={16} />
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 flex items-center gap-2">
+              <div className="flex-1 min-w-0 flex items-center justify-between pl-3 pr-1.5 py-1 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10">
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] truncate">
+                  Notifications
+                </span>
+                <NotificationBell />
+              </div>
+              {!isMobile && (
+                <button
+                  type="button"
+                  onClick={toggleSidebar}
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                  className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-slate-800 border border-white/10 transition-colors"
+                >
+                  <PanelLeftClose size={16} />
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* NAVIGATION (GROUPED) */}
@@ -781,7 +851,7 @@ const Sidebar = () => {
               ? 'h-[calc(100vh-160px)]'
               : isMobile
               ? 'h-[calc(100vh-320px)]'
-              : 'h-[calc(100vh-360px)]'
+              : 'h-[calc(100vh-316px)]'
           }`}
         >
           {menuGroups.map((group) => {
@@ -821,7 +891,10 @@ const Sidebar = () => {
                 <button
                   onClick={() => {
                     if (isCollapsed && !isMobile) {
+                      // collapsed: expand the sidebar and show this group (never close it)
                       toggleSidebar();
+                      setOpenGroups({ [group.key]: true });
+                      return;
                     }
                     toggleGroup(group.key);
                   }}

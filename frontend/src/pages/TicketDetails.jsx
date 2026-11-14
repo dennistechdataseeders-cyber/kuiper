@@ -1277,49 +1277,7 @@ const TicketDetails = () => {
       </div>
 
      {/* Ticket Progress */}
-{ticket && (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-3">
-    <div className="flex items-center gap-2 mb-3">
-      <CheckCircle size={16} className="text-blue-600" />
-      <span className="text-sm font-semibold text-gray-700">Progress</span>
-      <span className="text-xs font-medium text-gray-400 ml-auto">
-        {currentStatusIndex + 1}/{statusFlow.length}
-      </span>
-    </div>
-    <div className="relative px-6 sm:px-12">
-      <div className="absolute top-3 left-6 right-6 sm:left-12 sm:right-12 h-1 bg-gray-200 rounded-full" />
-      <div 
-        className="absolute top-3 left-6 sm:left-12 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500"
-        style={{ width: `calc(${Math.min((currentStatusIndex / (statusFlow.length - 1)) * 100, 100)}% - 16px)` }}
-      />
-      <div className="flex justify-between">
-        {statusFlow.map((status, index) => {
-          const isCompleted = index <= currentStatusIndex;
-          const isCurrent = status === ticket.status;
-          
-          return (
-            <div key={status} className="flex flex-col items-center relative group">
-              <div 
-                className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-pointer
-                  ${isCompleted 
-                    ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' 
-                    : 'bg-gray-200 text-gray-500'
-                  }
-                  ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500' : ''}
-                `}
-              >
-                {isCompleted ? <CheckCircle size={14} className="text-white" /> : index + 1}
-              </div>
-              <p className={`text-[10px] sm:text-xs font-semibold transition-colors mt-1.5 ${isCompleted ? 'text-green-700' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>
-                {isMobile ? status.substring(0, 1) : status}
-              </p>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  </div>
-)}
+{ticket && <TicketProgress ticket={ticket} statusFlow={statusFlow} currentStatusIndex={currentStatusIndex} isMobile={isMobile} />}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
         {/* Main Content Side */}
@@ -1945,3 +1903,122 @@ const TicketDetails = () => {
 };
 
 export default TicketDetails;
+
+// ============================================
+// Progress bar (each step is an equal-width column, so the line always
+// lines up with the circles). Hover a step to see when it happened.
+// ============================================
+const fmtStageTime = (d) =>
+  d ? new Date(d).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : '';
+
+const fmtGap = (from, to) => {
+  if (!from || !to) return '';
+  let mins = Math.max(0, Math.round((new Date(to) - new Date(from)) / 60000));
+  const d = Math.floor(mins / 1440); mins -= d * 1440;
+  const h = Math.floor(mins / 60); const m = mins - h * 60;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${m}m`;
+  return `${m}m`;
+};
+
+// When did the ticket (last) enter each stage?
+function stageTimes(ticket, statusFlow) {
+  const hist = Array.isArray(ticket.statusHistory) ? ticket.statusHistory : [];
+  const lastIn = (status) => {
+    for (let i = hist.length - 1; i >= 0; i -= 1) if (hist[i].status === status) return hist[i];
+    return null;
+  };
+  const fallback = {
+    'Open': ticket.createdAt,
+    'In Progress': ticket.startedAt,
+    'Resolved': ticket.resolvedAt,
+    'Closed': ticket.closedAt,
+  };
+  return statusFlow.map((status) => {
+    const h = lastIn(status);
+    if (h) return { at: h.at, by: h.byName || '' };
+    if (status === 'Open') return { at: ticket.createdAt, by: ticket.createdBy?.name || '' };
+    return { at: fallback[status] || null, by: '' };
+  });
+}
+
+function TicketProgress({ ticket, statusFlow, currentStatusIndex, isMobile }) {
+  const times = stageTimes(ticket, statusFlow);
+  const n = statusFlow.length;
+
+  return (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-3">
+      <div className="flex items-center gap-2 mb-3">
+        <CheckCircle size={16} className="text-blue-600" />
+        <span className="text-sm font-semibold text-gray-700">Progress</span>
+        <span className="text-xs font-medium text-gray-400 ml-auto">
+          {currentStatusIndex + 1}/{n}
+        </span>
+      </div>
+
+      <div className="grid" style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+        {statusFlow.map((status, index) => {
+          const isCompleted = index <= currentStatusIndex;
+          const isCurrent = status === ticket.status;
+          const leftDone = index <= currentStatusIndex;          // line coming into this step
+          const rightDone = index < currentStatusIndex;          // line going to the next step
+          const t = times[index];
+          // only show a time for steps the ticket has actually reached
+          const when = isCompleted ? t.at : null;
+          const prevAt = index > 0 && isCompleted ? times[index - 1].at : null;
+          const align = index === 0 ? 'left-0' : index === n - 1 ? 'right-0' : 'left-1/2 -translate-x-1/2';
+
+          return (
+            <div key={status} className="relative flex flex-col items-center group">
+              {/* connector halves */}
+              {index > 0 && (
+                <div className={`absolute top-[13px] left-0 right-1/2 h-1 ${leftDone ? 'bg-green-500' : 'bg-gray-200'}`} />
+              )}
+              {index < n - 1 && (
+                <div className={`absolute top-[13px] left-1/2 right-0 h-1 ${rightDone ? 'bg-green-500' : 'bg-gray-200'}`} />
+              )}
+
+              {/* circle */}
+              <div
+                tabIndex={0}
+                className={`relative z-10 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold transition-all duration-300 cursor-default outline-none
+                  ${isCompleted ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-md' : 'bg-gray-200 text-gray-500'}
+                  ${isCurrent ? 'ring-4 ring-blue-100 ring-offset-1 border-2 border-blue-500' : ''}
+                `}
+              >
+                {isCompleted ? <CheckCircle size={14} className="text-white" /> : index + 1}
+              </div>
+
+              <p className={`text-[10px] sm:text-xs font-semibold mt-1.5 text-center ${isCurrent ? 'text-blue-600' : isCompleted ? 'text-green-700' : 'text-gray-400'}`}>
+                {isMobile ? status.substring(0, 1) : status}
+              </p>
+
+              {/* hover / focus tooltip */}
+              <div
+                className={`pointer-events-none absolute bottom-full mb-2 ${align} z-30 w-max max-w-[240px] rounded-lg bg-slate-900 text-white px-3 py-2 shadow-xl
+                  opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition`}
+              >
+                <p className="text-xs font-bold">{status}</p>
+                {when ? (
+                  <>
+                    <p className="text-[11px] text-slate-200 mt-0.5">{fmtStageTime(when)}</p>
+                    {t.by && <p className="text-[10px] text-slate-400 mt-0.5">by {t.by}</p>}
+                    {prevAt && (
+                      <p className="text-[10px] text-slate-400 mt-0.5">
+                        {fmtGap(prevAt, when)} after {statusFlow[index - 1]}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[11px] text-slate-300 mt-0.5">
+                    {isCompleted ? 'Time not recorded' : 'Not reached yet'}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

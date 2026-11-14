@@ -2,14 +2,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Loader2, Plus, MoreHorizontal, Pencil, Trash2, Lock, X,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import { getActivityLeadName } from '../utils/useAlphaPagination';
-import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
+import useDashboardFilter, { idOf, ownerOf, isTodayLocal } from '../utils/useDashboardFilter';
 import DashboardFilterBanner from '../components/DashboardFilterBanner';
+import ZohoFilterSidebar, {
+  FilterLayout, FilterToggleButton, EMPTY_FILTERS, applyAllFilters, countActiveFilters,
+} from '../components/ZohoFilterSidebar';
 
 // "Completed" is a built-in stage (locked on the server): the Lead page treats it as finished.
 const DONE_STAGE = 'Completed';
@@ -26,8 +30,18 @@ const isOverdue = (task, stageName) => {
 
 const isClosedTask = (t) => t.status === DONE_STAGE || t.status === 'Cancelled';
 
+// ---- Zoho-style filter panel definitions ----
+const TASK_SYSTEM_FILTERS = (myId) => [
+  { key: 'open',      label: 'Open Tasks',      test: (t) => !isClosedTask(t) },
+  { key: 'completed', label: 'Completed Tasks', test: (t) => t.status === DONE_STAGE },
+  { key: 'overdue',   label: 'Overdue Tasks',   test: (t) => !isClosedTask(t) && isOverdue(t, t.status) },
+  { key: 'today',     label: 'Due Today',       test: (t) => !isClosedTask(t) && isTodayLocal(t.dueAt) },
+  { key: 'mine',      label: 'Assigned to Me',  test: (t) => !!myId && idOf(t.assignedTo) === String(myId) },
+];
+
 export default function ActivitiesTasks() {
   const { isCollapsed } = useSidebar();
+  const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
   const canEdit = EDIT_ROLES.includes(localStorage.getItem('role') || '');
@@ -40,6 +54,8 @@ export default function ActivitiesTasks() {
   const [items, setItems] = useState([]);     // tasks
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState('');
+  const [showFilters, setShowFilters] = useState(true);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   // drag & drop
   const [draggingId, setDraggingId] = useState(null);
@@ -87,10 +103,23 @@ export default function ActivitiesTasks() {
     return stageNames[0];
   }, [stageNames]);
 
+  // ---------- filter panel definitions ----------
+  const systemFilters = useMemo(() => TASK_SYSTEM_FILTERS(myId), [myId]);
+  const filterFields = useMemo(() => [
+    { key: 'title',    label: 'Subject',        type: 'text',   getValue: (i) => i.title },
+    { key: 'lead',     label: 'Related Lead',   type: 'text',   getValue: (i) => getActivityLeadName(i) },
+    { key: 'company',  label: 'Company',        type: 'select', getValue: (i) => i.leadId?.companyName },
+    { key: 'status',   label: 'Status',         type: 'select', options: stageNames, getValue: (i) => normalizeStatus(i.status) },
+    { key: 'priority', label: 'Priority',       type: 'select', options: ['High', 'Medium', 'Low'], getValue: (i) => i.priority },
+    { key: 'owner',    label: 'Task Owner',     type: 'select', getValue: (i) => ownerOf(i)?.name },
+    { key: 'dueAt',    label: 'Due Date',       type: 'date',   getValue: (i) => i.dueAt },
+    { key: 'createdAt',label: 'Created Time',   type: 'date',   getValue: (i) => i.createdAt },
+  ], [stageNames, normalizeStatus]);
+
   // ---------- derived ----------
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return items.filter((i) => {
+    const base = items.filter((i) => {
       if (dash.rep && idOf(ownerOf(i)) !== dash.rep) return false;
       if (dash.focus === 'open' && isClosedTask(i)) return false;
       if (dash.focus === 'overdue' && (isClosedTask(i) || !isOverdue(i, i.status))) return false;
@@ -102,7 +131,8 @@ export default function ActivitiesTasks() {
         (i.leadId?.companyName || '').toLowerCase().includes(s)
       );
     });
-  }, [items, q, dash.rep, dash.focus]);
+    return applyAllFilters(base, systemFilters, filterFields, filters);
+  }, [items, q, dash.rep, dash.focus, filters, systemFilters, filterFields]);
 
   const columns = useMemo(() => {
     const map = Object.fromEntries(stageNames.map((n) => [n, []]));
@@ -220,14 +250,17 @@ export default function ActivitiesTasks() {
             {filtered.length} task{filtered.length === 1 ? '' : 's'} · drag a card to change its stage
           </p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search tasks..."
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 shadow-sm bg-white"
-          />
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
+          <div className="relative flex-1 sm:w-72">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search tasks..."
+              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 shadow-sm bg-white"
+            />
+          </div>
         </div>
       </div>
 
@@ -237,6 +270,19 @@ export default function ActivitiesTasks() {
         className="mb-4"
       />
 
+      <FilterLayout
+        open={showFilters}
+        sidebar={
+          <ZohoFilterSidebar
+            title="Tasks"
+            systemFilters={systemFilters}
+            fields={filterFields}
+            rows={items}
+            value={filters}
+            onChange={setFilters}
+          />
+        }
+      >
       {loading ? (
         <div className="flex justify-center py-24"><Loader2 className="animate-spin text-blue-600" size={28} /></div>
       ) : (
@@ -325,6 +371,7 @@ export default function ActivitiesTasks() {
                     <div
                       key={t._id}
                       draggable
+                      onClick={() => navigate(`/sales/activity/${t._id}`)}
                       onDragStart={(e) => { setDraggingId(t._id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t._id); }}
                       onDragEnd={() => { setDraggingId(null); setOverStage(null); }}
                       className={`bg-white rounded-lg border border-slate-200 shadow-sm p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition ${
@@ -405,6 +452,7 @@ export default function ActivitiesTasks() {
           )}
         </div>
       )}
+      </FilterLayout>
 
       {/* ---------- Remove-stage dialog ---------- */}
       {deleting && (

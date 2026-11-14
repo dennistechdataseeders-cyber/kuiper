@@ -19,6 +19,10 @@ router.get('/history', leaveBucketController.getLeaveHistory);
 // Apply for leave
 router.post('/apply', leaveBucketController.applyLeave);
 
+// ✅ One-shot request: preview the paid / unpaid split, then submit everything at once
+router.post('/request/preview', leaveBucketController.previewLeave);
+router.post('/request', leaveBucketController.applyLeaveRequest);
+
 // ============================================
 // HR/ADMIN ROUTES
 // ============================================
@@ -38,6 +42,10 @@ router.get('/employees/buckets', leaveBucketController.getAllEmployeeBuckets);
 
 // ✅ NEW: Reward/penalize — directly set an employee's Paid Leave balance
 router.patch('/employee/:userId/adjust', leaveBucketController.adjustEmployeeBalance);
+
+// ✅ Approve / reject a whole one-shot request (all its pieces together)
+router.patch('/group/:groupId/approve', leaveBucketController.approveLeaveGroup);
+router.patch('/group/:groupId/reject', leaveBucketController.rejectLeaveGroup);
 
 // Approve leave
 router.patch('/:id/approve', leaveBucketController.approveLeave);

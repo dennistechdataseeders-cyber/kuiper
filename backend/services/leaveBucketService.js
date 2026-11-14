@@ -8,6 +8,8 @@ const User = require('../models/User');
 const sendEmail = require('./zohoMailer');
 const mongoose = require('mongoose');
 const { getLeaveBalanceAdjustedTemplate } = require('../templates/leaveBalanceEmailTemplates');
+const Holiday = require('../models/Holiday');
+const crypto = require('crypto');
 
 class LeaveBucketService {
 
@@ -268,7 +270,7 @@ class LeaveBucketService {
   // ============================================
   // ✅ Send leave request email to HR + Dhaval
   // ============================================
-  async sendLeaveRequestEmail(leaveApplication, employee) {
+  async sendLeaveRequestEmail(leaveApplication, employee, opts = {}) {
     try {
       const hrUsers = await User.find({
         role: 'HR',
@@ -305,9 +307,11 @@ class LeaveBucketService {
       const frontendUrl = process.env.FRONTEND_URL || 'https://kuiperapp.co.in';
       const leaveUrl = `${frontendUrl}/hr/leaves`;
 
-      const days = leaveApplication.isHalfDay
-        ? 0.5
-        : this.calculateDays(leaveApplication.startDate, leaveApplication.endDate);
+      const days = opts.days !== undefined
+        ? opts.days
+        : leaveApplication.isHalfDay
+          ? 0.5
+          : this.calculateDays(leaveApplication.startDate, leaveApplication.endDate);
 
       const isProbationary = employee.isProbationary || false;
 
@@ -694,6 +698,314 @@ class LeaveBucketService {
       newBalance,
       change
     };
+  }
+
+  // ============================================================
+  // ✅ ONE-SHOT LEAVE REQUEST
+  // The employee picks a date range and, per working day, Full / First half /
+  // Second half. Paid leave is used first (up to the available balance) and the
+  // rest becomes Unpaid — all in a single request. Weekends (Sat/Sun) and
+  // company holidays are never counted.
+  //
+  // Stored as several LeaveApplication pieces sharing one requestGroupId so
+  // existing reports / attendance / approval maths keep working unchanged.
+  // ============================================================
+  static get MAX_DAYS_PER_MONTH() { return 4; }
+
+  ymd(d) {
+    const x = new Date(d);
+    return `${x.getUTCFullYear()}-${String(x.getUTCMonth() + 1).padStart(2, '0')}-${String(x.getUTCDate()).padStart(2, '0')}`;
+  }
+
+  // days already "spoken for": pending requests (not yet deducted)
+  async pendingUsage(employeeId) {
+    const pending = await LeaveApplication.find({ employeeId, status: 'pending' }).lean();
+    let paid = 0;
+    let total = 0;
+    pending.forEach((l) => {
+      const d = l.isHalfDay ? 0.5 : this.calculateDays(l.startDate, l.endDate);
+      total += d;
+      if (l.leaveType === 'Paid Leave') paid += d;
+    });
+    return { paid, total, count: pending.length };
+  }
+
+  /**
+   * Work out a one-shot request without saving it.
+   * input: { startDate, endDate,
+   *          days:  { 'YYYY-MM-DD': 'full'|'first'|'second'|'none' },
+   *          types: { 'YYYY-MM-DD': 'auto'|'paid'|'unpaid' },   // per-day choice, default auto
+   *          usePaid }  // false → "auto" days become unpaid
+   * returns { dates[], pieces[], totals, balance, monthly, errors[], warnings[] }
+   */
+  async planLeave(employeeId, input = {}) {
+    const errors = [];
+    const warnings = [];
+    const { startDate, endDate } = input;
+    const choice = input.days || {};
+    const typeChoice = input.types || {};
+    const usePaid = input.usePaid !== false;
+
+    if (!startDate || !endDate) return { errors: ['Pick the leave dates'], warnings, dates: [], pieces: [] };
+    const start = new Date(`${String(startDate).slice(0, 10)}T00:00:00.000Z`);
+    const end = new Date(`${String(endDate).slice(0, 10)}T00:00:00.000Z`);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return { errors: ['Invalid dates'], warnings, dates: [], pieces: [] };
+    if (end < start) return { errors: ['End date is before start date'], warnings, dates: [], pieces: [] };
+    const spanDays = Math.round((end - start) / 86400000) + 1;
+    if (spanDays > 62) return { errors: ['A single request can cover at most 62 days'], warnings, dates: [], pieces: [] };
+
+    const employee = await User.findById(employeeId).select('isProbationary name email');
+    if (!employee) throw new Error('Employee not found');
+    const isProbationary = !!employee.isProbationary;
+
+    // holidays in range (compare by calendar day; holidays may be stored at UTC or IST midnight)
+    const hols = await Holiday.find({
+      date: { $gte: new Date(start.getTime() - 86400000), $lte: new Date(end.getTime() + 86400000) },
+    }).lean();
+    const holidayByDay = new Map();
+    hols.forEach((h) => {
+      if (h.isOptional) return; // optional holidays are working days unless taken as leave
+      holidayByDay.set(this.ymd(h.date), h.name);
+      const ist = new Date(new Date(h.date).getTime() + 330 * 60000);
+      holidayByDay.set(this.ymd(ist), h.name);
+    });
+
+    // existing pending / approved leave on these dates
+    const existing = await LeaveApplication.find({
+      employeeId,
+      status: { $in: ['pending', 'approved'] },
+      startDate: { $lte: end },
+      endDate: { $gte: start },
+    }).lean();
+    const takenByDay = new Map(); // ymd → amount already taken (0.5 / 1)
+    existing.forEach((l) => {
+      for (let t = new Date(l.startDate).getTime(); t <= new Date(l.endDate).getTime(); t += 86400000) {
+        const k = this.ymd(t);
+        takenByDay.set(k, Math.min(1, (takenByDay.get(k) || 0) + (l.isHalfDay ? 0.5 : 1)));
+      }
+    });
+
+    // ---------- each date ----------
+    const dates = [];
+    for (let i = 0; i < spanDays; i++) {
+      const d = new Date(start.getTime() + i * 86400000);
+      const key = this.ymd(d);
+      const dow = d.getUTCDay();
+      const weekend = dow === 0 || dow === 6;
+      const holiday = holidayByDay.get(key) || null;
+      const already = takenByDay.get(key) || 0;
+      let portion = choice[key] || 'full';
+      if (!['full', 'first', 'second', 'none'].includes(portion)) portion = 'full';
+
+      let off = null;
+      if (weekend) off = 'Weekend';
+      else if (holiday) off = `Holiday: ${holiday}`;
+      else if (already >= 1) off = 'Leave already applied';
+
+      if (off) portion = 'none';
+      else if (already === 0.5 && portion === 'full') {
+        portion = 'none';
+        warnings.push(`${key}: half a day is already on leave — pick First or Second half if you need the other half.`);
+      }
+
+      const amount = portion === 'full' ? 1 : portion === 'none' ? 0 : 0.5;
+      let type = typeChoice[key] || 'auto';
+      if (!['auto', 'paid', 'unpaid'].includes(type)) type = 'auto';
+      if (off || !amount) type = 'auto';
+      dates.push({ date: key, weekday: dow, off, portion, amount, type, alreadyOnLeave: already });
+    }
+
+    const totalDays = dates.reduce((t, d) => t + d.amount, 0);
+    if (totalDays === 0) errors.push('No working days selected');
+
+    // ---------- balance & monthly limit ----------
+    const bucket = await this.getOrCreateBucket(employeeId);
+    const pending = await this.pendingUsage(employeeId);
+    const ist = this.getISTDate();
+    const monthRec = bucket.monthlyUsage.find((m) => m.month === ist.getMonth() && m.year === ist.getFullYear());
+    const usedThisMonth = monthRec ? monthRec.leavesTaken : 0;
+    const MAX = LeaveBucketService.MAX_DAYS_PER_MONTH;
+    const monthlyRemaining = Math.max(0, MAX - usedThisMonth - pending.total);
+
+    // paid days the employee can still use (pending paid requests already reserved)
+    const paidCap = isProbationary ? 0 : Math.max(0, Math.floor((bucket.totalBalance - pending.paid) * 2) / 2); // whole / half days only
+
+    if (isProbationary) {
+      warnings.push('You are on probation, so the whole request is Unpaid Leave.');
+      if (dates.some((d) => d.type === 'paid' && d.amount)) errors.push('Employees on probation can only take Unpaid Leave — change the Paid days to Unpaid or Auto.');
+    }
+    if (totalDays > monthlyRemaining) {
+      errors.push(
+        `Monthly limit: you can take ${MAX} day(s) a month. Already used ${usedThisMonth}` +
+        `${pending.total ? ` + ${pending.total} pending` : ''}, so ${monthlyRemaining} day(s) are left — this request needs ${totalDays}.`
+      );
+    }
+
+    // ---------- decide paid / unpaid for every day ----------
+    // 1) days marked Paid take balance first, 2) Auto days use what is left, 3) Unpaid days stay unpaid
+    const forcedPaid = dates.filter((d) => d.amount && d.type === 'paid').reduce((t, d) => t + d.amount, 0);
+    if (!isProbationary && forcedPaid > paidCap) {
+      errors.push(`You marked ${forcedPaid} day(s) as Paid but only ${paidCap} paid day(s) are available. Change some days to Unpaid or Auto.`);
+    }
+    let paidLeft = Math.max(0, paidCap - (isProbationary ? 0 : Math.min(forcedPaid, paidCap)));
+    if (!usePaid) paidLeft = 0; // switch off → Auto days are unpaid
+    const availablePaid = paidCap;
+
+    const halves = []; // { date, part: 'full'|'first'|'second', type }
+    dates.forEach((d) => {
+      if (!d.amount) return;
+      if (d.type === 'paid' && !isProbationary) {
+        halves.push({ date: d.date, part: d.amount === 1 ? 'full' : d.portion, type: 'Paid Leave' });
+        return;
+      }
+      if (d.type === 'unpaid' || isProbationary) {
+        halves.push({ date: d.date, part: d.amount === 1 ? 'full' : d.portion, type: 'Unpaid Leave' });
+        return;
+      }
+      // auto
+      if (d.amount === 1) {
+        if (paidLeft >= 1) { halves.push({ date: d.date, part: 'full', type: 'Paid Leave' }); paidLeft -= 1; }
+        else if (paidLeft === 0.5) {
+          halves.push({ date: d.date, part: 'first', type: 'Paid Leave' });
+          halves.push({ date: d.date, part: 'second', type: 'Unpaid Leave' });
+          paidLeft = 0;
+        } else halves.push({ date: d.date, part: 'full', type: 'Unpaid Leave' });
+      } else {
+        const type = paidLeft >= 0.5 ? 'Paid Leave' : 'Unpaid Leave';
+        if (type === 'Paid Leave') paidLeft -= 0.5;
+        halves.push({ date: d.date, part: d.portion, type });
+      }
+    });
+
+    // merge consecutive full days of the same type into ranges (gaps = weekends/holidays break a range)
+    const pieces = [];
+    halves.forEach((h) => {
+      const last = pieces[pieces.length - 1];
+      const nextDay = last && this.ymd(new Date(`${last.endDate}T00:00:00.000Z`).getTime() + 86400000);
+      if (h.part === 'full' && last && !last.isHalfDay && last.leaveType === h.type && nextDay === h.date) {
+        last.endDate = h.date;
+        last.days += 1;
+      } else {
+        pieces.push({
+          leaveType: h.type,
+          startDate: h.date,
+          endDate: h.date,
+          isHalfDay: h.part !== 'full',
+          halfDayType: h.part === 'full' ? null : h.part,
+          days: h.part === 'full' ? 1 : 0.5,
+        });
+      }
+    });
+
+    const paidDays = pieces.filter((p) => p.leaveType === 'Paid Leave').reduce((t, p) => t + p.days, 0);
+    const unpaidDays = totalDays - paidDays;
+    const autoUnpaid = dates.some((d) => d.amount && d.type === 'auto') && unpaidDays > dates.filter((d) => d.type === 'unpaid').reduce((t, d) => t + d.amount, 0);
+    if (!isProbationary && usePaid && autoUnpaid && totalDays > 0) {
+      warnings.push(`Only ${availablePaid} paid day(s) available, so ${unpaidDays} day(s) will be Unpaid Leave.`);
+    }
+
+    return {
+      dates,
+      pieces,
+      totals: { totalDays, paidDays, unpaidDays, workingDays: dates.filter((d) => !d.off).length },
+      balance: {
+        total: bucket.totalBalance,
+        pendingPaid: pending.paid,
+        availablePaid: isProbationary ? 0 : Math.max(0, Math.floor((bucket.totalBalance - pending.paid) * 2) / 2),
+        isProbationary,
+      },
+      monthly: { limit: MAX, used: usedThisMonth, pending: pending.total, remaining: monthlyRemaining },
+      errors,
+      warnings,
+    };
+  }
+
+  async applyLeaveRequest(employeeId, input = {}) {
+    const reason = String(input.reason || '').trim();
+    const plan = await this.planLeave(employeeId, input);
+    if (!reason) plan.errors.push('Please add a reason');
+    if (plan.errors.length) {
+      const err = new Error(plan.errors[0]);
+      err.plan = plan;
+      throw err;
+    }
+
+    const groupId = crypto.randomUUID();
+    const summary = {
+      totalDays: plan.totals.totalDays,
+      paidDays: plan.totals.paidDays,
+      unpaidDays: plan.totals.unpaidDays,
+      fromDate: new Date(`${plan.pieces[0].startDate}T00:00:00.000Z`),
+      toDate: new Date(`${plan.pieces[plan.pieces.length - 1].endDate}T00:00:00.000Z`),
+    };
+
+    const docs = await LeaveApplication.insertMany(plan.pieces.map((p) => ({
+      employeeId,
+      leaveType: p.leaveType,
+      startDate: new Date(`${p.startDate}T00:00:00.000Z`),
+      endDate: new Date(`${p.endDate}T00:00:00.000Z`),
+      isHalfDay: p.isHalfDay,
+      halfDayType: p.halfDayType,
+      reason,
+      status: 'pending',
+      deductedFromBucket: false,
+      requestGroupId: groupId,
+      groupSummary: summary,
+    })));
+
+    // one email for the whole request
+    try {
+      const employee = await User.findById(employeeId).select('name email isProbationary');
+      const label = [
+        summary.paidDays ? `Paid ${summary.paidDays}` : '',
+        summary.unpaidDays ? `Unpaid ${summary.unpaidDays}` : '',
+      ].filter(Boolean).join(' + ');
+      await this.sendLeaveRequestEmail(
+        { leaveType: label || 'Leave', startDate: summary.fromDate, endDate: summary.toDate, isHalfDay: false, reason },
+        employee,
+        { days: summary.totalDays }
+      );
+    } catch (e) {
+      console.error('Leave request email failed:', e.message);
+    }
+
+    return { success: true, requestGroupId: groupId, pieces: docs, plan };
+  }
+
+  // HR: approve every pending piece of a request together
+  async approveLeaveGroup(groupId, approvedBy) {
+    const pieces = await LeaveApplication.find({ requestGroupId: groupId, status: 'pending' }).sort({ startDate: 1, halfDayType: 1 });
+    if (!pieces.length) throw new Error('No pending leave found for this request');
+
+    const employeeId = pieces[0].employeeId;
+    const bucket = await this.getOrCreateBucket(employeeId);
+    const paidNeeded = pieces
+      .filter((p) => p.leaveType === 'Paid Leave')
+      .reduce((t, p) => t + (p.isHalfDay ? 0.5 : this.calculateDays(p.startDate, p.endDate)), 0);
+    if (paidNeeded > bucket.totalBalance) {
+      throw new Error(`Insufficient Paid Leave balance to approve this request. Available: ${bucket.totalBalance}, Required: ${paidNeeded}`);
+    }
+
+    const results = [];
+    for (const p of pieces) {
+      results.push(await this.approveLeave(p._id, approvedBy));
+    }
+    const last = results[results.length - 1];
+    return {
+      success: true,
+      approved: results.length,
+      remainingBalance: last.remainingBalance,
+      monthlyUsage: last.monthlyUsage,
+    };
+  }
+
+  async rejectLeaveGroup(groupId, rejectionReason, approvedBy) {
+    const pieces = await LeaveApplication.find({ requestGroupId: groupId, status: 'pending' });
+    if (!pieces.length) throw new Error('No pending leave found for this request');
+    for (const p of pieces) {
+      await this.rejectLeave(p._id, rejectionReason || 'Rejected', approvedBy);
+    }
+    return { success: true, rejected: pieces.length };
   }
 
   calculateDays(startDate, endDate) {

@@ -98,6 +98,36 @@ router.get('/', async (req, res) => {
 });
 
 // ============================================
+// GET /api/lead-activities/:id  — one task / meeting / call (detail page)
+// Same visibility as editing: creator, assignee, managers, or an unassigned activity.
+// ============================================
+router.get('/:id', async (req, res) => {
+  try {
+    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ error: 'Invalid id' });
+    const activity = await LeadActivity.findById(req.params.id)
+      .populate({ path: 'leadId', select: 'companyName contacts website leadStatus leadSource leadOwner', populate: { path: 'leadOwner', select: 'name email' } })
+      .populate('createdBy', 'name email')
+      .populate('assignedTo', 'name email')
+      .populate('assignedBy', 'name email');
+    if (!activity) return res.status(404).json({ error: 'Activity not found' });
+
+    const me = String(req.user._id);
+    const idOf = (v) => String(v?._id || v || '');
+    const canSee =
+      idOf(activity.createdBy) === me ||
+      (activity.assignedTo && idOf(activity.assignedTo) === me) ||
+      isManager(req.user) ||
+      !activity.assignedTo;
+    if (!canSee) return res.status(403).json({ error: 'This task is assigned to someone else' });
+
+    res.json({ success: true, data: activity });
+  } catch (err) {
+    console.error('GET lead activity error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
 // POST /api/lead-activities
 //   Body: { leadId, type, title, content, scheduledAt, dueAt, ..., assignedTo }
 //   assignedTo (tasks only, managers only): hand the task to a sales rep.

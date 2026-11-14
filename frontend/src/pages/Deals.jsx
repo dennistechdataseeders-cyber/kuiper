@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Loader2, LayoutGrid, List as ListIcon, Plus, MoreHorizontal,
   Pencil, Trash2, Lock, X,
@@ -13,6 +14,13 @@ import { useSidebar } from '../context/SidebarContext';
 import Pagination from '../components/Pagination';
 import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
 import DashboardFilterBanner from '../components/DashboardFilterBanner';
+import useColumnTable from '../utils/useColumnTable';
+import { ColumnHead, ColumnToolbar } from '../components/ColumnTable';
+import { rowClickHandler } from '../components/RecordDetailKit';
+import useRecordTags, { useRowSelection } from '../utils/useRecordTags';
+import {
+  selectionColumn, tagsColumn, TagToolbar, TagDialogs, useTagDialogs, TagList,
+} from '../components/RecordTags';
 
 // These are the only stages the lead-side logic treats as "closed".
 // Everything else is a normal movable stage.
@@ -32,6 +40,7 @@ const isOverdue = (deal, stageName) => {
 
 export default function Deals() {
   const { isCollapsed } = useSidebar();
+  const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
   const canEdit = EDIT_ROLES.includes(localStorage.getItem('role') || '');
@@ -222,12 +231,86 @@ export default function Deals() {
     }
   };
 
+  // ---------- Zoho-style tags ----------
+  const tagsApi = useRecordTags('Deals');
+  const sel = useRowSelection();
+  const tagDialogs = useTagDialogs();
+
+  // ---------- list view: Zoho-style per-column menu (sort / pin / filter by / hide) ----------
+  const listColumns = [
+    selectionColumn({
+      sel, tagsApi, getId: (d) => d._id, getPageRows: () => paged,
+      openTags: tagDialogs.openTags, openManage: tagDialogs.openManage,
+    }),
+    tagsColumn(tagsApi, (d) => d._id), // Tag column first (after the checkbox / quick-action columns)
+    {
+      key: 'dealName', label: 'Deal Name', type: 'text', width: 220,
+      getValue: (d) => d.dealName,
+      tdClass: 'text-sm font-bold text-slate-800',
+      render: (d) => d.dealName,
+    },
+    {
+      key: 'account', label: 'Account', type: 'select',
+      getValue: (d) => d.organizationId?.companyName,
+      tdClass: 'text-sm text-slate-600',
+      render: (d) => d.organizationId?.companyName || '—',
+    },
+    {
+      key: 'contact', label: 'Contact', type: 'text',
+      getValue: (d) => d.contactName,
+      tdClass: 'text-sm text-slate-600',
+      render: (d) => (
+        <>
+          {d.contactName || '—'}
+          {d.contactRole && <span className="block text-[10px] text-slate-400 font-semibold">{d.contactRole}</span>}
+        </>
+      ),
+    },
+    {
+      key: 'amount', label: 'Amount', type: 'number',
+      getValue: (d) => Number(d.amount || 0),
+      tdClass: 'text-sm font-semibold text-slate-700',
+      render: (d) => fmtAmount(d.amount),
+    },
+    {
+      key: 'closingDate', label: 'Closing Date', type: 'date',
+      getValue: (d) => d.closingDate,
+      render: (d) => (
+        <span className={`text-sm ${isOverdue(d, d.stage) ? 'text-red-500 font-semibold' : 'text-slate-600'}`}>
+          {fmtDate(d.closingDate)}
+        </span>
+      ),
+    },
+    {
+      key: 'stage', label: 'Stage', type: 'select',
+      getValue: (d) => normalizeStage(d.stage),
+      render: (d) => (
+        <select
+          value={normalizeStage(d.stage)}
+          onChange={(e) => moveDeal(d._id, e.target.value)}
+          className="px-2 py-1 rounded-full text-[11px] font-black outline-none cursor-pointer border border-slate-200 bg-white"
+        >
+          {stages.map((s) => <option key={s._id}>{s.name}</option>)}
+        </select>
+      ),
+    },
+    {
+      key: 'owner', label: 'Deal Owner', type: 'select',
+      getValue: (d) => d.owner?.name,
+      tdClass: 'text-sm text-slate-600',
+      render: (d) => d.owner?.name || '—',
+    },
+  ];
+  const ct = useColumnTable('deals', listColumns, filtered, `${stageNames.join('|')}#${tagsApi.version}`);
+  const listRows = ct.rows;
+  useEffect(() => { setPage(1); }, [ct.stateKey]);
+
   // list-view paging
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(listRows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paged = useMemo(
-    () => filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [filtered, currentPage, pageSize]
+    () => listRows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [listRows, currentPage, pageSize]
   );
 
   // ============================================
@@ -368,9 +451,13 @@ export default function Deals() {
                       draggable
                       onDragStart={(e) => { setDraggingId(d._id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', d._id); }}
                       onDragEnd={() => { setDraggingId(null); setOverStage(null); }}
+                      onClick={rowClickHandler(() => navigate(`/sales/deals/${d._id}`))}
                       className={`bg-white rounded-lg border border-slate-200 shadow-sm p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition ${draggingId === d._id ? 'opacity-40' : ''}`}
                     >
                       <p className="text-sm font-bold text-slate-900 truncate">{d.dealName}</p>
+                      {tagsApi.tagsOf(d._id).length > 0 && (
+                        <div className="mt-1"><TagList tags={tagsApi.tagsOf(d._id)} max={2} /></div>
+                      )}
                       <div className="mt-1 space-y-0.5 text-[13px] text-slate-600">
                         <p className="truncate">{stage.name}</p>
                         <p className="truncate">{d.organizationId?.companyName || '—'}</p>
@@ -451,55 +538,52 @@ export default function Deals() {
         </div>
       ) : (
         /* ================= LIST ================= */
+        <>
+        <div className="flex flex-wrap items-center gap-2 mb-3">
+          <TagToolbar sel={sel} openTags={tagDialogs.openTags} openManage={tagDialogs.openManage} />
+          <ColumnToolbar ct={ct} className="flex-1" />
+        </div>
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left min-w-[900px]">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  {['Deal Name', 'Account', 'Contact', 'Amount', 'Closing Date', 'Stage', 'Deal Owner'].map((h) => (
-                    <th key={h} className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">{h}</th>
-                  ))}
-                </tr>
-              </thead>
+              <ColumnHead ct={ct} />
               <tbody className="divide-y divide-slate-100">
                 {paged.length === 0 ? (
-                  <tr><td colSpan="7" className="text-center py-10 text-slate-400">No deals yet. Open a lead and click “Convert Deal”.</td></tr>
+                  <tr>
+                    <td colSpan={ct.visibleColumns.length} className="text-center py-10 text-slate-400">
+                      {filtered.length === 0 ? 'No deals yet. Open a lead and click “Convert Deal”.' : 'No deals match the column filters.'}
+                    </td>
+                  </tr>
                 ) : paged.map((d) => (
-                  <tr key={d._id} className="hover:bg-slate-50 transition">
-                    <td className="px-6 py-4 text-sm font-bold text-slate-800">{d.dealName}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{d.organizationId?.companyName || '—'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {d.contactName || '—'}
-                      {d.contactRole && <span className="block text-[10px] text-slate-400 font-semibold">{d.contactRole}</span>}
-                    </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">{fmtAmount(d.amount)}</td>
-                    <td className={`px-6 py-4 text-sm ${isOverdue(d, d.stage) ? 'text-red-500 font-semibold' : 'text-slate-600'}`}>{fmtDate(d.closingDate)}</td>
-                    <td className="px-6 py-4">
-                      <select
-                        value={normalizeStage(d.stage)}
-                        onChange={(e) => moveDeal(d._id, e.target.value)}
-                        className="px-2 py-1 rounded-full text-[11px] font-black outline-none cursor-pointer border border-slate-200 bg-white"
-                      >
-                        {stages.map((s) => <option key={s._id}>{s.name}</option>)}
-                      </select>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">{d.owner?.name || '—'}</td>
+                  <tr
+                    key={d._id}
+                    onClick={rowClickHandler(() => navigate(`/sales/deals/${d._id}`))}
+                    className={`hover:bg-slate-50 transition group cursor-pointer ${sel.isSelected(d._id) ? 'bg-blue-50/60' : ''}`}
+                  >
+                    {ct.visibleColumns.map((col) => (
+                      <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'px-6 py-4'} ${col.tdClass || ''}`)}>
+                        {col.render(d)}
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {filtered.length > 0 && (
+          {listRows.length > 0 && (
             <Pagination
               page={currentPage}
               pageSize={pageSize}
-              totalItems={filtered.length}
+              totalItems={listRows.length}
               onPageChange={setPage}
               onPageSizeChange={(s) => { setPageSize(s); setPage(1); }}
             />
           )}
         </div>
+        </>
       )}
+
+      <TagDialogs dialogs={tagDialogs} tagsApi={tagsApi} onDone={sel.clear} />
 
       {/* ---------- Remove-stage dialog ---------- */}
       {deleting && (

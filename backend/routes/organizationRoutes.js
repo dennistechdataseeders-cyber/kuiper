@@ -186,6 +186,136 @@ router.get('/check-existing', authorize('Admin', 'Sales', 'Sales Manager','HR'),
   }
 });
 
+// ============================================
+// Account / Contact DETAIL PAGES (Sales → Accounts / Contacts → click a row)
+// These PATCH routes only touch the fields that are sent, so they can never
+// wipe the contacts list the way a full PUT without pointsOfContact would.
+// ============================================
+const ORG_STATUSES = ['New', 'Contacted', 'Converted', 'Active', 'Inactive'];
+const POC_DEPTS = ['CEO', 'CTO', 'Sales', 'Marketing', 'Support', 'Developer', 'Other'];
+const isObjId = (v) => /^[0-9a-fA-F]{24}$/.test(String(v || ''));
+const str = (v) => (v === undefined || v === null ? '' : String(v).trim());
+
+const populateOrg = (q) => q
+  .populate('salesRepId', 'name email')
+  .populate('clientUserId', 'name email')
+  .select('-__v');
+
+// --- GET: one account with its owner populated ---
+router.get('/:id/detail', authorize('Admin', 'Sales', 'Sales Manager', 'HR'), async (req, res) => {
+  try {
+    if (!isObjId(req.params.id)) return res.status(400).json({ error: 'Invalid account id' });
+    const org = await populateOrg(Organization.findById(req.params.id));
+    if (!org) return res.status(404).json({ error: 'Account not found' });
+    res.json({ success: true, data: org });
+  } catch (err) {
+    console.error('GET /orgs/:id/detail', err);
+    res.status(500).json({ error: 'Failed to load account' });
+  }
+});
+
+// --- PATCH: edit account fields ---
+// $set on just the changed paths: old contacts with legacy data are never re-validated.
+router.patch('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    if (!isObjId(req.params.id)) return res.status(400).json({ error: 'Invalid account id' });
+    const b = req.body || {};
+    const set = {};
+    const unset = {};
+
+    if (b.companyName !== undefined) {
+      if (!str(b.companyName)) return res.status(400).json({ error: 'Account Name is required' });
+      set.companyName = str(b.companyName);
+    }
+    ['website', 'address', 'phone', 'industry'].forEach((k) => {
+      if (b[k] !== undefined) set[k] = str(b[k]);
+    });
+    if (b.noOfEmployees !== undefined) {
+      if (b.noOfEmployees === '' || b.noOfEmployees === null) unset.noOfEmployees = 1;
+      else {
+        const n = Number(b.noOfEmployees);
+        if (Number.isNaN(n) || n < 0) return res.status(400).json({ error: 'No. of Employees must be a number' });
+        set.noOfEmployees = n;
+      }
+    }
+    if (b.status !== undefined) {
+      if (!ORG_STATUSES.includes(b.status)) return res.status(400).json({ error: 'Invalid status' });
+      set.status = b.status;
+    }
+    if (b.salesRepId !== undefined) {
+      if (!b.salesRepId) unset.salesRepId = 1;
+      else if (!isObjId(b.salesRepId)) return res.status(400).json({ error: 'Invalid owner' });
+      else set.salesRepId = b.salesRepId;
+    }
+    if (Array.isArray(b.customFields)) set.customFields = b.customFields;
+
+    const update = {};
+    if (Object.keys(set).length) update.$set = set;
+    if (Object.keys(unset).length) update.$unset = unset;
+    if (!Object.keys(update).length) return res.status(400).json({ error: 'Nothing to update' });
+
+    const saved = await populateOrg(
+      Organization.findByIdAndUpdate(req.params.id, update, { new: true, runValidators: true })
+    );
+    if (!saved) return res.status(404).json({ error: 'Account not found' });
+    res.json({ success: true, data: saved });
+  } catch (err) {
+    console.error('PATCH /orgs/:id', err);
+    res.status(400).json({ error: err.message || 'Failed to update account' });
+  }
+});
+
+// --- PATCH: edit one contact (by its _id, not its position) ---
+router.patch('/:id/pocs/:pocId', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
+  try {
+    const { id, pocId } = req.params;
+    if (!isObjId(id) || !isObjId(pocId)) return res.status(400).json({ error: 'Invalid id' });
+    const exists = await Organization.exists({ _id: id, 'pointsOfContact._id': pocId });
+    if (!exists) return res.status(404).json({ error: 'Contact not found' });
+
+    const b = req.body || {};
+    const set = {};
+    if (b.pocName !== undefined) {
+      if (!str(b.pocName)) return res.status(400).json({ error: 'Contact Name is required' });
+      set['pointsOfContact.$.pocName'] = str(b.pocName);
+    }
+    ['pocEmail', 'pocPhone', 'mobile', 'linkedin', 'title', 'notes'].forEach((k) => {
+      if (b[k] !== undefined) set[`pointsOfContact.$.${k}`] = str(b[k]);
+    });
+    if (b.department !== undefined) {
+      set['pointsOfContact.$.department'] = POC_DEPTS.includes(b.department) ? b.department : 'Other';
+    }
+    if (Array.isArray(b.customFields)) set['pointsOfContact.$.customFields'] = b.customFields;
+
+    // Only one primary contact per account
+    if (b.isPrimary === true) {
+      await Organization.updateOne({ _id: id }, { $set: { 'pointsOfContact.$[].isPrimary': false } });
+      set['pointsOfContact.$.isPrimary'] = true;
+    } else if (b.isPrimary === false) {
+      set['pointsOfContact.$.isPrimary'] = false;
+    }
+
+    if (Object.keys(set).length) {
+      await Organization.updateOne({ _id: id, 'pointsOfContact._id': pocId }, { $set: set });
+    }
+
+    // keep the legacy top-level poc* fields pointing at the primary contact
+    const org = await Organization.findById(id).select('pointsOfContact').lean();
+    const primary = (org.pointsOfContact || []).find((p) => p.isPrimary) || (org.pointsOfContact || [])[0];
+    if (primary) {
+      await Organization.updateOne({ _id: id }, {
+        $set: { pocName: primary.pocName, pocEmail: primary.pocEmail, pocPhone: primary.pocPhone, linkedin: primary.linkedin },
+      });
+    }
+
+    const saved = await populateOrg(Organization.findById(id));
+    res.json({ success: true, data: saved, poc: saved.pointsOfContact.id(pocId) });
+  } catch (err) {
+    console.error('PATCH /orgs/:id/pocs/:pocId', err);
+    res.status(400).json({ error: err.message || 'Failed to update contact' });
+  }
+});
+
 // --- GET: Get Single Organization by ID (MUST BE AFTER SPECIFIC ROUTES) ---
 router.get('/:id', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, res) => {
   try {

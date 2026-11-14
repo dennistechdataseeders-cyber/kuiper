@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import ApplyLeaveModal from './ApplyLeaveModal';
 
 const EmployeeLeave = ({ userId, token }) => {
   // State
@@ -33,17 +34,9 @@ const EmployeeLeave = ({ userId, token }) => {
   const [leaveBalance, setLeaveBalance] = useState(null);
   const [leaveHistory, setLeaveHistory] = useState([]);
   const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [processing, setProcessing] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-  const [balanceCheck, setBalanceCheck] = useState({
-    isValid: true,
-    message: '',
-    requiredDays: 0,
-    availableBalance: 0
-  });
-  
   // ✅ PROBATION STATE
   const [probationStatus, setProbationStatus] = useState(null);
   const [fetchingProbation, setFetchingProbation] = useState(false);
@@ -61,16 +54,6 @@ const EmployeeLeave = ({ userId, token }) => {
     monthlyLimit: 4
   });
 
-  // Leave form
-  const [leaveForm, setLeaveForm] = useState({
-    leaveType: 'Paid Leave',
-    leaveDuration: 'full', // 'full' or 'half'
-    halfDayType: 'first', // 'first' or 'second'
-    startDate: '',
-    endDate: '',
-    reason: ''
-  });
-
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
   };
@@ -84,14 +67,6 @@ const EmployeeLeave = ({ userId, token }) => {
     });
   };
 
-  // Calculate days between two dates
-  const calculateDays = (startDate, endDate) => {
-    if (!startDate || !endDate) return 0;
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    if (end < start) return 0;
-    return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-  };
 
   // ✅ Fetch probation status
   const fetchProbationStatus = async () => {
@@ -138,131 +113,6 @@ const EmployeeLeave = ({ userId, token }) => {
     } finally {
       setFetchingProbation(false);
     }
-  };
-
-  // ✅ NEW: Check leave balance with bucket system
-  const checkLeaveBalance = (leaveType, startDate, endDate, isHalfDay) => {
-    if (!startDate) return { isValid: true, message: '', requiredDays: 0, availableBalance: 0 };
-    
-    let requiredDays = 0;
-    if (isHalfDay) {
-      requiredDays = 0.5;
-    } else {
-      const end = endDate || startDate;
-      requiredDays = calculateDays(startDate, end);
-    }
-    
-    // Unpaid Leave - infinite
-    if (leaveType === 'Unpaid Leave') {
-      return { 
-        isValid: true, 
-        message: 'Unpaid Leave has no limit', 
-        requiredDays: requiredDays,
-        availableBalance: '∞'
-      };
-    }
-    
-    // Paid Leave - check bucket balance
-    const balance = leaveBalance?.balances?.['Paid Leave'] || 0;
-    
-    // Check if there's enough balance
-    if (balance < requiredDays) {
-      return { 
-        isValid: false, 
-        message: `Insufficient Paid Leave balance. Available: ${balance}, Required: ${requiredDays}`,
-        requiredDays: requiredDays,
-        availableBalance: balance
-      };
-    }
-    
-    // Check monthly limit (4 days max)
-    const monthlyRemaining = leaveBalance?.remainingThisMonth || 0;
-    if (requiredDays > monthlyRemaining) {
-      return {
-        isValid: false,
-        message: `You've taken ${leaveBalance?.leavesTakenThisMonth || 0} days this month. Maximum allowed is 4 days. Remaining: ${monthlyRemaining} days.`,
-        requiredDays: requiredDays,
-        availableBalance: balance
-      };
-    }
-    
-    return { 
-      isValid: true, 
-      message: `Sufficient balance: ${balance} days available. ${monthlyRemaining} days remaining this month.`,
-      requiredDays: requiredDays,
-      availableBalance: balance
-    };
-  };
-
-  // ✅ Get available leave types (filtered for probation)
-  const getAvailableLeaveTypes = () => {
-    // Always show Paid Leave and Unpaid Leave
-    const allTypes = ['Paid Leave', 'Unpaid Leave'];
-    
-    // If on probation, only allow Unpaid Leave
-    if (probationStatus?.isProbationary) {
-      return ['Unpaid Leave'];
-    }
-    
-    return allTypes;
-  };
-
-  // Validate form before submission - ✅ WITH PROBATION AND MONTHLY LIMIT CHECK
-  const validateLeaveForm = () => {
-    const { leaveType, leaveDuration, halfDayType, startDate, endDate, reason } = leaveForm;
-    
-    // Check if all required fields are filled
-    if (leaveDuration === 'full') {
-      if (!startDate || !endDate) {
-        toast.error('Please select both start and end dates');
-        return false;
-      }
-      const start = new Date(startDate);
-      const end = new Date(endDate);
-      if (end < start) {
-        toast.error('End date cannot be before start date');
-        return false;
-      }
-    } else {
-      if (!startDate) {
-        toast.error('Please select a date');
-        return false;
-      }
-    }
-    
-    if (!reason.trim()) {
-      toast.error('Please enter a reason');
-      return false;
-    }
-    
-    // ✅ PROBATION CHECK - Only Unpaid Leave allowed during probation
-    if (probationStatus?.isProbationary && leaveType !== 'Unpaid Leave') {
-      toast.error('⚠️ You are on probation. Only Unpaid Leave is available.');
-      return false;
-    }
-    
-    // Check leave balance
-    const isHalfDay = leaveDuration === 'half';
-    const balanceCheckResult = checkLeaveBalance(leaveType, startDate, isHalfDay ? startDate : endDate, isHalfDay);
-    
-    if (!balanceCheckResult.isValid) {
-      toast.error(balanceCheckResult.message);
-      setBalanceCheck({
-        isValid: false,
-        message: balanceCheckResult.message,
-        requiredDays: balanceCheckResult.requiredDays,
-        availableBalance: balanceCheckResult.availableBalance
-      });
-      return false;
-    }
-    
-    setBalanceCheck({
-      isValid: true,
-      message: '',
-      requiredDays: 0,
-      availableBalance: 0
-    });
-    return true;
   };
 
   // ✅ UPDATED: Fetch leave data from new bucket system
@@ -325,66 +175,6 @@ const EmployeeLeave = ({ userId, token }) => {
     fetchProbationStatus();
   }, [statusFilter]);
 
-  // Update balance check when form changes
-  useEffect(() => {
-    if (leaveForm.startDate && leaveForm.leaveType) {
-      const isHalfDay = leaveForm.leaveDuration === 'half';
-      const endDate = isHalfDay ? leaveForm.startDate : leaveForm.endDate;
-      const result = checkLeaveBalance(leaveForm.leaveType, leaveForm.startDate, endDate, isHalfDay);
-      setBalanceCheck(result);
-    }
-  }, [leaveForm.startDate, leaveForm.endDate, leaveForm.leaveType, leaveForm.leaveDuration]);
-
-  // Apply for leave
-  const handleApplyLeave = async (e) => {
-    e.preventDefault();
-    
-    if (!validateLeaveForm()) {
-      return;
-    }
-
-    setProcessing(true);
-    try {
-      const isHalfDay = leaveForm.leaveDuration === 'half';
-      const payload = {
-        leaveType: leaveForm.leaveType,
-        startDate: leaveForm.startDate,
-        endDate: isHalfDay ? leaveForm.startDate : leaveForm.endDate,
-        isHalfDay: isHalfDay,
-        halfDayType: isHalfDay ? leaveForm.halfDayType : undefined,
-        reason: leaveForm.reason
-      };
-
-      await axios.post(
-        `${API_BASE_URL}/api/leave-bucket/apply`,
-        payload,
-        authHeader
-      );
-      toast.success('Leave request submitted successfully!');
-      setShowLeaveModal(false);
-      setLeaveForm({
-        leaveType: 'Paid Leave',
-        leaveDuration: 'full',
-        halfDayType: 'first',
-        startDate: '',
-        endDate: '',
-        reason: ''
-      });
-      setBalanceCheck({
-        isValid: true,
-        message: '',
-        requiredDays: 0,
-        availableBalance: 0
-      });
-      fetchLeaveData();
-    } catch (error) {
-      console.error('Error applying for leave:', error);
-      toast.error(error.response?.data?.error || 'Failed to apply for leave');
-    } finally {
-      setProcessing(false);
-    }
-  };
-
   const getStatusColor = (status) => {
     switch(status) {
       case 'approved': return 'bg-emerald-100 text-emerald-800 border-emerald-300';
@@ -398,12 +188,41 @@ const EmployeeLeave = ({ userId, token }) => {
     switch(type) {
       case 'Paid Leave': return 'bg-blue-100 text-blue-800 border-blue-300';
       case 'Unpaid Leave': return 'bg-indigo-100 text-indigo-800 border-indigo-300';
+      case 'Paid + Unpaid': return 'bg-violet-100 text-violet-800 border-violet-300';
       default: return 'bg-gray-100 text-gray-800 border-gray-300';
     }
   };
 
-  const totalPages = Math.ceil(leaveHistory.length / itemsPerPage);
-  const paginatedHistory = leaveHistory.slice(
+  // pieces of one request (same requestGroupId) are shown as a single entry
+  const groupedHistory = (() => {
+    const out = [];
+    const byGroup = new Map();
+    leaveHistory.forEach((l) => {
+      if (!l.requestGroupId) { out.push(l); return; }
+      let g = byGroup.get(l.requestGroupId);
+      if (!g) {
+        g = { ...l, _id: l.requestGroupId, isGroup: true, pieces: [] };
+        byGroup.set(l.requestGroupId, g);
+        out.push(g);
+      }
+      g.pieces.push(l);
+    });
+    byGroup.forEach((g) => {
+      g.pieces.sort((x, y) => new Date(x.startDate) - new Date(y.startDate));
+      const statuses = [...new Set(g.pieces.map((p) => p.status))];
+      g.status = statuses.length === 1 ? statuses[0] : statuses.includes('pending') ? 'pending' : 'approved';
+      g.startDate = g.groupSummary?.fromDate || g.pieces[0].startDate;
+      g.endDate = g.groupSummary?.toDate || g.pieces[g.pieces.length - 1].endDate;
+      const paid = g.groupSummary?.paidDays ?? 0;
+      const unpaid = g.groupSummary?.unpaidDays ?? 0;
+      g.leaveType = paid && unpaid ? 'Paid + Unpaid' : paid ? 'Paid Leave' : 'Unpaid Leave';
+      g.isHalfDay = false;
+    });
+    return out;
+  })();
+
+  const totalPages = Math.ceil(groupedHistory.length / itemsPerPage);
+  const paginatedHistory = groupedHistory.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
@@ -440,18 +259,6 @@ const EmployeeLeave = ({ userId, token }) => {
       </div>
     );
   }
-
-  // Get the balance for the selected leave type
-  const getSelectedBalance = () => {
-    if (!leaveBalance) return 0;
-    return leaveBalance.balances?.[leaveForm.leaveType] || 0;
-  };
-
-  // Get available leave types (filtered for probation)
-  const availableLeaveTypes = getAvailableLeaveTypes();
-
-  // Check if any leave types are available
-  const hasAvailableLeaveTypes = availableLeaveTypes.length > 0;
 
   return (
     <div className="space-y-5">
@@ -625,7 +432,26 @@ const EmployeeLeave = ({ userId, token }) => {
                     </div>
                     <p className="text-sm font-medium text-slate-800 mt-1.5">
                       {formatDate(leave.startDate)} {leave.isHalfDay ? `(${leave.halfDayType === 'first' ? 'First Half' : 'Second Half'})` : `- ${formatDate(leave.endDate)}`}
+                      {leave.isGroup && leave.groupSummary && (
+                        <span className="ml-2 text-xs font-bold text-slate-500">
+                          · {leave.groupSummary.totalDays} day(s)
+                          {leave.groupSummary.paidDays ? ` · ${leave.groupSummary.paidDays} paid` : ''}
+                          {leave.groupSummary.unpaidDays ? ` · ${leave.groupSummary.unpaidDays} unpaid` : ''}
+                        </span>
+                      )}
                     </p>
+                    {leave.isGroup && leave.pieces.length > 1 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {leave.pieces.map((p) => (
+                          <span key={p._id} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${p.leaveType === 'Paid Leave' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
+                            {new Date(p.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
+                            {!p.isHalfDay && new Date(p.endDate).getTime() !== new Date(p.startDate).getTime() ? `–${new Date(p.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
+                            {p.isHalfDay ? (p.halfDayType === 'first' ? ' ½ (1st)' : ' ½ (2nd)') : ''}
+                            {' · '}{p.leaveType === 'Paid Leave' ? 'Paid' : 'Unpaid'}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                     <p className="text-xs text-slate-600 mt-1 line-clamp-1">{leave.reason}</p>
                     {leave.status === 'rejected' && leave.rejectionReason && (
                       <p className="text-xs font-medium text-rose-600 mt-1">
@@ -675,280 +501,13 @@ const EmployeeLeave = ({ userId, token }) => {
         )}
       </div>
 
-      {/* Leave Application Modal - WITH PROBATION RESTRICTIONS AND MONTHLY LIMIT */}
-      {showLeaveModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-slate-200 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-2xl">
-              <div>
-                <h2 className="text-xl font-black text-slate-900">Apply for Leave</h2>
-                <p className="text-sm text-slate-600 mt-0.5">Submit a leave request for approval</p>
-                {/* ✅ Show probation status in modal */}
-                {probationStatus?.isProbationary && (
-                  <p className="text-xs font-semibold text-amber-700 mt-1 flex items-center gap-1">
-                    <AlertCircle size={14} />
-                    Probation: Only Unpaid Leave available
-                  </p>
-                )}
-                {/* Show monthly limit info */}
-                <p className="text-[11px] font-medium text-slate-500 mt-1">
-                  Monthly limit: {leaveStats.monthlyUsed}/{leaveStats.monthlyLimit} used • {leaveStats.monthlyRemaining} remaining
-                </p>
-              </div>
-              <button
-                onClick={() => setShowLeaveModal(false)}
-                className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
-              >
-                <X size={18} className="text-slate-700" />
-              </button>
-            </div>
-
-            <form onSubmit={handleApplyLeave} className="p-5 space-y-5">
-              {/* Leave Type - FILTERED FOR PROBATION */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
-                  Leave Type *
-                </label>
-                <select
-                  required
-                  value={leaveForm.leaveType}
-                  onChange={(e) => setLeaveForm({ ...leaveForm, leaveType: e.target.value })}
-                  className="w-full p-3 bg-slate-50 rounded-lg border border-slate-300 outline-none text-sm font-medium text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                >
-                  {!hasAvailableLeaveTypes ? (
-                    <option value="">No leave types available</option>
-                  ) : (
-                    availableLeaveTypes.map((type) => {
-                      const balance = leaveBalance?.balances?.[type] || 0;
-                      const isUnlimited = type === 'Unpaid Leave';
-                      return (
-                        <option key={type} value={type}>
-                          {type} ({isUnlimited ? '∞' : balance} days available)
-                          {probationStatus?.isProbationary && type === 'Unpaid Leave' && ' ✓'}
-                        </option>
-                      );
-                    })
-                  )}
-                </select>
-                {probationStatus?.isProbationary && (
-                  <p className="text-xs font-medium text-amber-700 mt-1.5 flex items-center gap-1">
-                    <Info size={14} />
-                    Only Unpaid Leave is available during probation
-                  </p>
-                )}
-              </div>
-
-              {/* Leave Duration - Full Day or Half Day */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
-                  Leave Duration *
-                </label>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setLeaveForm({ ...leaveForm, leaveDuration: 'full' })}
-                    className={`py-3 rounded-lg font-bold text-sm transition-all border-2 ${
-                      leaveForm.leaveDuration === 'full'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-400'
-                    }`}
-                  >
-                    Full Day
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLeaveForm({ ...leaveForm, leaveDuration: 'half' })}
-                    className={`py-3 rounded-lg font-bold text-sm transition-all border-2 ${
-                      leaveForm.leaveDuration === 'half'
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                        : 'bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-400'
-                    }`}
-                  >
-                    Half Day
-                  </button>
-                </div>
-              </div>
-
-              {/* Half Day Type - First Half or Second Half (only shown when half day is selected) */}
-              {leaveForm.leaveDuration === 'half' && (
-                <div className="animate-in slide-in-from-top-2 duration-200">
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
-                    Half Day Type *
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setLeaveForm({ ...leaveForm, halfDayType: 'first' })}
-                      className={`py-3 rounded-lg font-bold text-sm transition-all border-2 ${
-                        leaveForm.halfDayType === 'first'
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                          : 'bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-400'
-                      }`}
-                    >
-                      First Half
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLeaveForm({ ...leaveForm, halfDayType: 'second' })}
-                      className={`py-3 rounded-lg font-bold text-sm transition-all border-2 ${
-                        leaveForm.halfDayType === 'second'
-                          ? 'bg-blue-600 text-white border-blue-600 shadow-md'
-                          : 'bg-slate-50 text-slate-700 border-slate-300 hover:border-slate-400'
-                      }`}
-                    >
-                      Second Half
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Date Selection */}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
-                    {leaveForm.leaveDuration === 'full' ? 'From Date *' : 'Date *'}
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                    value={leaveForm.startDate}
-                    onChange={(e) => setLeaveForm({ ...leaveForm, startDate: e.target.value })}
-                    className="w-full p-3 bg-slate-50 rounded-lg border border-slate-300 outline-none text-sm font-medium text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                  />
-                </div>
-                {leaveForm.leaveDuration === 'full' && (
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
-                      To Date *
-                    </label>
-                    <input
-                      type="date"
-                      required
-                      min={leaveForm.startDate || new Date().toISOString().split('T')[0]}
-                      value={leaveForm.endDate}
-                      onChange={(e) => setLeaveForm({ ...leaveForm, endDate: e.target.value })}
-                      className="w-full p-3 bg-slate-50 rounded-lg border border-slate-300 outline-none text-sm font-medium text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all"
-                    />
-                  </div>
-                )}
-              </div>
-
-              {/* Balance Validation Display - UPDATED FOR BUCKET SYSTEM */}
-              {leaveForm.startDate && (
-                <div className={`p-3.5 rounded-lg border-2 ${
-                  balanceCheck.isValid 
-                    ? 'bg-emerald-50 border-emerald-300' 
-                    : 'bg-rose-50 border-rose-300'
-                }`}>
-                  <div className="flex items-start gap-2.5">
-                    {balanceCheck.isValid ? (
-                      <Check size={18} className="text-emerald-700 mt-0.5 flex-shrink-0" />
-                    ) : (
-                      <AlertCircle size={18} className="text-rose-700 mt-0.5 flex-shrink-0" />
-                    )}
-                    <div>
-                      <p className={`text-sm font-bold ${
-                        balanceCheck.isValid ? 'text-emerald-800' : 'text-rose-800'
-                      }`}>
-                        {balanceCheck.isValid 
-                          ? `✓ ${balanceCheck.message || 'Leave balance is sufficient'}`
-                          : balanceCheck.message
-                        }
-                      </p>
-                      <p className="text-xs font-medium text-slate-600 mt-1">
-                        {leaveForm.leaveType === 'Unpaid Leave' 
-                          ? 'Unlimited leave available' 
-                          : `Available: ${balanceCheck.availableBalance} days • Required: ${balanceCheck.requiredDays} days`
-                        }
-                      </p>
-                      {leaveForm.leaveType === 'Paid Leave' && (
-                        <p className="text-[10px] font-medium text-slate-500 mt-0.5">
-                          Monthly remaining: {leaveStats.monthlyRemaining} days
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Leave Balance Info */}
-              {leaveForm.leaveType !== 'Unpaid Leave' && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <Info size={16} className="text-blue-700 flex-shrink-0" />
-                  <p className="text-xs font-medium text-blue-800">
-                    You have <strong>{getSelectedBalance()}</strong> Paid Leave days remaining.
-                    {leaveForm.leaveDuration === 'full' && leaveForm.startDate && leaveForm.endDate && (
-                      <> This request requires <strong>{calculateDays(leaveForm.startDate, leaveForm.endDate)}</strong> days.</>
-                    )}
-                    {leaveForm.leaveDuration === 'half' && (
-                      <> This request requires <strong>0.5</strong> days.</>
-                    )}
-                    <br />
-                    <span className="text-[11px] text-blue-700">
-                      Monthly remaining: {leaveStats.monthlyRemaining} days
-                    </span>
-                  </p>
-                </div>
-              )}
-
-              {leaveForm.leaveType === 'Unpaid Leave' && (
-                <div className={`flex items-center gap-2 p-3 rounded-lg border-2 ${probationStatus?.isProbationary ? 'bg-amber-50 border-amber-300' : 'bg-indigo-50 border-indigo-200'}`}>
-                  <Info size={16} className={probationStatus?.isProbationary ? 'text-amber-700' : 'text-indigo-700'} />
-                  <p className={`text-xs font-medium ${probationStatus?.isProbationary ? 'text-amber-800' : 'text-indigo-800'}`}>
-                    {probationStatus?.isProbationary 
-                      ? '✅ Unpaid Leave is available during probation with no limit.'
-                      : 'Unpaid Leave has no limit. You can take as many unpaid days as needed.'
-                    }
-                  </p>
-                </div>
-              )}
-
-              {/* Reason */}
-              <div>
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 block mb-2">
-                  Reason *
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  placeholder="Enter reason for leave..."
-                  value={leaveForm.reason}
-                  onChange={(e) => setLeaveForm({ ...leaveForm, reason: e.target.value })}
-                  className="w-full p-3 bg-slate-50 rounded-lg border border-slate-300 outline-none text-sm font-medium text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all resize-none placeholder:text-slate-400"
-                />
-              </div>
-
-              {/* ✅ Probation warning on submit button */}
-              {probationStatus?.isProbationary && leaveForm.leaveType !== 'Unpaid Leave' && (
-                <div className="p-3 bg-rose-50 rounded-lg border border-rose-300 text-center">
-                  <p className="text-xs font-bold text-rose-700">
-                    ⚠️ Please select Unpaid Leave during probation
-                  </p>
-                </div>
-              )}
-
-              {/* Monthly limit warning */}
-              {leaveForm.leaveType === 'Paid Leave' && leaveStats.monthlyRemaining <= 0 && (
-                <div className="p-3 bg-rose-50 rounded-lg border border-rose-300 text-center">
-                  <p className="text-xs font-bold text-rose-700">
-                    ⚠️ You have reached the monthly limit of {leaveStats.monthlyLimit} days
-                  </p>
-                </div>
-              )}
-
-              <button
-                type="submit"
-                disabled={processing || (!balanceCheck.isValid && leaveForm.leaveType !== 'Unpaid Leave') || (leaveForm.leaveType === 'Paid Leave' && leaveStats.monthlyRemaining <= 0)}
-                className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              >
-                {processing ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
-                Submit Leave Request
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
+      {/* One-shot leave request: paid first, rest unpaid, half days, monthly limit — all in one go */}
+      <ApplyLeaveModal
+        open={showLeaveModal}
+        onClose={() => setShowLeaveModal(false)}
+        onSubmitted={fetchLeaveData}
+        authHeader={authHeader}
+      />
     </div>
   );
 };

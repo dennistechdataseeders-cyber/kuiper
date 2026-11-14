@@ -10,6 +10,16 @@ import Pagination from '../components/Pagination';
 import AddContactModal from '../components/AddContactModal';
 import AddAccountModal from '../components/AddAccountModal';
 import { useCustomFields } from '../components/CustomFieldsSection';
+import ZohoFilterSidebar, {
+  FilterLayout, FilterToggleButton, EMPTY_FILTERS, applyAllFilters, countActiveFilters,
+} from '../components/ZohoFilterSidebar';
+import useColumnTable from '../utils/useColumnTable';
+import { ColumnHead, ColumnToolbar } from '../components/ColumnTable';
+import { rowClickHandler } from '../components/RecordDetailKit';
+import useRecordTags, { useRowSelection } from '../utils/useRecordTags';
+import {
+  selectionColumn, tagsColumn, tagFilterField, TagToolbar, TagDialogs, useTagDialogs,
+} from '../components/RecordTags';
 
 // Display helper for a saved custom-field value
 const formatCustomValue = (v) => {
@@ -18,6 +28,15 @@ const formatCustomValue = (v) => {
   if (typeof v === 'boolean') return v ? 'Yes' : 'No';
   return String(v);
 };
+
+// ---- Zoho-style filter panel definitions ----
+const CONTACT_SYSTEM_FILTERS = [
+  { key: 'primary',   label: 'Primary Contacts',       test: (r) => !!r.isPrimary },
+  { key: 'hasEmail',  label: 'Contacts With Email',    test: (r) => !!r.email },
+  { key: 'noEmail',   label: 'Contacts Without Email', test: (r) => !r.email },
+  { key: 'hasPhone',  label: 'Contacts With Phone',    test: (r) => !!r.phone },
+  { key: 'noPhone',   label: 'Contacts Without Phone', test: (r) => !r.phone },
+];
 
 export default function Contacts() {
   const { isCollapsed } = useSidebar();
@@ -32,9 +51,17 @@ export default function Contacts() {
   const [pageSize, setPageSize] = useState(10);
   const [showAddContact, setShowAddContact] = useState(false);
   const [showAddAccount, setShowAddAccount] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
 
   // Fields created in Customize Modules → Contacts (shown as extra columns)
   const customFields = useCustomFields('Contacts');
+
+  // ---- Zoho-style tags (contact id = `${accountId}-${pocId}`) ----
+  const tagsApi = useRecordTags('Contacts');
+  const sel = useRowSelection();
+  const tagDialogs = useTagDialogs();
+  const { namesOf, tagNames } = tagsApi;
 
   const loadContacts = useCallback(async () => {
     try {
@@ -54,8 +81,9 @@ export default function Contacts() {
 
   useEffect(() => { loadContacts(); }, [loadContacts]);
 
-  const contactRows = useMemo(() => {
-    let rows = [];
+  // every contact (before search / filter panel) — also feeds the panel's value lists
+  const baseRows = useMemo(() => {
+    const rows = [];
     for (const lead of leads) {
       if (accountId && lead._id !== accountId) continue;
 
@@ -64,17 +92,51 @@ export default function Contacts() {
         rows.push({
           _id: `${lead._id}-${c._id || c.pocName}`,
           leadId: lead._id,
+          pocId: c._id,
           companyName: lead.companyName,
           firstName,
           lastName: rest.join(' '),
           email: c.pocEmail,
           phone: c.pocPhone || c.mobile,
           title: c.title,
+          owner: lead.salesRepId?.name || '',
+          addedAt: c.addedAt,
           isPrimary: c.isPrimary,
           custom: Object.fromEntries((c.customFields || []).map(f => [f.fieldKey, f.value]))
         });
       }
     }
+    return rows;
+  }, [leads, accountId]);
+
+  const customFieldDefs = useMemo(
+    () => customFields.map((f) => ({
+      key: `cf_${f.fieldKey}`,
+      label: f.label,
+      type: 'text',
+      getValue: (r) => {
+        const v = r.custom?.[f.fieldKey];
+        return Array.isArray(v) ? v.join(', ') : (v ?? '');
+      },
+    })),
+    [customFields]
+  );
+
+  const filterFields = useMemo(() => [
+    { key: 'companyName', label: 'Account Name',  type: 'select' },
+    { key: 'firstName',   label: 'First Name',    type: 'text' },
+    { key: 'lastName',    label: 'Last Name',     type: 'text' },
+    { key: 'email',       label: 'Email',         type: 'text' },
+    { key: 'phone',       label: 'Phone',         type: 'text' },
+    { key: 'title',       label: 'Title',         type: 'select' },
+    { key: 'owner',       label: 'Contact Owner', type: 'select' },
+    { key: 'addedAt',     label: 'Created Time',  type: 'date' },
+    ...customFieldDefs,
+    tagFilterField({ namesOf, tagNames }, (r) => r._id),
+  ], [customFieldDefs, namesOf, tagNames]);
+
+  const contactRows = useMemo(() => {
+    let rows = baseRows;
 
     if (q.trim()) {
       const s = q.toLowerCase();
@@ -86,17 +148,104 @@ export default function Contacts() {
         r.companyName?.toLowerCase().includes(s)
       );
     }
-    return rows;
-  }, [leads, accountId, q]);
+    return applyAllFilters(rows, CONTACT_SYSTEM_FILTERS, filterFields, filters);
+  }, [baseRows, q, filters, filterFields]);
 
-  // Back to page 1 when the search text or the selected account changes
-  useEffect(() => { setPage(1); }, [q, accountId]);
+  // ---- Zoho-style per-column menu (sort / pin / filter by / hide) ----
+  const columns = [
+    selectionColumn({
+      sel, tagsApi, getId: (r) => r._id, getPageRows: () => pagedRows,
+      openTags: tagDialogs.openTags, openManage: tagDialogs.openManage,
+    }),
+    tagsColumn(tagsApi, (r) => r._id), // Tag column first (after the checkbox / quick-action columns)
+    {
+      key: 'name', label: 'Contact Name', type: 'text', width: 240,
+      getValue: (r) => `${r.firstName || ''} ${r.lastName || ''}`.trim(),
+      render: (row) => (
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">
+            {row.firstName?.charAt(0)}{row.lastName?.charAt(0)}
+          </div>
+          <span className="font-bold text-slate-800 truncate">
+            {row.firstName} {row.lastName}
+          </span>
+          {row.isPrimary && (
+            <span className="inline-flex items-center gap-1 text-[9px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full ml-1 shrink-0">
+              <Star size={8} fill="currentColor" /> Primary
+            </span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'companyName', label: 'Account Name', type: 'select',
+      getValue: (r) => r.companyName,
+      render: (row) => (
+        <button
+          onClick={() => navigate(`/sales/contacts?accountId=${row.leadId}`)}
+          className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:underline"
+        >
+          <Building2 size={14} />
+          {row.companyName}
+        </button>
+      ),
+    },
+    {
+      key: 'email', label: 'Email', type: 'text',
+      getValue: (r) => r.email,
+      render: (row) => (
+        <div className="flex items-center gap-1.5 text-sm text-slate-600">
+          <Mail size={14} className="text-slate-400" />
+          {row.email ? <a href={`mailto:${row.email}`} className="hover:text-blue-600">{row.email}</a> : '—'}
+        </div>
+      ),
+    },
+    {
+      key: 'phone', label: 'Phone', type: 'phone',
+      getValue: (r) => r.phone,
+      render: (row) => (
+        <div className="flex items-center gap-1.5 text-sm text-slate-600">
+          <Phone size={14} className="text-slate-400" />
+          {row.phone ? <a href={`tel:${row.phone}`} className="hover:text-blue-600">{row.phone}</a> : '—'}
+        </div>
+      ),
+    },
+    {
+      key: 'title', label: 'Title', type: 'select',
+      getValue: (r) => r.title,
+      tdClass: 'text-sm text-slate-600',
+      render: (row) => row.title || '—',
+    },
+    {
+      key: 'owner', label: 'Contact Owner', type: 'select',
+      getValue: (r) => r.owner,
+      tdClass: 'text-sm text-slate-600',
+      render: (row) => row.owner || '—',
+    },
+    ...customFields.map((f) => ({
+      key: `cf_${f.fieldKey}`, label: f.label, type: 'text',
+      getValue: (r) => {
+        const v = r.custom?.[f.fieldKey];
+        return Array.isArray(v) ? v.join(', ') : (v ?? '');
+      },
+      tdClass: 'text-sm text-slate-600',
+      render: (row) => formatCustomValue(row.custom?.[f.fieldKey]),
+    })),
+  ];
 
-  const totalPages = Math.max(1, Math.ceil(contactRows.length / pageSize));
+  // Left-side filters first, then the per-column sort / filters
+  const ct = useColumnTable('contacts', columns, contactRows, tagsApi.version);
+  const rows = ct.rows;
+  const colCount = ct.visibleColumns.length;
+
+  // Back to page 1 when search / account / filters / column sort change
+  useEffect(() => { setPage(1); }, [q, accountId, filters, ct.stateKey]);
+
+  const totalPages = Math.max(1, Math.ceil(rows.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pagedRows = useMemo(
-    () => contactRows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
-    [contactRows, currentPage, pageSize]
+    () => rows.slice((currentPage - 1) * pageSize, currentPage * pageSize),
+    [rows, currentPage, pageSize]
   );
 
   const handlePageSizeChange = (size) => {
@@ -124,6 +273,7 @@ export default function Contacts() {
         </div>
 
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
           <div className="relative flex-1 sm:w-72">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -148,78 +298,49 @@ export default function Contacts() {
         </div>
       </div>
 
+      <FilterLayout
+        open={showFilters}
+        sidebar={
+          <ZohoFilterSidebar
+            title="Contacts"
+            systemFilters={CONTACT_SYSTEM_FILTERS}
+            fields={filterFields}
+            rows={baseRows}
+            value={filters}
+            onChange={setFilters}
+          />
+        }
+      >
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <TagToolbar sel={sel} openTags={tagDialogs.openTags} openManage={tagDialogs.openManage} />
+        <ColumnToolbar ct={ct} className="flex-1" />
+      </div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left min-w-[900px]">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Contact Name</th>
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Account Name</th>
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Phone</th>
-                <th className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider">Title</th>
-                {customFields.map(f => (
-                  <th key={f.fieldKey} className="px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider whitespace-nowrap">{f.label}</th>
-                ))}
-              </tr>
-            </thead>
+            <ColumnHead ct={ct} />
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={5 + customFields.length} className="py-16">
+                  <td colSpan={colCount} className="py-16">
                     <div className="flex flex-col items-center justify-center gap-3 text-slate-400">
                       <Loader2 size={32} className="animate-spin text-blue-600" />
                       <span className="text-sm font-semibold">Loading contacts...</span>
                     </div>
                   </td>
                 </tr>
-              ) : contactRows.length === 0 ? (
-                <tr><td colSpan={5 + customFields.length} className="text-center py-10 text-slate-400">No contacts found.</td></tr>
+              ) : rows.length === 0 ? (
+                <tr><td colSpan={colCount} className="text-center py-10 text-slate-400">No contacts found.</td></tr>
               ) : (
                 pagedRows.map((row) => (
-                  <tr key={row._id} className="hover:bg-slate-50 transition">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">
-                          {row.firstName?.charAt(0)}{row.lastName?.charAt(0)}
-                        </div>
-                        <span className="font-bold text-slate-800">
-                          {row.firstName} {row.lastName}
-                        </span>
-                        {row.isPrimary && (
-                          <span className="inline-flex items-center gap-1 text-[9px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full ml-1">
-                            <Star size={8} fill="currentColor" /> Primary
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <button
-                        onClick={() => navigate(`/sales/contacts?accountId=${row.leadId}`)}
-                        className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 hover:underline"
-                      >
-                        <Building2 size={14} />
-                        {row.companyName}
-                      </button>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                        <Mail size={14} className="text-slate-400" />
-                        {row.email ? <a href={`mailto:${row.email}`} className="hover:text-blue-600">{row.email}</a> : '—'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-1.5 text-sm text-slate-600">
-                        <Phone size={14} className="text-slate-400" />
-                        {row.phone ? <a href={`tel:${row.phone}`} className="hover:text-blue-600">{row.phone}</a> : '—'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-600">
-                      {row.title || '—'}
-                    </td>
-                    {customFields.map(f => (
-                      <td key={f.fieldKey} className="px-6 py-4 text-sm text-slate-600">
-                        {formatCustomValue(row.custom?.[f.fieldKey])}
+                  <tr
+                    key={row._id}
+                    onClick={rowClickHandler(() => row.pocId && navigate(`/sales/contacts/${row.leadId}/${row.pocId}`))}
+                    className={`hover:bg-slate-50 transition group ${row.pocId ? 'cursor-pointer' : ''} ${sel.isSelected(row._id) ? 'bg-blue-50/60' : ''}`}
+                  >
+                    {ct.visibleColumns.map((col) => (
+                      <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'px-6 py-4'} ${col.tdClass || ''}`)}>
+                        {col.render(row)}
                       </td>
                     ))}
                   </tr>
@@ -229,17 +350,19 @@ export default function Contacts() {
           </table>
         </div>
 
-        {!loading && contactRows.length > 0 && (
+        {!loading && rows.length > 0 && (
           <Pagination
             page={currentPage}
             pageSize={pageSize}
-            totalItems={contactRows.length}
+            totalItems={rows.length}
             onPageChange={setPage}
             onPageSizeChange={handlePageSizeChange}
           />
         )}
       </div>
+      </FilterLayout>
 
+      <TagDialogs dialogs={tagDialogs} tagsApi={tagsApi} onDone={sel.clear} />
       <AddContactModal
         open={showAddContact}
         onClose={() => setShowAddContact(false)}

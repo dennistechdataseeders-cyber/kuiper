@@ -63,7 +63,22 @@ const leaveApplicationSchema = new mongoose.Schema({
     notifiedEmails: [{
         type: String,
         default: []
-    }]
+    }],
+    // ✅ One request from the employee can be stored as several pieces
+    // (e.g. 1 day paid + ½ day paid + ½ day unpaid). All pieces share this id
+    // and HR approves / rejects them together.
+    requestGroupId: {
+        type: String,
+        default: null,
+        index: true
+    },
+    groupSummary: {
+        totalDays: { type: Number, default: null },
+        paidDays: { type: Number, default: null },
+        unpaidDays: { type: Number, default: null },
+        fromDate: { type: Date, default: null },
+        toDate: { type: Date, default: null }
+    }
 }, {
     timestamps: true
 });
