@@ -11,9 +11,12 @@ axios.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
+      const blocked = error.response.data?.code === 'ACCOUNT_BLOCKED';
       localStorage.clear();
       // Use window.location for a hard reset to clear all state
-      window.location.href = '/login'; 
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = blocked ? '/login?blocked=1' : '/login';
+      }
     }
     return Promise.reject(error);
   }

@@ -116,6 +116,14 @@ const Login = () => {
   // ============================================================
   const [mount3D, setMount3D] = useState(false);
 
+  // Signed out because the account was blocked
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('blocked')) {
+      toast.error('Your account access has been disabled. Please contact HR or Admin.', { duration: 6000 });
+      window.history.replaceState(null, '', '/login');
+    }
+  }, []);
+
   useEffect(() => {
     if (!shouldLoad3DBackground()) return;
 

@@ -22,6 +22,7 @@ const { syncProjectFeeds } = require('../services/feedGitSyncService');
 const { register, login, forgotPassword, resetPassword } = require('../controllers/authController');
 // --- MIDDLEWARE ---
 const { authorize } = require('../middleware/roleCheck');
+const { blockStartAfter } = require('../utils/accessBlock');
 const getWelcomeTemplate = require('../templates/welcomeEmail');
 const { protect } = require('../middleware/authMiddleware');
 
@@ -47,6 +48,9 @@ const { Resend } = require('resend');
 const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ============================================
+// POC / client accounts are visible to and managed by Admin and Super Admin only (not HR)
+const POC_ROLES = ['Client', 'POC'];
+
 // HELPER: Protect Admin / Super Admin / HR accounts from HR edits
 // ============================================
 function hrCannotTouchPrivilegedRoles(req) {
@@ -68,6 +72,12 @@ router.get('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales
       filter = { role: req.query.role };
     } else if (req.user.role === 'Sales Manager') {
       filter = { role: 'Sales' };
+    }
+
+    // HR never sees POC / client accounts — only Admin and Super Admin manage them
+    if (req.user.role === 'HR') {
+      if (req.query.role && POC_ROLES.includes(req.query.role)) return res.json([]);
+      if (!req.query.role) filter = { role: { $nin: POC_ROLES } };
     }
     
     const users = await User.find(filter)
@@ -96,6 +106,10 @@ router.get('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales
 router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance','Developer', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { role } = req.params;
+
+    if (req.user.role === 'HR' && POC_ROLES.includes(role)) {
+      return res.status(403).json({ error: 'HR cannot view POC accounts' });
+    }
     
     // Validate role
     const validRoles = ['Admin', 'HR', 'Finance', 'Sales', 'Project Manager', 'Developer', 'Team Lead', 'IT', 'Client'];
@@ -173,6 +187,9 @@ router.post('/users', authorize('Super Admin', 'Admin', 'HR', 'Project Manager',
     // ✅ HR SAFETY GUARD: HR cannot create Admin / Super Admin
     // ============================================
     if (hrCannotTouchPrivilegedRoles(req)) {
+      if (POC_ROLES.includes(role)) {
+        return res.status(403).json({ error: 'Only Admin or Super Admin can add POC accounts' });
+      }
       if (['Admin', 'Super Admin'].includes(role)) {
         return res.status(403).json({
           error: 'HR cannot create Admin or Super Admin accounts'
@@ -372,6 +389,9 @@ router.put('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req, re
     // ✅ HR SAFETY GUARD: HR cannot edit Admin / Super Admin / HR
     // ============================================
     if (hrCannotTouchPrivilegedRoles(req)) {
+      if (POC_ROLES.includes(existingUser.role) || (role && POC_ROLES.includes(role))) {
+        return res.status(403).json({ error: 'Only Admin or Super Admin can manage POC accounts' });
+      }
       if (['Admin', 'Super Admin', 'HR'].includes(existingUser.role)) {
         return res.status(403).json({
           error: 'HR cannot modify Admin, Super Admin, or other HR accounts'
@@ -442,6 +462,86 @@ router.put('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req, re
 });
 
 // ============================================
+// PATCH /users/:id/access - Block / unblock login
+// body: { action: 'block' | 'unblock', mode: 'now' | 'after', lastWorkingDay: 'YYYY-MM-DD', reason }
+//   mode 'now'   → signed out and blocked immediately
+//   mode 'after' → can work through lastWorkingDay; blocked from 00:00 IST the next day
+// Admin / Super Admin / HR. HR cannot block Admin, Super Admin, HR or POC accounts.
+// ============================================
+router.patch('/users/:id/access', authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
+  try {
+    const { action, mode = 'now', lastWorkingDay, reason = '' } = req.body || {};
+    if (!['block', 'unblock'].includes(action)) {
+      return res.status(400).json({ error: "action must be 'block' or 'unblock'" });
+    }
+
+    const target = await User.findById(req.params.id);
+    if (!target) return res.status(404).json({ error: 'User not found' });
+
+    if (String(target._id) === String(req.user._id)) {
+      return res.status(400).json({ error: 'You cannot block your own account' });
+    }
+    if (target.role === 'Super Admin' && req.user.role !== 'Super Admin') {
+      return res.status(403).json({ error: 'Only a Super Admin can block a Super Admin' });
+    }
+    if (hrCannotTouchPrivilegedRoles(req)) {
+      if (POC_ROLES.includes(target.role)) {
+        return res.status(403).json({ error: 'Only Admin or Super Admin can manage POC accounts' });
+      }
+      if (['Admin', 'Super Admin', 'HR'].includes(target.role)) {
+        return res.status(403).json({ error: 'HR cannot block Admin, Super Admin, or other HR accounts' });
+      }
+    }
+
+    let summary;
+    if (action === 'unblock') {
+      target.isActive = true;
+      target.accessBlockedFrom = null;
+      target.accessBlockReason = '';
+      target.accessBlockedBy = null;
+      target.accessBlockedOn = null;
+      summary = 'restored login access for';
+    } else {
+      let from = new Date();
+      if (mode === 'after') {
+        const start = blockStartAfter(lastWorkingDay);
+        if (!start) return res.status(400).json({ error: 'Pick a valid last working day' });
+        if (start > from) from = start; // a past last working day just blocks now
+      }
+      const immediate = from <= new Date();
+      target.accessBlockedFrom = from;
+      target.accessBlockReason = String(reason).trim().slice(0, 500);
+      target.accessBlockedBy = req.user._id;
+      target.accessBlockedOn = new Date();
+      if (immediate) target.isActive = false;
+      summary = immediate
+        ? 'blocked login for'
+        : `scheduled login block (from ${from.toISOString()}) for`;
+    }
+
+    await target.save();
+
+    try {
+      await Log.create({
+        actionType: action === 'block' ? 'USER_ACCESS_BLOCKED' : 'USER_ACCESS_RESTORED',
+        performerId: req.user._id,
+        details: `${req.user.role} ${req.user.name} ${summary} ${target.email} (${target.role})${target.accessBlockReason ? ` - Reason: ${target.accessBlockReason}` : ''}`,
+        timestamp: new Date(),
+      });
+    } catch (logErr) {
+      console.error('Non-critical Log Error:', logErr.message);
+    }
+
+    const out = target.toObject();
+    delete out.password;
+    res.json({ message: action === 'block' ? 'Access updated' : 'Access restored', user: out });
+  } catch (err) {
+    console.error('Error updating user access:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
 // ✅ UPDATED: DELETE /users/:id - Delete user
 // ✅ HR added — HR cannot delete Admin / Super Admin / other HR
 // ============================================
@@ -456,6 +556,9 @@ router.delete('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req,
     // ✅ HR SAFETY GUARD
     // ============================================
     if (hrCannotTouchPrivilegedRoles(req)) {
+      if (POC_ROLES.includes(target.role)) {
+        return res.status(403).json({ error: 'Only Admin or Super Admin can manage POC accounts' });
+      }
       if (['Admin', 'Super Admin', 'HR'].includes(target.role)) {
         return res.status(403).json({
           error: 'HR cannot delete Admin, Super Admin, or other HR accounts'

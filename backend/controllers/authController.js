@@ -1,3 +1,4 @@
+const { BLOCKED_MESSAGE, isLoginBlocked, settleScheduledBlock } = require('../utils/accessBlock');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -39,6 +40,12 @@ const login = async (req, res) => {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid Credentials" });
+    }
+
+    // Blocked accounts (left the company, suspended) cannot sign in
+    if (isLoginBlocked(user)) {
+      await settleScheduledBlock(User, user);
+      return res.status(403).json({ error: BLOCKED_MESSAGE, code: 'ACCOUNT_BLOCKED' });
     }
 
     // Generate Token
@@ -85,6 +92,9 @@ const forgotPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({ error: "User not found with this email" });
     }
+    if (isLoginBlocked(user)) {
+      return res.status(403).json({ error: BLOCKED_MESSAGE, code: 'ACCOUNT_BLOCKED' });
+    }
 
     // Generate Token
     const resetToken = crypto.randomBytes(20).toString('hex');
@@ -125,6 +135,9 @@ const resetPassword = async (req, res) => {
 
     if (!user) {
       return res.status(400).json({ message: "Token is invalid or has expired" });
+    }
+    if (isLoginBlocked(user)) {
+      return res.status(403).json({ error: BLOCKED_MESSAGE, message: BLOCKED_MESSAGE, code: 'ACCOUNT_BLOCKED' });
     }
 
     // 2. Hash the new password

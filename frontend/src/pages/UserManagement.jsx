@@ -17,10 +17,13 @@ import {
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
+import AccessBlockModal, { AccessBadge, accessStatus } from '../components/AccessBlockModal';
+import { Ban, LockOpen } from 'lucide-react';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
   const [organizations, setOrganizations] = useState([]);
+  const [accessUser, setAccessUser] = useState(null); // user in the Block login modal
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -81,7 +84,7 @@ const UserManagement = () => {
     if (isAdmin) return targetUser.role !== 'Super Admin';
 
     if (isHR) {
-      if (['Admin', 'Super Admin'].includes(targetUser.role)) return false;
+      if (['Admin', 'Super Admin', 'Client'].includes(targetUser.role)) return false;
       return true;
     }
 
@@ -102,7 +105,7 @@ const UserManagement = () => {
     if (isAdmin) return targetUser.role !== 'Super Admin';
 
     if (isHR) {
-      if (['Admin', 'Super Admin', 'HR'].includes(targetUser.role)) return false;
+      if (['Admin', 'Super Admin', 'HR', 'Client'].includes(targetUser.role)) return false;
       return true;
     }
 
@@ -203,7 +206,8 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     try {
       const res = await axios.get(`${API_BASE}/users`, authHeader);
-      setUsers(res.data);
+      // HR does not see POC / client accounts (the server also hides them)
+      setUsers(isHR ? res.data.filter(u => u.role !== 'Client') : res.data);
     } catch (err) {
       console.error("Error fetching users:", err);
       toast.error("Failed to fetch users");
@@ -211,6 +215,7 @@ const UserManagement = () => {
   };
 
   const fetchOrganizations = async () => {
+    if (isHR) return; // client organizations are not shown to HR
     try {
       const res = await axios.get(`${API_BASE_URL}/api/orgs`, {
         headers: { Authorization: `Bearer ${token}` }
@@ -597,8 +602,8 @@ const UserManagement = () => {
       return ['Client', 'Team Lead'];
     }
     if (isHR) {
+      // POC (Client) accounts are added by Admin / Super Admin only
       return [
-        'Client',
         'Developer',
         'Sales',
         'Project Manager',
@@ -839,11 +844,13 @@ const UserManagement = () => {
                 // ✅ Permission flags per row
                 const rowEditable = canEditTarget(user);
                 const rowDeletable = canDeleteTarget(user);
+                const rowBlockable = canDeleteTarget(user); // same people you may delete
+                const access = accessStatus(user);
 
                 return (
                   <>
                     {/* Main Row */}
-                    <tr key={user._id} className="hover:bg-blue-50/30 transition-colors group">
+                    <tr key={user._id} className={`hover:bg-blue-50/30 transition-colors group ${access === 'blocked' ? 'opacity-60' : ''}`}>
                       <td className="p-5">
                         {showExpandButton && (
                           <button
@@ -862,6 +869,7 @@ const UserManagement = () => {
                         <div>
                           <p className="font-bold text-slate-800">{user.name}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <AccessBadge user={user} />
                             {isPOC && user.organizationId && (
                               <span className="inline-flex items-center gap-1 text-[8px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
                                 <Building2 size={8} />
@@ -962,6 +970,17 @@ const UserManagement = () => {
                               title="Edit User"
                             >
                               <Edit2 size={16}/>
+                            </button>
+                          )}
+
+                          {/* Block / restore login */}
+                          {rowBlockable && (
+                            <button
+                              onClick={() => setAccessUser(user)}
+                              className={`p-2 rounded-lg transition-all shadow-sm hover:bg-white ${access === 'active' ? 'text-slate-400 hover:text-orange-600' : 'text-red-500 hover:text-emerald-600'}`}
+                              title={access === 'active' ? 'Block login' : 'Login access (blocked / scheduled)'}
+                            >
+                              {access === 'active' ? <Ban size={16}/> : <LockOpen size={16}/>}
                             </button>
                           )}
 
@@ -1653,6 +1672,16 @@ const UserManagement = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {accessUser && (
+        <AccessBlockModal
+          user={accessUser}
+          apiBase={API_BASE}
+          authHeader={authHeader}
+          onClose={() => setAccessUser(null)}
+          onDone={fetchUsers}
+        />
       )}
     </div>
   );

@@ -68,6 +68,13 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+
+  // Login blocking (e.g. employee leaving). Login is refused once isActive is false
+  // or accessBlockedFrom has passed. See utils/accessBlock.js
+  accessBlockedFrom: { type: Date, default: null },
+  accessBlockReason: { type: String, default: '' },
+  accessBlockedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  accessBlockedOn: { type: Date, default: null },
   
   // Employee Code
   employeeCode: {
@@ -98,6 +105,41 @@ const UserSchema = new mongoose.Schema({
     trim: true
   },
   
+  // ============================================
+  // HR PROFILE FIELDS (Employee directory / profile page) — all optional
+  // ============================================
+  employmentType: {
+    type: String,
+    enum: ['', 'Full-time', 'Part-time', 'Intern', 'Contract', 'Consultant'],
+    default: ''
+  },
+  reportingManager: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    default: null
+  },
+  workLocation: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  personalEmail: {
+    type: String,
+    default: '',
+    trim: true,
+    lowercase: true
+  },
+  gender: {
+    type: String,
+    enum: ['', 'Male', 'Female', 'Other'],
+    default: ''
+  },
+  bloodGroup: {
+    type: String,
+    enum: ['', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'],
+    default: ''
+  },
+
   // ============================================
   // ✅ PROBATION FIELDS
   // ============================================

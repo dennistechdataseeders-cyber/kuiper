@@ -133,7 +133,7 @@ router.get('/client/me', authorize('Client'), async (req, res) => {
 });
 
 // --- GET: View Organizations (ALL sales people can see ALL organizations) ---
-router.get('/', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, res) => {
+router.get('/', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     // ✅ REMOVED the salesRepId filter - ALL sales people can see ALL organizations
     const organizations = await Organization.find({})
@@ -150,7 +150,7 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, r
 });
 
 // --- GET: Check if company already exists (MUST BE BEFORE /:id ROUTE) ---
-router.get('/check-existing', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, res) => {
+router.get('/check-existing', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { companyName } = req.query;
     
@@ -202,7 +202,7 @@ const populateOrg = (q) => q
   .select('-__v');
 
 // --- GET: one account with its owner populated ---
-router.get('/:id/detail', authorize('Admin', 'Sales', 'Sales Manager', 'HR'), async (req, res) => {
+router.get('/:id/detail', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     if (!isObjId(req.params.id)) return res.status(400).json({ error: 'Invalid account id' });
     const org = await populateOrg(Organization.findById(req.params.id));
@@ -317,7 +317,7 @@ router.patch('/:id/pocs/:pocId', authorize('Admin', 'Sales', 'Sales Manager'), a
 });
 
 // --- GET: Get Single Organization by ID (MUST BE AFTER SPECIFIC ROUTES) ---
-router.get('/:id', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, res) => {
+router.get('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     // Validate if the ID is a valid MongoDB ObjectId
     const isValidObjectId = req.params.id.match(/^[0-9a-fA-F]{24}$/);
@@ -425,7 +425,7 @@ router.delete('/:id', authorize('Admin', 'Sales', 'Sales Manager'), async (req, 
 });
 
 // --- POST: Check if organization already exists ---
-router.post('/check-duplicate', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, res) => {
+router.post('/check-duplicate', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { companyName, prospectId } = req.body;
     
@@ -618,7 +618,7 @@ router.delete('/:id/poc/:pocIndex', authorize('Admin', 'Sales', 'Sales Manager')
 });
 
 // --- GET: Get all POCs for an organization ---
-router.get('/:id/pocs', authorize('Admin', 'Sales', 'Sales Manager','HR'), async (req, res) => {
+router.get('/:id/pocs', authorize('Admin', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     // ✅ No salesRepId filter - ANY sales person can view POCs in ANY organization
     const organization = await Organization.findById(req.params.id)
