@@ -8,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
+const { visibleAnnouncementFilter } = require('../utils/accessBlock');
 
 const {
     createAnnouncement,
@@ -106,6 +107,7 @@ router.get('/unviewed/count', protect, async (req, res) => {
     try {
         const userId = req.user._id;
         const count = await Announcement.countDocuments({
+            ...(await visibleAnnouncementFilter(User)),
             viewedBy: { $ne: userId }
         });
         console.log(`📊 Unviewed announcements for ${userId}: ${count}`);
@@ -152,6 +154,7 @@ router.post('/:id/viewed', protect, async (req, res) => {
                 const io = req.app.get('io');
                 if (io) {
                     const unviewedCount = await Announcement.countDocuments({
+                        ...(await visibleAnnouncementFilter(User)),
                         viewedBy: { $ne: userId }
                     });
                     io.to(userId.toString()).emit('announcement_count_update', {

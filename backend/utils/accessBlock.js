@@ -28,3 +28,32 @@ const blockStartAfter = (lastWorkingDay) => {
 };
 
 module.exports = { BLOCKED_MESSAGE, isLoginBlocked, settleScheduledBlock, blockStartAfter };
+
+// ---- Hiding blocked people (birthday / work-anniversary posts and widgets) ----
+
+// Mongo filter for users who still have access right now
+// (not blocked, and any scheduled block has not started yet).
+const activeUserFilter = (now = new Date()) => ({
+  isActive: { $ne: false },
+  $or: [{ accessBlockedFrom: null }, { accessBlockedFrom: { $exists: false } }, { accessBlockedFrom: { $gt: now } }],
+});
+
+// Ids of users whose login is blocked now.
+const blockedUserIds = async (User, now = new Date()) => {
+  const rows = await User.find({
+    $or: [{ isActive: false }, { accessBlockedFrom: { $ne: null, $lte: now } }],
+  }).select('_id').lean();
+  return rows.map((r) => r._id);
+};
+
+// Announcement filter that hides automated birthday / anniversary posts of blocked users.
+const PERSONAL_POST_TYPES = ['birthday', 'work_anniversary'];
+const visibleAnnouncementFilter = async (User) => {
+  const ids = await blockedUserIds(User);
+  if (!ids.length) return {};
+  return { $nor: [{ automatedType: { $in: PERSONAL_POST_TYPES }, automatedUserId: { $in: ids } }] };
+};
+
+module.exports.activeUserFilter = activeUserFilter;
+module.exports.blockedUserIds = blockedUserIds;
+module.exports.visibleAnnouncementFilter = visibleAnnouncementFilter;

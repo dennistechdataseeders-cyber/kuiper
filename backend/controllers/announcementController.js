@@ -2,6 +2,7 @@
 
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
+const { visibleAnnouncementFilter } = require('../utils/accessBlock');
 const path = require('path');
 const fs = require('fs');
 
@@ -168,7 +169,10 @@ exports.getAnnouncements = async (req, res) => {
         const { limit = 50, page = 1 } = req.query;
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
-        const announcements = await Announcement.find()
+        // Hide birthday / anniversary posts of blocked users
+        const visible = await visibleAnnouncementFilter(User);
+
+        const announcements = await Announcement.find(visible)
             .populate('createdBy', 'name email role profileImage')
             .populate('comments.userId', 'name email role profileImage')
             .populate('likes', 'name email profileImage')
@@ -189,10 +193,11 @@ exports.getAnnouncements = async (req, res) => {
         // Save all changes
         await Promise.all(announcements.map(a => a.save()));
 
-        const total = await Announcement.countDocuments();
+        const total = await Announcement.countDocuments(visible);
 
         // Get unviewed count for current user
         const unviewedCount = await Announcement.countDocuments({
+            ...visible,
             viewedBy: { $ne: userId }
         });
 

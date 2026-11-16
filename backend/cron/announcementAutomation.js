@@ -3,6 +3,7 @@ const cron = require('node-cron');
 const mongoose = require('mongoose');
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
+const { activeUserFilter } = require('../utils/accessBlock');
 
 /**
  * Check for birthdays and work anniversaries and create automated posts
@@ -19,7 +20,9 @@ async function createAutomatedAnnouncements() {
         const todayDay = today.getDate();
 
         // Get all active users (excluding clients)
+        // Active, non-blocked employees only (blocked / leaving users get no posts)
         const users = await User.find({
+            ...activeUserFilter(),
             isActive: true,
             role: { $ne: 'Client' }
         });

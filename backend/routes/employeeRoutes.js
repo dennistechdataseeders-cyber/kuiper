@@ -16,6 +16,7 @@ const LeaveApplication = require('../models/LeaveApplication');
 const EmployeePunchLog = require('../models/EmployeePunchLog');
 const MissedPunchRequest = require('../models/MissedPunchRequest');
 const User = require('../models/User');
+const { activeUserFilter } = require('../utils/accessBlock');
 const LeaveType = require('../models/LeaveType');
 
 // Import shift service (Option B — ShiftHistory)
@@ -992,6 +993,7 @@ router.get('/team-culture', async (req, res) => {
     oneMonthAgo.setUTCMonth(oneMonthAgo.getUTCMonth() - 1);
 
     const users = await User.find({
+      ...activeUserFilter(),
       isActive: true,
       role: { $ne: 'Client' }
     }).select('name dateOfBirth dateOfJoining role designation');

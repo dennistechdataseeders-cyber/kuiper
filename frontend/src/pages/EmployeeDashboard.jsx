@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
+import { accessStatus } from '../components/AccessBlockModal';
 import { useSidebar } from '../context/SidebarContext';
 import AttendanceCombined from '../components/AttendanceCombined';
 import EmployeeLeave from '../components/EmployeeLeave';
@@ -232,7 +233,8 @@ const EmployeeDashboard = () => {
   const calculateTeamCultureFromUsers = async () => {
     try {
       const res = await axios.get(`${API_BASE_URL}/api/admin/users`, authHeader);
-      const users = res.data || [];
+      // Skip POCs and anyone whose login is blocked (left / leaving)
+      const users = (res.data || []).filter((u) => u.role !== 'Client' && accessStatus(u) !== 'blocked');
       const today = new Date();
       const currentMonth = today.getUTCMonth();
       const currentYear = today.getUTCFullYear();
