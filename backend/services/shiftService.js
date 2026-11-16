@@ -216,13 +216,10 @@ async function evaluateAndPersistLateness(punchLog) {
 }
 
 module.exports = {
-  IST_OFFSET_MINUTES,
-  LATE_BUFFER_MINUTES,
   getISTDateString,
   toShiftStartMinutes,
   getShiftStartMinutesForDate,
   evaluateLateness,
-  ensureInitialShiftHistory,
   recordShiftChange,
   evaluateAndPersistLateness
 };

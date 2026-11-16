@@ -105,6 +105,5 @@ async function syncFeedGitDates({ projectId, onlyNeverSynced = false } = {}) {
 }
 
 module.exports = {
-  syncAllFeeds: (opts = {}) => syncFeedGitDates(opts),
-  syncProjectFeeds: (projectId) => syncFeedGitDates({ projectId })
+  syncAllFeeds: (opts = {}) => syncFeedGitDates(opts)
 };
