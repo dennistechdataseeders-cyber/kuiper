@@ -13,6 +13,12 @@ import {
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
+// Late coming rule: 3 late comings a month are allowed, each one after that costs ½ day
+const FREE_LATES_PER_MONTH = 3;
+const LATE_PENALTY_PER_LATE = 0.5;
+const LATE_PENALTY_LABEL = `Late Penalty (after ${FREE_LATES_PER_MONTH} lates, ½ day each)`;
+const ABSENT_PENALTY_LABEL = "Absent Penalty (1 absent = 2 days' pay)";
+
 // ============================================================
 // ✅ SHARED TIME HELPERS (Matches AttendanceCombined / Timeline)
 // ============================================================
@@ -101,6 +107,7 @@ const getStatusInfo = (status) => {
     case 'Weekend': return { code: 'WO', color: 'bg-slate-100 text-slate-500' };
     case 'Partial': return { code: '½P', color: 'bg-blue-100 text-blue-700' };
     case 'Holiday': return { code: 'H', color: 'bg-red-100 text-red-700' };
+    case 'Upcoming': return { code: '·', color: 'bg-white text-slate-300' };
     default: return { code: '?', color: 'bg-slate-100 text-slate-700' };
   }
 };
@@ -129,7 +136,8 @@ const countDailyBreaks = (rec) => {
     rec.status === 'Weekend' ||
     rec.status === 'Leave' ||
     rec.status === 'Absent' ||
-    rec.status === 'Holiday'
+    rec.status === 'Holiday' ||
+    rec.status === 'Upcoming'
   ) {
     return 0;
   }
@@ -252,6 +260,8 @@ const EmployeeAttendanceReport = () => {
       let totalLeave = 0;
       let totalPaidLeave = 0;
       let totalUnpaidLeave = 0;
+      let totalHolidays = 0;   // weekday holidays
+      let totalUpcoming = 0;   // working days later this month (not yet happened)
       let totalLateOccurrences = 0;
       let totalLateMinutes = 0;
       let totalEffectiveHours = 0;
@@ -280,6 +290,12 @@ const EmployeeAttendanceReport = () => {
             break;
           case 'Absent':
             totalAbsent += 1;
+            break;
+          case 'Holiday':
+            if (!record.isWeekend) totalHolidays += 1;
+            break;
+          case 'Upcoming':
+            totalUpcoming += 1;
             break;
           case 'Leave': {
             // Use the per-day amounts from the backend: a day can be ½ paid,
@@ -338,17 +354,22 @@ const EmployeeAttendanceReport = () => {
       const totalNoOfDays = daysInMonth;
       const totalWorkingDays = getWorkingDays(selectedYear, selectedMonth);
 
-      // Late penalty: every 2 late comings → 1 day deducted
+      // Late penalty: first 3 late comings in the month are free,
+      // every late coming after that = ½ day deducted
+      // (4 lates → 0.5, 5 lates → 1, 6 lates → 1.5 ...)
       const totalLateComing = totalLateOccurrences;
-      const latePenaltyDays = Math.floor(totalLateComing / 2);
+      const latePenaltyDays = Math.max(0, totalLateComing - FREE_LATES_PER_MONTH) * LATE_PENALTY_PER_LATE;
 
-      // ✅ Absent penalty: every absent day → 2 days deducted
+      // ✅ Absent penalty: 1 absent day costs 2 days' pay
+      //    (the unpaid day itself + 1 extra day as penalty)
       const absentPenaltyDays = totalAbsent * 2;
 
+      // ✅ Paid leave is PAID → it is not deducted. Only unpaid leave,
+      //    late penalty and absent penalty reduce payable days.
+      //    Upcoming days (rest of the current month) count as payable.
       const totalSalaryPayableDays = Math.max(
         0,
         totalNoOfDays
-          - totalPaidLeave
           - totalUnpaidLeave
           - latePenaltyDays
           - absentPenaltyDays
@@ -376,6 +397,8 @@ const EmployeeAttendanceReport = () => {
           totalWorkingDays,
           totalPaidLeave,
           totalUnpaidLeave,
+          totalHolidays,
+          totalUpcoming,
           totalLateComing,
           latePenaltyDays,
           absentPenaltyDays,
@@ -461,11 +484,13 @@ const EmployeeAttendanceReport = () => {
           ['Total Working Days', s.totalWorkingDays],
           ['Days Present', s.totalPresent],
           ['Absent Days', s.totalAbsent],
-          ['Paid Leave Taken', s.totalPaidLeave],
+          ['Holidays (weekdays)', s.totalHolidays],
+          ...(s.totalUpcoming ? [['Upcoming Days (not yet worked)', s.totalUpcoming]] : []),
+          ['Paid Leave Taken (paid, not deducted)', s.totalPaidLeave],
           ['Unpaid Leave Taken', s.totalUnpaidLeave],
           ['Total Number of Late Comings', s.totalLateComing],
-          ['Late Penalty (2 lates = 1 day)', `-${s.latePenaltyDays}`],
-          ['Absent Penalty (1 absent = 2 days)', `-${s.absentPenaltyDays}`],
+          [LATE_PENALTY_LABEL, `-${s.latePenaltyDays}`],
+          [ABSENT_PENALTY_LABEL, `-${s.absentPenaltyDays}`],
           ['Total Salary Payable Days', s.totalSalaryPayableDays],
         ];
 
@@ -818,8 +843,18 @@ const EmployeeAttendanceReport = () => {
                       <p className="text-[8px] font-black uppercase tracking-wider text-rose-500">Absent Days</p>
                       <p className="text-base font-black text-rose-700">{s.totalAbsent}</p>
                     </div>
+                    <div className="bg-white rounded-lg border border-red-200 p-2 text-center shadow-sm">
+                      <p className="text-[8px] font-black uppercase tracking-wider text-red-400">Holidays</p>
+                      <p className="text-base font-black text-red-600">{s.totalHolidays}</p>
+                    </div>
+                    {s.totalUpcoming > 0 && (
+                      <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm" title="Working days later this month — not counted as absent">
+                        <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Upcoming Days</p>
+                        <p className="text-base font-black text-slate-600">{s.totalUpcoming}</p>
+                      </div>
+                    )}
                     <div className="bg-white rounded-lg border border-indigo-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-indigo-500">Paid Leave</p>
+                      <p className="text-[8px] font-black uppercase tracking-wider text-indigo-500" title="Paid — not deducted from payable days">Paid Leave</p>
                       <p className="text-base font-black text-indigo-700">{s.totalPaidLeave}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-purple-200 p-2 text-center shadow-sm">
@@ -831,14 +866,14 @@ const EmployeeAttendanceReport = () => {
                       <p className="text-base font-black text-amber-700">{s.totalLateComing}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-red-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-red-500">Late Penalty (2 lates = 1 day)</p>
+                      <p className="text-[8px] font-black uppercase tracking-wider text-red-500" title={`${s.totalLateComing} late coming(s) this month`}>{LATE_PENALTY_LABEL}</p>
                       <p className="text-base font-black text-red-700">-{s.latePenaltyDays}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-red-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-red-500">Absent Penalty (1 absent = 2 days)</p>
+                      <p className="text-[8px] font-black uppercase tracking-wider text-red-500">{ABSENT_PENALTY_LABEL}</p>
                       <p className="text-base font-black text-red-700">-{s.absentPenaltyDays}</p>
                     </div>
-                    <div className="bg-sky-50 rounded-lg border-2 border-sky-400 p-2 text-center shadow-sm md:col-span-3">
+                    <div className={`bg-sky-50 rounded-lg border-2 border-sky-400 p-2 text-center shadow-sm ${s.totalUpcoming > 0 ? 'md:col-span-4' : 'md:col-span-1'}`}>
                       <p className="text-[8px] font-black uppercase tracking-wider text-sky-600">Total Salary Payable Days</p>
                       <p className="text-lg font-black text-sky-800">{s.totalSalaryPayableDays}</p>
                     </div>
@@ -846,7 +881,9 @@ const EmployeeAttendanceReport = () => {
 
                   {/* Reconciliation line */}
                   <p className="text-center text-[9px] text-slate-500 mt-2 font-medium">
-                    Formula: {s.totalNoOfDays} total days − {s.totalPaidLeave} paid leave − {s.totalUnpaidLeave} unpaid leave − {s.latePenaltyDays} late penalty − {s.absentPenaltyDays} absent penalty = <b className="text-sky-700">{s.totalSalaryPayableDays}</b> payable days
+                    Formula: {s.totalNoOfDays} total days − {s.totalUnpaidLeave} unpaid leave − {s.latePenaltyDays} late penalty − {s.absentPenaltyDays} absent penalty = <b className="text-sky-700">{s.totalSalaryPayableDays}</b> payable days
+                    {' '}· paid leave ({s.totalPaidLeave}) is not deducted
+                    {s.totalUpcoming > 0 && <> · <span className="text-amber-600">month in progress: {s.totalUpcoming} upcoming working day(s) are counted as payable</span></>}
                   </p>
                 </div>
 

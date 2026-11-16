@@ -1687,6 +1687,7 @@ router.get('/attendance/employee-report', async (req, res) => {
     });
 
     const reportData = [];
+    const todayISTForReport = getISTDateStringLocal(new Date()); // 'YYYY-MM-DD'
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
                         'July', 'August', 'September', 'October', 'November', 'December'];
@@ -1786,6 +1787,11 @@ router.get('/attendance/employee-report', async (req, res) => {
           }
         }
 
+        // ✅ Days that haven't happened yet are not "Absent"
+        if (status === 'absent' && dateStr > todayISTForReport) {
+          status = 'upcoming';
+        }
+
         reportData.push({
           employeeName: employee.name,
           employeeCode: employee.employeeCode || 'N/A',
@@ -1800,7 +1806,8 @@ router.get('/attendance/employee-report', async (req, res) => {
             status === 'leave'   ? 'Leave'   :
             status === 'present' ? 'Present' :
             status === 'late'    ? 'Late'    :
-            status === 'partial' ? 'Partial' : 'Absent',
+            status === 'partial' ? 'Partial' :
+            status === 'upcoming' ? 'Upcoming' : 'Absent',
 
           punchInUTC: punchIn ? punchIn.toISOString() : null,
           punchOutUTC: punchOut ? punchOut.toISOString() : null,
