@@ -3,7 +3,7 @@ const Holiday = require('../models/Holiday');
 const User = require('../models/User');
 const Log = require('../models/Log');
 const sendEmail = require('../services/zohoMailer');
-const { getHolidayCreatedTemplate } = require('../templates/holidayEmailTemplates');
+const { getHolidayCreatedTemplate, getHolidayUpdatedTemplate, getHolidayDeletedTemplate } = require('../templates/holidayEmailTemplates');
 
 // ============================================
 // GET ALL HOLIDAYS

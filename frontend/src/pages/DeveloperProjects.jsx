@@ -18,7 +18,7 @@ const DeveloperProjects = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedStatus, setSelectedStatus] = useState('ALL');
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Comment Modal State
   const [showCommentModal, setShowCommentModal] = useState(false);

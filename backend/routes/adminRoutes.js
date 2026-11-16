@@ -766,7 +766,7 @@ router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Man
 // ============================================
 
 // GET /projects - General projects route
-router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client', 'Team Lead', 'HR'), async (req, res) => {
+router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client', 'Team Lead', 'HR', 'Developer'), async (req, res) => {
   try {
     let query = {};
     
@@ -779,6 +779,10 @@ router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Cl
       query = { teamLead: req.user._id };
     } else if (req.user.role === 'Project Manager') {
       query = { projectManager: req.user._id };
+    } else if (req.user.role === 'Developer') {
+      // Developer: only projects that contain a feed assigned to them (same rule as /api/dev/my-projects)
+      const assignedFeeds = await Feed.find({ assignedDevelopers: req.user._id }).select('projectId');
+      query = { _id: { $in: [...new Set(assignedFeeds.map(f => String(f.projectId)))] } };
     } else if (req.user.role === 'Client') {
       // Client logic - get projects where they are a client or their organization is assigned
       const clientIdStr = req.user._id.toString();
