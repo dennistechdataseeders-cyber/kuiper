@@ -17,7 +17,6 @@ const EmployeePunchLog = require('../models/EmployeePunchLog');
 const MissedPunchRequest = require('../models/MissedPunchRequest');
 const User = require('../models/User');
 const { activeUserFilter } = require('../utils/accessBlock');
-const LeaveType = require('../models/LeaveType');
 
 // Import shift service (Option B — ShiftHistory)
 const {

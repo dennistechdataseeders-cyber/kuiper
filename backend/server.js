@@ -14,14 +14,6 @@ require('dotenv').config();
 // SAFELY LOAD ALL CRON WORKERS
 // =========================================================
 
-// Drip Campaign Worker
-try {
-  require(path.join(__dirname, 'cron', 'dripCampaignWorker'));
-  console.log('⏰ Drip Campaign Worker initialized successfully');
-} catch (err) {
-  console.log('⚠️ Notice: Drip Campaign Worker not loaded:', err.message);
-}
-
 // Leave Balance Updater
 try {
   require(path.join(__dirname, 'cron', 'leaveBalanceUpdater'));
@@ -484,7 +476,6 @@ mongoose.connect(MONGO_URI)
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
       
       console.log('\n📋 Loaded Services:');
-      console.log('  ✅ Drip Campaign Worker');
       console.log('  ✅ Leave Balance Updater');
       console.log('  ✅ Daily Productivity Report');
       console.log('  ✅ Biometric Sync (every 15 minutes)');
