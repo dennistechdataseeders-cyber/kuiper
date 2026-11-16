@@ -51,7 +51,7 @@ import {
   Contact, BookOpen, Gauge, BriefcaseBusiness, Rss, ChartPie, ChartColumn, HeartHandshake,
   CalendarHeart, CalendarOff, ClipboardList, Workflow, Tags, CodeXml, NotebookPen, FolderGit2,
   FileCode, GitBranch, LayoutGrid, PanelsTopLeft, ShieldCheck, FolderTree, Radio, Radar,
-  SignalHigh, Truck, CalendarClock, Compass, Boxes, IdCard, Terminal, ClipboardCheck, Wrench, UsersRound as TeamIcon,
+  SignalHigh, Truck, BookUser, CalendarClock, Compass, Boxes, IdCard, Terminal, ClipboardCheck, Wrench, Lightbulb, FlaskConical, FileSearch, UsersRound as TeamIcon,
 } from 'lucide-react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
@@ -98,6 +98,9 @@ const ITEM_ICONS = {
   '/pm/resource-analytics':          ChartPie,
   '/pm/work-report':                 ChartColumn,
   '/pm/git-manager':                 GitFork,
+  // Feasibility
+  '/feasibility':                    FlaskConical,
+  '/pm/feasibility':                 FileSearch,
   // Team lead
   '/teamlead':                       ShieldCheck,
   '/teamlead/projects':              FolderTree,
@@ -115,6 +118,7 @@ const ITEM_ICONS = {
   '/client':                         Truck,
   // HR
   '/hr':                             HeartHandshake,
+  '/hr/employees':                   BookUser,
   '/hr/holidays':                    CalendarHeart,
   '/hr/leaves':                      CalendarOff,
   '/hr/attendance-sync':             RefreshCw,
@@ -133,6 +137,7 @@ const GROUP_ICONS = {
   hr:                 IdCard,
   developer:          Terminal,
   pm:                 ClipboardCheck,
+  feasibility:        Lightbulb,
   setup:              Wrench,
   team:               UserPlus,
 };
@@ -226,11 +231,21 @@ const buildMenuGroups = (role) => {
         ],
       },
       {
+        key: 'feasibility',
+        label: 'Feasibility',
+        icon: <FileText size={18} />,
+        items: [
+          { path: '/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
+          { path: '/pm/feasibility', icon: <FileText size={16} />, label: 'PM Feasibility' },
+        ],
+      },
+      {
         key: 'hr',
         label: 'HR',
         icon: <UsersRound size={18} />,
         items: [
           { path: '/hr', icon: <UsersRound size={16} />, label: 'HR Dashboard' },
+          { path: '/hr/employees', icon: <Users size={16} />, label: 'Employees' },
           { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
           { path: '/hr/leaves', icon: <Calendar size={16} />, label: 'Leave Management' },
           { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
@@ -305,6 +320,7 @@ const buildMenuGroups = (role) => {
         icon: <UsersRound size={18} />,
         items: [
           { path: '/hr', icon: <UsersRound size={16} />, label: 'HR Dashboard' },
+          { path: '/hr/employees', icon: <Users size={16} />, label: 'Employees' },
           { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
           { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
           { path: '/admin/ticket-rules', icon: <Mail size={16} />, label: 'Ticket Rules' },
@@ -360,6 +376,14 @@ const buildMenuGroups = (role) => {
       ]},
       SALES_GROUP,
       SALES_ACTIVITIES_GROUP,
+      {
+        key: 'feasibility',
+        label: 'Feasibility',
+        icon: <FileText size={18} />,
+        items: [
+          { path: '/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
+        ],
+      },
       GENERAL_GROUP,
       {
         key: 'setup',
@@ -389,6 +413,7 @@ const buildMenuGroups = (role) => {
           { path: '/pm/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
           { path: '/pm/work-report', icon: <BarChart3 size={16} />, label: 'Work Report' },
           { path: '/pm/resource-analytics', icon: <ChartBar size={16} />, label: 'Resource Analytics' },
+          { path: '/pm/feasibility', icon: <FileText size={16} />, label: 'Feasibility' },
           { path: '/pm/git-manager', icon: <GitFork size={16} />, label: 'Git Manager' },
         ],
       },
@@ -463,6 +488,7 @@ const buildMenuGroups = (role) => {
         label: 'HR Management',
         icon: <UsersRound size={18} />,
         items: [
+          { path: '/hr/employees', icon: <Users size={16} />, label: 'Employees' },
           { path: '/admin/users', icon: <Users size={16} />, label: 'Users' },
           { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
           { path: '/hr/leaves', icon: <Calendar size={16} />, label: 'Leave Management' },
