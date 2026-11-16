@@ -99,12 +99,6 @@ const minutesOfDayIST = (dateLike) => {
 };
 
 /** IST calendar date string (YYYY-MM-DD). */
-const toISTDateString = (dateLike) => {
-  if (!dateLike) return null;
-  const d = new Date(dateLike);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-CA', { timeZone: IST_TZ });
-};
 
 /** The stored `date` field is UTC midnight of the IST calendar day.
  *  Reading it with UTC getters gives us back the calendar day. */
@@ -1015,16 +1009,6 @@ const AttendanceCombined = ({ userId, token }) => {
   // ─────────────────────────────────────────────────────────────
   // Navigation
   // ─────────────────────────────────────────────────────────────
-  const navigateMonth = (direction) => {
-    if (direction === 'prev') {
-      if (selectedMonth === 0) { setSelectedMonth(11); setSelectedYear(y => y - 1); }
-      else setSelectedMonth(m => m - 1);
-    } else {
-      if (selectedMonth === 11) { setSelectedMonth(0); setSelectedYear(y => y + 1); }
-      else setSelectedMonth(m => m + 1);
-    }
-    setShowMonthPicker(false);
-  };
 
   const handleMonthSelect = (monthIndex) => { setSelectedMonth(monthIndex); setShowMonthPicker(false); };
   const handleYearSelect = (year) => { setSelectedYear(year); setShowMonthPicker(false); };

@@ -100,7 +100,6 @@ const FeasibilityDashboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const [completing, setCompleting] = useState({});
   const [expandedComments, setExpandedComments] = useState(null);
 
   // Close Lead Modal State
@@ -451,11 +450,6 @@ const handleCreateFeasibilitySubmit = async (e) => {
     return comments;
   };
 
-  const hasComments = (lead) => {
-    if (!lead.lastInteractionDesc) return false;
-    return lead.lastInteractionDesc.includes('**[PM Comment -') || 
-           lead.lastInteractionDesc.includes('**[Sales Comment -');
-  };
 
   const toggleComments = (leadId) => {
     setExpandedComments(expandedComments === leadId ? null : leadId);
@@ -797,7 +791,6 @@ const handleCreateFeasibilitySubmit = async (e) => {
               </thead>
               <tbody>
                 {currentTasks.map((task) => {
-                  const isClosed = task.status === 'Closed' || task.status === 'Production Ready';
                   const comments = extractPMComments(task.lastInteractionDesc);
                   const hasExistingComments = comments.length > 0;
                   const isExpanded = expandedComments === task._id;

@@ -1,5 +1,5 @@
 import { useLocation } from 'react-router-dom';
-import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
+import useDashboardFilter, { idOf } from '../utils/useDashboardFilter';
 import DashboardFilterBanner from '../components/DashboardFilterBanner';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
@@ -560,7 +560,6 @@ const LeadGeneration = () => {
 
   // Attachment state for Production Ready form
   const [productionAttachment, setProductionAttachment] = useState(null);
-  const [uploadingAttachment, setUploadingAttachment] = useState(false);
 
   const itemsPerPage = 10;
 

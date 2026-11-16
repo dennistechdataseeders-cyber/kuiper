@@ -37,7 +37,6 @@ const DeveloperProjects = () => {
 
   const userRole = localStorage.getItem('role');
   const userId = localStorage.getItem('userId');
-  const userName = localStorage.getItem('userName') || 'Developer';
 
   useEffect(() => {
     fetchProjects();

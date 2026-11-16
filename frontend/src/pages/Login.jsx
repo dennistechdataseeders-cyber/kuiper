@@ -2,8 +2,6 @@
 
 import React, {
   useState,
-  useRef,
-  useMemo,
   useEffect,
   Suspense,
   lazy
@@ -13,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 
 // ============================================================
 // ✅ FIX: Lazy-load the heavy 3D background so it never blocks

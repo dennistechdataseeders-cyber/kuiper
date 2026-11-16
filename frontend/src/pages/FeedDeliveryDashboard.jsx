@@ -16,7 +16,6 @@ const FeedDeliveryDashboard = () => {
   const navigate = useNavigate();
   
   const userRole = localStorage.getItem('role');
-  const token = localStorage.getItem('token');
 
   useEffect(() => {
     fetchProjects();

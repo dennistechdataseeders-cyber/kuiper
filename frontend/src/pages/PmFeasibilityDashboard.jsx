@@ -42,11 +42,9 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 
 const PmFeasibilityDashboard = () => {
   const { isCollapsed } = useSidebar();
-  const navigate = useNavigate();
   const [feasibilityTasks, setFeasibilityTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -339,13 +337,6 @@ const PmFeasibilityDashboard = () => {
     }
     
     return comments;
-  };
-
-  // Check if there are any comments
-  const hasComments = (lead) => {
-    if (!lead.lastInteractionDesc) return false;
-    return lead.lastInteractionDesc.includes('**[PM Comment -') || 
-           lead.lastInteractionDesc.includes('**[Sales Comment -');
   };
 
   const filteredTasks = feasibilityTasks.filter(task => {

@@ -11,11 +11,9 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
 
 const DeveloperFeeds = () => {
   const { isCollapsed } = useSidebar();
-  const navigate = useNavigate();
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');

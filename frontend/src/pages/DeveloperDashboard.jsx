@@ -354,11 +354,6 @@ const DeveloperDashboard = () => {
     return feed.feedType;
   };
 
-  // ✅ Check if feed is closed (for display purposes)
-  const isClosedFeed = (feed) => {
-    return feed.feedStatus === 'Closed';
-  };
-
   if (loading) return (
     <div className={`p-8 flex items-center justify-center min-h-screen transition-all duration-300 bg-gradient-to-br from-slate-50 to-slate-100 ${
       isCollapsed ? 'ml-20' : 'ml-64'

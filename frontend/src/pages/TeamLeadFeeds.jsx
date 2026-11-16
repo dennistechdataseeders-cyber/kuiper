@@ -94,7 +94,6 @@ const TeamLeadFeeds = () => {
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role');
   const userId = localStorage.getItem('userId');
-  const userName = localStorage.getItem('userName') || 'Team Lead';
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
   };

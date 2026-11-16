@@ -138,7 +138,6 @@ const EmployeeDashboard = () => {
   const [attendanceMonth, setAttendanceMonth] = useState(new Date().getMonth());
   const [attendanceYear, setAttendanceYear] = useState(new Date().getFullYear());
 
-  const [syncing, setSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState(null);
 
   // Team & Culture

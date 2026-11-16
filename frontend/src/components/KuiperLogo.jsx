@@ -3,7 +3,6 @@ import { Canvas, useFrame, extend } from '@react-three/fiber';
 import { Effects } from '@react-three/drei';
 import { UnrealBloomPass } from 'three-stdlib';
 import * as THREE from 'three';
-import { motion } from 'framer-motion';
 extend({ UnrealBloomPass });
 
 // --- 3D PARTICLE SWARM (OPTIMIZED FOR SIDEBAR) ---

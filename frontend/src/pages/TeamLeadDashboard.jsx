@@ -14,7 +14,6 @@ import {
   TrendingUp,
   Briefcase,
   Clock,
-  CheckCircle,
   AlertCircle,
   Plus,
   Search,
@@ -132,25 +131,7 @@ const TeamLeadDashboard = () => {
     }
   };
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Open': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'In Progress': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'Resolved': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Closed': return 'bg-gray-100 text-gray-700 border-gray-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
-  };
 
-  const getStatusIcon = (status) => {
-    switch(status) {
-      case 'Open': return <AlertCircle size={10} className="text-blue-500" />;
-      case 'In Progress': return <Clock size={10} className="text-yellow-500" />;
-      case 'Resolved': return <CheckCircle size={10} className="text-green-500" />;
-      case 'Closed': return <X size={10} className="text-gray-400" />;
-      default: return <AlertCircle size={10} />;
-    }
-  };
 
   const getFeedTypeStyle = (type) => {
     switch(type) {

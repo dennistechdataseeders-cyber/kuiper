@@ -261,18 +261,6 @@ const CreateTicket = () => {
     setSelectedWatchers(prev => prev.filter(id => id !== userId));
   };
 
-  // Get user name by ID
-  const getUserName = (userId) => {
-    const user = allUsers.find(u => u._id === userId);
-    return user ? user.name : 'Unknown';
-  };
-
-  // Get user role by ID
-  const getUserRole = (userId) => {
-    const user = allUsers.find(u => u._id === userId);
-    return user ? user.role : '';
-  };
-
   const validateFile = (file) => {
     if (!isAllowedFile(file)) {
       toast.error(`File type "${file.name}" is not supported.`);

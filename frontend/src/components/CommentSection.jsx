@@ -29,7 +29,6 @@ const CommentSection = ({
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
   const [uploadingFiles, setUploadingFiles] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
   const [downloading, setDownloading] = useState(null);
   const commentsEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -295,23 +294,6 @@ const CommentSection = ({
     const files = Array.from(e.target.files);
     processFiles(files);
     e.target.value = '';
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files);
-    processFiles(files);
   };
 
   const processFiles = (files) => {

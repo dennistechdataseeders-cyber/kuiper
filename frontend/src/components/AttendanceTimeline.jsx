@@ -14,8 +14,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import axios from 'axios';
 import {
-  Calendar, Clock, ChevronLeft, ChevronRight,
-  CheckCircle, XCircle, AlertCircle, Coffee,
+  Calendar, ChevronLeft, ChevronRight,
+  Coffee,
   Loader2, Calendar as CalendarIcon, ChevronUp, Play,
   Pause, Info, MousePointer2, ChevronDown,
   TrendingUp, TrendingDown, Minus, BarChart3,
@@ -56,12 +56,6 @@ const formatTimeDisplay = (dateString) => {
 /**
  * Returns the IST calendar date string (YYYY-MM-DD) from a UTC Date.
  */
-const getISTDateString = (date) => {
-  if (!date) return null;
-  const d = new Date(date);
-  if (isNaN(d.getTime())) return null;
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-};
 
 // ─────────────────────────────────────────────────────────────
 // Timeline track config
@@ -204,30 +198,6 @@ const formatDurationDetailed = (hours) => {
   if (hrs > 0 && mins > 0) return `${hrs}h ${mins}m`;
   if (hrs > 0) return `${hrs}h 0m`;
   return `0h ${mins}m`;
-};
-
-const getStatusIcon = (status) => {
-  switch (status) {
-    case 'present': return <CheckCircle size={14} className="text-emerald-600" />;
-    case 'late': return <AlertCircle size={14} className="text-amber-600" />;
-    case 'absent': return <XCircle size={14} className="text-rose-600" />;
-    case 'leave': return <CalendarIcon size={14} className="text-indigo-600" />;
-    case 'weekend': return <Coffee size={14} className="text-slate-400" />;
-    case 'holiday': return <Gift size={14} className="text-purple-600" />;
-    default: return <Clock size={14} className="text-slate-400" />;
-  }
-};
-
-const getStatusLabel = (status) => {
-  switch (status) {
-    case 'present': return 'Present';
-    case 'late': return 'Late';
-    case 'absent': return 'Absent';
-    case 'leave': return 'On Leave';
-    case 'weekend': return 'Weekend';
-    case 'holiday': return 'Holiday 🎉';
-    default: return '—';
-  }
 };
 
 // ─────────────────────────────────────────────────────────────
@@ -1232,7 +1202,6 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                   .map((day, idx) => {
                     const isHolidayDay = day.isHoliday || false;
                     const holidayName = day.holidayName || null;
-                    const styles = isHolidayDay ? STATUS_STYLES.holiday : (STATUS_STYLES[day.status] || STATUS_STYLES.default);
                     const hasIn = day.punchInUTC || (day.sessions && day.sessions.length > 0);
                     const today = isToday(day.date);
                     const isWeekend = day.isWeekend || false;

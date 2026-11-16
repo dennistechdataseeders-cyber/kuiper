@@ -235,15 +235,6 @@ const GitManager = () => {
     return <FileCode size={18} className="text-gray-500" />;
   };
 
-  // Get last updated time for a folder (returns dd/mm/yyyy)
-  const getLastUpdated = (item) => {
-    if (item.type === 'folder') {
-      const date = new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000);
-      return 'Updated: ' + formatDate(date);
-    }
-    return null;
-  };
-
   // Get projects with Git repositories
   const projectsWithGit = projects.filter(p => p.gitRepoUrl);
 

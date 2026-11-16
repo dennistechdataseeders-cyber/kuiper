@@ -519,17 +519,6 @@ const Announcements = () => {
   // ============================================
   // GET USER AVATAR
   // ============================================
-  const getUserAvatar = (user) => {
-    if (!user) return null;
-    
-    if (user.profileImage) {
-      if (user.profileImage.startsWith('http://') || user.profileImage.startsWith('https://')) {
-        return user.profileImage;
-      }
-      return `${API_BASE_URL}${user.profileImage.startsWith('/') ? user.profileImage : '/' + user.profileImage}`;
-    }
-    return null;
-  };
 
   // ============================================
   // RENDER

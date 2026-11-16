@@ -52,7 +52,6 @@ const TeamLeadProjects = () => {
 
   const userRole = localStorage.getItem('role');
   const userId = localStorage.getItem('userId');
-  const userName = localStorage.getItem('userName') || 'Team Lead';
   const token = localStorage.getItem('token');
   const authHeader = {
     headers: { Authorization: `Bearer ${token}` }
@@ -441,7 +440,6 @@ const TeamLeadProjects = () => {
     setSubmittingComment(true);
 
     try {
-      const token = localStorage.getItem('token');
       let uploadedFiles = [];
 
       if (selectedFiles.length > 0) {
@@ -488,7 +486,6 @@ const TeamLeadProjects = () => {
 
     setDeletingComment(commentId);
     try {
-      const token = localStorage.getItem('token');
       await axios.delete(
         `${API_BASE_URL}/api/comments/projects/${selectedProject._id}/comments/${commentId}`,
         authHeader

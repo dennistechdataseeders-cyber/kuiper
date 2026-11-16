@@ -12,7 +12,7 @@ import {
 import API_BASE_URL from '../config';
 import { useSidebar } from '../context/SidebarContext';
 import Pagination from '../components/Pagination';
-import useDashboardFilter, { idOf, ownerOf } from '../utils/useDashboardFilter';
+import useDashboardFilter, { idOf } from '../utils/useDashboardFilter';
 import DashboardFilterBanner from '../components/DashboardFilterBanner';
 import useColumnTable from '../utils/useColumnTable';
 import { ColumnHead, ColumnToolbar } from '../components/ColumnTable';

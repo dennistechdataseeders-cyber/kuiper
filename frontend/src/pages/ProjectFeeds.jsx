@@ -76,7 +76,6 @@ const ProjectFeeds = () => {
   const [feedTypeFilter, setFeedTypeFilter] = useState('ALL');
   const [selectedProject, setSelectedProject] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
-  const [showPendingOnly, setShowPendingOnly] = useState(false);
 
   // PAGINATION
   const [currentPage, setCurrentPage] = useState(1);
@@ -134,38 +133,6 @@ const ProjectFeeds = () => {
     headers: {
       Authorization: `Bearer ${token}`
     }
-  };
-
-  // Get today's day name
-  const getTodayDayName = () => {
-    const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    return days[new Date().getDay()];
-  };
-
-  // Get today's day of month
-  const getTodayDayOfMonth = () => {
-    return new Date().getDate();
-  };
-
-  // Check if feed is scheduled for today
-  const isFeedForToday = (feed) => {
-    if (feed.feedType === 'Daily') return true;
-    if (feed.feedType === 'Weekly') {
-      return feed.weekDay === getTodayDayName();
-    }
-    if (feed.feedType === 'Monthly') {
-      return feed.monthDay === getTodayDayOfMonth();
-    }
-    return false;
-  };
-
-  // Check if feed is completed for today
-  const isCompletedToday = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
-      return feed.completionHistory.some(h => h && h.date === today);
-    }
-    return false;
   };
 
   // Get developer names by IDs
@@ -333,23 +300,6 @@ const ProjectFeeds = () => {
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
-
-  const openCommentModal = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
-      const todayCompletion = feed.completionHistory.find(h => h && h.date === today);
-      if (todayCompletion) {
-        setSelectedCommentFeed({
-          name: feed.name,
-          projectName: feed.projectName,
-          projectCustomId: feed.projectCustomId,
-          description: todayCompletion.description || 'No description provided',
-          completedAt: todayCompletion.completedAt
-        });
-        setShowCommentModal(true);
-      }
-    }
   };
 
   // Open Feed Comment Modal

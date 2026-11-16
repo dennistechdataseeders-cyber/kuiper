@@ -20,9 +20,6 @@ import {
   RefreshCw,
   ChevronRight,
   Hash,
-  Globe,
-  Smartphone,
-  Monitor,
   UserCheck,
   MessageSquare,
   Eye,
@@ -88,15 +85,6 @@ const PmDashboard = () => {
     }
     if (feed.feedType === 'Monthly') {
       return feed.monthDay === getTodayDayOfMonth();
-    }
-    return false;
-  };
-
-  // Check if feed is completed for today
-  const isCompletedToday = (feed) => {
-    const today = new Date().toISOString().split('T')[0];
-    if (feed.completionHistory && Array.isArray(feed.completionHistory)) {
-      return feed.completionHistory.some(h => h && h.date === today);
     }
     return false;
   };
@@ -228,26 +216,6 @@ const PmDashboard = () => {
     fetchDashboardData();
   }, []);
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'Open': return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'In Progress': return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'Resolved': return 'bg-green-100 text-green-700 border-green-200';
-      case 'Closed': return 'bg-gray-100 text-gray-700 border-gray-200';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch(priority) {
-      case 'Urgent': return 'bg-red-100 text-red-700';
-      case 'High': return 'bg-orange-100 text-orange-700';
-      case 'Medium': return 'bg-yellow-100 text-yellow-700';
-      case 'Low': return 'bg-green-100 text-green-700';
-      default: return 'bg-gray-100 text-gray-700';
-    }
-  };
-
   const getFeedTypeColor = (type) => {
     switch(type) {
       case 'Daily': return 'bg-emerald-50 text-emerald-700 border-emerald-200';
@@ -264,24 +232,6 @@ const PmDashboard = () => {
       case 'Weekly': return <Calendar size={10} />;
       case 'Monthly': return <Calendar size={10} />;
       default: return <Clock size={10} />;
-    }
-  };
-
-  const getPlatformIcon = (platform) => {
-    switch(platform) {
-      case 'Web': return <Globe size={10} />;
-      case 'App': return <Smartphone size={10} />;
-      case 'Both': return <Monitor size={10} />;
-      default: return null;
-    }
-  };
-
-  const getPlatformColor = (platform) => {
-    switch(platform) {
-      case 'Web': return 'bg-blue-50 text-blue-700 border-blue-200';
-      case 'App': return 'bg-purple-50 text-purple-700 border-purple-200';
-      case 'Both': return 'bg-indigo-50 text-indigo-700 border-indigo-200';
-      default: return 'bg-slate-50 text-slate-500 border-slate-200';
     }
   };
 
