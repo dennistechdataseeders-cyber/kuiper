@@ -824,7 +824,7 @@ Run on the branch itself: backend on port 5099 and Vite on port 5174 (pointed at
 During the Developer run the machine's network changed (`ERR_NETWORK_CHANGED`) and one page load came up blank. After a reload everything rendered; that blank load was environmental, not code.
 
 ## What I could not verify
-- **Super Admin, Admin, Sales, Sales Manager, Team Lead, HR, Finance and Client screens were not clicked through** (no logins for those roles). They rely on the static checks above: routes, the endpoint set diff, and every frontend API URL resolving to a mounted route.
+- **Super Admin, Admin, Team Lead, HR, Finance and Client screens were not clicked through** (no logins for those roles). Sales and Sales Manager were clicked through later; see "Bug fixes" below. They rely on the static checks above: routes, the endpoint set diff, and every frontend API URL resolving to a mounted route.
 - I ran a GET-only probe against the branch server (port 5099) with no token. It shows none of the 92 kept GET paths falls through to the "route does not exist" 404. It cannot tell kept from removed routes under protected prefixes, though, because auth answers 401 before route matching. The static endpoint diff above is the real evidence.
 - Not checked against prod data: U2 (feed-status pipeline endpoints) and U6 (`sync-logs`) were **kept** on the assumption that outside scripts call them.
 
@@ -837,3 +837,27 @@ During the Developer run the machine's network changed (`ERR_NETWORK_CHANGED`) a
 16. `controllers/workDescriptionController.js` uses `Feed` and `Worklog` without requiring them (`no-undef`), so any code path that reaches them throws.
 17. On `main`, `leaveController.applyLeave` referenced `leaveBucketService` without importing it. Moot now, since that function was dead and has been removed.
 18. A Developer opening a project's feed status (`/developer/projects/:id/feeds`) gets 4× **403** from `GET /api/admin/projects`. `ProjectFeedStatus.fetchProjectFeedsFromMainTable` calls it for every role, but `adminRoutes.js` (`router.get('/projects', ...)`) only allows Super Admin, Admin, Project Manager, Client, Team Lead and HR. The page still shows feeds from `/api/client/...`. (Pre-existing.)
+19. `/admin/users` (UserManagement) logs a React dev warning: *Each child in a list should have a unique "key" prop*. It's a development-only warning with no visible effect. `UserManagement.jsx` is byte-identical to `main`, so it's pre-existing. (Not fixed.)
+
+---
+
+# Bug fixes (branch `fix/known-bugs`, on top of `cleanup/current-only`)
+
+Requested after the cleanup: fix the breaking bugs without changing current functionality or visual style.
+
+| Bug | Fix | Commit |
+|---|---|---|
+| 16: `workDescriptionController.getDeveloperWorklogs` uses undefined `Feed`/`Worklog` | The function is **not routed anywhere** (on `main` either), so it is dead code. Removed it, together with an orphaned comment banner left over from step 8. This commit sits on `cleanup/current-only`. | `da81492` |
+| 2: `DeveloperProjects.jsx` page-size select calls undefined `setItemsPerPage` (crash on change) | `const itemsPerPage = 10` → `const [itemsPerPage, setItemsPerPage] = useState(10)`. Same default, same markup; the select now works. | `7b2758e` |
+| 15: holiday update/delete emails throw (templates not imported) | Import `getHolidayUpdatedTemplate` and `getHolidayDeletedTemplate` from `holidayEmailTemplates.js`, where they already exist and their arguments match the call sites. **Behaviour note:** saving a holiday edit or delete already worked (the email step's error was caught and logged). Now the notification emails are **actually sent** to all active non-admin users, as the code and its "…and notifications sent" response intend. | `7b2758e` |
+| 18: Developer gets 403 from `GET /api/admin/projects` on project feed status | Added `Developer` to the route's roles with a Developer branch scoped to projects containing a feed assigned to them (same rule as `/api/dev/my-projects`). Other roles' queries are untouched. The only Developer caller is `ProjectFeedStatus`; `CreateTicket` returns `[]` for Developers without calling it. | `7b2758e` |
+
+**Not changed (needs your decision):** bug 1, the sidebar "Employees" link (`/hr/employees`) with no route. There is no Employees page to point it at, and removing the link would change the sidebar.
+
+## Verification
+- Build OK, 0 warnings. ESLint 187 problems (was 188; the `setItemsPerPage` `no-undef` is gone, and the frontend now has **0 `no-undef`**). `node --check` passes on every backend file. Boot is clean (0 missing modules, 0 runtime errors).
+- Holiday templates rendered with sample data (updated 6,966 chars, deleted 4,520 chars). I didn't edit or delete a real holiday, because that would now email real users in your local DB.
+- **Browser, Developer:** "Show 5 per page" now gives "Showing 1 to 5 of 6 projects" with pagination, no error, same styling. `/developer/projects/:id/feeds`: the 4× 403 are now **200**, with 0 console errors. Scoping check: `GET /api/admin/projects` as this developer returns exactly the same 6 projects as `/api/dev/my-projects`.
+- **Browser, Sales:** 22 pages, including account, contact, deal and activity detail, lead generation and new account: all render, **123 API calls, 0 failed, 0 console errors**. `/notifications` redirects Sales to `/sales`, which is pre-existing bug 5.
+- **Browser, Sales Manager:** 21 pages, including Team (`/admin/users`) and account/contact/deal detail: all render, **0 failed API calls**. The only console entry is the pre-existing React key warning (bug 19).
+- Twice the browser pane's network dropped (`ERR_NETWORK_CHANGED`, `ERR_NETWORK_IO_SUSPENDED` while the pane was hidden), and the affected pages were re-run after a reload. These were environmental, not code.
