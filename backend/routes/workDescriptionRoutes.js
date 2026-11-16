@@ -3,8 +3,7 @@ const express = require('express');
 const router = express.Router();
 
 const {
-  saveWorkDescription,
-  getTodayDescriptions
+  saveWorkDescription
 } = require('../controllers/workDescriptionController');
 
 /*

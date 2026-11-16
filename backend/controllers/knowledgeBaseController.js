@@ -162,54 +162,6 @@ exports.deleteEntry = async (req, res) => {
   }
 };
 
-// Delete a specific file from an entry
-exports.deleteFile = async (req, res) => {
-  try {
-    const { entryId, fileIndex } = req.params;
-    const entry = await KnowledgeBase.findById(entryId);
-    
-    if (!entry) {
-      return res.status(404).json({ error: 'Entry not found' });
-    }
-    
-    const index = parseInt(fileIndex);
-    if (index < 0 || index >= entry.files.length) {
-      return res.status(400).json({ error: 'Invalid file index' });
-    }
-    
-    // Delete physical file
-    const file = entry.files[index];
-    const uploadDir = path.join(__dirname, '../uploads/knowledge');
-    const filePath = path.join(uploadDir, file.filename);
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-    }
-    
-    // Remove file from entry
-    entry.files.splice(index, 1);
-    await entry.save();
-    
-    res.json({
-      success: true,
-      message: 'File deleted successfully'
-    });
-  } catch (error) {
-    console.error('Error deleting file:', error);
-    res.status(500).json({ error: 'Failed to delete file' });
-  }
-};
-
-// Get all folders
-exports.getFolders = async (req, res) => {
-  try {
-    const folders = await KnowledgeBase.getFolders();
-    res.json({ success: true, folders });
-  } catch (error) {
-    console.error('Error fetching folders:', error);
-    res.status(500).json({ error: 'Failed to fetch folders' });
-  }
-};
-
 // Download file
 exports.downloadFile = async (req, res) => {
   try {

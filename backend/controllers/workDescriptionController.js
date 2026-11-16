@@ -163,39 +163,3 @@ GET TODAY DESCRIPTIONS
 ========================================
 */
 
-exports.getTodayDescriptions =
-  async (req, res) => {
-
-    try {
-
-      const developerId =
-        req.user.id;
-
-      const today =
-        new Date()
-          .toISOString()
-          .split('T')[0];
-
-      const logs =
-        await WorkDescription.find({
-
-          developer: developerId,
-
-          date: today
-
-        });
-
-      res.json(logs);
-
-    } catch (error) {
-
-      console.error(error);
-
-      res.status(500).json({
-        error:
-          'Failed to fetch descriptions'
-      });
-
-    }
-
-  };

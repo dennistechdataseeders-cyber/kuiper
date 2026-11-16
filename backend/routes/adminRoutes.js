@@ -17,31 +17,12 @@ const Prospect = require('../models/Prospect');
 const LeadGen = require('../models/LeadGen');
 const Organization = require('../models/Organization');
 const ProjectClient = require('../models/ProjectClient');
-const { syncProjectFeeds } = require('../services/feedGitSyncService');
 
-const { register, login, forgotPassword, resetPassword } = require('../controllers/authController');
 // --- MIDDLEWARE ---
 const { authorize } = require('../middleware/roleCheck');
 const { blockStartAfter } = require('../utils/accessBlock');
 const getWelcomeTemplate = require('../templates/welcomeEmail');
 const { protect } = require('../middleware/authMiddleware');
-
-// --- NODEMAILER TRANSPORTER (kept for bulk-invite and other emails) ---
-const nodemailer = require('nodemailer');
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS, 
-  },
-  tls: {
-    rejectUnauthorized: false
-  }
-});
 
 // --- RESEND (for invitation emails only) ---
 const { Resend } = require('resend');

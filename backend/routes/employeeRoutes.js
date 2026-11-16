@@ -14,7 +14,6 @@ const { protect } = require('../middleware/authMiddleware');
 // Import models
 const LeaveApplication = require('../models/LeaveApplication');
 const EmployeePunchLog = require('../models/EmployeePunchLog');
-const MissedPunchRequest = require('../models/MissedPunchRequest');
 const User = require('../models/User');
 const { activeUserFilter } = require('../utils/accessBlock');
 

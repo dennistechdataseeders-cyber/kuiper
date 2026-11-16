@@ -1874,49 +1874,6 @@ exports.addComment = async (req, res) => {
 // GET PROJECTS FOR DROPDOWN
 // ============================================
 
-exports.getProjects = async (req, res) => {
-  try {
-    let filter = {};
-    
-    if (req.user.role === 'Client') {
-      const clientIdStr = req.user.id;
-      
-      const projects = await Project.aggregate([
-        {
-          $addFields: {
-            clientIdsAsString: {
-              $map: {
-                input: "$clients",
-                as: "client",
-                in: { $toString: "$$client" }
-              }
-            }
-          }
-        },
-        {
-          $match: {
-            $expr: {
-              $in: [clientIdStr, "$clientIdsAsString"]
-            }
-          }
-        },
-        { $limit: 50 }
-      ]);
-      
-      return res.json(projects);
-    }
-    
-    const allProjects = await Project.find(filter)
-      .select('name projectCustomId _id')
-      .limit(50);
-    
-    res.json(allProjects);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'Failed to fetch projects' });
-  }
-};
-
 // ============================================
 // GET FEEDS FOR DROPDOWN
 // ============================================

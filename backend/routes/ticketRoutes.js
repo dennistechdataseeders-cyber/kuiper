@@ -7,7 +7,6 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const Feed = require('../models/Feed');
-const User = require('../models/User');
 
 // All routes require authentication
 router.use(protect);
