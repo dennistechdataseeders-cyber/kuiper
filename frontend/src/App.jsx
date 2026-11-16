@@ -7,24 +7,17 @@ import UserManagement from './pages/UserManagement';
 import ProjectManagement from './pages/ProjectManagement';
 import AdminDashboard from './pages/AdminDashboard';
 import Login from './pages/Login';
-import Organizations from './pages/Organizations';
 import SalesDashboard from './pages/SalesDashboard';
 import SalesManagerDashboard from './pages/SalesManagerDashboard';
 import LeadGeneration from './pages/LeadGeneration';
-import Prospects from './pages/Prospects';
 import DeveloperDashboard from './pages/DeveloperDashboard';
-import ProjectDetailView from './pages/ProjectDetailView';
-import DeveloperBucket from './components/DeveloperBucket';
 import Profile from './pages/Profile';
 import ProjectFeeds from './pages/ProjectFeeds';  
-import PMTaskProgress from './pages/PMTaskProgress';
 import Worklog from './pages/Worklog';
 import ResourceAnalytics from './pages/ResourceAnalytics';
-import EmailTrigger from './pages/EmailTrigger';
 import TicketDashboard from './pages/TicketDashboard';
 import CreateTicket from './pages/CreateTicket';
 import TicketDetails from './pages/TicketDetails';
-import ClientDashboard from './pages/ClientDashboard';
 import NotificationSettings from './pages/NotificationSettings';
 import GitManager from './pages/GitManager';
 import DeveloperGitFeeds from './pages/DeveloperGitFeeds';
@@ -39,7 +32,6 @@ import TicketAssignmentRules from './pages/TicketAssignmentRules';
 import TicketCategoriesManager from './pages/TicketCategoriesManager';
 import FeedDeliveryDashboard from './pages/FeedDeliveryDashboard';
 import ProjectFeedStatus from './pages/ProjectFeedStatus';
-import ClientFeedDetails from './pages/ClientFeedDetails';
 import AttendanceSync from './pages/AttendanceSync';
 import KnowledgeBase from './pages/KnowledgeBase';
 import FeasibilityDashboard from './pages/FeasibilityDashboard';
@@ -450,9 +442,7 @@ function AppContent() {
                         ============================================ */}
                     <Route path="/sales" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
                     <Route path="/sales/leads" element={<Leads />} />
-                    <Route path="/sales/add_org" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><Organizations /></ProtectedRoute>} />
                     <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
-                    <Route path="/sales/prospects" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><Prospects /></ProtectedRoute>} />
                     <Route path="/sales/accounts" element={<Accounts />} />
                     <Route path="/sales/deals" element={<Deals />} />   
                     <Route path="/sales/accounts/new" element={<CreateAccount />} />
@@ -460,12 +450,6 @@ function AppContent() {
                     <Route path="/sales/accounts/:id" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><AccountDetail /></ProtectedRoute>} />
                     <Route path="/sales/contacts/:accountId/:pocId" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><ContactDetail /></ProtectedRoute>} />
                     <Route path="/sales/deals/:id" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><DealDetail /></ProtectedRoute>} />
-                    
-                    <Route path="/sales/email-trigger" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}>
-                        <EmailTrigger />
-                      </ProtectedRoute>
-                    } />
 
                     {/* ============================================
                         ✅ ACTIVITIES (NOTES FEATURE — ZOHO STYLE)
@@ -509,7 +493,6 @@ function AppContent() {
                         <ProjectFeeds />
                       </ProtectedRoute>
                     } />
-                    <Route path="/pm/task-progress" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}><PMTaskProgress /></ProtectedRoute>} />
                     <Route path="/pm/resource-analytics" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
                         <ResourceAnalytics />
@@ -546,8 +529,6 @@ function AppContent() {
                         DEVELOPER ROUTES
                         ============================================ */}
                     <Route path="/developer" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer']}><DeveloperDashboard /></ProtectedRoute>} />
-                    <Route path="/developer/project/:id" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer']}><ProjectDetailView /></ProtectedRoute>} />
-                    <Route path="/developer/bucket" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer']}><DeveloperBucket /></ProtectedRoute>} />
                     <Route path="/developer/worklog" element={<ProtectedRoute allowedRoles={['Super Admin', 'Developer', 'Admin']}><Worklog /></ProtectedRoute>} />    
                     <Route path="/developer/git-feeds" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer']}><DeveloperGitFeeds /></ProtectedRoute>} />
                     <Route path="/developer/projects" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer']}><DeveloperProjects /></ProtectedRoute>} />
@@ -592,11 +573,6 @@ function AppContent() {
                     <Route path="/client/projects/:projectId/feeds" element={
                       <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Client']}>
                         <ProjectFeedStatus />
-                      </ProtectedRoute>
-                    } />
-                    <Route path="/client/feeds/:feedId" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Client']}>
-                        <ClientFeedDetails />
                       </ProtectedRoute>
                     } />
                     
