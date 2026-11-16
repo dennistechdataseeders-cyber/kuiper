@@ -141,12 +141,9 @@ const adminRoutes = require('./routes/adminRoutes');
 const authRoutes = require('./routes/authRoutes');
 const leadGenRoutes = require('./routes/leadGenRoutes');
 const organizationRoutes = require('./routes/organizationRoutes');
-const prospectRoutes = require('./routes/prospects');
 const developerRoutes = require('./routes/developer');
-const pmRoutes = require('./routes/pmRoutes');
 const workDescriptionRoutes = require('./routes/workDescriptionRoutes');
 const resourceAnalyticsRoutes = require('./routes/resourceAnalyticsRoutes');
-const emailCampaignRoutes = require('./routes/emailCampaignRoutes');
 const ticketRoutes = require('./routes/ticketRoutes');
 const commentRoutes = require('./routes/commentRoutes');
 const teamLeadRoutes = require('./routes/teamLeadRoutes');
@@ -416,12 +413,9 @@ app.use('/api/orgs', protect, organizationRoutes);
 // leadGenRoutes is served ONLY at '/api/lead-generation'. Mounting it here too
 // shadowed leadRoutes, so POST/GET /api/leads hit the old LeadGen handler.
 app.use('/api/lead-generation', protect, leadGenRoutes);
-app.use('/api/prospects', protect, prospectRoutes);
 app.use('/api/dev', protect, developerRoutes);
-app.use('/api/pm', protect, pmRoutes);
 app.use('/api/dev/worklog', protect, workDescriptionRoutes);
 app.use('/api/resource-analytics', resourceAnalyticsRoutes);
-app.use('/api/email-campaign', emailCampaignRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/ticket-categories', require('./routes/ticketCategoryRoutes')); // dynamic Category/Subcategory/Specific Issue
 app.use('/api/comments', protect, commentRoutes);

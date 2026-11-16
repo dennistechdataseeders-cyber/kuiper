@@ -238,15 +238,6 @@ router.delete('/fields/:fieldKey', authorize('Admin', 'Sales', 'Sales Manager'),
   }
 });
 
-router.post('/fields/seed', authorize('Admin'), async (req, res) => {
-  try {
-    await ensureDefaultFields();
-    res.json({ success: true, message: 'Default fields seeded' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ============================================
 // DROPDOWN OPTION MANAGEMENT
 // (must be declared BEFORE the generic /:id routes below)

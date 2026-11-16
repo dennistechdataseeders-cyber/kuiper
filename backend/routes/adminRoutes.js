@@ -587,67 +587,6 @@ router.delete('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req,
 });
 
 // ============================================
-// ✅ FIX EXISTING USERS - Run this once to set probation for existing users
-// ✅ HR added
-// ============================================
-router.post('/fix-probation', authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
-  try {
-    // Get all employees (excluding Admin, Super Admin, HR, Client)
-    const employees = await User.find({
-      role: { $nin: ['Admin', 'Super Admin', 'HR', 'Client'] },
-      isActive: true
-    });
-    
-    let updated = 0;
-    let alreadySet = 0;
-    let completed = 0;
-    
-    for (const emp of employees) {
-      const joiningDate = emp.dateOfJoining ? new Date(emp.dateOfJoining) : emp.createdAt ? new Date(emp.createdAt) : new Date();
-      const threeMonthsLater = new Date(joiningDate);
-      threeMonthsLater.setMonth(threeMonthsLater.getMonth() + 3);
-      const now = new Date();
-      
-      // Check if already set correctly
-      if (emp.isProbationary === true && emp.probationEndDate) {
-        alreadySet++;
-        continue;
-      }
-      
-      // Only set probation if they joined in the last 3 months
-      if (now < threeMonthsLater) {
-        emp.isProbationary = true;
-        emp.probationEndDate = threeMonthsLater;
-        await emp.save();
-        updated++;
-        console.log(`✅ ${emp.name} set on probation until ${threeMonthsLater.toLocaleDateString()}`);
-      } else {
-        // Already completed probation
-        emp.isProbationary = false;
-        emp.probationEndDate = null;
-        await emp.save();
-        completed++;
-        console.log(`✅ ${emp.name} probation already completed (joined ${joiningDate.toLocaleDateString()})`);
-      }
-    }
-    
-    res.json({
-      success: true,
-      message: `Probation fix complete`,
-      stats: {
-        updated: updated,
-        alreadySet: alreadySet,
-        completed: completed,
-        total: employees.length
-      }
-    });
-  } catch (error) {
-    console.error('Error fixing probation:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
 // ✅ UPDATED: POST /users/:userId/link-github - Link GitHub account for a developer
 // ✅ HR added
 // ============================================
@@ -844,78 +783,6 @@ router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Man
 // ============================================
 // PROJECT MANAGEMENT ROUTES
 // ============================================
-
-// GET /client-projects - Specific route for client projects
-router.get('/client-projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client'), async (req, res) => {
-  try {
-    console.log('=== CLIENT PROJECTS ENDPOINT ===');
-    
-    // ✅ FIX: Super Admin and Admin see ALL projects
-    if (req.user.role === 'Super Admin' || req.user.role === 'Admin') {
-      const allProjects = await Project.find({})
-        .populate('clients', 'name email role')
-        .populate('organizations', 'companyName')
-        .populate('projectManager', 'name email')
-        .populate({
-          path: 'feeds',
-          populate: {
-            path: 'assignedDevelopers',
-            select: 'name email',
-            model: 'User'
-          }
-        })
-        .sort({ createdAt: -1 });
-      
-      console.log(`Found ${allProjects.length} projects for Admin/Super Admin`);
-      return res.json(allProjects);
-    }
-    
-    // Client-specific filtering
-    const clientIdStr = req.user._id.toString();
-    console.log('Looking for client ID (string):', clientIdStr);
-    
-    const projects = await Project.aggregate([
-      {
-        $addFields: {
-          clientIdsAsString: {
-            $map: {
-              input: "$clients",
-              as: "client",
-              in: { $toString: "$$client" }
-            }
-          }
-        }
-      },
-      {
-        $match: {
-          $expr: {
-            $in: [clientIdStr, "$clientIdsAsString"]
-          }
-        }
-      }
-    ]);
-    
-    const populatedProjects = await Project.populate(projects, [
-      { path: 'clients', select: 'name email role' },
-      { path: 'organizations', select: 'companyName' },
-      { path: 'projectManager', select: 'name email' },
-      {
-        path: 'feeds',
-        populate: {
-          path: 'assignedDevelopers',
-          select: 'name email',
-          model: 'User'
-        }
-      }
-    ]);
-    
-    console.log(`Found ${populatedProjects.length} projects for client`);
-    res.json(populatedProjects);
-  } catch (err) {
-    console.error('Error fetching client projects:', err);
-    res.status(500).json({ message: err.message });
-  }
-});
 
 // GET /projects - General projects route
 router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client', 'Team Lead', 'HR'), async (req, res) => {
@@ -1159,23 +1026,6 @@ router.put('/projects/:id', authorize('Super Admin', 'Admin', 'Project Manager')
   }
 });
 
-// DELETE /projects/:id - Delete project
-router.delete('/projects/:id', authorize('Super Admin', 'Admin'), async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
-    if (!project) return res.status(404).json({ message: "Project not found" });
-
-    if (project.feeds && project.feeds.length > 0) {
-      await Feed.deleteMany({ _id: { $in: project.feeds } });
-    }
-    
-    await Project.findByIdAndDelete(req.params.id);
-    res.json({ message: "Project and its feeds deleted successfully" });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-});
-
 // GET /organizations - Fetch organizations
 router.get('/organizations', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
   try {
@@ -1219,69 +1069,6 @@ router.get('/projects/:id/invite-link', authorize('Super Admin', 'Project Manage
     });
   } catch (error) {
     console.error('Error generating invite link:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
-
-router.post('/projects/:id/bulk-invite', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
-  try {
-    const { developerEmails, customMessage } = req.body;
-    const project = await Project.findById(req.params.id);
-    
-    if (!project || !project.gitRepoName) {
-      return res.status(404).json({ success: false, error: 'Project or Git repo not found' });
-    }
-    
-    const inviteLink = gitService.getInviteLink(project.gitRepoName);
-    const results = [];
-    
-    for (const email of developerEmails) {
-      try {
-        const mailOptions = {
-          from: `"KUIPER CRM" <${process.env.EMAIL_USER}>`,
-          to: email,
-          subject: `GitHub Repository Invitation: ${project.projectCustomId || project.name}`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e0e0e0; border-radius: 10px;">
-              <h2 style="color: #2563eb;">GitHub Repository Access</h2>
-              <p>Hello,</p>
-              <p>You have been granted access to the GitHub repository for project:</p>
-              <h3 style="color: #1e293b;">${project.projectCustomId || project.name}</h3>
-              <p>${customMessage || 'Please click the link below to accept the invitation and start contributing.'}</p>
-              <a href="${inviteLink}" 
-                 style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; margin: 20px 0;">
-                Accept GitHub Invitation
-              </a>
-              <p style="color: #666; font-size: 12px;">Or copy this link to your browser: ${inviteLink}</p>
-              <hr style="margin: 20px 0; border-color: #e0e0e0;">
-              <p style="color: #999; font-size: 11px;">This invitation will expire in 7 days.</p>
-            </div>
-          `
-        };
-        
-        await transporter.sendMail(mailOptions);
-        results.push({ email, success: true, message: 'Invitation sent' });
-        
-        await Log.create({
-          actionType: 'INVITE_SENT',
-          performerId: req.user._id,
-          details: `Sent GitHub invite for ${project.gitRepoName} to ${email}`,
-          timestamp: new Date()
-        });
-      } catch (error) {
-        console.error(`Error sending email to ${email}:`, error);
-        results.push({ email, success: false, error: error.message });
-      }
-    }
-    
-    res.json({
-      success: true,
-      inviteLink: inviteLink,
-      results: results,
-      message: `Invitations sent to ${results.filter(r => r.success).length} developers`
-    });
-  } catch (error) {
-    console.error('Error sending bulk invites:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1337,34 +1124,6 @@ router.get('/projects/:id/collaborators', authorize('Super Admin', 'Project Mana
     }
   } catch (error) {
     console.error('Error fetching collaborators:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.delete('/projects/:id/remove-collaborator', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
-  try {
-    const { email } = req.body;
-    const project = await Project.findById(req.params.id);
-    
-    if (!project || !project.gitRepoName) {
-      return res.status(404).json({ error: 'Project or Git repo not found' });
-    }
-    
-    const result = await gitService.removeCollaborator(project.gitRepoName, email);
-    
-    if (result.success) {
-      await Log.create({
-        actionType: 'COLLABORATOR_REMOVED',
-        performerId: req.user._id,
-        details: `Removed ${result.username} from repo ${project.gitRepoName}`,
-        timestamp: new Date()
-      });
-      res.json({ success: true, message: `Collaborator removed: ${result.username}` });
-    } else {
-      res.status(400).json({ error: result.error });
-    }
-  } catch (error) {
-    console.error('Error removing collaborator:', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -1648,79 +1407,9 @@ router.post('/tasks/create', authorize('Super Admin', 'Admin', 'Project Manager'
   }
 });
 
-router.post('/feeds/push-task', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
-  try {
-    const io = req.app.get('io');
-    const { feedId, projectId, details, targetUsers } = req.body;
-
-    const createdTask = await Task.create({
-      feedId,
-      projectId,
-      performerId: req.user._id,
-      targetUsers,
-      details,
-      status: 'Pending'
-    });
-
-    const task = await Task.findById(createdTask._id)
-      .populate('projectId', 'name')
-      .populate('feedId', 'name')
-      .populate('targetUsers', 'name')
-      .populate('performerId', 'name');
-
-    targetUsers.forEach(userId => {
-      io.to(userId.toString()).emit('new_task', task);
-    });
-
-    res.json(task);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to push task' });
-  }
-});
-
-router.get('/pm/task-progress', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
-  try {
-    const projects = await Project.find({ projectManager: req.user._id })
-      .populate({
-        path: 'feeds',
-        populate: { path: 'assignedDevelopers', select: 'name email' }
-      });
-
-    const projectIds = projects.map(p => p._id);
-    const tasks = await Task.find({ projectId: { $in: projectIds } })
-      .populate('feedId')
-      .populate('targetUsers', 'name');
-
-    const formattedProjects = projects.map(project => {
-      const feeds = project.feeds.map(feed => {
-        const feedTasks = tasks.filter(task => task.feedId?._id.toString() === feed._id.toString());
-        const completed = feedTasks.filter(t => t.status === 'Completed').length;
-        const progress = feedTasks.length > 0 ? Math.round((completed / feedTasks.length) * 100) : 0;
-        return { ...feed.toObject(), tasks: feedTasks, progress };
-      });
-      return { ...project.toObject(), feeds };
-    });
-
-    res.json(formattedProjects);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to fetch task progress' });
-  }
-});
-
 // ============================================
 // HELPER ROUTES
 // ============================================
-
-router.get('/users/clients', authorize('Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
-  try {
-    const clients = await User.find({ role: 'Client' }).select('name email githubUsername');
-    res.json(clients);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 
 router.get('/users/developers', authorize('Super Admin','HR', 'Admin', 'Project Manager', 'Team Lead'), async (req, res) => {
   try {
@@ -1803,55 +1492,6 @@ router.get('/client/projects', authorize('Super Admin', 'Client'), async (req, r
   }
 });
 
-// GET /projects/:projectId/feeds - Get all feeds for a project (Admin/Super Admin only)
-router.get('/projects/:projectId/feeds', authorize('Super Admin', 'Admin'), async (req, res) => {
-  try {
-    const { projectId } = req.params;
-    
-    const project = await Project.findById(projectId)
-      .populate({
-        path: 'feeds',
-        populate: {
-          path: 'assignedDevelopers',
-          select: 'name email githubUsername'
-        }
-      });
-    
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
-    
-    // Return all feeds with full details
-    const feeds = project.feeds.map(feed => ({
-      _id: feed._id,
-      name: feed.name,
-      feedType: feed.feedType || 'Daily',
-      feedStatus: feed.feedStatus || 'New',
-      assignedDevelopers: feed.assignedDevelopers || [],
-      feedPlatform: feed.feedPlatform || null,
-      webDomain: feed.webDomain || null,
-      weekDay: feed.weekDay || null,
-      monthDay: feed.monthDay || null,
-      createdAt: feed.createdAt,
-      updatedAt: feed.updatedAt
-    }));
-    
-    res.json({
-      success: true,
-      project: {
-        _id: project._id,
-        projectCustomId: project.projectCustomId,
-        name: project.name
-      },
-      feeds: feeds,
-      total: feeds.length
-    });
-  } catch (error) {
-    console.error('Error fetching admin feeds:', error);
-    res.status(500).json({ error: 'Failed to fetch feeds' });
-  }
-});
-
 // ============================================
 // TEAM LEAD ASSIGNMENT ROUTES
 // ============================================
@@ -1897,35 +1537,6 @@ router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Ad
   }
 });
 
-// GET /teamleads - Get all Team Leads (for dropdown)
-router.get('/teamleads', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
-  try {
-    const teamLeads = await User.find({ role: 'Team Lead' })
-      .select('name email _id')
-      .sort({ name: 1 });
-    res.json({ success: true, teamLeads });
-  } catch (err) {
-    console.error('Error fetching Team Leads:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /projects/teamlead/:teamLeadId - Get all projects for a specific Team Lead
-router.get('/projects/teamlead/:teamLeadId', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
-  try {
-    const projects = await Project.find({ teamLead: req.params.teamLeadId })
-      .populate('projectManager', 'name email')
-      .populate('teamLead', 'name email')
-      .populate('clients', 'name email')
-      .populate('organizations', 'companyName');
-    
-    res.json({ success: true, projects });
-  } catch (err) {
-    console.error('Error fetching Team Lead projects:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // GET /users/teamleads - Get all Team Leads
 router.get('/users/teamleads', authorize('Super Admin', 'Admin', 'Project Manager', 'HR'), async (req, res) => {
   try {
@@ -1933,31 +1544,6 @@ router.get('/users/teamleads', authorize('Super Admin', 'Admin', 'Project Manage
       .select('name email _id');
     res.json(teamLeads);
   } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// GET /projects/teamlead - Get projects for Team Lead (alternative endpoint)
-router.get('/projects/teamlead', authorize('Super Admin', 'Team Lead'), async (req, res) => {
-  try {
-    const projects = await Project.find({ teamLead: req.user._id })
-      .populate('clients', 'name email role')
-      .populate('organizations', 'companyName website address')
-      .populate('projectManager', 'name email')
-      .populate('teamLead', 'name email')
-      .populate({
-        path: 'feeds',
-        populate: {
-          path: 'assignedDevelopers',
-          select: 'name email',
-          model: 'User'
-        }
-      })
-      .sort({ createdAt: -1 });
-    
-    res.json({ success: true, projects });
-  } catch (err) {
-    console.error('Error fetching Team Lead projects:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -2079,65 +1665,6 @@ router.delete('/remove-profile-image', protect, async (req, res) => {
   }
 });
 
-// GET /projects/:id/repo-folder-last-updated - Get last updated date for a folder in GitHub repo
-router.get('/projects/:id/repo-folder-last-updated', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
-  try {
-    const project = await Project.findById(req.params.id);
-    
-    if (!project || !project.gitRepoName) {
-      return res.json({ success: false, error: 'No Git repository found for this project' });
-    }
-    
-    const { folderPath } = req.query;
-    
-    if (!folderPath) {
-      return res.json({ success: false, error: 'Folder path is required' });
-    }
-    
-    // Use GitHub API to get the last commit date for the folder
-    const { Octokit } = require('@octokit/rest');
-    const octokit = new Octokit({ 
-      auth: process.env.GITHUB_TOKEN,
-      userAgent: 'KUIPER-CRM-v1.0'
-    });
-    
-    try {
-      // Get commits for the specific folder
-      const commits = await octokit.repos.listCommits({
-        owner: process.env.GITHUB_OWNER,
-        repo: project.gitRepoName,
-        path: folderPath,
-        per_page: 1
-      });
-      
-      if (commits.data && commits.data.length > 0) {
-        const lastCommit = commits.data[0];
-        return res.json({
-          success: true,
-          lastUpdated: lastCommit.commit.committer.date,
-          commitSha: lastCommit.sha,
-          message: lastCommit.commit.message
-        });
-      } else {
-        return res.json({
-          success: true,
-          lastUpdated: null,
-          message: 'No commits found for this folder'
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching folder commits:', error);
-      return res.json({
-        success: false,
-        error: error.message
-      });
-    }
-  } catch (err) {
-    console.error('Error fetching repo folder last updated:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ============================================
 // BULK IMPORT FEEDS VIA EXCEL
 // ============================================
@@ -2247,189 +1774,6 @@ router.post('/feeds/bulk', authorize('Super Admin', 'Admin', 'Project Manager','
   }
 });
 
-// ============================================
-// UPDATE USER LEAVE BALANCE
-// ============================================
-router.patch('/users/:userId/leave-balance', protect, authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const { leaveType, amount, action, reason } = req.body;
-    
-    if (!leaveType) {
-      return res.status(400).json({ error: 'Leave type is required' });
-    }
-    if (amount === undefined || amount === null) {
-      return res.status(400).json({ error: 'Amount is required' });
-    }
-    if (!action || !['add', 'deduct', 'set'].includes(action)) {
-      return res.status(400).json({ error: 'Action must be add, deduct, or set' });
-    }
-    
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount < 0) {
-      return res.status(400).json({ error: 'Amount must be a positive number' });
-    }
-    if (numAmount % 0.5 !== 0) {
-      return res.status(400).json({ error: 'Amount must be in increments of 0.5 (e.g., 0.5, 1.0, 1.5)' });
-    }
-    
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    const currentBalance = user.leaveBalances.get(leaveType) || 0;
-    let newBalance;
-    let historyType;
-    let historyReason = reason || '';
-    
-    switch(action) {
-      case 'add':
-        newBalance = currentBalance + numAmount;
-        historyType = 'granted';
-        historyReason = historyReason || `Manual addition of ${numAmount} ${leaveType} day(s)`;
-        break;
-      case 'deduct':
-        if (currentBalance < numAmount) {
-          return res.status(400).json({ 
-            error: `Insufficient balance. Current: ${currentBalance}, Requested: ${numAmount}` 
-          });
-        }
-        newBalance = currentBalance - numAmount;
-        historyType = 'deducted';
-        historyReason = historyReason || `Manual deduction of ${numAmount} ${leaveType} day(s)`;
-        break;
-      case 'set':
-        newBalance = numAmount;
-        historyType = 'adjusted';
-        historyReason = historyReason || `Manual adjustment to ${numAmount} ${leaveType} day(s)`;
-        break;
-      default:
-        return res.status(400).json({ error: 'Invalid action' });
-    }
-    
-    user.leaveBalances.set(leaveType, newBalance);
-    user.leaveBalancesLastUpdated = new Date();
-    
-    user.leaveBalanceHistory.push({
-      type: historyType,
-      leaveType: leaveType,
-      amount: action === 'deduct' ? -numAmount : numAmount,
-      previousBalance: currentBalance,
-      newBalance: newBalance,
-      reason: historyReason,
-      date: new Date()
-    });
-    
-    await user.save();
-    
-    // ============================================
-    // MANUAL NOTIFICATION
-    // ============================================
-    try {
-      if (!user.unreadNotifications) {
-        user.unreadNotifications = [];
-      }
-      
-      const notificationMessage = `Your ${leaveType} balance has been ${action === 'deduct' ? 'reduced by' : action === 'add' ? 'increased by' : 'set to'} ${newBalance} days. Reason: ${historyReason}`;
-      
-      user.unreadNotifications.push({
-        type: 'leave_balance_updated',
-        message: notificationMessage,
-        createdAt: new Date(),
-        read: false
-      });
-      
-      user.notificationCount = (user.notificationCount || 0) + 1;
-      await user.save();
-      
-      const io = req.app.get('io');
-      if (io) {
-        io.to(user._id.toString()).emit('notification_count_update', {
-          count: user.notificationCount,
-          type: 'leave_balance_updated',
-          message: notificationMessage
-        });
-      }
-      
-      console.log(`✅ Leave balance notification sent to ${user.email}`);
-    } catch (notifError) {
-      console.error('❌ Failed to send notification:', notifError.message);
-    }
-    
-    const balances = {};
-    user.leaveBalances.forEach((value, key) => {
-      balances[key] = value;
-    });
-    
-    res.json({
-      success: true,
-      message: `Leave balance ${action}ed successfully`,
-      data: {
-        leaveType,
-        previousBalance: currentBalance,
-        newBalance,
-        action,
-        amount: numAmount,
-        reason: historyReason,
-        allBalances: balances,
-        history: user.leaveBalanceHistory.slice(-5)
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error updating leave balance:', error);
-    res.status(500).json({ error: 'Failed to update leave balance', details: error.message });
-  }
-});
-
-// ============================================
-// GET USER LEAVE BALANCE HISTORY
-// ============================================
-router.get('/users/:userId/leave-history', protect, authorize('Super Admin', 'Admin', 'HR'), async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const user = await User.findById(userId).select('leaveBalanceHistory leaveBalances name email');
-    
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    const balances = {};
-    if (user.leaveBalances && typeof user.leaveBalances === 'object') {
-      if (user.leaveBalances instanceof Map) {
-        user.leaveBalances.forEach((value, key) => {
-          balances[key] = value;
-        });
-      } else {
-        Object.keys(user.leaveBalances).forEach(key => {
-          balances[key] = user.leaveBalances[key];
-        });
-      }
-    }
-    
-    res.json({
-      success: true,
-      data: {
-        name: user.name,
-        email: user.email,
-        balances,
-        history: user.leaveBalanceHistory || []
-      }
-    });
-    
-  } catch (error) {
-    console.error('Error fetching leave history:', error);
-    res.status(500).json({ error: 'Failed to fetch leave history' });
-  }
-});
-router.post('/projects/:id/sync-git-dates', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
-  try {
-    res.json(await syncProjectFeeds(req.params.id));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
 // ============================================
 // COUNTRY MAP
 // ============================================

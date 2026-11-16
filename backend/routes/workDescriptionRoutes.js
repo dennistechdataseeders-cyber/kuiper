@@ -24,9 +24,4 @@ GET TODAY DESCRIPTIONS
 ========================================
 */
 
-router.get(
-  '/today',
-  getTodayDescriptions
-);
-
 module.exports = router;

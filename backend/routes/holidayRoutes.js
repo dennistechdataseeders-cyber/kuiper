@@ -16,12 +16,6 @@ router.get('/', holidayController.getHolidays);
 // Get a single holiday by ID
 router.get('/:id', holidayController.getHolidayById);
 
-// Get upcoming holidays
-router.get('/upcoming', holidayController.getUpcomingHolidays);
-
-// Check if a date is a holiday
-router.get('/check', holidayController.checkHoliday);
-
 // ============================================
 // ADMIN ROUTES - Only HR/Admin/Super Admin can modify
 // ============================================

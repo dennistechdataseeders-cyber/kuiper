@@ -315,148 +315,6 @@ router.post('/upload-file', protect, upload.single('file'), async (req, res) => 
   }
 });
 
-// Multiple file upload endpoint
-router.post('/upload-files', protect, upload.array('files', 10), async (req, res) => {
-  try {
-    console.log('========================================');
-    console.log('📤 MULTIPLE FILE UPLOAD REQUEST RECEIVED');
-    console.log('========================================');
-    
-    if (!req.files || req.files.length === 0) {
-      console.error('❌ No files provided');
-      return res.status(400).json({ error: 'No files provided' });
-    }
-    
-    console.log(`🔍 ${req.files.length} files received`);
-    
-    const baseUrl = getBaseUrl(req);
-    const uploadedFiles = [];
-    const errors = [];
-    
-    for (const file of req.files) {
-      try {
-        console.log(`📄 Processing file: ${file.originalname}`);
-        console.log(`  - Size: ${file.size} bytes`);
-        
-        const fileExt = path.extname(file.originalname).toLowerCase();
-        const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-        const isImage = imageExtensions.includes(fileExt);
-        
-        if (isImage && file.size > 5 * 1024 * 1024) {
-          fs.unlinkSync(file.path);
-          errors.push({
-            filename: file.originalname,
-            error: 'Image files must be less than 5MB'
-          });
-          continue;
-        }
-        
-        const fileUrl = `${baseUrl}/uploads/tickets/${file.filename}`;
-        
-        uploadedFiles.push({
-          success: true,
-          url: fileUrl,
-          filename: file.filename,
-          originalName: file.originalname,
-          size: file.size,
-          type: isImage ? 'image' : 'document',
-          extension: fileExt.substring(1)
-        });
-        
-        console.log(`  ✅ Uploaded: ${fileUrl}`);
-      } catch (err) {
-        console.error(`❌ Error processing file ${file.originalname}:`, err.message);
-        errors.push({
-          filename: file.originalname,
-          error: err.message
-        });
-      }
-    }
-    
-    console.log(`✅ Upload complete: ${uploadedFiles.length} successful, ${errors.length} failed`);
-    console.log('========================================');
-    
-    res.json({
-      success: true,
-      files: uploadedFiles,
-      errors: errors.length > 0 ? errors : undefined,
-      totalUploaded: uploadedFiles.length,
-      totalFailed: errors.length
-    });
-  } catch (error) {
-    console.error('❌ Multiple file upload error:', error);
-    res.status(500).json({ error: 'Failed to upload files', details: error.message });
-  }
-});
-
-// Delete file endpoint
-router.delete('/delete-file', protect, async (req, res) => {
-  try {
-    const { filename } = req.body;
-    const filePath = path.join(__dirname, '../uploads/tickets', filename);
-    
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      res.json({ success: true, message: 'File deleted successfully' });
-    } else {
-      res.status(404).json({ error: 'File not found' });
-    }
-  } catch (error) {
-    console.error('File deletion error:', error);
-    res.status(500).json({ error: 'Failed to delete file' });
-  }
-});
-
-// Legacy: Single image upload endpoint
-router.post('/upload-image', protect, upload.single('image'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No image file provided' });
-    }
-    
-    // Validate it's actually an image
-    const fileExt = path.extname(req.file.originalname).toLowerCase();
-    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    if (!imageExtensions.includes(fileExt)) {
-      fs.unlinkSync(req.file.path);
-      return res.status(400).json({ error: 'Only image files are allowed' });
-    }
-    
-    const baseUrl = getBaseUrl(req);
-    const imageUrl = `${baseUrl}/uploads/tickets/${req.file.filename}`;
-    
-    res.json({ 
-      success: true, 
-      url: imageUrl,
-      filename: req.file.filename,
-      originalName: req.file.originalname,
-      size: req.file.size,
-      type: 'image'
-    });
-  } catch (error) {
-    console.error('Image upload error:', error);
-    res.status(500).json({ error: 'Failed to upload image' });
-  }
-});
-
-// Legacy: Delete image endpoint
-router.delete('/delete-image', protect, async (req, res) => {
-  try {
-    const { filename } = req.body;
-    const filePath = path.join(__dirname, '../uploads/tickets', filename);
-    
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
-      res.json({ success: true, message: 'Image deleted successfully' });
-    } else {
-      res.status(404).json({ error: 'Image not found' });
-    }
-  } catch (error) {
-    console.error('Image deletion error:', error);
-    res.status(500).json({ error: 'Failed to delete image' });
-  }
-});
-
 // ============================================
 // SECURE FILE DOWNLOAD ENDPOINT
 // ============================================
@@ -517,22 +375,6 @@ router.get('/download/:filename', protect, async (req, res) => {
 });
 
 // ============================================
-// DEPARTMENT USERS ENDPOINT
-// ============================================
-router.get('/department-users/:role', protect, async (req, res) => {
-  try {
-    const { role } = req.params;
-    const users = await User.find({ role: role })
-      .select('name email _id role')
-      .sort({ name: 1 });
-    res.json(users);
-  } catch (error) {
-    console.error('Error fetching department users:', error);
-    res.status(500).json({ error: 'Failed to fetch department users' });
-  }
-});
-
-// ============================================
 // TICKET CRUD ROUTES
 // ============================================
 
@@ -561,9 +403,6 @@ router.post('/:id/comments', ticketController.addComment);
 // ============================================
 // HELPER ENDPOINTS FOR DROPDOWNS
 // ============================================
-
-// Get projects for dropdown (role-based)
-router.get('/projects/list', ticketController.getProjects);
 
 router.get('/feeds/:projectId', protect, async (req, res) => {
   try {

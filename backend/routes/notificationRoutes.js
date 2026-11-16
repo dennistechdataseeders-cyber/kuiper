@@ -383,52 +383,6 @@ router.patch('/mark-all-read', protect, async (req, res) => {
 });
 
 // ============================================
-// Get unread count only (lightweight endpoint)
-// ============================================
-router.get('/unread-count', protect, async (req, res) => {
-  try {
-    const user = await User.findById(req.user._id);
-    const unreadCount = user.unreadNotifications?.filter(n => !n.read).length || 0;
-    
-    // Also count open tickets not viewed
-    const viewedTicketIds = new Set(user.viewedOpenTickets || []);
-    let ticketQuery = {};
-    if (req.user.role === 'Admin') {
-      ticketQuery = { status: { $in: ['Open', 'In Progress'] } };
-    } else if (req.user.role === 'Client') {
-      ticketQuery = {
-        createdBy: req.user._id,
-        status: { $in: ['Open', 'In Progress'] }
-      };
-    } else if (req.user.role === 'HR' || req.user.role === 'Finance') {
-      ticketQuery = {
-        assignedTo: req.user._id,
-        status: { $in: ['Open', 'In Progress'] }
-      };
-    } else {
-      ticketQuery = {
-        $or: [
-          { createdBy: req.user._id },
-          { assignedTo: req.user._id }
-        ],
-        status: { $in: ['Open', 'In Progress'] }
-      };
-    }
-    
-    const openTickets = await Ticket.find(ticketQuery).select('_id');
-    const openTicketCount = openTickets.filter(t => !viewedTicketIds.has(t._id.toString())).length;
-    
-    res.json({
-      success: true,
-      count: unreadCount + openTicketCount
-    });
-  } catch (error) {
-    console.error('Error fetching unread count:', error);
-    res.status(500).json({ error: 'Failed to fetch unread count' });
-  }
-});
-
-// ============================================
 // POST /api/notifications/test-reminder
 // Sends a sample reminder to the logged-in user so the whole chain
 // (bucket entry + desktop notification + voice) can be checked without waiting.

@@ -49,9 +49,6 @@ router.get('/', protect, knowledgeBaseController.getEntries);
 // Get single entry
 router.get('/:id', protect, knowledgeBaseController.getEntry);
 
-// Get all folders
-router.get('/folders/list', protect, knowledgeBaseController.getFolders);
-
 // Download file
 router.get('/:entryId/download/:fileIndex', protect, knowledgeBaseController.downloadFile);
 
@@ -83,14 +80,6 @@ router.delete(
   protect,
   authorize('Admin'),
   knowledgeBaseController.deleteEntry
-);
-
-// Delete specific file (Admin only)
-router.delete(
-  '/:entryId/file/:fileIndex',
-  protect,
-  authorize('Admin'),
-  knowledgeBaseController.deleteFile
 );
 
 module.exports = router;

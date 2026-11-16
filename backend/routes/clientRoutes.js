@@ -431,82 +431,6 @@ router.post('/feeds/update', async (req, res) => {
 });
 
 // ============================================================
-// GET /api/client/feeds/:feedId - UPDATED with output_path & record_count
-// ============================================================
-router.get('/feeds/:feedId', protect, async (req, res) => {
-  try {
-    const { feedId } = req.params;
-    const today = new Date().toISOString().split('T')[0];
-    
-    let feedStatus = await FeedStatus.findOne({ 
-      feed_name: feedId,
-      date: today
-    });
-    
-    if (!feedStatus) {
-      feedStatus = await FeedStatus.findOne({ feed_name: feedId })
-        .sort({ date: -1 });
-    }
-    
-    if (!feedStatus) {
-      feedStatus = await FeedStatus.findById(feedId).catch(() => null);
-    }
-    
-    if (!feedStatus) {
-      return res.status(404).json({ error: 'Feed not found' });
-    }
-    
-    const project = await Project.findOne({ name: feedStatus.project });
-    
-    const stages = feedStatus.stages || {};
-    const totalStages = 5;
-    const completedStages = Object.values(stages).filter(
-      (s) => s && s.completed === true
-    ).length;
-    const progress = feedStatus.progress !== undefined ? feedStatus.progress : Math.round((completedStages / totalStages) * 100);
-    
-    let status = feedStatus.status || 'Pending';
-    if (feedStatus.failed) {
-      status = 'Failed';
-    } else if (progress === 100) {
-      status = 'Completed';
-    } else if (progress > 0) {
-      status = 'In Progress';
-    } else {
-      status = 'Pending';
-    }
-    
-    const enrichedFeed = {
-      feed_name: feedStatus.feed_name,
-      _id: feedStatus._id,
-      status: status,
-      progress: progress,
-      stages: feedStatus.stages || {},
-      failed: feedStatus.failed || false,
-      error_message: feedStatus.error_message || '',
-      updated_at: feedStatus.updated_at || new Date(),
-      date: feedStatus.date || today,
-      project: feedStatus.project,
-      client: feedStatus.client,
-      feed_type: feedStatus.feed_type || 'Daily',
-      projectId: project?._id || null,
-      projectName: project?.name || feedStatus.project,
-      projectCustomId: project?.projectCustomId || feedStatus.project,
-      feedStatus: status,
-      feedType: feedStatus.feed_type || 'Daily',
-      output_path: feedStatus.output_path || null,
-      record_count: feedStatus.record_count !== undefined && feedStatus.record_count !== null ? feedStatus.record_count : null
-    };
-
-    res.status(200).json(enrichedFeed);
-    
-  } catch (error) {
-    console.error('❌ Error fetching feed details:', error);
-    res.status(500).json({ error: 'Failed to fetch feed details', details: error.message });
-  }
-});
-
-// ============================================================
 // POST /api/client/feeds/:feedId/status - UPDATED with record_count
 // ============================================================
 router.post('/feeds/:feedId/status', protect, async (req, res) => {
@@ -642,32 +566,6 @@ router.post('/feeds/status/notify', async (req, res) => {
       error: 'Failed to process feed notification',
       details: error.message 
     });
-  }
-});
-
-// ============================================================
-// ⚠️ DEBUG: Check FeedStatus connection
-// ============================================================
-router.get('/debug/feedstatus', async (req, res) => {
-  try {
-    const isConnected = FeedStatus.db ? FeedStatus.db.readyState === 1 : false;
-    
-    const count = await FeedStatus.countDocuments();
-    
-    const samples = await FeedStatus.find().limit(5);
-    
-    res.json({
-      success: true,
-      connection: {
-        readyState: FeedStatus.db ? FeedStatus.db.readyState : 'unknown',
-        isConnected: isConnected,
-        databaseName: FeedStatus.db ? FeedStatus.db.databaseName : 'unknown'
-      },
-      totalRecords: count,
-      samples: samples
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message, stack: error.stack });
   }
 });
 

@@ -13,12 +13,6 @@ router.use(protect);
 // Get leave summary (balance, monthly usage, etc.)
 router.get('/bucket/summary', leaveBucketController.getLeaveSummary);
 
-// Get leave history
-router.get('/history', leaveBucketController.getLeaveHistory);
-
-// Apply for leave
-router.post('/apply', leaveBucketController.applyLeave);
-
 // ✅ One-shot request: preview the paid / unpaid split, then submit everything at once
 router.post('/request/preview', leaveBucketController.previewLeave);
 router.post('/request', leaveBucketController.applyLeaveRequest);
@@ -30,9 +24,6 @@ router.use(authorize('HR', 'Admin'));
 
 // Get pending leaves
 router.get('/pending', leaveBucketController.getPendingLeaves);
-
-// Get all leaves with filters
-router.get('/all', leaveBucketController.getAllLeaves);
 
 // Get employee leave summary
 router.get('/employee/:userId/summary', leaveBucketController.getEmployeeLeaveSummary);
@@ -52,8 +43,5 @@ router.patch('/:id/approve', leaveBucketController.approveLeave);
 
 // Reject leave
 router.patch('/:id/reject', leaveBucketController.rejectLeave);
-
-// Force accrual (admin only)
-router.post('/force-accrue', authorize('Super Admin', 'Admin'), leaveBucketController.forceAccrue);
 
 module.exports = router;
