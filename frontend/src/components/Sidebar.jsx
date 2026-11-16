@@ -51,7 +51,7 @@ import {
   Contact, BookOpen, Gauge, BriefcaseBusiness, Rss, ChartPie, ChartColumn, HeartHandshake,
   CalendarHeart, CalendarOff, ClipboardList, Workflow, Tags, CodeXml, NotebookPen, FolderGit2,
   FileCode, GitBranch, LayoutGrid, PanelsTopLeft, ShieldCheck, FolderTree, Radio, Radar,
-  SignalHigh, Truck, BookUser, CalendarClock, Compass, Boxes, IdCard, Terminal, ClipboardCheck, Wrench, Lightbulb, FlaskConical, FileSearch, UsersRound as TeamIcon,
+  SignalHigh, Truck, CalendarClock, Compass, Boxes, IdCard, Terminal, ClipboardCheck, Wrench, Lightbulb, FlaskConical, FileSearch, UsersRound as TeamIcon,
 } from 'lucide-react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
@@ -118,7 +118,6 @@ const ITEM_ICONS = {
   '/client':                         Truck,
   // HR
   '/hr':                             HeartHandshake,
-  '/hr/employees':                   BookUser,
   '/hr/holidays':                    CalendarHeart,
   '/hr/leaves':                      CalendarOff,
   '/hr/attendance-sync':             RefreshCw,
@@ -245,7 +244,6 @@ const buildMenuGroups = (role) => {
         icon: <UsersRound size={18} />,
         items: [
           { path: '/hr', icon: <UsersRound size={16} />, label: 'HR Dashboard' },
-          { path: '/hr/employees', icon: <Users size={16} />, label: 'Employees' },
           { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
           { path: '/hr/leaves', icon: <Calendar size={16} />, label: 'Leave Management' },
           { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
@@ -320,7 +318,6 @@ const buildMenuGroups = (role) => {
         icon: <UsersRound size={18} />,
         items: [
           { path: '/hr', icon: <UsersRound size={16} />, label: 'HR Dashboard' },
-          { path: '/hr/employees', icon: <Users size={16} />, label: 'Employees' },
           { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
           { path: '/hr/attendance-sync', icon: <RefreshCw size={16} />, label: 'Attendance Sync' },
           { path: '/admin/ticket-rules', icon: <Mail size={16} />, label: 'Ticket Rules' },
@@ -488,7 +485,6 @@ const buildMenuGroups = (role) => {
         label: 'HR Management',
         icon: <UsersRound size={18} />,
         items: [
-          { path: '/hr/employees', icon: <Users size={16} />, label: 'Employees' },
           { path: '/admin/users', icon: <Users size={16} />, label: 'Users' },
           { path: '/hr/holidays', icon: <CalendarDays size={16} />, label: 'Holiday List' },
           { path: '/hr/leaves', icon: <Calendar size={16} />, label: 'Leave Management' },
