@@ -8,7 +8,7 @@ class NotificationManager {
     this.isSupported = 'Notification' in window;
     this.audioContext = null;
     // Use absolute path for custom icon - make sure this file exists
-    this.customIcon = `${window.location.origin}/images/login_img.png`;
+    this.customIcon = `${window.location.origin}/images/login_img_192.png`;
   }
 
   // Request permission from user

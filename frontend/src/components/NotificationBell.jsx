@@ -479,7 +479,7 @@ const NotificationBell = () => {
       notificationManager.show({
         title: 'Notifications Enabled',
         body: 'You will now receive real-time updates',
-        icon: '/images/tab_logo.png', 
+        icon: '/images/tab_logo_192.png', 
         silent: false
       });
     } else {

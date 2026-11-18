@@ -13,6 +13,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isPMRole } from '../utils/roles';
+import { prefetchLanding } from '../pageLoaders';
 
 // ============================================================
 // ✅ FIX: Lazy-load the heavy 3D background so it never blocks
@@ -158,6 +159,8 @@ const Login = () => {
       localStorage.setItem('userName', user.name);
       localStorage.setItem('userId', user.id);
       localStorage.setItem('lastActive', Date.now().toString());
+      // Start downloading this role's dashboard while the welcome animation plays
+      prefetchLanding(user.role);
 
       toast.success(`Welcome , ${user.name}!`);
 
@@ -223,7 +226,7 @@ const Login = () => {
                   <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-500 blur-xl opacity-40 animate-pulse" />
                   <div className="relative w-full h-full bg-blue-600/20 border border-blue-500/30 rounded-3xl flex items-center justify-center shadow-2xl backdrop-blur-md overflow-hidden">
                     <img
-                      src="/images/login_img.png"
+                      src="/images/login_img.webp"
                       alt="logo"
                       className="w-full h-full object-contain"
                     />

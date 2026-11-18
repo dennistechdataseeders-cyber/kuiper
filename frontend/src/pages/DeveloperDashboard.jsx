@@ -217,7 +217,7 @@ const DeveloperDashboard = () => {
         
         new Notification('New Feed Assignment', {
           body: notificationBody,
-          icon: '/images/tab_logo.png',
+          icon: '/images/tab_logo_192.png',
           tag: `feed-${data.feed._id}`
         });
       }
@@ -244,7 +244,7 @@ const DeveloperDashboard = () => {
       if (Notification.permission === 'granted') {
         new Notification('New Task Assigned', {
           body: task.details?.substring(0, 100) || 'You have a new task in your bucket',
-          icon: '/images/tab_logo.png'
+          icon: '/images/tab_logo_192.png'
         });
       }
     });

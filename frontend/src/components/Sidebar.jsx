@@ -59,6 +59,20 @@ import { useSidebar } from '../context/SidebarContext';
 import NotificationBell from './NotificationBell';
 import API_BASE_URL from '../config';
 import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
+import companyLogoPoster from '../assets/company_logo_poster.webp';
+
+// Company logo: a 4 KB poster frame. The ~900 KB video is only fetched and played while
+// the logo is hovered.
+const LogoVideo = () => {
+  const [play, setPlay] = useState(false);
+  return (
+    <span className="block w-full h-full" onMouseEnter={() => setPlay(true)} onMouseLeave={() => setPlay(false)}>
+      {play
+        ? <video src={companyLogoVideo} poster={companyLogoPoster} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+        : <img src={companyLogoPoster} alt="" className="w-full h-full object-cover" />}
+    </span>
+  );
+};
 import io from 'socket.io-client';
 import { isPMRole } from '../utils/roles';
 
@@ -1011,14 +1025,14 @@ const Sidebar = () => {
             <div className="flex items-center justify-center gap-2 mb-2 px-2 cursor-pointer" title="Visit TechDataSeeders">
               <div className="flex items-center gap-2" onClick={handleVideoLogoClick}>
                 <div className="w-15 h-15 rounded-full bg-black/80 border border-blue-500/20 shadow-lg shadow-blue-500/10 flex items-center justify-center overflow-hidden hover:scale-105 transition-transform duration-300">
-                  <video src={companyLogoVideo} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+                  <LogoVideo />
                 </div>
               </div>
             </div>
           ) : (
             <div className="flex justify-center mb-2 cursor-pointer hover:opacity-80" onClick={handleVideoLogoClick} title="Visit TechDataSeeders">
               <div className="w-8 h-8 rounded-full bg-black/80 border border-blue-500/20 overflow-hidden">
-                <video src={companyLogoVideo} autoPlay loop muted playsInline className="w-full h-full object-cover" />
+                <LogoVideo />
               </div>
             </div>
           )}

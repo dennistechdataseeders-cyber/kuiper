@@ -260,7 +260,7 @@ const TicketDetails = () => {
       notificationManager.show({
         title: '💬 New Comment on Ticket',
         body: `${commentAuthor} commented${attachmentText}: "${ticketData?.title?.substring(0, 50) || 'Ticket'}"`,
-        icon: '/images/login_img.png',
+        icon: '/images/login_img_192.png',
         tag: `comment-${ticketData?._id}`,
         data: { ticketId: ticketData?._id, type: 'ticket' },
         onClick: () => {

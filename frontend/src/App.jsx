@@ -1,75 +1,77 @@
 // frontend/src/App.jsx
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
-import ViewAnalytics from './pages/ViewAnalytics';
-import UserManagement from './pages/UserManagement';
-import ProjectManagement from './pages/ProjectManagement';
-import AdminDashboard from './pages/AdminDashboard';
+import { pageLoaders } from './pageLoaders';
+import PageLoader from './components/PageLoader';
+const ViewAnalytics = lazy(pageLoaders.ViewAnalytics);
+const UserManagement = lazy(pageLoaders.UserManagement);
+const ProjectManagement = lazy(pageLoaders.ProjectManagement);
+const AdminDashboard = lazy(pageLoaders.AdminDashboard);
 import Login from './pages/Login';
-import SalesDashboard from './pages/SalesDashboard';
-import SalesManagerDashboard from './pages/SalesManagerDashboard';
-import LeadGeneration from './pages/LeadGeneration';
-import DeveloperDashboard from './pages/DeveloperDashboard';
-import Profile from './pages/Profile';
-import ProjectFeeds from './pages/ProjectFeeds';  
-import Worklog from './pages/Worklog';
-import ResourceAnalytics from './pages/ResourceAnalytics';
-import TicketDashboard from './pages/TicketDashboard';
-import CreateTicket from './pages/CreateTicket';
-import TicketDetails from './pages/TicketDetails';
-import NotificationSettings from './pages/NotificationSettings';
-import GitManager from './pages/GitManager';
-import DeveloperGitFeeds from './pages/DeveloperGitFeeds';
-import AdminProjectClients from './pages/AdminProjectClients';  
-import DeveloperProjects from './pages/DeveloperProjects';
-import DeveloperFeeds from './pages/DeveloperFeeds';
-import TeamLeadDashboard from './pages/TeamLeadDashboard';
-import TeamLeadProjects from './pages/TeamLeadProjects';
-import TeamLeadDevelopers from './pages/TeamLeadDevelopers';
-import TeamLeadFeeds from './pages/TeamLeadFeeds';
-import TicketAssignmentRules from './pages/TicketAssignmentRules';
-import TicketCategoriesManager from './pages/TicketCategoriesManager';
-import FeedDeliveryDashboard from './pages/FeedDeliveryDashboard';
-import ProjectFeedStatus from './pages/ProjectFeedStatus';
-import AttendanceSync from './pages/AttendanceSync';
-import KnowledgeBase from './pages/KnowledgeBase';
-import FeasibilityDashboard from './pages/FeasibilityDashboard';
-import PmFeasibilityDashboard from './pages/PmFeasibilityDashboard';
-import PmDashboard from './pages/PmDashboard';
-import EmployeeAttendanceDetail from './pages/EmployeeAttendanceDetail';
-import EmployeeAttendanceReport from './pages/EmployeeAttendanceReport';
-import Announcements from './pages/Announcements';
-import HolidayList from './pages/HolidayList';
-import WorkReport from './pages/WorkReport';
-import Leads from './pages/Leads';
-import Accounts from './pages/Accounts';
-import Contacts from './pages/Contacts'; 
-import CreateAccount from './pages/CreateAccount';
-import Deals from './pages/Deals';
-import AccountDetail from './pages/AccountDetail';
-import ContactDetail from './pages/ContactDetail';
-import DealDetail from './pages/DealDetail';
-import CustomizeModules from './pages/CustomizeModules';
+const SalesDashboard = lazy(pageLoaders.SalesDashboard);
+const SalesManagerDashboard = lazy(pageLoaders.SalesManagerDashboard);
+const LeadGeneration = lazy(pageLoaders.LeadGeneration);
+const DeveloperDashboard = lazy(pageLoaders.DeveloperDashboard);
+const Profile = lazy(pageLoaders.Profile);
+const ProjectFeeds = lazy(pageLoaders.ProjectFeeds);
+const Worklog = lazy(pageLoaders.Worklog);
+const ResourceAnalytics = lazy(pageLoaders.ResourceAnalytics);
+const TicketDashboard = lazy(pageLoaders.TicketDashboard);
+const CreateTicket = lazy(pageLoaders.CreateTicket);
+const TicketDetails = lazy(pageLoaders.TicketDetails);
+const NotificationSettings = lazy(pageLoaders.NotificationSettings);
+const GitManager = lazy(pageLoaders.GitManager);
+const DeveloperGitFeeds = lazy(pageLoaders.DeveloperGitFeeds);
+const AdminProjectClients = lazy(pageLoaders.AdminProjectClients);
+const DeveloperProjects = lazy(pageLoaders.DeveloperProjects);
+const DeveloperFeeds = lazy(pageLoaders.DeveloperFeeds);
+const TeamLeadDashboard = lazy(pageLoaders.TeamLeadDashboard);
+const TeamLeadProjects = lazy(pageLoaders.TeamLeadProjects);
+const TeamLeadDevelopers = lazy(pageLoaders.TeamLeadDevelopers);
+const TeamLeadFeeds = lazy(pageLoaders.TeamLeadFeeds);
+const TicketAssignmentRules = lazy(pageLoaders.TicketAssignmentRules);
+const TicketCategoriesManager = lazy(pageLoaders.TicketCategoriesManager);
+const FeedDeliveryDashboard = lazy(pageLoaders.FeedDeliveryDashboard);
+const ProjectFeedStatus = lazy(pageLoaders.ProjectFeedStatus);
+const AttendanceSync = lazy(pageLoaders.AttendanceSync);
+const KnowledgeBase = lazy(pageLoaders.KnowledgeBase);
+const FeasibilityDashboard = lazy(pageLoaders.FeasibilityDashboard);
+const PmFeasibilityDashboard = lazy(pageLoaders.PmFeasibilityDashboard);
+const PmDashboard = lazy(pageLoaders.PmDashboard);
+const EmployeeAttendanceDetail = lazy(pageLoaders.EmployeeAttendanceDetail);
+const EmployeeAttendanceReport = lazy(pageLoaders.EmployeeAttendanceReport);
+const Announcements = lazy(pageLoaders.Announcements);
+const HolidayList = lazy(pageLoaders.HolidayList);
+const WorkReport = lazy(pageLoaders.WorkReport);
+const Leads = lazy(pageLoaders.Leads);
+const Accounts = lazy(pageLoaders.Accounts);
+const Contacts = lazy(pageLoaders.Contacts);
+const CreateAccount = lazy(pageLoaders.CreateAccount);
+const Deals = lazy(pageLoaders.Deals);
+const AccountDetail = lazy(pageLoaders.AccountDetail);
+const ContactDetail = lazy(pageLoaders.ContactDetail);
+const DealDetail = lazy(pageLoaders.DealDetail);
+const CustomizeModules = lazy(pageLoaders.CustomizeModules);
 
 // ============================================
 // ✅ ACTIVITIES IMPORTS (Notes feature shows inside Leads)
 // ============================================
-import ActivitiesTasks from './pages/ActivitiesTasks';
-import ActivitiesMeetings from './pages/ActivitiesMeetings';
-import ActivitiesCalls from './pages/ActivitiesCalls';
-import ActivityDetail from './pages/ActivityDetail';
+const ActivitiesTasks = lazy(pageLoaders.ActivitiesTasks);
+const ActivitiesMeetings = lazy(pageLoaders.ActivitiesMeetings);
+const ActivitiesCalls = lazy(pageLoaders.ActivitiesCalls);
+const ActivityDetail = lazy(pageLoaders.ActivityDetail);
 
 // ============================================
 // HRMS IMPORTS
 // ============================================
-import HrDashboard from './pages/HrDashboard';
-import EmployeeDashboard from './pages/EmployeeDashboard';
+const HrDashboard = lazy(pageLoaders.HrDashboard);
+const EmployeeDashboard = lazy(pageLoaders.EmployeeDashboard);
 
 // ============================================
 // LEAVE MANAGEMENT IMPORTS - KEPT FOR HR
 // ============================================
-import HrLeaveDashboard from './pages/HrLeaveDashboard';
+const HrLeaveDashboard = lazy(pageLoaders.HrLeaveDashboard);
 
 // Import the Notification component
 import NotificationBell from './components/NotificationBell';
@@ -405,6 +407,7 @@ function AppContent() {
                 <main className={`flex-1 w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
                   isCollapsed ? 'pl-[84px]' : 'pl-[28px]'
                 }`}>
+                  <Suspense fallback={<PageLoader />}>
                   <Routes key={location.pathname}>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
 
@@ -679,6 +682,7 @@ function AppContent() {
                       } />
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
                   </Routes>
+                  </Suspense>
                   
                 </main>
               </div>

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import * as XLSX from 'xlsx';
 import { useNavigate } from 'react-router-dom';
 import { useSidebar } from '../context/SidebarContext';
 import { 
@@ -92,7 +91,9 @@ const TeamLeadProjects = () => {
     setBulkFeedFile(file);
     
     const reader = new FileReader();
-    reader.onload = (evt) => {
+    reader.onload = async (evt) => {
+      // xlsx (~320 KB) is only downloaded when a sheet is actually imported
+      const XLSX = await import('xlsx');
       try {
         const data = new Uint8Array(evt.target.result);
         const workbook = XLSX.read(data, { type: 'array' });

@@ -403,7 +403,7 @@ const Worklog = () => {
             notificationManager.show({
               title: '⏰ Long Work Session Alert',
               body: `You've been working on "${feedName}" for ${hours}h ${minutes}m. Consider taking a break!`,
-              icon: '/images/login_img.png',
+              icon: '/images/login_img_192.png',
               tag: `long-work-${item.feed._id}`,
               priority: 'default',
               data: { feedId: item.feed._id, type: 'worklog' }
@@ -440,7 +440,7 @@ const Worklog = () => {
             notificationManager.show({
               title: '⏰ Long Ticket Work Session Alert',
               body: `You've been working on ticket "${ticketTitle}" for ${hours}h ${minutes}m. Consider taking a break!`,
-              icon: '/images/login_img.png',
+              icon: '/images/login_img_192.png',
               tag: `long-ticket-${item.ticket._id}`,
               priority: 'default',
               data: { ticketId: item.ticket._id, type: 'ticket' }
@@ -595,7 +595,8 @@ const Worklog = () => {
   }, [syncServerTime]);
 
   useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 1000);
+    // Live timers/clock: re-render every second, but not while the tab is hidden
+    const interval = setInterval(() => { if (!document.hidden) setTick(t => t + 1); }, 1000);
     return () => clearInterval(interval);
   }, []);
 

@@ -29,12 +29,22 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       chunkSizeWarningLimit: 1600,
-      rollupOptions: {
+      rolldownOptions: {
         output: {
-          manualChunks(id) {
-            if (id.includes('node_modules')) {
-              return id.toString().split('node_modules/')[1].split('/')[0].toString();
-            }
+          // A few long-lived vendor groups instead of one chunk per npm package (which made
+          // dozens of requests). Heavy libraries get their own chunk so only the pages that use
+          // them download them: three (sidebar particles / login background), charts, excel.
+          // Higher priority wins when a module matches several groups (each group also pulls in
+          // its dependencies, so react must be claimed by react-vendor first).
+          codeSplitting: {
+            groups: [
+              { name: 'react-vendor', test: /[\/]node_modules[\/](react|react-dom|scheduler)[\/]/, priority: 50 },
+              { name: 'router', test: /[\/]node_modules[\/](react-router|react-router-dom)[\/]/, priority: 40 },
+              { name: 'ui', test: /[\/]node_modules[\/](framer-motion|motion-dom|motion-utils|lucide-react|react-hot-toast|goober)[\/]/, priority: 30 },
+              { name: 'three', test: /[\/]node_modules[\/](three|three-stdlib|@react-three|maath|its-fine|suspend-react|zustand|react-use-measure|troika-three-text|troika-three-utils|troika-worker-utils|camera-controls|meshline|stats-gl|stats\.js|three-mesh-bvh|detect-gpu|@monogrid|hls\.js|tunnel-rat|use-sync-external-store)[\/]/, priority: 20 },
+              { name: 'charts', test: /[\/]node_modules[\/](chart\.js|react-chartjs-2|@kurkle)[\/]/, priority: 20 },
+              { name: 'excel', test: /[\/]node_modules[\/](xlsx|exceljs|file-saver|jszip)[\/]/, priority: 20 },
+            ],
           },
         },
       },
