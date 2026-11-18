@@ -6,7 +6,6 @@
 // Everything is written straight through the models, so no route runs: no emails,
 // no notifications, no GitHub repo / invite calls.
 // Every record is owned by (or hangs off) a test user, which is how removeTestData()
-// finds it again. Real data is never matched.
 
 const Project = require('../models/Project');
 const Feed = require('../models/Feed');

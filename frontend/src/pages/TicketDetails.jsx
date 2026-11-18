@@ -11,7 +11,7 @@ import {
   Loader2, Eye, Download, UploadCloud, GitFork, Paperclip,
   File, FileText, FileArchive, FileSpreadsheet, FileVideo, FileAudio,
   FileCode, FileJson, Tag, Layers, Building2, Briefcase, Lock,
-  UserPlus, Search, ChevronDown, ChevronRight, ChevronUp
+  UserPlus, Search, ChevronDown, ChevronRight, ChevronUp, Pencil
 } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
@@ -55,6 +55,11 @@ const TicketDetails = () => {
   // ============================================
   const [watchers, setWatchers] = useState([]);
   const [showWatcherModal, setShowWatcherModal] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentText, setEditCommentText] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [assignSearchTerm, setAssignSearchTerm] = useState('');
   const [availableUsers, setAvailableUsers] = useState([]);
   const [addingWatcher, setAddingWatcher] = useState(false);
   const [watcherSearchTerm, setWatcherSearchTerm] = useState('');
@@ -337,6 +342,10 @@ const TicketDetails = () => {
   // REMOVE WATCHER
   // ============================================
   const handleRemoveWatcher = async (userId) => {
+    if (!canRemoveWatchers) {
+      toast.error('Only the ticket creator or an Admin can remove watchers');
+      return;
+    }
     if (!window.confirm('Remove this watcher from the ticket?')) return;
     try {
       const token = localStorage.getItem('token');
@@ -377,6 +386,13 @@ const TicketDetails = () => {
       }
     });
     
+    // A message was edited: just refresh the ticket (no "new comment" toast)
+    socketRef.current.on('ticket_comment_edited', (updatedTicket) => {
+      if (updatedTicket._id === id) {
+        setTicket(updatedTicket);
+      }
+    });
+
     socketRef.current.on('ticket_commented', (updatedTicket) => {
       if (updatedTicket._id === id) {
         const comments = updatedTicket.comments || [];
@@ -454,8 +470,7 @@ const TicketDetails = () => {
   };
 
   const fetchDevelopers = async () => {
-    if (userRole === 'HR' || userRole === 'Finance') return;
-    if (!isPMRole(userRole) && userRole !== 'Admin' && userRole !== 'Team Lead') return;
+    if (userRole === 'Client') return;
     
     try {
       const token = localStorage.getItem('token');
@@ -522,10 +537,12 @@ const TicketDetails = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setTicket(res.data);
-      toast.success('Developer assigned successfully');
+      setShowAssignModal(false);
+      setAssignSearchTerm('');
+      toast.success('Ticket assigned successfully');
     } catch (error) {
       console.error('Error assigning developer:', error);
-      toast.error('Failed to assign developer');
+      toast.error(error.response?.data?.error || 'Failed to assign ticket');
     } finally {
       setAssigning(false);
     }
@@ -773,6 +790,50 @@ const TicketDetails = () => {
   };
 
   // ============================================
+  // Edit own messages
+  const startEditComment = (comment) => {
+    setEditingCommentId(comment._id);
+    setEditCommentText(comment.text || '');
+  };
+
+  const cancelEditComment = () => {
+    setEditingCommentId(null);
+    setEditCommentText('');
+  };
+
+  const saveEditedComment = async (commentId) => {
+    const original = ticket?.comments?.find(c => c._id === commentId);
+    const text = editCommentText.trim();
+    const hasAttachments = (original?.images?.length || 0) + (original?.files?.length || 0) > 0;
+
+    if (!text && !hasAttachments) {
+      toast.error('Message cannot be empty');
+      return;
+    }
+    if (text === (original?.text || '')) {
+      cancelEditComment();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.patch(
+        `${API_BASE_URL}/api/tickets/${id}/comments/${commentId}`,
+        { text },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setTicket(res.data);
+      cancelEditComment();
+      toast.success('Message updated');
+    } catch (error) {
+      console.error('Error editing comment:', error);
+      toast.error(error.response?.data?.error || 'Failed to edit message');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   // FIXED: Comment submission with better error handling
   // ============================================
   const addComment = async (e) => {
@@ -889,6 +950,10 @@ const TicketDetails = () => {
   };
 
   const isTicketCreator = ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId);
+  // Anyone can add watchers; only the ticket creator or an Admin can remove them
+  const canRemoveWatchers =
+    userRole === 'Admin' || userRole === 'Super Admin' ||
+    String(ticket?.createdBy?._id || ticket?.createdBy) === String(currentUserId);
 
   const formatCommentTime = (date) => {
     if (!date) return 'Unknown';
@@ -917,10 +982,8 @@ const TicketDetails = () => {
     }
   };
 
-  const canAssignDeveloper = 
-    userRole !== 'HR' && 
-    userRole !== 'Finance' && 
-    (userRole === 'Admin' || isPMRole(userRole) || userRole === 'Team Lead');
+  // Like watchers: any non-Client user can assign / reassign
+  const canAssignDeveloper = userRole !== 'Client';
 
   const handleTextareaKeyDown = (e) => {
     if (isTicketClosed) {
@@ -945,15 +1008,15 @@ const TicketDetails = () => {
     }
   };
 
+  // Any non-Client user can add watchers (the Watchers panel itself is hidden for Clients)
   const canAddWatcher = 
     ticket &&
-    (userRole === 'Admin' || isPMRole(userRole) || userRole === 'Team Lead' || 
-     (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId))) && 
+    userRole !== 'Client' &&
     ticket.status !== 'Closed';
 
   const canCloseTicket = 
     ticket &&
-    (userRole === 'Admin' || 
+    (userRole === 'Admin' || userRole === 'Super Admin' || 
      (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId)));
 
   if (loading) {
@@ -1052,7 +1115,7 @@ const TicketDetails = () => {
               </button>
             )}
             
-            {(isPMRole(userRole) || userRole === 'Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
+            {(isPMRole(userRole) || userRole === 'Admin' || userRole === 'Super Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
             ticket.status !== 'Closed' && (
               <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto">
                 {ticket.status !== 'In Progress' && (
@@ -1341,7 +1404,38 @@ const TicketDetails = () => {
                               {commentUser}
                             </div>
                             
-                            {comment.text && (
+                            {editingCommentId === comment._id ? (
+                              <div className="space-y-1.5">
+                                <textarea
+                                  value={editCommentText}
+                                  onChange={(e) => setEditCommentText(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Escape') cancelEditComment();
+                                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) saveEditedComment(comment._id);
+                                  }}
+                                  autoFocus
+                                  rows={3}
+                                  className="w-full text-xs sm:text-sm text-gray-800 bg-white border border-blue-300 rounded-md p-2 outline-none focus:ring-2 focus:ring-blue-200 resize-y"
+                                />
+                                <div className="flex justify-end gap-1.5">
+                                  <button
+                                    onClick={cancelEditComment}
+                                    disabled={savingEdit}
+                                    className="px-2 py-0.5 text-[10px] sm:text-xs rounded-md bg-white/20 hover:bg-white/30 text-white font-medium disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    onClick={() => saveEditedComment(comment._id)}
+                                    disabled={savingEdit}
+                                    className="px-2 py-0.5 text-[10px] sm:text-xs rounded-md bg-white text-blue-700 font-semibold hover:bg-blue-50 disabled:opacity-50 flex items-center gap-1"
+                                  >
+                                    {savingEdit && <Loader2 size={10} className="animate-spin" />}
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            ) : comment.text && (
                               <div className={`text-xs sm:text-sm leading-relaxed ${isCurrentUser ? 'text-white' : 'text-gray-700'} break-words`}>
                                 <div className="whitespace-pre-wrap comment-content" style={{ 
                                   whiteSpace: 'pre-wrap',
@@ -1414,6 +1508,17 @@ const TicketDetails = () => {
                           <div className={`flex items-center gap-1 mt-0.5 sm:mt-1 text-[8px] sm:text-[10px] text-gray-400 ${isCurrentUser ? 'justify-end' : ''}`}>
                             <Clock size={isMobile ? 8 : 10} />
                             <span>{commentTime}</span>
+                            {comment.editedAt && <span className="italic">(edited)</span>}
+                            {isCurrentUser && !isTicketClosed && comment._id && comment.text && editingCommentId !== comment._id && (
+                              <button
+                                onClick={() => startEditComment(comment)}
+                                className="ml-1 flex items-center gap-0.5 text-gray-400 hover:text-blue-600 transition-colors"
+                                title="Edit message"
+                              >
+                                <Pencil size={isMobile ? 8 : 10} />
+                                <span>Edit</span>
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1662,10 +1767,7 @@ const TicketDetails = () => {
                     <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1 mt-2">
                       {watchers.map(watcher => {
                         const isCurrentUser = watcher._id === currentUserId;
-                        const canRemove = (userRole === 'Admin' || isPMRole(userRole) || userRole === 'Team Lead' || 
-                                          (ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId)) || 
-                                          isCurrentUser) && 
-                                          ticket.status !== 'Closed';
+                        const canRemove = canRemoveWatchers && ticket.status !== 'Closed';
                         return (
                           <div key={watcher._id} className="flex items-center justify-between p-1.5 bg-gray-50 rounded-lg border border-gray-200">
                             <div className="flex items-center gap-1.5">
@@ -1702,9 +1804,19 @@ const TicketDetails = () => {
           {/* Assignment Management */}
           {userRole !== 'Client' && canAssignDeveloper && ticket.status !== 'Closed' && (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
-              <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-1.5 text-[10px] sm:text-xs uppercase tracking-wider">
-                <Users size={isMobile ? 12 : 14} className="text-gray-500" /> Assignment
-              </h3>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-1.5 text-[10px] sm:text-xs uppercase tracking-wider">
+                  <Users size={isMobile ? 12 : 14} className="text-gray-500" /> Assignment
+                </h3>
+                <button
+                  onClick={() => { setShowAssignModal(true); setAssignSearchTerm(''); }}
+                  disabled={assigning}
+                  className="text-[9px] sm:text-[10px] text-blue-600 hover:text-blue-800 font-medium flex items-center gap-0.5 disabled:opacity-50"
+                >
+                  <UserPlus size={isMobile ? 10 : 12} />
+                  {ticket.assignedTo ? 'Change' : 'Assign'}
+                </button>
+              </div>
               {ticket.assignedTo ? (
                 <div className="mb-2 p-1.5 bg-green-50/70 border border-green-200 rounded-lg">
                   <p className="text-[9px] text-green-700 font-semibold">Current:</p>
@@ -1724,20 +1836,7 @@ const TicketDetails = () => {
                     : 'Ticket is unassigned.'}
                 </div>
               )}
-              {(isPMRole(userRole) || userRole === 'Admin' || userRole === 'Team Lead') && ticket.status !== 'Closed' && (
-                <select 
-                  onChange={(e) => assignDeveloper(e.target.value)} 
-                  disabled={assigning} 
-                  className="w-full px-2 py-1.5 text-[9px] bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm cursor-pointer" 
-                  defaultValue=""
-                >
-                  <option value="">{ticket.assignedTo ? 'Reassign...' : 'Assign...'}</option>
-                  {developers.map(dev => (
-                    <option key={dev._id} value={dev._id}>{dev.name}</option>
-                  ))}
-                </select>
-              )}
-              {userRole === 'Developer' && ticket.assignedTo?._id === currentUserId && (
+              {ticket.assignedTo?._id === currentUserId && (
                 <div className="mt-1 text-[9px] text-green-600 font-medium flex items-center gap-1">
                   <CheckCircle size={isMobile ? 10 : 12} /> You are assigned.
                 </div>
@@ -1864,6 +1963,99 @@ const TicketDetails = () => {
                   }).length} user(s) found
                 </p>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ASSIGN MODAL WITH SEARCH (same pattern as Add Watcher) */}
+      {showAssignModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h2 className="text-base font-black text-slate-800">{ticket.assignedTo ? 'Reassign Ticket' : 'Assign Ticket'}</h2>
+                <p className="text-[9px] text-slate-500">Select who should handle this ticket</p>
+              </div>
+              <button
+                onClick={() => { setShowAssignModal(false); setAssignSearchTerm(''); }}
+                className="w-6 h-6 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            <div className="p-4">
+              <div className="relative mb-3">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Search by name, email, or role..."
+                  value={assignSearchTerm}
+                  onChange={(e) => setAssignSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                />
+                {assignSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setAssignSearchTerm('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+
+              {(() => {
+                const search = assignSearchTerm.toLowerCase().trim();
+                const matches = developers.filter(u =>
+                  !search ||
+                  u.name?.toLowerCase().includes(search) ||
+                  u.email?.toLowerCase().includes(search) ||
+                  u.role?.toLowerCase().includes(search)
+                );
+                return (
+                  <div className="max-h-56 overflow-y-auto">
+                    {matches.length === 0 ? (
+                      <p className="text-sm text-slate-400 text-center py-4">
+                        {search ? <>No users found matching "<span className="font-medium">{assignSearchTerm}</span>"</> : 'No users available'}
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {matches.map(user => {
+                          const isCurrent = ticket.assignedTo?._id === user._id;
+                          return (
+                            <div
+                              key={user._id}
+                              onClick={() => { if (!isCurrent && !assigning) assignDeveloper(user._id); }}
+                              className={`flex items-center justify-between p-2 rounded-lg border transition-all ${
+                                isCurrent
+                                  ? 'border-green-300 bg-green-50 cursor-default'
+                                  : 'border-slate-200 hover:border-blue-400 hover:bg-blue-50 cursor-pointer'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
+                                  {user.name?.charAt(0) || '?'}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="text-xs font-bold text-slate-800 truncate">{user.name}</p>
+                                  <p className="text-[8px] text-slate-500 truncate">{user.email}</p>
+                                  <p className="text-[7px] text-slate-400">{user.role}</p>
+                                </div>
+                              </div>
+                              {isCurrent
+                                ? <span className="text-[8px] font-semibold text-green-700 ml-2">Current</span>
+                                : <UserPlus size={14} className="text-blue-600 flex-shrink-0 ml-2" />}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         </div>

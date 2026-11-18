@@ -160,9 +160,20 @@ const CreateTicket = () => {
   };
   const { role: assignRole, viaOverride: assignViaOverride } = resolveAssignRole();
   const isPMAssign = isPMRole(assignRole);
-  // wording for the special (developer-pool) block
-  const poolNoun = assignRole === 'Developer' || !assignRole ? 'developer' : assignRole;
-  const poolTitle = assignRole === 'Developer' || !assignRole ? 'Developer' : assignRole;
+  // Any active non-Client user can be assigned, whatever the category / override rule
+  const poolNoun = 'team member';
+  const poolTitle = 'Team Member';
+
+  // Active, non-Client users the ticket can be assigned to
+  const fetchAssignableUsers = async () => {
+    const token = localStorage.getItem('token');
+    const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    return (res.data || [])
+      .filter(u => u.role !== 'Client' && u.isActive !== false)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  };
 
   const getAvailableCategories = () => buildCategoryMap(categoriesData, isClient);
 
@@ -404,9 +415,9 @@ const CreateTicket = () => {
     return uploadedUrls;
   };
 
-  // Fetch the users that can receive this ticket (role comes from the category config,
-  // e.g. Developer / Team Lead / Project Manager). Skipped for clients.
-  const fetchDepartmentUsers = async (roleToFetch) => {
+  // Fetch the users that can receive this ticket (any non-Client user; Project Managers
+  // only when the PM-override rule applies). Skipped for clients.
+  const fetchDepartmentUsers = async () => {
     if (isClient) {
       setDepartmentUsers([]);
       setSelectedPerson('');
@@ -419,21 +430,13 @@ const CreateTicket = () => {
     setSelectedPerson('');
 
     try {
-      const token = localStorage.getItem('token');
-      if (!roleToFetch) {
-        setDepartmentUsers([]);
-        return;
-      }
+      const users = await fetchAssignableUsers();
 
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${encodeURIComponent(roleToFetch)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      setDepartmentUsers(users);
 
-      setDepartmentUsers(res.data);
-
-      if (res.data.length === 1) {
-        setSelectedPerson(res.data[0]._id);
-        setFormData(prev => ({ ...prev, assignedTo: res.data[0]._id }));
+      if (users.length === 1) {
+        setSelectedPerson(users[0]._id);
+        setFormData(prev => ({ ...prev, assignedTo: users[0]._id }));
       }
     } catch (error) {
       console.error('Error fetching department users:', error);
@@ -443,22 +446,22 @@ const CreateTicket = () => {
     }
   };
 
-  // Re-fetch whenever category / subcategory / resolved role changes
+  // Re-fetch whenever category / subcategory changes
   useEffect(() => {
-    if (!isClient && formData.category && assignRole && !isSpecialSubcategory) {
-      fetchDepartmentUsers(assignRole);
+    if (!isClient && formData.category && !isSpecialSubcategory) {
+      fetchDepartmentUsers();
     } else {
       setDepartmentUsers([]);
       setSelectedPerson('');
     }
-  }, [formData.category, formData.subcategory, isClient, assignRole, isSpecialSubcategory]);
+  }, [formData.category, formData.subcategory, isClient, isSpecialSubcategory]);
 
-  // Special subcategories use their own pool dropdown (developers / team leads)
+  // Special subcategories use their own pool dropdown
   useEffect(() => {
     if (!isClient && isSpecialSubcategory) {
       fetchDevelopers();
     }
-  }, [isSpecialSubcategory, isClient, assignRole]);
+  }, [isSpecialSubcategory, isClient]);
 
   const getSubcategories = () => {
     if (!formData.category) return [];
@@ -499,8 +502,8 @@ const CreateTicket = () => {
     return formData.category;
   };
   // Field title: Sales on Development > Feasibility sees "Assign to Project Manager *"
-  const assigneeFieldLabel = isPMAssign ? 'Project Manager' : `${getAssigneeLabel()} Team Member`;
-  const assigneeNoun = isPMAssign ? 'Project Manager' : `${getAssigneeLabel()} team member`;
+  const assigneeFieldLabel = 'Team Member';
+  const assigneeNoun = 'team member';
 
   useEffect(() => {
     if (formData.category && formData.subcategory && formData.subItem) {
@@ -597,17 +600,10 @@ const CreateTicket = () => {
     }
   };
 
-  // Pool of users for special subcategories (role from category config, e.g. Developer / Team Lead)
+  // Pool of users for special subcategories (any non-Client user)
   const fetchDevelopers = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const roleToFetch = assignRole || 'Developer';
-
-      const res = await axios.get(`${API_BASE_URL}/api/admin/users/by-role/${encodeURIComponent(roleToFetch)}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      setDevelopers(res.data || []);
+      setDevelopers(await fetchAssignableUsers());
     } catch (error) {
       console.error('Error fetching developers:', error);
       setDevelopers([]);
@@ -1077,7 +1073,7 @@ const CreateTicket = () => {
                   {departmentUsers.length === 0 && !loadingDepartmentUsers && (
                     <div className="mt-2 p-2 bg-amber-50 rounded-lg border border-amber-200">
                       <p className="text-xs text-amber-700">
-                        ⚠️ No {getAssigneeLabel()} users found in the system. Please contact an administrator to add {getAssigneeLabel()} users.
+                        ⚠️ No assignable users found in the system. Please contact an administrator.
                       </p>
                     </div>
                   )}
@@ -1121,17 +1117,6 @@ const CreateTicket = () => {
                   
                   {developers.length > 0 && formData.assignedTo && (
                     <div className="mt-3 p-3 bg-white rounded-lg border border-purple-200 flex items-center gap-3">
-                      {developers.find(d => d._id === formData.assignedTo)?.githubLinked ? (
-                        <div className="flex items-center gap-2 text-green-600">
-                          <GitFork size={14} />
-                          <span className="text-xs font-medium">GitHub linked</span>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-amber-600">
-                          <AlertCircle size={14} />
-                          <span className="text-xs font-medium">GitHub not linked</span>
-                        </div>
-                      )}
                       <span className="text-xs text-slate-400 ml-auto">
                         {poolTitle} will be assigned to this ticket
                       </span>
@@ -1514,7 +1499,7 @@ const CreateTicket = () => {
                 
                 {!isClient && shouldShowPersonDropdown() && departmentUsers.length === 0 && formData.category && (
                   <p className="text-xs text-amber-600 mt-2 text-center">
-                    No {getAssigneeLabel()} users available. Please contact an administrator.
+                    No assignable users available. Please contact an administrator.
                   </p>
                 )}
               </div>

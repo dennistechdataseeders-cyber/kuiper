@@ -48,7 +48,7 @@ import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
 import { isPMRole } from '../utils/roles';
 
-import { isProjectManagerOf, projectTeamLeads } from '../utils/projectAccess';
+import { isProjectManagerOf, projectTeamLeads, canEditProjectTeam } from '../utils/projectAccess';
 import ProjectTeamModal from '../components/ProjectTeamModal';
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
@@ -1082,7 +1082,8 @@ const ProjectManagement = () => {
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden lg:table-cell">Country</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Feeds</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden lg:table-cell">Git Activity</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Team</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Team Leads</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Project Coordinators</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
                   <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Actions</th>
                 </tr>
@@ -1189,34 +1190,44 @@ const ProjectManagement = () => {
                           )}
                         </td>
 
-                        {/* Team: team leads + coordinators (edit in Project Settings) */}
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <button
-                            type="button"
-                            onClick={() => setTeamModalProject(project)}
-                            title="Project Settings: Project Manager, Coordinators, Team Leads"
-                            className="min-w-[120px] max-w-[200px] text-left flex flex-wrap gap-1 group"
-                          >
-                            {projectTeamLeads(project).length === 0 && (project.projectCoordinators || []).length === 0 ? (
-                              <span className="px-2 py-1 rounded-md text-[8px] font-black uppercase border border-dashed border-slate-300 text-slate-400 group-hover:border-indigo-300 group-hover:text-indigo-500">
-                                + Assign team
-                              </span>
+                        {/* Team Leads / Project Coordinators: clickable (opens Project Settings) only for
+                            Admin, Super Admin and this project's own Project Manager; view-only for others */}
+                        {(() => {
+                          const canEdit = canEditProjectTeam(userRole, currentUserId, project);
+                          const leads = projectTeamLeads(project);
+                          const coordinators = (project.projectCoordinators || []).filter((c) => c && typeof c === 'object');
+                          const cell = (people, chipClass) => {
+                            const chips = people.length === 0
+                              ? <span className="text-[10px] text-slate-400">—</span>
+                              : people.map((p, i) => (
+                                <span key={p._id || i} className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase border whitespace-nowrap ${chipClass}`}>
+                                  {p.name}
+                                </span>
+                              ));
+                            return canEdit ? (
+                              <button
+                                type="button"
+                                onClick={() => setTeamModalProject(project)}
+                                title="Project Settings: Project Manager, Coordinators, Team Leads"
+                                className="min-w-[100px] max-w-[200px] text-left flex flex-wrap gap-1"
+                              >
+                                {chips}
+                              </button>
                             ) : (
-                              <>
-                                {projectTeamLeads(project).map((tl, i) => (
-                                  <span key={tl._id || i} className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 whitespace-nowrap">
-                                    TL · {tl.name}
-                                  </span>
-                                ))}
-                                {(project.projectCoordinators || []).filter((c) => c && typeof c === 'object').map((c) => (
-                                  <span key={c._id} className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase border bg-cyan-50 text-cyan-700 border-cyan-200 whitespace-nowrap">
-                                    PC · {c.name}
-                                  </span>
-                                ))}
-                              </>
-                            )}
-                          </button>
-                        </td>
+                              <div className="min-w-[100px] max-w-[200px] flex flex-wrap gap-1">{chips}</div>
+                            );
+                          };
+                          return (
+                            <>
+                              <td className="px-4 py-3 hidden md:table-cell">
+                                {cell(leads, 'bg-indigo-50 text-indigo-700 border-indigo-200')}
+                              </td>
+                              <td className="px-4 py-3 hidden md:table-cell">
+                                {cell(coordinators, 'bg-cyan-50 text-cyan-700 border-cyan-200')}
+                              </td>
+                            </>
+                          );
+                        })()}
 
                         {/* Status */}
                         <td className="px-4 py-3">
@@ -1250,13 +1261,15 @@ const ProjectManagement = () => {
                             >
                               <Settings2 size={12} />
                             </button>
-                            <button
-                              onClick={() => setTeamModalProject(project)}
-                              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-cyan-50 hover:text-cyan-600 transition-all flex-shrink-0"
-                              title="Project Settings (Manager, Coordinators, Team Leads)"
-                            >
-                              <Users size={12} />
-                            </button>
+                            {canEditProjectTeam(userRole, currentUserId, project) && (
+                              <button
+                                onClick={() => setTeamModalProject(project)}
+                                className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-cyan-50 hover:text-cyan-600 transition-all flex-shrink-0"
+                                title="Project Settings (Manager, Coordinators, Team Leads)"
+                              >
+                                <Users size={12} />
+                              </button>
+                            )}
                             <button
                               onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }}
                               className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition-all flex-shrink-0"
@@ -1289,7 +1302,7 @@ const ProjectManagement = () => {
                   })
                 ) : (
                   <tr>
-                    <td colSpan={9} className="py-12 text-center">
+                    <td colSpan={10} className="py-12 text-center">
                       <div className="flex flex-col items-center justify-center">
                         <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
                           <Activity size={20} className="text-slate-300" />

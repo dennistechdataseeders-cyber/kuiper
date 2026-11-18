@@ -52,7 +52,9 @@ import {
   CalendarHeart, CalendarOff, ClipboardList, Workflow, Tags, CodeXml, NotebookPen, FolderGit2,
   FileCode, GitBranch, LayoutGrid, PanelsTopLeft, ShieldCheck, FolderTree, Radio, Radar,
   SignalHigh, Truck, CalendarClock, Compass, Boxes, IdCard, Terminal, ClipboardCheck, Wrench, Lightbulb, FlaskConical, FileSearch, UsersRound as TeamIcon,
+  UserPen,
 } from 'lucide-react';
+import UpdateProfileModal from './UpdateProfileModal';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import KuiperLogo from './KuiperLogo';
 import { useSidebar } from '../context/SidebarContext';
@@ -543,6 +545,7 @@ const Sidebar = () => {
   const [profileImage, setProfileImage] = useState(null);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [showImageUploadModal, setShowImageUploadModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false); // "Edit Details" (personal info)
   const [selectedFile, setSelectedFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
 
@@ -793,7 +796,7 @@ const Sidebar = () => {
     }
   };
 
-  const getRoleDisplayName = (role) => role;
+  const getRoleDisplayName = (role) => role;  
 
   // BADGE HELPERS
   const shouldShowBadge = (label) => label === 'Tickets' && ticketCount > 0;
@@ -1044,6 +1047,17 @@ const Sidebar = () => {
             }`}>
               <button
                 onClick={() => {
+                  setShowProfileModal(true);
+                  setShowUserMenu(false);
+                }}
+                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+              >
+                <UserPen size={13} className="text-emerald-400" />
+                <span>Edit Details</span>
+              </button>
+
+              <button
+                onClick={() => {
                   setShowImageUploadModal(true);
                   setShowUserMenu(false);
                 }}
@@ -1101,10 +1115,11 @@ const Sidebar = () => {
           {/* ACCOUNT BUTTON */}
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
-            className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all ${
+            title="Account: edit details, profile picture, password, logout"
+            className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all border ${
               showUserMenu
-                ? 'bg-slate-800 border border-white/5 shadow-xl'
-                : 'hover:bg-slate-800'
+                ? 'bg-slate-800 border-blue-400/60 ring-2 ring-blue-500/30 shadow-[0_0_18px_rgba(59,130,246,0.35)]'
+                : 'bg-slate-800/60 border-blue-500/30 ring-1 ring-blue-500/15 shadow-[0_0_12px_rgba(59,130,246,0.18)] hover:bg-slate-800 hover:border-blue-400/60 hover:shadow-[0_0_18px_rgba(59,130,246,0.35)]'
             } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
           >
             <div className="relative flex-shrink-0 group">
@@ -1232,6 +1247,16 @@ const Sidebar = () => {
             )}
           </div>
         </div>
+      )}
+
+      {/* EDIT DETAILS (personal info) MODAL */}
+      {showProfileModal && (
+        <UpdateProfileModal
+          isOpen={showProfileModal}
+          onClose={() => setShowProfileModal(false)}
+          userId={userId}
+          currentImage={profileImage}
+        />
       )}
 
       {/* LOGOUT MODAL */}

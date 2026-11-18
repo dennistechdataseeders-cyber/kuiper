@@ -932,8 +932,12 @@ exports.createTicket = async (req, res) => {
     let finalAssignedPM = null;
     
     if (assignedTo) {
-      const user = await User.findById(assignedTo);
+      const user = await User.findById(assignedTo).select('role');
       if (user) {
+        // Any non-Client user can be an assignee
+        if (user.role === 'Client') {
+          return res.status(400).json({ error: 'Tickets cannot be assigned to a Client user' });
+        }
         finalAssignedTo = user._id;
       }
     }
@@ -947,13 +951,13 @@ exports.createTicket = async (req, res) => {
       const { role: requiredRole, viaOverride } = resolveAssignRole(catDoc, subcategory, userRole);
       if (viaOverride && isPMRole(requiredRole)) {
         if (!finalAssignedTo) {
-          return res.status(400).json({ error: 'Please assign a Project Manager for this ticket.' });
+          return res.status(400).json({ error: 'Please assign a team member for this ticket.' });
         }
-        const pmUser = await User.findById(finalAssignedTo).select('role isActive');
-        if (!pmUser || !isPMRole(pmUser.role)) {
-          return res.status(400).json({ error: 'Selected assignee must be a Project Manager.' });
+        // Any non-Client user may be the assignee; if it happens to be a PM, keep the PM bucket behaviour
+        const assigneeUser = await User.findById(finalAssignedTo).select('role isActive');
+        if (assigneeUser && isPMRole(assigneeUser.role)) {
+          finalAssignedPM = assigneeUser._id;
         }
-        finalAssignedPM = pmUser._id;   // assignedTo is also the PM, so the ticket lands in their bucket
       }
     }
     
@@ -1293,14 +1297,11 @@ exports.removeWatcher = async (req, res) => {
       return res.status(400).json({ error: 'userId is required' });
     }
 
-    // Who may remove a watcher: Admin / Super Admin, the ticket creator,
-    // PM / Team Lead, or the watcher removing themselves
+    // Who may remove a watcher: only Admin / Super Admin or the ticket creator.
+    // (Anyone can ADD watchers; removal is restricted.)
     const me = req.user.id.toString();
-    const isCreator = ticket.createdBy?.toString() === me;
-    const canRemove =
-      ['Admin', 'Super Admin', ...PM_ROLES, 'Team Lead'].includes(req.user.role) ||
-      isCreator ||
-      userId === me;
+    const isCreator = String(ticket.createdBy?._id || ticket.createdBy) === me;
+    const canRemove = ['Admin', 'Super Admin'].includes(req.user.role) || isCreator;
     if (!canRemove) {
       return res.status(403).json({ error: 'You are not allowed to remove watchers from this ticket' });
     }
@@ -1759,6 +1760,7 @@ exports.updateStatus = async (req, res) => {
 
     const canUpdate = 
       req.user.role === 'Admin' ||
+      req.user.role === 'Super Admin' ||
       isPMRole(req.user.role) ||
       req.user.role === 'Team Lead' ||
       ticket.createdBy.toString() === req.user.id ||
@@ -1873,10 +1875,10 @@ exports.assignTicket = async (req, res) => {
       }
     }
     
-    // Prevent assigning to Admin or Client users
-    if (newAssignee && (newAssignee.role === 'Admin' || newAssignee.role === 'Client')) {
+    // Any non-Client user can be an assignee
+    if (newAssignee && newAssignee.role === 'Client') {
       return res.status(400).json({ 
-        error: `Cannot assign ticket to ${newAssignee.role} user` 
+        error: 'Cannot assign ticket to a Client user' 
       });
     }
     
@@ -2015,6 +2017,63 @@ exports.addComment = async (req, res) => {
 };
 
 // ============================================
+// EDIT COMMENT (only the author can edit their own message)
+// ============================================
+exports.editComment = async (req, res) => {
+  try {
+    const { text } = req.body;
+    const ticket = await Ticket.findById(req.params.id);
+
+    if (!ticket) {
+      return res.status(404).json({ error: 'Ticket not found' });
+    }
+
+    if (ticket.status === 'Closed') {
+      return res.status(400).json({ error: 'Cannot edit comments on a closed ticket' });
+    }
+
+    const comment = ticket.comments.id(req.params.commentId);
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    if (String(comment.userId) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'You can only edit your own messages' });
+    }
+
+    const newText = typeof text === 'string' ? text.trim() : '';
+    const hasAttachments = (comment.images && comment.images.length > 0) || (comment.files && comment.files.length > 0);
+    if (!newText && !hasAttachments) {
+      return res.status(400).json({ error: 'Message cannot be empty' });
+    }
+
+    if (newText !== (comment.text || '')) {
+      comment.text = newText;
+      comment.editedAt = new Date();
+      await ticket.save();
+    }
+
+    const updatedTicket = await Ticket.findById(ticket._id)
+      .populate('createdBy', 'name email role')
+      .populate('assignedTo', 'name email')
+      .populate('assignedPM', 'name email')
+      .populate('projectId', 'name projectCustomId')
+      .populate('feedId', 'name')
+      .populate('comments.userId', 'name');
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`ticket_${req.params.id}`).emit('ticket_comment_edited', updatedTicket);
+    }
+
+    res.json(updatedTicket);
+  } catch (error) {
+    console.error('Error editing comment:', error);
+    res.status(500).json({ error: 'Failed to edit comment' });
+  }
+};
+
+// ============================================
 // GET PROJECTS FOR DROPDOWN
 // ============================================
 
@@ -2041,8 +2100,10 @@ exports.getFeeds = async (req, res) => {
 
 exports.getDevelopers = async (req, res) => {
   try {
-    const developers = await User.find({ role: 'Developer' })
-      .select('name email _id githubUsername githubLinked');
+    // Every active non-Client user can receive a ticket
+    const developers = await User.find({ role: { $ne: 'Client' }, isActive: { $ne: false } })
+      .select('name email _id role githubUsername githubLinked')
+      .sort({ name: 1 });
     
     res.json(developers);
   } catch (error) {

@@ -1,5 +1,5 @@
 const express = require('express');
-const { pmProjectFilter, tlProjectFilter, isProjectPM, idOf } = require('../utils/projectAccess');
+const { pmProjectFilter, tlProjectFilter, isProjectPM, idOf, TEAM_EDIT_ROLES, TEAM_FIELDS, isTeamAdmin, canEditProjectTeam } = require('../utils/projectAccess');
 const { PM_ROLES, isPMRole } = require('../utils/roles');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -902,7 +902,9 @@ router.post('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Sales')
       organizations: organizations || [],
       description,
       adminId: req.user._id,
-      projectManager: projectManager || (isPMRole(req.user.role) ? req.user._id : null),
+      // Only Admin / Super Admin may choose the PM. A Project Manager creating a project becomes
+      // its PM; anyone else (e.g. a Project Coordinator) creates it without a PM.
+      projectManager: isTeamAdmin(req.user) ? (projectManager || null) : (req.user.role === 'Project Manager' ? req.user._id : null),
       country,
       industry,
       projectCustomId: fullFormattedName
@@ -1031,7 +1033,14 @@ router.patch('/projects/:id/status', authorize('Super Admin', 'Admin', ...PM_ROL
 // PUT /projects/:id - Update project
 router.put('/projects/:id', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
-    const updatedProject = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const update = { ...req.body };
+    // Team fields (PM, coordinators, team leads) only from someone allowed to edit the team
+    if (TEAM_FIELDS.some((f) => f in update)) {
+      const current = await Project.findById(req.params.id).select('projectManager');
+      if (!current) return res.status(404).json({ message: 'Project not found' });
+      if (!canEditProjectTeam(req.user, current)) TEAM_FIELDS.forEach((f) => delete update[f]);
+    }
+    const updatedProject = await Project.findByIdAndUpdate(req.params.id, update, { new: true });
     res.json(updatedProject);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -1511,14 +1520,14 @@ router.get('/client/projects', authorize('Super Admin', 'Client'), async (req, r
 // PUT /projects/:projectId/team - Project settings: one Project Manager, any number of
 // Project Coordinators and Team Leads. Admin / Super Admin can edit any project; a PM or
 // Coordinator only projects they manage. teamLead is kept equal to teamLeads[0].
-router.put('/projects/:projectId/team', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
+router.put('/projects/:projectId/team', authorize(...TEAM_EDIT_ROLES), async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId);
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
-    const isAdmin = ['Super Admin', 'Admin'].includes(req.user.role);
-    if (!isAdmin && !isProjectPM(project, req.user._id)) {
-      return res.status(403).json({ error: 'You can only change the team of projects you manage.' });
+    // Admin / Super Admin, or the project's own primary Project Manager (not coordinators / team leads)
+    if (!canEditProjectTeam(req.user, project)) {
+      return res.status(403).json({ error: "Only Admin or this project's Project Manager can change its team." });
     }
 
     const uniqueIds = (list) => [...new Set((Array.isArray(list) ? list : []).filter(Boolean).map(String))];
@@ -1585,10 +1594,14 @@ router.put('/projects/:projectId/team', authorize('Super Admin', 'Admin', ...PM_
 });
 
 // POST /projects/:projectId/assign-teamlead - Assign Team Lead to project
-router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
+router.post('/projects/:projectId/assign-teamlead', authorize(...TEAM_EDIT_ROLES), async (req, res) => {
   try {
     const { teamLeadId } = req.body;
     const project = await Project.findById(req.params.projectId);
+    // Admin / Super Admin, or the project's own primary Project Manager (not coordinators / team leads)
+    if (project && !canEditProjectTeam(req.user, project)) {
+      return res.status(403).json({ error: "Only Admin or this project's Project Manager can change its team." });
+    }
     
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });

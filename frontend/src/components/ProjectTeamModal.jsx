@@ -54,6 +54,8 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
   const [coordSearch, setCoordSearch] = useState('');
   const [tlSearch, setTlSearch] = useState('');
   const [saving, setSaving] = useState(false);
+  // Only Admin / Super Admin may change the Project Manager; a PM sees it read-only
+  const canChangePm = ['Super Admin', 'Admin'].includes(localStorage.getItem('role'));
 
   const coordinatorChoices = projectManagers.filter((u) => idOf(u) !== pmId);
   const nameOf = (list, id) => list.find((u) => idOf(u) === id)?.name || 'Unknown user';
@@ -103,7 +105,8 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
             <select
               value={pmId}
               onChange={(e) => changePm(e.target.value)}
-              disabled={saving}
+              disabled={saving || !canChangePm}
+              title={canChangePm ? undefined : 'Only Admin can change the Project Manager'}
               className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm"
             >
               <option value="">— None —</option>

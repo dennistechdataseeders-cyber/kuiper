@@ -12,6 +12,14 @@ const Feed = require('../models/Feed');
 // All routes require authentication
 router.use(protect);
 
+// Any logged-in user except Clients (assignment works like watchers: not role-gated)
+const blockClients = (req, res, next) => {
+  if (req.user && req.user.role === 'Client') {
+    return res.status(403).json({ error: 'Clients cannot assign tickets' });
+  }
+  next();
+};
+
 // ============================================
 // MULTER CONFIGURATION FOR FILE UPLOADS
 // ============================================
@@ -397,11 +405,14 @@ router.get('/:id', ticketController.getTicketById);
 // Update ticket status
 router.patch('/:id/status', ticketController.updateStatus);
 
-// Assign ticket to user (PM, Admin, Team Lead only)
-router.patch('/:id/assign', authorize('Super Admin',...PM_ROLES, 'Admin', 'Team Lead'), ticketController.assignTicket);
+// Assign ticket to any non-Client user (open to every non-Client user, like watchers)
+router.patch('/:id/assign', blockClients, ticketController.assignTicket);
 
 // Add comment to ticket
 router.post('/:id/comments', ticketController.addComment);
+
+// Edit a comment (only its author can edit)
+router.patch('/:id/comments/:commentId', ticketController.editComment);
 
 // ============================================
 // HELPER ENDPOINTS FOR DROPDOWNS
@@ -426,8 +437,8 @@ router.get('/feeds/:projectId', protect, async (req, res) => {
   }
 });
 
-// Get developers for assignment dropdown (PM, Admin, Team Lead only)
-router.get('/developers/list', authorize('Super Admin',...PM_ROLES, 'Admin', 'Team Lead'), ticketController.getDevelopers);
+// Get assignable users (every active non-Client user); callable by any non-Client user
+router.get('/developers/list', blockClients, ticketController.getDevelopers);
 
 // ============================================
 // WATCHER ROUTES

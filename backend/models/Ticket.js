@@ -122,6 +122,7 @@ const ticketSchema = new mongoose.Schema({
       type: { type: String },
     }],
     createdAt: { type: Date, default: Date.now },
+    editedAt: { type: Date },   // set when the author edits the message text
   }],
 
   resolvedAt: Date,

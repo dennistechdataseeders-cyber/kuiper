@@ -14,6 +14,12 @@ export const isTeamLeadOf = (project, userId) =>
   (idOf(project.teamLead) === String(userId) ||
     (project.teamLeads || []).some((t) => idOf(t) === String(userId)));
 
+// Who may CHANGE a project's team (mirrors backend canEditProjectTeam): Super Admin, Admin, or a
+// Project Manager who is that project's own primary projectManager. Coordinators / team leads: view only.
+export const canEditProjectTeam = (role, userId, project) =>
+  ['Super Admin', 'Admin'].includes(role) ||
+  (role === 'Project Manager' && !!project && idOf(project.projectManager) === String(userId));
+
 // Team leads to show for a project: teamLeads, falling back to the legacy single teamLead
 export const projectTeamLeads = (project) => {
   const list = (project?.teamLeads || []).filter((t) => t && typeof t === 'object');
