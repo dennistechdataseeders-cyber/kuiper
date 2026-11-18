@@ -200,6 +200,11 @@ router.post('/users', authorize('Super Admin', 'Admin', 'HR', ...PM_ROLES, 'Sale
       }
     }
 
+    // Only a Super Admin can create another Super Admin
+    if (role === 'Super Admin' && req.user.role !== 'Super Admin') {
+      return res.status(403).json({ error: 'Only a Super Admin can create Super Admin accounts' });
+    }
+
     // Authorization Logic for Role Creation
     if (req.user.role === 'Sales Manager') {
       finalRole = 'Sales'; 
@@ -386,6 +391,12 @@ router.put('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req, re
     const existingUser = await User.findById(req.params.id);
     if (!existingUser) {
       return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Only a Super Admin can edit a Super Admin or make someone a Super Admin
+    if (req.user.role !== 'Super Admin' &&
+        (existingUser.role === 'Super Admin' || (role === 'Super Admin' && role !== existingUser.role))) {
+      return res.status(403).json({ error: 'Only a Super Admin can manage Super Admin accounts' });
     }
 
     // ============================================

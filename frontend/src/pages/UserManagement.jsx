@@ -617,6 +617,8 @@ const UserManagement = () => {
       ];
     }
     return [
+      // Only a Super Admin can create another Super Admin (enforced on the server too)
+      ...(isSuperAdmin ? ['Super Admin'] : []),
       'Client',
       'Developer',
       'Sales',
