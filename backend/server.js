@@ -498,8 +498,34 @@ mongoose.connect(MONGO_URI)
       salesNotifier.startRealtimeNotifications();
       salesNotifier.startDailyEmailJob();
       console.log('  ✅ Sales Notifications (real-time + daily email)');
+
+      // Tell PM2 (wait_ready: true) that the API is accepting requests
+      if (process.send) process.send('ready');
     });
   })
   .catch((err) => {
     console.error('❌ Engine Startup Failed. MongoDB Connection Error:', err);
   });
+
+// =========================================================
+// GRACEFUL SHUTDOWN (pm2 reload / restart / stop send SIGINT)
+// Stop accepting new connections, let in-flight requests finish, close sockets and
+// the DB, then exit. Forced exit after 8 s so a stuck request can't block a deploy
+// (PM2 kill_timeout is 10 s).
+// =========================================================
+let shuttingDown = false;
+const shutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`🛑 ${signal} received: closing HTTP server...`);
+  const force = setTimeout(() => { console.error('⏱️ Forced exit after 8 s'); process.exit(1); }, 8000);
+  force.unref();
+  io.close();
+  server.close(async () => {
+    try { await mongoose.connection.close(false); } catch (e) { /* already closed */ }
+    console.log('👋 Shutdown complete');
+    process.exit(0);
+  });
+};
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

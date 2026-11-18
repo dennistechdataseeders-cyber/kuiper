@@ -22,6 +22,20 @@ axios.interceptors.response.use(
   }
 );
 
+// After a deploy, a tab opened earlier may ask for a lazy page chunk that no longer exists.
+// Reload once to pick up the new build (the flag stops reload loops).
+window.addEventListener('vite:preloadError', (event) => {
+  try {
+    if (sessionStorage.getItem('chunkReloaded') === '1') return;
+    sessionStorage.setItem('chunkReloaded', '1');
+  } catch { /* storage unavailable: still reload once */ }
+  event.preventDefault();
+  window.location.reload();
+});
+window.addEventListener('load', () => {
+  try { setTimeout(() => sessionStorage.removeItem('chunkReloaded'), 10000); } catch { /* ignore */ }
+});
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
      <ErrorBoundary> 
