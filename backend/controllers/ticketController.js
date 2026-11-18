@@ -1,6 +1,7 @@
 // backend/controllers/ticketController.js - COMPLETE UPDATED FILE
 
 const mongoose = require('mongoose');
+const { pmProjectFilter, tlProjectFilter, PROJECT_ACCESS_FIELDS } = require('../utils/projectAccess');
 const { PM_ROLES, isPMRole } = require('../utils/roles');
 const Ticket = require('../models/Ticket');
 const Project = require('../models/Project');
@@ -309,6 +310,8 @@ async function getTicketStakeholders(ticket, createdByUser) {
   const project = await Project.findById(ticket.projectId)
     .populate('projectManager', 'name email role')
     .populate('teamLead', 'name email role')
+    .populate('projectCoordinators', 'name email role')
+    .populate('teamLeads', 'name email role')
     .populate('clients', 'name email role');
 
   if (project && project.projectManager) {
@@ -334,6 +337,17 @@ async function getTicketStakeholders(ticket, createdByUser) {
         role: 'Team Lead',
         type: 'team_lead'
       });
+    }
+  }
+
+  // Project Coordinators and every Team Lead on the project
+  if (project) {
+    for (const [list, role, type] of [[project.projectCoordinators, 'Project Coordinator', 'project_manager'], [project.teamLeads, 'Team Lead', 'team_lead']]) {
+      for (const person of list || []) {
+        if (person && person.email && !stakeholders.has(person.email)) {
+          stakeholders.set(person.email, { _id: person._id, name: person.name, email: person.email, role, type });
+        }
+      }
     }
   }
 
@@ -451,6 +465,8 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
   const project = await Project.findById(ticket.projectId)
     .populate('projectManager', 'name email')
     .populate('teamLead', 'name email')
+    .populate('projectCoordinators', 'name email')
+    .populate('teamLeads', 'name email')
     .populate('clients', 'name email');
   
   const stakeholders = new Map();
@@ -510,6 +526,19 @@ async function notifyCommentStakeholders(ticket, commentAuthor, commentText, has
         email: tl.email,
         role: 'Team Lead'
       });
+    }
+  }
+
+  // ============================================
+  // 4b. ADD PROJECT COORDINATORS AND ALL TEAM LEADS
+  // ============================================
+  if (project) {
+    for (const [list, role] of [[project.projectCoordinators, 'Project Coordinator'], [project.teamLeads, 'Team Lead']]) {
+      for (const person of list || []) {
+        if (person && person.email && person.email !== commentAuthor.email && !stakeholders.has(person._id.toString())) {
+          stakeholders.set(person._id.toString(), { _id: person._id, name: person.name, email: person.email, role });
+        }
+      }
     }
   }
   
@@ -872,7 +901,7 @@ exports.createTicket = async (req, res) => {
     if (userRole === 'Team Lead' && projectId) {
       const project = await Project.findOne({ 
         _id: projectId, 
-        teamLead: req.user.id 
+        ...tlProjectFilter(req.user.id) 
       });
       if (!project) {
         return res.status(403).json({ 
@@ -1026,7 +1055,7 @@ exports.createTicket = async (req, res) => {
     let projectCustomId = 'N/A';
     let projectData = null;
     if (finalProjectId) {
-      projectData = await Project.findById(finalProjectId).select('name projectCustomId teamLead projectManager');
+      projectData = await Project.findById(finalProjectId).select(`name projectCustomId ${PROJECT_ACCESS_FIELDS}`);
       if (projectData) {
         projectName = projectData.name || 'Unknown Project';
         projectCustomId = projectData.projectCustomId || 'N/A';
@@ -1470,8 +1499,8 @@ exports.getTickets = async (req, res) => {
           { feedId: { $in: devFeedIds } } // ✅ NEW - feed-based visibility
         ]
       };
-    } else if (userRole === 'Project Manager') {
-      const pmProjects = await Project.find({ projectManager: userId }).select('_id');
+    } else if (isPMRole(userRole)) {
+      const pmProjects = await Project.find(pmProjectFilter(userId)).select('_id');
       const projectIds = pmProjects.map(p => p._id);
 
       filter = {
@@ -1491,7 +1520,7 @@ exports.getTickets = async (req, res) => {
         ]
       };
     } else if (userRole === 'Team Lead') {
-      const tlProjects = await Project.find({ teamLead: userId }).select('_id');
+      const tlProjects = await Project.find(tlProjectFilter(userId)).select('_id');
       const projectIds = tlProjects.map(p => p._id);
       filter = {
         $or: [

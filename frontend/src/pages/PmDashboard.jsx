@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { isProjectManagerOf } from '../utils/projectAccess';
 
 const PmDashboard = () => {
   const navigate = useNavigate();
@@ -112,7 +113,7 @@ const PmDashboard = () => {
       // Fetch projects for this PM
       const projectsRes = await axios.get(`${API_BASE_URL}/api/admin/projects`, authHeader);
       const pmProjects = projectsRes.data.filter(
-        p => p.projectManager?._id === currentUserId || p.projectManager === currentUserId
+        p => isProjectManagerOf(p, currentUserId)
       );
       setProjects(pmProjects);
 

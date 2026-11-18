@@ -49,6 +49,8 @@ import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
 import { isPMRole } from '../utils/roles';
 
+import { isProjectManagerOf, projectTeamLeads } from '../utils/projectAccess';
+import ProjectTeamModal from '../components/ProjectTeamModal';
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
   { label: "Australia", value: "AU" }, { label: "Brazil", value: "BR" }, { label: "Canada", value: "CA" },
@@ -134,6 +136,7 @@ const ProjectManagement = () => {
 
   // --- Comment Modal State ---
   const [showProjectCommentModal, setShowProjectCommentModal] = useState(false);
+  const [teamModalProject, setTeamModalProject] = useState(null); // Project Settings (PM, coordinators, team leads)
   const [selectedProjectForComments, setSelectedProjectForComments] = useState(null);
   const [commentRefreshTrigger, setCommentRefreshTrigger] = useState(0);
 
@@ -451,9 +454,7 @@ const ProjectManagement = () => {
     
     if (userRole !== 'Super Admin' && userRole !== 'Admin') {
       result = result.filter(
-        (p) =>
-          p.projectManager?._id === currentUserId ||
-          p.projectManager === currentUserId
+        (p) => isProjectManagerOf(p, currentUserId)
       );
     }
 
@@ -1080,7 +1081,7 @@ const ProjectManagement = () => {
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden lg:table-cell">Country</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Feeds</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden lg:table-cell">Git Activity</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">TL</th>
+                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Team</th>
                   <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
                   <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Actions</th>
                 </tr>
@@ -1187,21 +1188,33 @@ const ProjectManagement = () => {
                           )}
                         </td>
 
-                        {/* TL */}
+                        {/* Team: team leads + coordinators (edit in Project Settings) */}
                         <td className="px-4 py-3 hidden md:table-cell">
-                          <div className="relative min-w-[120px]">
-                            <select
-                              value={project.teamLead?._id || project.teamLead || ''}
-                              onChange={(e) => updateTeamLead(project._id, e.target.value)}
-                              className="w-full px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 bg-indigo-50 text-indigo-700 border-indigo-200"
-                              style={selectArrowStyle}
-                            >
-                              <option value="">— None —</option>
-                              {teamLeads.map(tl => (
-                                <option key={tl._id} value={tl._id}>{tl.name}</option>
-                              ))}
-                            </select>
-                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setTeamModalProject(project)}
+                            title="Project Settings: Project Manager, Coordinators, Team Leads"
+                            className="min-w-[120px] max-w-[200px] text-left flex flex-wrap gap-1 group"
+                          >
+                            {projectTeamLeads(project).length === 0 && (project.projectCoordinators || []).length === 0 ? (
+                              <span className="px-2 py-1 rounded-md text-[8px] font-black uppercase border border-dashed border-slate-300 text-slate-400 group-hover:border-indigo-300 group-hover:text-indigo-500">
+                                + Assign team
+                              </span>
+                            ) : (
+                              <>
+                                {projectTeamLeads(project).map((tl, i) => (
+                                  <span key={tl._id || i} className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase border bg-indigo-50 text-indigo-700 border-indigo-200 whitespace-nowrap">
+                                    TL · {tl.name}
+                                  </span>
+                                ))}
+                                {(project.projectCoordinators || []).filter((c) => c && typeof c === 'object').map((c) => (
+                                  <span key={c._id} className="px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase border bg-cyan-50 text-cyan-700 border-cyan-200 whitespace-nowrap">
+                                    PC · {c.name}
+                                  </span>
+                                ))}
+                              </>
+                            )}
+                          </button>
                         </td>
 
                         {/* Status */}
@@ -1235,6 +1248,13 @@ const ProjectManagement = () => {
                               title="Edit Project"
                             >
                               <Settings2 size={12} />
+                            </button>
+                            <button
+                              onClick={() => setTeamModalProject(project)}
+                              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-cyan-50 hover:text-cyan-600 transition-all flex-shrink-0"
+                              title="Project Settings (Manager, Coordinators, Team Leads)"
+                            >
+                              <Users size={12} />
                             </button>
                             <button
                               onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }}
@@ -1353,6 +1373,18 @@ const ProjectManagement = () => {
       </div>
 
       {/* PROJECT MODAL - Responsive */}
+      {teamModalProject && (
+        <ProjectTeamModal
+          project={teamModalProject}
+          projectManagers={projectManagers}
+          teamLeads={teamLeads}
+          adminBase={ADMIN_BASE}
+          authHeader={authHeader}
+          onClose={() => setTeamModalProject(null)}
+          onSaved={() => { setTeamModalProject(null); fetchInitialData(); }}
+        />
+      )}
+
       {showProjectModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-3 sm:p-6">
           <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-xl p-6 sm:p-10 max-h-[90vh] overflow-y-auto">

@@ -1,6 +1,7 @@
 // backend/routes/clientRoutes.js
 
 const express = require('express');
+const { pmProjectFilter, tlProjectFilter, isProjectPM, isProjectTL } = require('../utils/projectAccess');
 const { isPMRole } = require('../utils/roles');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
@@ -42,13 +43,13 @@ router.get('/projects', protect, async (req, res) => {
     } else if (isPMRole(userRole)) {
       // PMs: projects they manage OR where they are the team lead
       query.$or = [
-        { projectManager: userId },
-        { teamLead: userId }
+        ...pmProjectFilter(userId).$or,
+        ...tlProjectFilter(userId).$or
       ];
       
     } else if (userRole === 'Team Lead') {
       // Team Leads: projects where they are the team lead
-      query = { teamLead: userId };
+      query = tlProjectFilter(userId);
       
     } else if (userRole === 'Admin') {
       // Admins: all projects
@@ -114,13 +115,13 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
       
     } else if (isPMRole(userRole)) {
       // Check if PM manages this project OR is the team lead
-      const isPM = project.projectManager && project.projectManager.toString() === userId.toString();
-      const isTeamLead = project.teamLead && project.teamLead.toString() === userId.toString();
+      const isPM = isProjectPM(project, userId);
+      const isTeamLead = isProjectTL(project, userId);
       hasAccess = isPM || isTeamLead;
       
     } else if (userRole === 'Team Lead') {
       // Check if Team Lead is assigned to this project
-      hasAccess = project.teamLead && project.teamLead.toString() === userId.toString();
+      hasAccess = isProjectTL(project, userId);
       
     } else {
       hasAccess = false;

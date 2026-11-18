@@ -1,5 +1,6 @@
 // backend/routes/teamLeadRoutes.js
 const express = require('express');
+const { tlProjectFilter } = require('../utils/projectAccess');
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -20,9 +21,11 @@ const { authorize } = require('../middleware/roleCheck');
 // ============================================
 router.get('/my-projects',  authorize('Team Lead'), async (req, res) => {
   try {
-    const projects = await Project.find({ teamLead: req.user._id })
+    const projects = await Project.find(tlProjectFilter(req.user._id))
       .populate('projectManager', 'name email')
       .populate('teamLead', 'name email')
+      .populate('teamLeads', 'name email')
+      .populate('projectCoordinators', 'name email')
       .populate('clients', 'name email')
       .populate('organizations', 'companyName')
       .populate({
@@ -56,7 +59,7 @@ router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async 
     // Check if this feed belongs to a project assigned to this Team Lead
     const project = await Project.findOne({
       _id: feed.projectId._id,
-      teamLead: req.user._id
+      ...tlProjectFilter(req.user._id)
     });
 
     if (!project) {
@@ -153,7 +156,7 @@ router.get('/developers',  authorize('Team Lead'), async (req, res) => {
 router.get('/my-tickets',  authorize('Team Lead'), async (req, res) => {
   try {
     // Get all projects assigned to this Team Lead
-    const projects = await Project.find({ teamLead: req.user._id }).select('_id');
+    const projects = await Project.find(tlProjectFilter(req.user._id)).select('_id');
     const projectIds = projects.map(p => p._id);
 
     // Get tickets for these projects
@@ -179,7 +182,7 @@ router.get('/my-tickets',  authorize('Team Lead'), async (req, res) => {
 // ============================================
 router.get('/stats',  authorize('Team Lead'), async (req, res) => {
   try {
-    const projects = await Project.find({ teamLead: req.user._id });
+    const projects = await Project.find(tlProjectFilter(req.user._id));
     const projectIds = projects.map(p => p._id);
 
     const feeds = await Feed.find({ projectId: { $in: projectIds } });

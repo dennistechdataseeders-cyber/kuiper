@@ -1,6 +1,7 @@
 // backend/routes/workReportRoutes.js
 
 const express = require('express');
+const { pmProjectFilter } = require('../utils/projectAccess');
 const { PM_ROLES, isPMRole } = require('../utils/roles');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -114,7 +115,7 @@ function buildDateFilter(startDate, endDate) {
 // HELPER: check PM scope for a developer
 // ============================================
 async function pmCanViewDeveloper(pmUserId, developerId) {
-  const pmProjects = await Project.find({ projectManager: pmUserId }).select('_id');
+  const pmProjects = await Project.find(pmProjectFilter(pmUserId)).select('_id');
   const projectIds = pmProjects.map(p => p._id);
 
   const feedCount = await Feed.countDocuments({
@@ -443,8 +444,8 @@ router.get(
     try {
       let developerIds = null;
 
-      if (req.user.role === 'Project Manager') {
-        const pmProjects = await Project.find({ projectManager: req.user._id }).select('_id');
+      if (isPMRole(req.user.role)) {
+        const pmProjects = await Project.find(pmProjectFilter(req.user._id)).select('_id');
         const projectIds = pmProjects.map(p => p._id);
 
         const feeds = await Feed.find({ projectId: { $in: projectIds } })
@@ -494,8 +495,8 @@ router.get(
       if (developerId === 'all') {
         let query = { role: 'Developer', isActive: true };
 
-        if (req.user.role === 'Project Manager') {
-          const pmProjects = await Project.find({ projectManager: req.user._id }).select('_id');
+        if (isPMRole(req.user.role)) {
+          const pmProjects = await Project.find(pmProjectFilter(req.user._id)).select('_id');
           const projectIds = pmProjects.map(p => p._id);
 
           const feeds = await Feed.find({ projectId: { $in: projectIds } })

@@ -1,6 +1,7 @@
 // backend/routes/commentRoutes.js - COMPLETE FIX WITH FILE SAVING
 
 const express = require('express');
+const { isProjectPM, isProjectTL, PROJECT_ACCESS_FIELDS } = require('../utils/projectAccess');
 const { isPMRole } = require('../utils/roles');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
@@ -19,7 +20,7 @@ router.get('/projects/:projectId/comments', protect, async (req, res) => {
   try {
     const project = await Project.findById(req.params.projectId)
       .populate('comments.userId', 'name email role')
-      .select('comments teamLead projectManager');
+      .select(`comments ${PROJECT_ACCESS_FIELDS}`);
     
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
@@ -291,15 +292,15 @@ async function userHasProjectAccess(user, project) {
   }
   
   // Project Manager can see their projects
-  if (role === 'Project Manager') {
-    const isPM = compareIds(project.projectManager, userId);
+  if (isPMRole(role)) {
+    const isPM = isProjectPM(project, userId);
     console.log(`   PM check: ${isPM}`);
     if (isPM) return true;
   }
   
   // Team Lead can see projects they lead
   if (role === 'Team Lead') {
-    const isTL = compareIds(project.teamLead, userId);
+    const isTL = isProjectTL(project, userId);
     console.log(`   TL check: ${isTL}`);
     if (isTL) return true;
   }
@@ -334,7 +335,7 @@ async function userCanCommentOnProject(user, project) {
   if (isPMRole(role)) return true;
   
   if (role === 'Team Lead') {
-    return compareIds(project.teamLead, userId);
+    return isProjectTL(project, userId);
   }
   
   // Developer can comment if assigned to any feed in this project
@@ -366,7 +367,7 @@ async function userCanDeleteComment(user, project, comment) {
   if (isPMRole(role)) return true;
   
   if (role === 'Team Lead') {
-    return compareIds(project.teamLead, userId);
+    return isProjectTL(project, userId);
   }
   
   // Developer can delete if assigned to any feed in this project
@@ -407,10 +408,10 @@ async function userHasFeedAccess(user, feed) {
   if (feed.projectId) {
     const project = await Project.findById(feed.projectId);
     if (project) {
-      if (role === 'Project Manager' && compareIds(project.projectManager, userId)) {
+      if (isPMRole(role) && isProjectPM(project, userId)) {
         return true;
       }
-      if (role === 'Team Lead' && compareIds(project.teamLead, userId)) {
+      if (role === 'Team Lead' && isProjectTL(project, userId)) {
         return true;
       }
       // Developer can access if assigned to any feed in the project
@@ -452,10 +453,10 @@ async function userCanCommentOnFeed(user, feed) {
   if (feed.projectId) {
     const project = await Project.findById(feed.projectId);
     if (project) {
-      if (role === 'Project Manager' && compareIds(project.projectManager, userId)) {
+      if (isPMRole(role) && isProjectPM(project, userId)) {
         return true;
       }
-      if (role === 'Team Lead' && compareIds(project.teamLead, userId)) {
+      if (role === 'Team Lead' && isProjectTL(project, userId)) {
         return true;
       }
     }
@@ -490,7 +491,7 @@ async function userCanDeleteFeedComment(user, feed, comment) {
   if (role === 'Team Lead') {
     if (feed.projectId) {
       const project = await Project.findById(feed.projectId);
-      return compareIds(project?.teamLead, userId);
+      return isProjectTL(project, userId);
     }
     return false;
   }

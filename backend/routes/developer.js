@@ -3,6 +3,7 @@
 // v3: adds GET /api/dev/dashboard/overview → returns current (today) + upcoming (next 7 days) feeds
 
 const express = require('express');
+const { pmProjectFilter, tlProjectFilter } = require('../utils/projectAccess');
 const { isPMRole } = require('../utils/roles');
 const router = express.Router();
 const mongoose = require('mongoose');
@@ -818,8 +819,8 @@ router.get('/ticket-worklog', protect, async (req, res) => {
       status: { $in: ['Open', 'In Progress'] }
     };
   }
-    else if (userRole === 'Project Manager') {
-      const pmProjects = await Project.find({ projectManager: userId }).select('_id');
+    else if (isPMRole(userRole)) {
+      const pmProjects = await Project.find(pmProjectFilter(userId)).select('_id');
       const projectIds = pmProjects.map(p => p._id);
 
       ticketQuery = {
@@ -833,7 +834,7 @@ router.get('/ticket-worklog', protect, async (req, res) => {
       };
     }
     else if (userRole === 'Team Lead') {
-      const tlProjects = await Project.find({ teamLead: userId }).select('_id');
+      const tlProjects = await Project.find(tlProjectFilter(userId)).select('_id');
       const projectIds = tlProjects.map(p => p._id);
 
       ticketQuery = {

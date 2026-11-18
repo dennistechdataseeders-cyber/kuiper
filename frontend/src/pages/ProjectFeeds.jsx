@@ -42,6 +42,7 @@ import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
+import { isProjectManagerOf } from '../utils/projectAccess';
 
 const weekDays = [
   'Monday',
@@ -417,9 +418,7 @@ const fetchData = async () => {
     } else {
       // Project Manager sees only their projects
       filteredProjects = allProjects.filter(
-        p =>
-          p.projectManager?._id === currentUserId ||
-          p.projectManager === currentUserId
+        p => isProjectManagerOf(p, currentUserId)
       );
     }
 

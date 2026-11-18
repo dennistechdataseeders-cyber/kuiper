@@ -17,6 +17,10 @@ const ProjectSchema = new mongoose.Schema({
   }],
   
   projectManager: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  // Extra Project Coordinators: same project-level access as projectManager
+  projectCoordinators: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // All Team Leads of the project. teamLead (below) mirrors teamLeads[0] for older code/data.
+  teamLeads: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   description: String,
   adminId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   feeds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Feed' }],

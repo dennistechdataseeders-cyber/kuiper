@@ -15,6 +15,7 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { isPMRole } from '../utils/roles';
 
+import { isProjectManagerOf } from '../utils/projectAccess';
 // ============================================
 // Categories now come from the backend (/api/ticket-categories) so an
 // Admin / Super Admin can edit them. This turns the API list into the
@@ -579,10 +580,7 @@ const CreateTicket = () => {
         }
       } else if (isPMRole(userRole)) {
         const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, { headers });
-        clientProjects = res.data.filter(project => 
-          project.projectManager?._id === currentUserId || 
-          project.projectManager === currentUserId
-        );
+        clientProjects = res.data.filter(project => isProjectManagerOf(project, currentUserId));
       } else if (userRole === 'Team Lead') {
         const res = await axios.get(`${API_BASE_URL}/api/teamlead/my-projects`, { headers });
         clientProjects = res.data.projects || [];

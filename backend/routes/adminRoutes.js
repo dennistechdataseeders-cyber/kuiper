@@ -1,4 +1,5 @@
 const express = require('express');
+const { pmProjectFilter, tlProjectFilter, isProjectPM, idOf } = require('../utils/projectAccess');
 const { PM_ROLES, isPMRole } = require('../utils/roles');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -11,6 +12,7 @@ const gitService = require('../services/gitService');
 
 // --- MODELS ---
 const User = require('../models/User');
+const mongoose = require('mongoose');
 const Log = require('../models/Log');
 const Project = require('../models/Project');
 const Feed = require('../models/Feed');
@@ -777,9 +779,9 @@ router.get('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Client',
     } 
     // Role-based filtering for other roles
     else if (req.user.role === 'Team Lead') {
-      query = { teamLead: req.user._id };
-    } else if (req.user.role === 'Project Manager') {
-      query = { projectManager: req.user._id };
+      query = tlProjectFilter(req.user._id);
+    } else if (isPMRole(req.user.role)) {
+      query = pmProjectFilter(req.user._id);
     } else if (req.user.role === 'Developer') {
       // Developer: only projects that contain a feed assigned to them (same rule as /api/dev/my-projects)
       const assignedFeeds = await Feed.find({ assignedDevelopers: req.user._id }).select('projectId');
@@ -816,6 +818,8 @@ router.get('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Client',
         { path: 'organizations', select: 'companyName' },
         { path: 'projectManager', select: 'name email' },
         { path: 'teamLead', select: 'name email' },
+        { path: 'projectCoordinators', select: 'name email role' },
+        { path: 'teamLeads', select: 'name email role' },
         {
           path: 'feeds',
           populate: {
@@ -835,6 +839,8 @@ router.get('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Client',
       .populate('organizations', 'companyName website address')
       .populate('projectManager', 'name email')
       .populate('teamLead', 'name email')
+      .populate('projectCoordinators', 'name email role')
+      .populate('teamLeads', 'name email role')
       .populate({
         path: 'feeds',
         populate: {
@@ -1482,6 +1488,82 @@ router.get('/client/projects', authorize('Super Admin', 'Client'), async (req, r
 // TEAM LEAD ASSIGNMENT ROUTES
 // ============================================
 
+// PUT /projects/:projectId/team - Project settings: one Project Manager, any number of
+// Project Coordinators and Team Leads. Admin / Super Admin can edit any project; a PM or
+// Coordinator only projects they manage. teamLead is kept equal to teamLeads[0].
+router.put('/projects/:projectId/team', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
+  try {
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const isAdmin = ['Super Admin', 'Admin'].includes(req.user.role);
+    if (!isAdmin && !isProjectPM(project, req.user._id)) {
+      return res.status(403).json({ error: 'You can only change the team of projects you manage.' });
+    }
+
+    const uniqueIds = (list) => [...new Set((Array.isArray(list) ? list : []).filter(Boolean).map(String))];
+    const { projectManager } = req.body;
+    const pmId = projectManager !== undefined ? (projectManager ? String(projectManager) : null) : idOf(project.projectManager) || null;
+    const coordinatorIds = uniqueIds(req.body.projectCoordinators).filter((id) => id !== pmId);
+    const teamLeadIds = uniqueIds(req.body.teamLeads);
+
+    // Validate every person: right role and still active
+    const wanted = [...new Set([...(pmId ? [pmId] : []), ...coordinatorIds, ...teamLeadIds])];
+    if (wanted.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
+      return res.status(400).json({ error: 'Invalid user id' });
+    }
+    const people = await User.find({ _id: { $in: wanted } }).select('name role isActive');
+    const byId = new Map(people.map((p) => [String(p._id), p]));
+    const bad = (id, roles, label) => {
+      const p = byId.get(id);
+      if (!p || p.isActive === false || !roles.includes(p.role)) return `${p ? p.name : id} cannot be a ${label}`;
+      return null;
+    };
+    const errors = [
+      ...(pmId ? [bad(pmId, PM_ROLES, 'Project Manager')] : []),
+      ...coordinatorIds.map((id) => bad(id, PM_ROLES, 'Project Coordinator')),
+      ...teamLeadIds.map((id) => bad(id, ['Team Lead'], 'Team Lead')),
+    ].filter(Boolean);
+    if (errors.length) return res.status(400).json({ error: errors.join('; ') });
+
+    const before = new Set([...(project.projectCoordinators || []).map(idOf), ...(project.teamLeads || []).map(idOf), idOf(project.teamLead)]);
+
+    project.projectManager = pmId;
+    project.projectCoordinators = coordinatorIds;
+    project.teamLeads = teamLeadIds;
+    project.teamLead = teamLeadIds[0] || null;
+    await project.save();
+
+    // In-app notification (no email) for people newly added to the project
+    for (const id of [...coordinatorIds, ...teamLeadIds]) {
+      if (before.has(id) || id === String(req.user._id)) continue;
+      const person = await User.findById(id);
+      if (person) {
+        const as = teamLeadIds.includes(id) ? 'Team Lead' : 'Project Coordinator';
+        await person.addNotification({ type: 'system', message: `You were added as ${as} on project ${project.projectCustomId || project.name}.` });
+      }
+    }
+
+    const name = (id) => byId.get(id)?.name || id;
+    await Log.create({
+      actionType: 'PROJECT_TEAM_UPDATED',
+      performerId: req.user._id,
+      details: `Project ${project.projectCustomId}: PM ${pmId ? name(pmId) : 'none'}; coordinators [${coordinatorIds.map(name).join(', ')}]; team leads [${teamLeadIds.map(name).join(', ')}]`,
+      timestamp: new Date()
+    });
+
+    const populated = await Project.findById(project._id)
+      .populate('projectManager', 'name email role')
+      .populate('projectCoordinators', 'name email role')
+      .populate('teamLeads', 'name email role')
+      .populate('teamLead', 'name email');
+    res.json({ success: true, project: populated });
+  } catch (err) {
+    console.error('Error updating project team:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /projects/:projectId/assign-teamlead - Assign Team Lead to project
 router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
@@ -1498,6 +1580,9 @@ router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Ad
       return res.status(400).json({ error: 'User not found or not a Team Lead' });
     }
     
+    // The chosen lead becomes the primary one; other team leads on the project stay.
+    const previousPrimary = idOf(project.teamLead);
+    project.teamLeads = [teamLeadId, ...(project.teamLeads || []).filter((t) => idOf(t) !== String(teamLeadId) && idOf(t) !== previousPrimary)];
     project.teamLead = teamLeadId;
     await project.save();
     

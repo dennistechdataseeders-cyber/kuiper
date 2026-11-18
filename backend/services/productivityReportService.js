@@ -1,6 +1,7 @@
 // backend/services/productivityReportService.js
 
 const User = require('../models/User');
+const { pmProjectFilter } = require('../utils/projectAccess');
 const { PM_ROLES } = require('../utils/roles');
 const Ticket = require('../models/Ticket');
 const LeadGen = require('../models/LeadGen');
@@ -96,9 +97,7 @@ class ProductivityReportService {
       
       const pmData = await Promise.all(pms.map(async (pm) => {
         // Get projects managed by this PM
-        const projects = await Project.find({ 
-          projectManager: pm._id 
-        }).select('_id projectCustomId name');
+        const projects = await Project.find(pmProjectFilter(pm._id)).select('_id projectCustomId name');
         
         const projectIds = projects.map(p => p._id);
         
