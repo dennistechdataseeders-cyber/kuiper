@@ -3,16 +3,16 @@
     "page": "Ticket list (Admin)",
     "call": "/api/tickets?page=1&limit=25&status=all&type=all",
     "status": 200,
-    "ms": 18.8,
-    "kb": 17.1,
+    "ms": 21,
+    "kb": 17,
     "gzipKb": 2.1,
-    "items": "25/6009"
+    "items": "25/6010"
   },
   {
     "page": "Ticket list (Admin)",
     "call": "/api/tickets/stats",
     "status": 200,
-    "ms": 40.6,
+    "ms": 54.5,
     "kb": 0.2,
     "gzipKb": 0.2,
     "items": null
@@ -21,8 +21,8 @@
     "page": "Ticket list (Admin)",
     "call": "TOTAL (2 calls)",
     "status": "",
-    "ms": 59.5,
-    "kb": 17.3,
+    "ms": 75.5,
+    "kb": 17.2,
     "gzipKb": 2.3,
     "items": ""
   },
@@ -30,7 +30,7 @@
     "page": "Ticket list (Developer)",
     "call": "/api/tickets?page=1&limit=25&status=all&type=all",
     "status": 200,
-    "ms": 14.5,
+    "ms": 21.1,
     "kb": 18.1,
     "gzipKb": 2.3,
     "items": "25/501"
@@ -39,7 +39,7 @@
     "page": "Ticket list (Developer)",
     "call": "/api/tickets/stats",
     "status": 200,
-    "ms": 14.7,
+    "ms": 18.4,
     "kb": 0.2,
     "gzipKb": 0.2,
     "items": null
@@ -48,7 +48,7 @@
     "page": "Ticket list (Developer)",
     "call": "TOTAL (2 calls)",
     "status": "",
-    "ms": 29.2,
+    "ms": 39.5,
     "kb": 18.3,
     "gzipKb": 2.5,
     "items": ""
@@ -57,17 +57,17 @@
     "page": "Single ticket",
     "call": "/api/tickets/:ticket",
     "status": 200,
-    "ms": 14.8,
-    "kb": 1.6,
-    "gzipKb": 0.6,
+    "ms": 9.7,
+    "kb": 1,
+    "gzipKb": 0.5,
     "items": null
   },
   {
     "page": "Single ticket",
     "call": "/api/tickets/:ticket/watchers",
     "status": 200,
-    "ms": 10.6,
-    "kb": 0.3,
+    "ms": 12.1,
+    "kb": 0.4,
     "gzipKb": 0.2,
     "items": null
   },
@@ -75,17 +75,17 @@
     "page": "Single ticket",
     "call": "/api/tickets/developers/list",
     "status": 200,
-    "ms": 7.2,
-    "kb": 4.4,
-    "gzipKb": 0.4,
-    "items": 31
+    "ms": 15.5,
+    "kb": 10.8,
+    "gzipKb": 1.1,
+    "items": 67
   },
   {
     "page": "Single ticket",
     "call": "/api/tickets/users/watchers",
     "status": 200,
-    "ms": 11.5,
-    "kb": 7.7,
+    "ms": 17,
+    "kb": 7.8,
     "gzipKb": 1,
     "items": null
   },
@@ -93,16 +93,16 @@
     "page": "Single ticket",
     "call": "TOTAL (4 calls)",
     "status": "",
-    "ms": 44.2,
-    "kb": 13.9,
-    "gzipKb": 2.2,
+    "ms": 54.3,
+    "kb": 20,
+    "gzipKb": 2.8,
     "items": ""
   },
   {
     "page": "Admin dashboard",
     "call": "/api/admin/dashboard-summary",
     "status": 200,
-    "ms": 4.6,
+    "ms": 6.6,
     "kb": 0,
     "gzipKb": 0,
     "items": null
@@ -111,16 +111,16 @@
     "page": "Admin dashboard",
     "call": "/api/admin/analytics?limit=5",
     "status": 200,
-    "ms": 6.4,
+    "ms": 10.3,
     "kb": 1.5,
-    "gzipKb": 0.4,
+    "gzipKb": 0.5,
     "items": null
   },
   {
     "page": "Admin dashboard",
     "call": "TOTAL (2 calls)",
     "status": "",
-    "ms": 11,
+    "ms": 16.9,
     "kb": 1.5,
     "gzipKb": 0.5,
     "items": ""
@@ -129,7 +129,7 @@
     "page": "PM dashboard",
     "call": "/api/admin/projects",
     "status": 200,
-    "ms": 34.5,
+    "ms": 25.4,
     "kb": 92.4,
     "gzipKb": 5.7,
     "items": 16
@@ -138,7 +138,7 @@
     "page": "PM dashboard",
     "call": "/api/tickets/stats?scope=myProjects",
     "status": 200,
-    "ms": 11.2,
+    "ms": 15.2,
     "kb": 0.2,
     "gzipKb": 0.2,
     "items": null
@@ -147,7 +147,7 @@
     "page": "PM dashboard",
     "call": "TOTAL (2 calls)",
     "status": "",
-    "ms": 45.7,
+    "ms": 40.6,
     "kb": 92.7,
     "gzipKb": 5.9,
     "items": ""
@@ -156,8 +156,8 @@
     "page": "HR dashboard",
     "call": "/api/hr/dashboard/stats",
     "status": 200,
-    "ms": 14.7,
-    "kb": 9,
+    "ms": 25,
+    "kb": 9.1,
     "gzipKb": 1.1,
     "items": null
   },
@@ -165,7 +165,7 @@
     "page": "HR dashboard",
     "call": "/api/leave-bucket/pending",
     "status": 200,
-    "ms": 82.8,
+    "ms": 100.3,
     "kb": 283.3,
     "gzipKb": 12.4,
     "items": 366
@@ -174,7 +174,7 @@
     "page": "HR dashboard",
     "call": "/api/hr/attendance/corrections",
     "status": 200,
-    "ms": 4.5,
+    "ms": 5.9,
     "kb": 0,
     "gzipKb": 0,
     "items": 0
@@ -183,8 +183,8 @@
     "page": "HR dashboard",
     "call": "/api/hr/employees",
     "status": 200,
-    "ms": 8.9,
-    "kb": 8.8,
+    "ms": 14.3,
+    "kb": 8.9,
     "gzipKb": 1,
     "items": null
   },
@@ -192,7 +192,7 @@
     "page": "HR dashboard",
     "call": "/api/hr/leave/all",
     "status": 200,
-    "ms": 256.3,
+    "ms": 370.7,
     "kb": 1181.1,
     "gzipKb": 48.1,
     "items": 1500
@@ -201,16 +201,16 @@
     "page": "HR dashboard",
     "call": "/api/hr/employees/probation",
     "status": 200,
-    "ms": 12.1,
-    "kb": 20.5,
+    "ms": 16.3,
+    "kb": 20.8,
     "gzipKb": 1.4,
-    "items": 63
+    "items": 64
   },
   {
     "page": "HR dashboard",
     "call": "/api/leave-bucket/employees/buckets",
     "status": 200,
-    "ms": 89.8,
+    "ms": 127.2,
     "kb": 24.8,
     "gzipKb": 1.4,
     "items": 62
@@ -219,16 +219,16 @@
     "page": "HR dashboard",
     "call": "TOTAL (7 calls)",
     "status": "",
-    "ms": 469.1,
-    "kb": 1527.5,
-    "gzipKb": 65.5,
+    "ms": 659.7,
+    "kb": 1528.1,
+    "gzipKb": 65.6,
     "items": ""
   },
   {
     "page": "Worklog (Developer)",
     "call": "/api/dev/worklog",
     "status": 200,
-    "ms": 40.7,
+    "ms": 70.5,
     "kb": 58.6,
     "gzipKb": 4.1,
     "items": 48
@@ -237,7 +237,7 @@
     "page": "Worklog (Developer)",
     "call": "/api/dev/worklog/history?date=2026-11-17",
     "status": 200,
-    "ms": 6.3,
+    "ms": 12.6,
     "kb": 0.1,
     "gzipKb": 0.1,
     "items": null
@@ -246,7 +246,7 @@
     "page": "Worklog (Developer)",
     "call": "/api/dev/ticket-worklog",
     "status": 200,
-    "ms": 45.8,
+    "ms": 76,
     "kb": 56.9,
     "gzipKb": 4.3,
     "items": 88
@@ -255,7 +255,7 @@
     "page": "Worklog (Developer)",
     "call": "/api/dev/system-time-check",
     "status": 200,
-    "ms": 3.1,
+    "ms": 7.2,
     "kb": 0.1,
     "gzipKb": 0.1,
     "items": null
@@ -264,7 +264,7 @@
     "page": "Worklog (Developer)",
     "call": "TOTAL (4 calls)",
     "status": "",
-    "ms": 95.9,
+    "ms": 166.4,
     "kb": 115.8,
     "gzipKb": 8.6,
     "items": ""
@@ -273,7 +273,7 @@
     "page": "Lead generation (Sales Manager)",
     "call": "/api/lead-generation",
     "status": 200,
-    "ms": 97.3,
+    "ms": 141,
     "kb": 1140.6,
     "gzipKb": 50.4,
     "items": 1506
@@ -282,16 +282,16 @@
     "page": "Lead generation (Sales Manager)",
     "call": "/api/admin/users",
     "status": 200,
-    "ms": 6,
-    "kb": 10.5,
-    "gzipKb": 0.9,
+    "ms": 9.9,
+    "kb": 10.7,
+    "gzipKb": 1,
     "items": 9
   },
   {
     "page": "Lead generation (Sales Manager)",
     "call": "/api/orgs",
     "status": 200,
-    "ms": 5.3,
+    "ms": 8.2,
     "kb": 0.4,
     "gzipKb": 0.3,
     "items": 1
@@ -300,16 +300,16 @@
     "page": "Lead generation (Sales Manager)",
     "call": "TOTAL (3 calls)",
     "status": "",
-    "ms": 108.6,
-    "kb": 1151.5,
-    "gzipKb": 51.5,
+    "ms": 159.1,
+    "kb": 1151.7,
+    "gzipKb": 51.6,
     "items": ""
   },
   {
     "page": "Sidebar + bell polls (Admin, every 30s)",
     "call": "/api/tickets/stats",
     "status": 200,
-    "ms": 30.9,
+    "ms": 53.4,
     "kb": 0.2,
     "gzipKb": 0.2,
     "items": null
@@ -318,7 +318,7 @@
     "page": "Sidebar + bell polls (Admin, every 30s)",
     "call": "/api/announcements/unviewed/count",
     "status": 200,
-    "ms": 6.6,
+    "ms": 9.6,
     "kb": 0,
     "gzipKb": 0,
     "items": null
@@ -327,7 +327,7 @@
     "page": "Sidebar + bell polls (Admin, every 30s)",
     "call": "/api/notifications/count",
     "status": 200,
-    "ms": 10.1,
+    "ms": 17,
     "kb": 0.1,
     "gzipKb": 0.1,
     "items": null
@@ -336,7 +336,7 @@
     "page": "Sidebar + bell polls (Admin, every 30s)",
     "call": "TOTAL (3 calls)",
     "status": "",
-    "ms": 47.6,
+    "ms": 80,
     "kb": 0.4,
     "gzipKb": 0.3,
     "items": ""

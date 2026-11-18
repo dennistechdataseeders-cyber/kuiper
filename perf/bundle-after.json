@@ -1,0 +1,112 @@
+{
+  "initial": {
+    "jsFiles": 5,
+    "cssFiles": 1,
+    "requests": 6,
+    "jsRaw": 582841,
+    "jsGzip": 186390,
+    "jsBr": 161826,
+    "cssRaw": 166189,
+    "cssGzip": 22133
+  },
+  "totalJsChunks": 84,
+  "totalJsRaw": 4664552,
+  "top10": [
+    {
+      "file": "excel-DdKszzvs.js",
+      "raw": 1357818,
+      "gzip": 394883,
+      "initial": false
+    },
+    {
+      "file": "three-uuSXSHVm.js",
+      "raw": 913516,
+      "gzip": 239706,
+      "initial": false
+    },
+    {
+      "file": "react-vendor-DscY24hi.js",
+      "raw": 189646,
+      "gzip": 58862,
+      "initial": true
+    },
+    {
+      "file": "ui-CMevnge3.js",
+      "raw": 180561,
+      "gzip": 58352,
+      "initial": true
+    },
+    {
+      "file": "charts-njO84DR5.js",
+      "raw": 171529,
+      "gzip": 58579,
+      "initial": false
+    },
+    {
+      "file": "index-eRCa_vZf.js",
+      "raw": 169204,
+      "gzip": 53701,
+      "initial": true
+    },
+    {
+      "file": "EmployeeDashboard-DK4GschF.js",
+      "raw": 88555,
+      "gzip": 18935,
+      "initial": false
+    },
+    {
+      "file": "useStateManager-7e1e8489.esm-D3aSGICA.js",
+      "raw": 85831,
+      "gzip": 29736,
+      "initial": false
+    },
+    {
+      "file": "Leads-DCTHuyVG.js",
+      "raw": 80533,
+      "gzip": 21227,
+      "initial": false
+    },
+    {
+      "file": "ProjectManagement-DwEVV_Vh.js",
+      "raw": 66500,
+      "gzip": 14750,
+      "initial": false
+    }
+  ],
+  "mediaFromInitialChunks": [
+    {
+      "file": "assets/Company_Logo_mp4-CmJdne5J.mp4",
+      "raw": 917080
+    }
+  ],
+  "publicImages": [
+    {
+      "file": "images/login_img.png",
+      "raw": 1332361
+    },
+    {
+      "file": "images/login_img.webp",
+      "raw": 5960
+    },
+    {
+      "file": "images/login_img_192.png",
+      "raw": 19488
+    },
+    {
+      "file": "images/tab_logo.png",
+      "raw": 1210869
+    },
+    {
+      "file": "images/tab_logo_192.png",
+      "raw": 15756
+    },
+    {
+      "file": "images/tab_logo_32.png",
+      "raw": 1338
+    },
+    {
+      "file": "images/tab_logo_64.png",
+      "raw": 2781
+    }
+  ]
+}
