@@ -159,7 +159,7 @@ const SalesManagerDashboard = () => {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(() => fetchData(true), 60000); // keep the board live
+    const interval = setInterval(() => { if (!document.hidden) fetchData(true); }, 60000); // keep the board live (not in hidden tabs)
     const onRefresh = () => fetchData(true);
     window.addEventListener('tasks:refresh', onRefresh);
     return () => {

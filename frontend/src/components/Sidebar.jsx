@@ -75,6 +75,7 @@ const LogoVideo = () => {
 };
 import io from 'socket.io-client';
 import { isPMRole } from '../utils/roles';
+import usePolling from '../utils/usePolling';
 
 // ============================================
 // ONE ICON PER PAGE
@@ -630,24 +631,19 @@ const Sidebar = () => {
   }, [userId]);
 
   // FETCH TICKET COUNT
-  useEffect(() => {
-    const fetchTicketCount = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-        const res = await axios.get(`${API_BASE_URL}/api/tickets`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const nonClosedTickets = res.data.filter((t) => t.status !== 'Closed');
-        setTicketCount(nonClosedTickets.length);
-      } catch (error) {
-        console.error('Error fetching ticket count:', error);
-      }
-    };
-    fetchTicketCount();
-    const interval = setInterval(fetchTicketCount, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  // Ticket badge: count of the user's non-closed tickets (server-side count, not the whole list)
+  usePolling(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      const res = await axios.get(`${API_BASE_URL}/api/tickets/stats`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setTicketCount(res.data.notClosed || 0);
+    } catch (error) {
+      console.error('Error fetching ticket count:', error);
+    }
+  }, 30000);
 
   // FETCH ANNOUNCEMENT COUNT
   useEffect(() => {
@@ -664,8 +660,10 @@ const Sidebar = () => {
       }
     };
     fetchAnnouncementCount();
-    const interval = setInterval(fetchAnnouncementCount, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(() => { if (!document.hidden) fetchAnnouncementCount(); }, 30000);
+    const onVisible = () => { if (!document.hidden) fetchAnnouncementCount(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   // SOCKET

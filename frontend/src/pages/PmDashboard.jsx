@@ -185,16 +185,11 @@ const PmDashboard = () => {
       });
 
       // Fetch tickets for PM's projects
-      const projectIds = pmProjects.map(p => p._id);
-      const ticketsRes = await axios.get(`${API_BASE_URL}/api/tickets`, authHeader);
-      const pmTickets = ticketsRes.data.filter(ticket =>
-        ticket.projectId && projectIds.includes(ticket.projectId._id || ticket.projectId)
-      );
-
-      // Calculate ticket stats
-      const openTickets = pmTickets.filter(t => t.status === 'Open').length;
-      const inProgressTickets = pmTickets.filter(t => t.status === 'In Progress').length;
-      const resolvedTickets = pmTickets.filter(t => t.status === 'Resolved').length;
+      // (counted on the server: tickets on projects this user manages)
+      const { data: ticketStats } = await axios.get(`${API_BASE_URL}/api/tickets/stats`, { ...authHeader, params: { scope: 'myProjects' } });
+      const openTickets = ticketStats.open;
+      const inProgressTickets = ticketStats.inProgress;
+      const resolvedTickets = ticketStats.resolved;
 
       setStats({
         totalProjects: pmProjects.length,
@@ -202,7 +197,7 @@ const PmDashboard = () => {
         openTickets: openTickets,
         inProgressTickets: inProgressTickets,
         resolvedTickets: resolvedTickets,
-        totalTickets: pmTickets.length
+        totalTickets: ticketStats.total
       });
 
     } catch (error) {

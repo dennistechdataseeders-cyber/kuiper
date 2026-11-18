@@ -339,7 +339,7 @@ const EmployeeDashboard = () => {
     fetchTodayStatus();
 
     // Auto-refresh today-status every 2 minutes
-    const interval = setInterval(fetchTodayStatus, 120000);
+    const interval = setInterval(() => { if (!document.hidden) fetchTodayStatus(); }, 120000);
     return () => clearInterval(interval);
   }, []);
 

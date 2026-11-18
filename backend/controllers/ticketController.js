@@ -1471,127 +1471,240 @@ function getGeneralTicketTemplate(ticket, creatorName, frontendUrl) {
 // ============================================
 
 
+// Which tickets a user may see (same rules the list always used). Shared by the ticket
+// list and the ticket stats so both always agree.
+async function ticketVisibilityFilter(user) {
+  let filter = {};
+  const userRole = user.role;
+  const userId = user.id;
+
+  if (userRole === 'Client') {
+    filter = {
+      $or: [
+        { createdBy: userId },
+        { assignedTo: userId }
+      ]
+    };
+  } else if (userRole === 'Developer') {
+    // Feeds this developer is assigned to - every ticket raised on those
+    // feeds belongs in their bucket, even if someone else is the assignee
+    const devFeeds = await Feed.find({ assignedDevelopers: userId }).select('_id');
+    const devFeedIds = devFeeds.map(f => f._id);
+
+    filter = {
+      $or: [
+        { assignedTo: userId },
+        { createdBy: userId },
+        { assignedTo: null },
+        { watchers: userId },
+        { feedId: { $in: devFeedIds } } // ✅ NEW - feed-based visibility
+      ]
+    };
+  } else if (isPMRole(userRole)) {
+    const pmProjects = await Project.find(pmProjectFilter(userId)).select('_id');
+    const projectIds = pmProjects.map(p => p._id);
+
+    filter = {
+      $or: [
+        { projectId: { $in: projectIds } },
+        { 
+          $and: [
+            { projectId: null },
+            { category: 'Production' },
+            { subcategory: 'Feasibility' }
+          ]
+        },
+        { createdBy: userId },
+        { assignedTo: userId },
+        { assignedPM: userId }, // ✅ tickets a Sales user assigned to this PM
+        { watchers: userId } // ✅ ADD THIS
+      ]
+    };
+  } else if (userRole === 'Team Lead') {
+    const tlProjects = await Project.find(tlProjectFilter(userId)).select('_id');
+    const projectIds = tlProjects.map(p => p._id);
+    filter = {
+      $or: [
+        { projectId: { $in: projectIds } },
+        { createdBy: userId },
+        { assignedTo: userId },
+        { watchers: userId } // ✅ ADD THIS
+      ]
+    };
+  } else if (userRole === 'HR') {
+    const hrUserId = user.id;
+    const hrUsers = await User.find({ role: 'HR' }).distinct('_id');
+    filter = {
+      $or: [
+        { category: { $in: ['HR', 'Admin', 'Payroll'] } },
+        { subcategory: { $in: ['Employee Documents', 'Attendance & Leave', 'Employee Management'] } },
+        { createdBy: hrUserId },
+        { assignedTo: hrUserId },
+        { watchers: hrUserId }, // ✅ ADD THIS
+        { createdBy: { $in: hrUsers } },
+        { assignedTo: { $in: hrUsers } }
+      ]
+    };
+  } else if (userRole === 'Finance') {
+    const financeUserId = user.id;
+    const financeUsers = await User.find({ role: 'Finance' }).distinct('_id');
+    filter = {
+      $or: [
+        { category: { $in: ['Finance', 'Payroll', 'Admin'] } },
+        { subcategory: { $in: ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'] } },
+        { createdBy: financeUserId },
+        { assignedTo: financeUserId },
+        { watchers: financeUserId }, // ✅ ADD THIS
+        { createdBy: { $in: financeUsers } },
+        { assignedTo: { $in: financeUsers } }
+      ]
+    };
+  } else if (userRole === 'Sales' || userRole === 'Sales Manager') {
+    // Sales: only tickets they raised, are assigned to, or are watching
+    filter = {
+      $or: [
+        { createdBy: userId },
+        { assignedTo: userId },
+        { watchers: userId }
+      ]
+    };
+  } else if (userRole === 'Admin' || userRole === 'Super Admin') {
+    filter = {};
+  } else {
+    // Safe default for any other role: only their own tickets
+    filter = {
+      $or: [
+        { createdBy: userId },
+        { assignedTo: userId }
+      ]
+    };
+  }
+  return filter;
+}
+
+const escapeRegex = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+// Filters from the ticket list UI (status buttons, internal/external, search, HR/Finance
+// "assigned to me"), applied in Mongo instead of in the browser.
+async function ticketListFilters(query, userId) {
+  const and = [];
+  const { status, type, q, assignedToMe } = query;
+  if (status === 'Watching') and.push({ watchers: userId }, { status: { $ne: 'Closed' } });
+  else if (status && status !== 'all') and.push({ status });
+  if (type === 'internal') and.push({ isInternal: true });
+  else if (type === 'external') and.push({ isInternal: { $ne: true } });
+  if (assignedToMe === '1' || assignedToMe === 'true') and.push({ assignedTo: userId });
+
+  const text = String(q || '').trim();
+  if (text) {
+    // number, title, assignee / creator name, project id or name, feed name
+    const rx = new RegExp(escapeRegex(text), 'i');
+    const [users, projects, feeds] = await Promise.all([
+      User.find({ name: rx }).select('_id').lean(),
+      Project.find({ $or: [{ name: rx }, { projectCustomId: rx }] }).select('_id').lean(),
+      Feed.find({ name: rx }).select('_id').lean(),
+    ]);
+    const ids = (list) => list.map((x) => x._id);
+    and.push({
+      $or: [
+        { ticketNumber: rx }, { title: rx },
+        { assignedTo: { $in: ids(users) } }, { createdBy: { $in: ids(users) } },
+        { projectId: { $in: ids(projects) } }, { feedId: { $in: ids(feeds) } },
+      ],
+    });
+  }
+  return and;
+}
+
+// Only what the ticket table and its badges use (no comments, description, history)
+const TICKET_LIST_FIELDS = 'ticketNumber title status priority category subcategory subItem ticketType isInternal createdBy assignedTo assignedPM projectId feedId watchers createdAt updatedAt';
+
+// GET /api/tickets?page=1&limit=25&status=&type=&q=&assignedToMe=
+// -> { items, total, page, limit }
 exports.getTickets = async (req, res) => {
   try {
-    let filter = {};
-    const userRole = req.user.role;
-    const userId = req.user.id;
+    const visibility = await ticketVisibilityFilter(req.user);
+    const extra = await ticketListFilters(req.query, req.user.id);
+    const filter = extra.length ? { $and: [visibility, ...extra] } : visibility;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 25, 1), 200);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
 
-    if (userRole === 'Client') {
-      filter = {
-        $or: [
-          { createdBy: userId },
-          { assignedTo: userId }
-        ]
-      };
-    } else if (userRole === 'Developer') {
-      // Feeds this developer is assigned to - every ticket raised on those
-      // feeds belongs in their bucket, even if someone else is the assignee
-      const devFeeds = await Feed.find({ assignedDevelopers: userId }).select('_id');
-      const devFeedIds = devFeeds.map(f => f._id);
+    const [items, total] = await Promise.all([
+      Ticket.find(filter)
+        .select(TICKET_LIST_FIELDS)
+        .populate('createdBy', 'name role')
+        .populate('assignedTo', 'name')
+        .populate('projectId', 'name projectCustomId')
+        .populate('feedId', 'name')
+        .sort({ createdAt: -1, _id: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+      Ticket.countDocuments(filter),
+    ]);
 
-      filter = {
-        $or: [
-          { assignedTo: userId },
-          { createdBy: userId },
-          { assignedTo: null },
-          { watchers: userId },
-          { feedId: { $in: devFeedIds } } // ✅ NEW - feed-based visibility
-        ]
-      };
-    } else if (isPMRole(userRole)) {
-      const pmProjects = await Project.find(pmProjectFilter(userId)).select('_id');
-      const projectIds = pmProjects.map(p => p._id);
-
-      filter = {
-        $or: [
-          { projectId: { $in: projectIds } },
-          { 
-            $and: [
-              { projectId: null },
-              { category: 'Production' },
-              { subcategory: 'Feasibility' }
-            ]
-          },
-          { createdBy: userId },
-          { assignedTo: userId },
-          { assignedPM: userId }, // ✅ tickets a Sales user assigned to this PM
-          { watchers: userId } // ✅ ADD THIS
-        ]
-      };
-    } else if (userRole === 'Team Lead') {
-      const tlProjects = await Project.find(tlProjectFilter(userId)).select('_id');
-      const projectIds = tlProjects.map(p => p._id);
-      filter = {
-        $or: [
-          { projectId: { $in: projectIds } },
-          { createdBy: userId },
-          { assignedTo: userId },
-          { watchers: userId } // ✅ ADD THIS
-        ]
-      };
-    } else if (userRole === 'HR') {
-      const hrUserId = req.user.id;
-      const hrUsers = await User.find({ role: 'HR' }).distinct('_id');
-      filter = {
-        $or: [
-          { category: { $in: ['HR', 'Admin', 'Payroll'] } },
-          { subcategory: { $in: ['Employee Documents', 'Attendance & Leave', 'Employee Management'] } },
-          { createdBy: hrUserId },
-          { assignedTo: hrUserId },
-          { watchers: hrUserId }, // ✅ ADD THIS
-          { createdBy: { $in: hrUsers } },
-          { assignedTo: { $in: hrUsers } }
-        ]
-      };
-    } else if (userRole === 'Finance') {
-      const financeUserId = req.user.id;
-      const financeUsers = await User.find({ role: 'Finance' }).distinct('_id');
-      filter = {
-        $or: [
-          { category: { $in: ['Finance', 'Payroll', 'Admin'] } },
-          { subcategory: { $in: ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'] } },
-          { createdBy: financeUserId },
-          { assignedTo: financeUserId },
-          { watchers: financeUserId }, // ✅ ADD THIS
-          { createdBy: { $in: financeUsers } },
-          { assignedTo: { $in: financeUsers } }
-        ]
-      };
-    } else if (userRole === 'Sales' || userRole === 'Sales Manager') {
-      // Sales: only tickets they raised, are assigned to, or are watching
-      filter = {
-        $or: [
-          { createdBy: userId },
-          { assignedTo: userId },
-          { watchers: userId }
-        ]
-      };
-    } else if (userRole === 'Admin' || userRole === 'Super Admin') {
-      filter = {};
-    } else {
-      // Safe default for any other role: only their own tickets
-      filter = {
-        $or: [
-          { createdBy: userId },
-          { assignedTo: userId }
-        ]
-      };
-    }
-
-    const tickets = await Ticket.find(filter)
-      .populate('createdBy', 'name email role')
-      .populate('assignedTo', 'name email')
-      .populate('assignedPM', 'name email')
-      .populate('projectId', 'name projectCustomId')
-      .populate('feedId', 'name')
-      .populate('watchers', 'name email')
-      .sort({ createdAt: -1 });
-
-    res.json(tickets);
+    res.json({ items, total, page, limit });
   } catch (error) {
     console.error('Error fetching tickets:', error);
     res.status(500).json({ error: 'Failed to fetch tickets' });
+  }
+};
+
+// GET /api/tickets/stats[?scope=myProjects]
+// Counts for the ticket dashboard cards, the sidebar badge (notClosed) and the PM
+// dashboard (scope=myProjects: only tickets on projects the user manages / leads).
+// One aggregation pass instead of downloading every ticket.
+const HR_CATEGORIES = ['HR', 'Admin', 'Payroll'];
+const HR_SUBCATEGORIES = ['Employee Documents', 'Attendance & Leave', 'Employee Management'];
+const FINANCE_CATEGORIES = ['Finance', 'Payroll', 'Admin'];
+const FINANCE_SUBCATEGORIES = ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'];
+
+exports.getTicketStats = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    let base = await ticketVisibilityFilter(req.user);
+    if (req.query.scope === 'myProjects') {
+      const own = await Project.find(req.user.role === 'Team Lead' ? tlProjectFilter(userId) : pmProjectFilter(userId)).select('_id').lean();
+      base = { $and: [base, { projectId: { $in: own.map((p) => p._id) } }] };
+    }
+    const match = Ticket.find().cast(Ticket, base); // aggregate() does not cast ids itself
+    const me = new mongoose.Types.ObjectId(String(userId));
+    const sumIf = (cond) => ({ $sum: { $cond: [cond, 1, 0] } });
+    const isStatus = (st) => ({ $eq: ['$status', st] });
+    const mine = { $eq: ['$assignedTo', me] };
+
+    const [row] = await Ticket.aggregate([
+      { $match: match },
+      { $group: {
+        _id: null,
+        total: { $sum: 1 },
+        open: sumIf(isStatus('Open')),
+        inProgress: sumIf(isStatus('In Progress')),
+        resolved: sumIf(isStatus('Resolved')),
+        closed: sumIf(isStatus('Closed')),
+        internal: sumIf({ $eq: ['$isInternal', true] }),
+        feasibility: sumIf({ $and: [{ $eq: ['$category', 'Production'] }, { $eq: ['$subcategory', 'Feasibility'] }] }),
+        watching: sumIf({ $and: [{ $in: [me, { $ifNull: ['$watchers', []] }] }, { $ne: ['$status', 'Closed'] }] }),
+        assignedTotal: sumIf(mine),
+        assignedOpen: sumIf({ $and: [mine, isStatus('Open')] }),
+        assignedInProgress: sumIf({ $and: [mine, isStatus('In Progress')] }),
+        assignedResolved: sumIf({ $and: [mine, isStatus('Resolved')] }),
+        hrAssigned: sumIf({ $and: [mine, { $or: [{ $in: ['$category', HR_CATEGORIES] }, { $in: ['$subcategory', HR_SUBCATEGORIES] }] }] }),
+        financeAssigned: sumIf({ $and: [mine, { $or: [{ $in: ['$category', FINANCE_CATEGORIES] }, { $in: ['$subcategory', FINANCE_SUBCATEGORIES] }] }] }),
+      } },
+    ]);
+    const r = row || {};
+    const n = (k) => r[k] || 0;
+    res.json({
+      total: n('total'), open: n('open'), inProgress: n('inProgress'), resolved: n('resolved'), closed: n('closed'),
+      notClosed: n('total') - n('closed'), internal: n('internal'), external: n('total') - n('internal'),
+      feasibility: n('feasibility'), watching: n('watching'),
+      assigned: { total: n('assignedTotal'), open: n('assignedOpen'), inProgress: n('assignedInProgress'), resolved: n('assignedResolved') },
+      hrAssigned: n('hrAssigned'), financeAssigned: n('financeAssigned'),
+    });
+  } catch (error) {
+    console.error('Error fetching ticket stats:', error);
+    res.status(500).json({ error: 'Failed to fetch ticket stats' });
   }
 };
 

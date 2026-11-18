@@ -443,7 +443,7 @@ const ProjectFeedStatus = () => {
     fetchFeeds(actualProjectId);
     
     const interval = setInterval(() => {
-      if (!isSocketConnected) {
+      if (!isSocketConnected && !document.hidden) {
         fetchFeeds(actualProjectId);
       }
     }, 15000);

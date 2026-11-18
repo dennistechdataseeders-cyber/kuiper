@@ -1,9 +1,9 @@
 // frontend/src/pages/TicketDashboard.jsx - WITH WATCHING FILTER
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search, GitFork, Eye } from 'lucide-react';
+import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag, Filter, UserCheck, Search, GitFork, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
@@ -11,12 +11,25 @@ import toast from 'react-hot-toast';
 import notificationManager from '../utils/notifications';
 import { PM_ROLES, isPMRole } from '../utils/roles';
 
+const PAGE_SIZE = 25;
+const EMPTY_STATS = {
+  total: 0, open: 0, inProgress: 0, resolved: 0, internal: 0, external: 0, feasibility: 0, watching: 0,
+  assigned: { total: 0, open: 0, inProgress: 0, resolved: 0 }, hrAssigned: 0, financeAssigned: 0,
+};
+
 const TicketDashboard = () => {
+  // Server-side pages: `tickets` is the current page only; filters/search run in Mongo
   const [tickets, setTickets] = useState([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [serverStats, setServerStats] = useState(EMPTY_STATS);
   const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(false);
   const [filter, setFilter] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const requestSeq = useRef(0);
   const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
@@ -38,8 +51,6 @@ const TicketDashboard = () => {
   const isFinance = userRole === 'Finance';
 
   useEffect(() => {
-    fetchTickets();
-    
     notificationManager.initAudio();
     
     const socket = io(API_BASE_URL);
@@ -47,6 +58,8 @@ const TicketDashboard = () => {
     
     socket.on('ticket_created', (newTicket) => {
       setTickets(prev => [newTicket, ...prev]);
+      setTotal(prev => prev + 1);
+      fetchStats();
       toast.success(`New ticket: ${newTicket.title}`);
       
       if (isPMRole(userRole) || userRole === 'Admin' || userRole === 'Team Lead') {
@@ -62,10 +75,11 @@ const TicketDashboard = () => {
     
     socket.on('ticket_updated', (updatedTicket) => {
       const oldTicket = tickets.find(t => t._id === updatedTicket._id);
-      setTickets(prev => prev.map(t => 
+      setTickets(prev => prev.map(t =>
         t._id === updatedTicket._id ? updatedTicket : t
       ));
-      
+      fetchStats();
+
       toast.info(`Ticket ${formatTicketNumber(updatedTicket.ticketNumber)} status updated to ${updatedTicket.status}`);
       
       if (oldTicket && oldTicket.status !== updatedTicket.status) {
@@ -129,20 +143,65 @@ const TicketDashboard = () => {
     return String(num).padStart(4, '0');
   };
 
-  const fetchTickets = async () => {
+  // HR and Finance only ever see the tickets assigned to them in this list
+  const onlyAssignedToMe = isHR || isFinance;
+
+  const fetchTickets = useCallback(async (pageToLoad) => {
+    const seq = ++requestSeq.current; // ignore answers to older requests
+    setListLoading(true);
     try {
       const token = localStorage.getItem('token');
       const res = await axios.get(`${API_BASE_URL}/api/tickets`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          page: pageToLoad,
+          limit: PAGE_SIZE,
+          status: filter,
+          type: filterType,
+          q: debouncedSearch || undefined,
+          assignedToMe: onlyAssignedToMe ? 1 : undefined,
+        },
       });
-      setTickets(res.data);
+      if (seq !== requestSeq.current) return;
+      setTickets(res.data.items);
+      setTotal(res.data.total);
     } catch (error) {
       console.error('Error fetching tickets:', error);
       toast.error('Failed to load tickets');
     } finally {
-      setLoading(false);
+      if (seq === requestSeq.current) {
+        setListLoading(false);
+        setLoading(false);
+      }
     }
-  };
+  }, [filter, filterType, debouncedSearch, onlyAssignedToMe]);
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get(`${API_BASE_URL}/api/tickets/stats`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setServerStats(res.data);
+    } catch (error) {
+      console.error('Error fetching ticket stats:', error);
+    }
+  }, []);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+
+  // Search is sent to the server 300 ms after the user stops typing
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 300);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
+
+  // New filter / search -> back to page 1
+  useEffect(() => { setPage(1); }, [filter, filterType, debouncedSearch]);
+
+  useEffect(() => { fetchTickets(page); }, [fetchTickets, page]);
+
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -184,98 +243,15 @@ const TicketDashboard = () => {
   };
 
   // ============================================
-  // FILTER TICKETS WITH SEARCH & WATCHING FILTER
+  // Filters, search (ticket number, title, assignee / creator, project, feed) and the
+  // Watching filter run on the server; this is the current page of results.
   // ============================================
-  const filteredTickets = tickets.filter(t => {
-    // Status filter - includes 'Watching' as a special filter
-    if (filter === 'Watching') {
-      // Show tickets where current user is a watcher
-      const watcherIds = (t.watchers || []).map(w => w._id || w);
-      const isWatching = watcherIds.includes(currentUserId);
-      if (!isWatching) return false;
-      // For watching filter, also check that ticket is not closed
-      if (t.status === 'Closed') return false;
-    } else if (filter !== 'all' && t.status !== filter) {
-      return false;
-    }
-    
-    // Type filter (internal/external)
-    if (filterType === 'internal' && !t.isInternal) return false;
-    if (filterType === 'external' && t.isInternal) return false;
-    
-    // For HR - ONLY show tickets assigned to this HR user
-    if (isHR) {
-      if (t.assignedTo?._id !== currentUserId && t.assignedTo !== currentUserId) return false;
-    }
-    
-    // For Finance - ONLY show tickets assigned to this Finance user
-    if (isFinance) {
-      if (t.assignedTo?._id !== currentUserId && t.assignedTo !== currentUserId) return false;
-    }
-    
-    // Search filter - search by ticket number, title, or assigned to name
-    if (searchQuery.trim() !== '') {
-      const query = searchQuery.trim().toLowerCase();
-      
-      // Search by ticket number (formatted as 4 digits)
-      const formattedNumber = formatTicketNumber(t.ticketNumber);
-      const ticketNumberMatch = formattedNumber.toLowerCase().includes(query) || 
-                               String(t.ticketNumber).toLowerCase().includes(query) || false;
-      
-      // Search by ticket title
-      const titleMatch = t.title?.toLowerCase().includes(query) || false;
-      
-      // Search by assigned to name
-      const assignedToName = t.assignedTo?.name?.toLowerCase() || '';
-      const assignedToMatch = assignedToName.includes(query) || false;
-      
-      // Search by created by name
-      const createdByName = t.createdBy?.name?.toLowerCase() || '';
-      const createdByMatch = createdByName.includes(query) || false;
-      
-      // Search by project custom ID or name
-      const projectIdMatch = t.projectId?.projectCustomId?.toLowerCase().includes(query) || false;
-      const projectNameMatch = t.projectId?.name?.toLowerCase().includes(query) || false;
-      
-      // Search by feed name
-      const feedNameMatch = t.feedId?.name?.toLowerCase().includes(query) || false;
-      
-      if (!ticketNumberMatch && !titleMatch && !assignedToMatch && !createdByMatch && !projectIdMatch && !projectNameMatch && !feedNameMatch) {
-        return false;
-      }
-    }
-    
-    return true;
-  });
+  const filteredTickets = tickets;
 
-  const stats = {
-    total: tickets.length,
-    open: tickets.filter(t => t.status === 'Open').length,
-    inProgress: tickets.filter(t => t.status === 'In Progress').length,
-    resolved: tickets.filter(t => t.status === 'Resolved').length,
-    internal: tickets.filter(t => t.isInternal).length,
-    external: tickets.filter(t => !t.isInternal).length,
-    feasibility: tickets.filter(t => t.category === 'Production' && t.subcategory === 'Feasibility').length,
-    watching: tickets.filter(t => {
-      const watcherIds = (t.watchers || []).map(w => w._id || w);
-      return watcherIds.includes(currentUserId) && t.status !== 'Closed';
-    }).length
-  };
-
-  // Stats for HR and Finance - only count assigned tickets
-  const getAssignedStats = () => {
-    const assignedTickets = tickets.filter(t => 
-      t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId
-    );
-    return {
-      total: assignedTickets.length,
-      open: assignedTickets.filter(t => t.status === 'Open').length,
-      inProgress: assignedTickets.filter(t => t.status === 'In Progress').length,
-      resolved: assignedTickets.filter(t => t.status === 'Resolved').length,
-    };
-  };
-
-  const assignedStats = (isHR || isFinance) ? getAssignedStats() : stats;
+  // Card counts come from GET /api/tickets/stats (same visibility rules as the list)
+  const stats = serverStats;
+  // HR and Finance cards only count tickets assigned to them
+  const assignedStats = (isHR || isFinance) ? serverStats.assigned : stats;
 
   const getCategoryDisplay = (ticket) => {
     if (ticket.subItem) return ticket.subItem;
@@ -446,11 +422,7 @@ const TicketDashboard = () => {
               <div>
                 <p className="text-[10px] sm:text-sm text-gray-600">HR</p>
                 <p className="text-lg sm:text-2xl font-bold text-pink-600">
-                  {tickets.filter(t => 
-                    (t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId) &&
-                    (['HR', 'Admin', 'Payroll'].includes(t.category) ||
-                    ['Employee Documents', 'Attendance & Leave', 'Employee Management'].includes(t.subcategory))
-                  ).length}
+                  {serverStats.hrAssigned}
                 </p>
               </div>
               <Users size={isMobile ? 20 : 32} className="text-pink-500" />
@@ -465,11 +437,7 @@ const TicketDashboard = () => {
               <div>
                 <p className="text-[10px] sm:text-sm text-gray-600">Finance</p>
                 <p className="text-lg sm:text-2xl font-bold text-green-600">
-                  {tickets.filter(t => 
-                    (t.assignedTo?._id === currentUserId || t.assignedTo === currentUserId) &&
-                    (['Finance', 'Payroll', 'Admin'].includes(t.category) ||
-                    ['Reimbursement', 'Payment Requests', 'Invoice Management', 'Salary', 'Tax & Deductions'].includes(t.subcategory))
-                  ).length}
+                  {serverStats.financeAssigned}
                 </p>
               </div>
               <Clock size={isMobile ? 20 : 32} className="text-green-500" />
@@ -522,7 +490,7 @@ const TicketDashboard = () => {
                 "{searchQuery}"
               </span>
               <span className="text-gray-400 text-[10px] sm:text-xs">
-                ({filteredTickets.length} ticket{filteredTickets.length !== 1 ? 's' : ''})
+                ({total} ticket{total !== 1 ? 's' : ''})
               </span>
             </div>
           )}
@@ -611,7 +579,7 @@ const TicketDashboard = () => {
       </div>
 
       {/* Tickets Table - Responsive */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      <div className={`bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden transition-opacity ${listLoading ? 'opacity-60' : ''}`}>
         <div className="overflow-x-auto">
           {isMobile ? (
             // Mobile Card View
@@ -848,6 +816,32 @@ const TicketDashboard = () => {
             </table>
           )}
         </div>
+
+        {/* Pagination */}
+        {total > 0 && (
+          <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-t border-gray-200 bg-gray-50 text-xs sm:text-sm text-gray-600">
+            <span>
+              Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1 || listLoading}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={14} /> <span className="hidden sm:inline">Previous</span>
+              </button>
+              <span className="font-medium text-gray-700">{page} / {pageCount}</span>
+              <button
+                onClick={() => setPage(p => Math.min(pageCount, p + 1))}
+                disabled={page >= pageCount || listLoading}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white hover:bg-gray-100 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <span className="hidden sm:inline">Next</span> <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

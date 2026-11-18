@@ -51,9 +51,12 @@ const NotificationBell = () => {
     
     fetchNotificationCount();
     
-    const interval = setInterval(fetchNotificationCount, 30000);
+    // Poll only while the tab is visible; refresh as soon as it becomes visible again
+    const interval = setInterval(() => { if (!document.hidden) fetchNotificationCount(); }, 30000);
+    const onVisible = () => { if (!document.hidden) fetchNotificationCount(); };
+    document.addEventListener('visibilitychange', onVisible);
     
-    return () => clearInterval(interval);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   // Meeting / call / task reminders arrive through SalesNotifier and are already stored
@@ -174,16 +177,9 @@ const NotificationBell = () => {
       setNotificationCount(res.data.unreadCount || 0);
       setOpenTicketCount(res.data.openTicketCount || 0);
       
-      // Fetch unviewed announcements
-      try {
-        const annRes = await axios.get(`${API_BASE_URL}/api/announcements/unviewed/count`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        setAnnouncementCount(annRes.data.count || 0);
-      } catch (annError) {
-        console.error('Error fetching announcement count:', annError);
-        setAnnouncementCount(0);
-      }
+      // Unviewed announcements come back in the same response (same rule as
+      // /api/announcements/unviewed/count), so no second request
+      setAnnouncementCount(res.data.announcementCount || 0);
       
     } catch (error) {
       console.error('Error fetching notification count:', error);

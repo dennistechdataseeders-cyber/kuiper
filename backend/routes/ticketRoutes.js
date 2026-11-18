@@ -384,6 +384,9 @@ router.post('/', ticketController.createTicket);
 // Get all tickets (with filters)
 router.get('/', ticketController.getTickets);
 
+// Ticket counts (dashboard cards, sidebar badge, PM dashboard) - must stay above '/:id'
+router.get('/stats', ticketController.getTicketStats);
+
 // Get single ticket by ID
 router.get('/:id', ticketController.getTicketById);
 

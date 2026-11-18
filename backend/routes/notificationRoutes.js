@@ -6,6 +6,7 @@ const { protect } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Ticket = require('../models/Ticket');
 const Announcement = require('../models/Announcement');
+const { visibleAnnouncementFilter } = require('../utils/accessBlock');
 const SalesNotificationService = require('../services/salesNotificationService');
 
 // ============================================
@@ -14,13 +15,17 @@ const SalesNotificationService = require('../services/salesNotificationService')
 
 router.get('/count', protect, async (req, res) => {
   try {
-    const user = await User.findById(req.user._id);
+    // Only the two fields this count needs (not the whole user document)
+    const user = await User.findById(req.user._id).select('unreadNotifications viewedOpenTickets').lean();
     
     // Count unread notifications (excluding announcements from this count)
     const unreadCount = user.unreadNotifications?.filter(n => !n.read && n.type !== 'new_announcement').length || 0;
     
     // Count unread announcements separately
+    // Same rule as GET /api/announcements/unviewed/count (hides blocked users' automated posts),
+    // so the bell can use this number instead of making a second request
     const unviewedAnnouncements = await Announcement.countDocuments({
+      ...(await visibleAnnouncementFilter(User)),
       viewedBy: { $ne: req.user._id }
     });
     
@@ -56,8 +61,8 @@ router.get('/count', protect, async (req, res) => {
       };
     }
     
-    const openTickets = await Ticket.find(ticketQuery).select('_id');
-    openTicketCount = openTickets.filter(t => !viewedTicketIds.has(t._id.toString())).length;
+    // Count in Mongo instead of loading every open ticket id
+    openTicketCount = await Ticket.countDocuments({ ...ticketQuery, _id: { $nin: [...viewedTicketIds] } });
     
     res.json({
       success: true,

@@ -22,17 +22,19 @@ const rows = fs.readFileSync(CSV, 'utf8').split('\n').filter((l) => l && !l.star
   .map((l) => l.match(/("([^"]|"")*"|[^,]*)(,|$)/g).map((c) => c.replace(/,$/, '').replace(/^"|"$/g, '').replace(/""/g, '"')));
 const cred = Object.fromEntries(rows.map((r) => [r[0], { email: r[2], password: r[3] }]));
 
-// page -> [role, [paths]]; ':ticket' is replaced by a ticket with many comments
+// page -> [role, [paths]]; ':ticket' is replaced by a ticket with many comments.
+// These are the calls the pages make AFTER the step-2 changes; perf/api-before.json holds the
+// numbers for the calls they made before (whole ticket list for the list, PM dashboard and sidebar).
 const PAGES = [
-  ['Ticket list (Admin)', 'Admin', ['/api/tickets']],
-  ['Ticket list (Developer)', 'Developer', ['/api/tickets']],
+  ['Ticket list (Admin)', 'Admin', ['/api/tickets?page=1&limit=25&status=all&type=all', '/api/tickets/stats']],
+  ['Ticket list (Developer)', 'Developer', ['/api/tickets?page=1&limit=25&status=all&type=all', '/api/tickets/stats']],
   ['Single ticket', 'Admin', ['/api/tickets/:ticket', '/api/tickets/:ticket/watchers', '/api/tickets/developers/list', '/api/tickets/users/watchers']],
   ['Admin dashboard', 'Admin', ['/api/admin/projects', '/api/admin/users', '/api/admin/analytics']],
-  ['PM dashboard', 'Project Manager', ['/api/admin/projects', '/api/tickets']],
+  ['PM dashboard', 'Project Manager', ['/api/admin/projects', '/api/tickets/stats?scope=myProjects']],
   ['HR dashboard', 'HR', ['/api/hr/dashboard/stats', '/api/leave-bucket/pending', '/api/hr/attendance/corrections', '/api/hr/employees', '/api/hr/leave/all', '/api/hr/employees/probation', '/api/leave-bucket/employees/buckets']],
   ['Worklog (Developer)', 'Developer', ['/api/dev/worklog', `/api/dev/worklog/history?date=${new Date(Date.now() - 86400e3).toISOString().slice(0, 10)}`, '/api/dev/ticket-worklog', '/api/dev/system-time-check']],
   ['Lead generation (Sales Manager)', 'Sales Manager', ['/api/lead-generation', '/api/admin/users', '/api/orgs']],
-  ['Sidebar + bell polls (Admin, every 30s)', 'Admin', ['/api/tickets', '/api/announcements/unviewed/count', '/api/notifications/count']],
+  ['Sidebar + bell polls (Admin, every 30s)', 'Admin', ['/api/tickets/stats', '/api/announcements/unviewed/count', '/api/notifications/count']],
 ];
 
 const median = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
