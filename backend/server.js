@@ -1,6 +1,7 @@
 // backend/server.js - UPDATED with leaveBucketRoutes + autoStopWorklogs + feedGitSync
 
 const express = require('express');
+const compression = require('compression');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
@@ -262,6 +263,10 @@ io.on('connection', (socket) => {
 /* =========================================================
    APPLICATION LEVEL MIDDLEWARES
 ========================================================= */
+
+// gzip/brotli-negotiated compression for API responses (JSON lists shrink ~10x).
+// Skips responses under 1 KB and anything a client asks not to compress.
+app.use(compression({ threshold: 1024 }));
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

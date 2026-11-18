@@ -129,7 +129,8 @@ router.get('/', authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES), async
       .populate('organizationId', 'companyName linkedin') 
       .populate('salesRepId', 'name')
       .populate('projectManagerId', 'name email')
-      .sort({ createdAt: -1 }); 
+      .sort({ createdAt: -1 })
+      .lean(); // read-only list
       
     res.json(leads);
   } catch (err) {

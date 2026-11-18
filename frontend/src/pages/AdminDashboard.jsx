@@ -35,9 +35,9 @@ const AdminDashboard = () => {
           },
         };
 
-        const [projRes, userRes, logRes] = await Promise.all([
-          axios.get(`${API_BASE_URL}/api/admin/projects`, headers),
-          axios.get(`${API_BASE_URL}/api/admin/users`, headers),
+        const [summaryRes, logRes] = await Promise.all([
+          // project / user counts only (not the full lists)
+          axios.get(`${API_BASE_URL}/api/admin/dashboard-summary`, headers),
           axios.get(
             `${API_BASE_URL}/api/admin/analytics?limit=5`,
             headers
@@ -45,8 +45,8 @@ const AdminDashboard = () => {
         ]);
 
         setStats({
-          projects: projRes.data.length,
-          users: userRes.data.length,
+          projects: summaryRes.data.projects,
+          users: summaryRes.data.users,
           recentLogs: logRes.data.logs || [],
           totalLogsCount: logRes.data.totalLogs || 0,
         });

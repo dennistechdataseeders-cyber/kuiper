@@ -29,7 +29,7 @@ const PAGES = [
   ['Ticket list (Admin)', 'Admin', ['/api/tickets?page=1&limit=25&status=all&type=all', '/api/tickets/stats']],
   ['Ticket list (Developer)', 'Developer', ['/api/tickets?page=1&limit=25&status=all&type=all', '/api/tickets/stats']],
   ['Single ticket', 'Admin', ['/api/tickets/:ticket', '/api/tickets/:ticket/watchers', '/api/tickets/developers/list', '/api/tickets/users/watchers']],
-  ['Admin dashboard', 'Admin', ['/api/admin/projects', '/api/admin/users', '/api/admin/analytics']],
+  ['Admin dashboard', 'Admin', ['/api/admin/dashboard-summary', '/api/admin/analytics?limit=5']],
   ['PM dashboard', 'Project Manager', ['/api/admin/projects', '/api/tickets/stats?scope=myProjects']],
   ['HR dashboard', 'HR', ['/api/hr/dashboard/stats', '/api/leave-bucket/pending', '/api/hr/attendance/corrections', '/api/hr/employees', '/api/hr/leave/all', '/api/hr/employees/probation', '/api/leave-bucket/employees/buckets']],
   ['Worklog (Developer)', 'Developer', ['/api/dev/worklog', `/api/dev/worklog/history?date=${new Date(Date.now() - 86400e3).toISOString().slice(0, 10)}`, '/api/dev/ticket-worklog', '/api/dev/system-time-check']],

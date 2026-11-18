@@ -67,19 +67,38 @@ router.get('/users', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Sales Manag
     const users = await User.find(filter)
       .select('-password')
       .populate('organizationId', 'companyName website')
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Prospect / lead counts for all listed users in two grouped queries (was 2 per user)
+    const ids = users.map((u) => u._id);
+    const countBy = (Model) => Model.aggregate([
+      { $match: { salesRepId: { $in: ids } } },
+      { $group: { _id: '$salesRepId', n: { $sum: 1 } } },
+    ]).then((rows) => new Map(rows.map((r) => [String(r._id), r.n])));
+    const [prospectCounts, leadCounts] = await Promise.all([countBy(Prospect), countBy(LeadGen)]);
     
     // Attach counts for Prospects and Leads to each user
-    const usersWithStats = await Promise.all(users.map(async (user) => {
-      const userObj = user.toObject();
-      userObj.prospectCount = await Prospect.countDocuments({ salesRepId: user._id });
-      userObj.leadCount = await LeadGen.countDocuments({ salesRepId: user._id });
-      return userObj;
+    const usersWithStats = users.map((user) => ({
+      ...user,
+      prospectCount: prospectCounts.get(String(user._id)) || 0,
+      leadCount: leadCounts.get(String(user._id)) || 0,
     }));
     
     res.json(usersWithStats);
   } catch (err) {
     console.error("Error in /users route:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /dashboard-summary - the two numbers the Admin dashboard shows (it used to download
+// every project with feeds and every user just to read .length)
+router.get('/dashboard-summary', authorize('Super Admin', 'Admin'), async (req, res) => {
+  try {
+    const [projects, users] = await Promise.all([Project.countDocuments({}), User.countDocuments({})]);
+    res.json({ projects, users });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -849,7 +868,8 @@ router.get('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Client',
           model: 'User'
         }
       })
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean(); // read-only list: plain objects are much cheaper than documents
       
     res.json(data);
   } catch (err) {
