@@ -65,3 +65,5 @@ backend/test_biometric.py
 *.temp
 *.bak
 *.backup
+# Seeded test-account credentials (seedTestUsers.js)
+backend/scripts/output/
