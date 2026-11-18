@@ -101,4 +101,8 @@ leaveApplicationSchema.virtual('daysCount').get(function() {
 leaveApplicationSchema.set('toJSON', { virtuals: true });
 leaveApplicationSchema.set('toObject', { virtuals: true });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+leaveApplicationSchema.index({ status: 1, appliedAt: -1 });
+leaveApplicationSchema.index({ appliedAt: -1 });
+
 module.exports = mongoose.model('LeaveApplication', leaveApplicationSchema);

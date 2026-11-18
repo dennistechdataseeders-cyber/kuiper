@@ -177,4 +177,8 @@ FeedSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
 });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+FeedSchema.index({ projectId: 1 });
+FeedSchema.index({ assignedDevelopers: 1 });
+
 module.exports = mongoose.model('Feed', FeedSchema);

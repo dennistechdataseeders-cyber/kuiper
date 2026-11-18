@@ -148,4 +148,11 @@ ProjectSchema.virtual('teamLeadDetails', {
   justOne: true
 });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+ProjectSchema.index({ projectManager: 1 });
+ProjectSchema.index({ projectCoordinators: 1 });
+ProjectSchema.index({ teamLead: 1 });
+ProjectSchema.index({ teamLeads: 1 });
+ProjectSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Project', ProjectSchema);

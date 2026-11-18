@@ -75,4 +75,10 @@ leadGenSchema.pre('save', async function (next) {
   }
 });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+leadGenSchema.index({ salesRepId: 1, createdAt: -1 });
+leadGenSchema.index({ projectManagerId: 1, createdAt: -1 });
+leadGenSchema.index({ status: 1 });
+leadGenSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('LeadGen', leadGenSchema);

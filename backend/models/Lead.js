@@ -68,4 +68,8 @@ const leadSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+leadSchema.index({ leadOwner: 1 });
+leadSchema.index({ createdAt: -1 });
+
 module.exports = mongoose.model('Lead', leadSchema); 

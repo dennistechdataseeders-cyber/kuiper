@@ -147,4 +147,14 @@ ticketSchema.pre('save', async function () {
   }
 });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+ticketSchema.index({ createdAt: -1 });
+ticketSchema.index({ createdBy: 1, createdAt: -1 });
+ticketSchema.index({ assignedTo: 1, createdAt: -1 });
+ticketSchema.index({ projectId: 1, createdAt: -1 });
+ticketSchema.index({ status: 1, createdAt: -1 });
+ticketSchema.index({ watchers: 1 });
+ticketSchema.index({ feedId: 1 });
+ticketSchema.index({ category: 1, subcategory: 1 });
+
 module.exports = mongoose.model('Ticket', ticketSchema);

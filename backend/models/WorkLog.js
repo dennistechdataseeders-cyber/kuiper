@@ -53,4 +53,8 @@ const workLogSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
+// Indexes for the list / dashboard queries (see backend/scripts/ensureIndexes.js)
+workLogSchema.index({ developerId: 1, date: 1 });
+workLogSchema.index({ feedId: 1, date: 1 });
+
 module.exports = mongoose.model('WorkLog', workLogSchema);
