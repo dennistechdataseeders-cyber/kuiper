@@ -240,6 +240,7 @@ const buildMenuGroups = (role) => {
         icon: <FolderKanban size={18} />,
         items: [
           { path: '/admin/projects', icon: <FolderKanban size={16} />, label: 'Projects' },
+          { path: '/admin/users', icon: <Users size={16} />, label: 'Users' },
           { path: '/admin/project-clients', icon: <Users size={16} />, label: 'Project Clients' },
           { path: '/pm/feeds', icon: <Logs size={16} />, label: 'Feed Management' },
           { path: '/pm/feed-status', icon: <Activity size={16} />, label: 'Feed Status' },
