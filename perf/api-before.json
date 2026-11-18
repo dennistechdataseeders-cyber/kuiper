@@ -1,0 +1,335 @@
+[
+  {
+    "page": "Ticket list (Admin)",
+    "call": "/api/tickets",
+    "status": 200,
+    "ms": 1837.9,
+    "kb": 11024.2,
+    "gzipKb": 754,
+    "items": 6009
+  },
+  {
+    "page": "Ticket list (Admin)",
+    "call": "TOTAL (1 calls)",
+    "status": "",
+    "ms": 1837.9,
+    "kb": 11024.2,
+    "gzipKb": 754,
+    "items": ""
+  },
+  {
+    "page": "Ticket list (Developer)",
+    "call": "/api/tickets",
+    "status": 200,
+    "ms": 184.2,
+    "kb": 931.9,
+    "gzipKb": 64.9,
+    "items": 501
+  },
+  {
+    "page": "Ticket list (Developer)",
+    "call": "TOTAL (1 calls)",
+    "status": "",
+    "ms": 184.2,
+    "kb": 931.9,
+    "gzipKb": 64.9,
+    "items": ""
+  },
+  {
+    "page": "Single ticket",
+    "call": "/api/tickets/:ticket",
+    "status": 200,
+    "ms": 8.7,
+    "kb": 2.5,
+    "gzipKb": 0.7,
+    "items": null
+  },
+  {
+    "page": "Single ticket",
+    "call": "/api/tickets/:ticket/watchers",
+    "status": 200,
+    "ms": 5.7,
+    "kb": 0.1,
+    "gzipKb": 0.1,
+    "items": null
+  },
+  {
+    "page": "Single ticket",
+    "call": "/api/tickets/developers/list",
+    "status": 200,
+    "ms": 4.3,
+    "kb": 4.4,
+    "gzipKb": 0.4,
+    "items": 31
+  },
+  {
+    "page": "Single ticket",
+    "call": "/api/tickets/users/watchers",
+    "status": 200,
+    "ms": 9.7,
+    "kb": 7.7,
+    "gzipKb": 1,
+    "items": null
+  },
+  {
+    "page": "Single ticket",
+    "call": "TOTAL (4 calls)",
+    "status": "",
+    "ms": 28.3,
+    "kb": 14.7,
+    "gzipKb": 2.2,
+    "items": ""
+  },
+  {
+    "page": "Admin dashboard",
+    "call": "/api/admin/projects",
+    "status": 200,
+    "ms": 244.8,
+    "kb": 891.8,
+    "gzipKb": 45,
+    "items": 154
+  },
+  {
+    "page": "Admin dashboard",
+    "call": "/api/admin/users",
+    "status": 200,
+    "ms": 72.4,
+    "kb": 73.8,
+    "gzipKb": 2.8,
+    "items": 66
+  },
+  {
+    "page": "Admin dashboard",
+    "call": "/api/admin/analytics",
+    "status": 200,
+    "ms": 4.9,
+    "kb": 2.2,
+    "gzipKb": 0.4,
+    "items": null
+  },
+  {
+    "page": "Admin dashboard",
+    "call": "TOTAL (3 calls)",
+    "status": "",
+    "ms": 322.1,
+    "kb": 967.8,
+    "gzipKb": 48.2,
+    "items": ""
+  },
+  {
+    "page": "PM dashboard",
+    "call": "/api/admin/projects",
+    "status": 200,
+    "ms": 38.8,
+    "kb": 92.4,
+    "gzipKb": 5.7,
+    "items": 16
+  },
+  {
+    "page": "PM dashboard",
+    "call": "/api/tickets",
+    "status": 200,
+    "ms": 240.4,
+    "kb": 1111.4,
+    "gzipKb": 76.8,
+    "items": 585
+  },
+  {
+    "page": "PM dashboard",
+    "call": "TOTAL (2 calls)",
+    "status": "",
+    "ms": 279.2,
+    "kb": 1203.8,
+    "gzipKb": 82.5,
+    "items": ""
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/hr/dashboard/stats",
+    "status": 200,
+    "ms": 12.2,
+    "kb": 9,
+    "gzipKb": 1.1,
+    "items": null
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/leave-bucket/pending",
+    "status": 200,
+    "ms": 62.9,
+    "kb": 283.3,
+    "gzipKb": 12.5,
+    "items": 366
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/hr/attendance/corrections",
+    "status": 200,
+    "ms": 4,
+    "kb": 0,
+    "gzipKb": 0,
+    "items": 0
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/hr/employees",
+    "status": 200,
+    "ms": 5.3,
+    "kb": 8.8,
+    "gzipKb": 1,
+    "items": null
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/hr/leave/all",
+    "status": 200,
+    "ms": 205.8,
+    "kb": 1181.1,
+    "gzipKb": 48.2,
+    "items": 1500
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/hr/employees/probation",
+    "status": 200,
+    "ms": 6.8,
+    "kb": 20.5,
+    "gzipKb": 1.4,
+    "items": 63
+  },
+  {
+    "page": "HR dashboard",
+    "call": "/api/leave-bucket/employees/buckets",
+    "status": 200,
+    "ms": 78.1,
+    "kb": 24.8,
+    "gzipKb": 1.4,
+    "items": 62
+  },
+  {
+    "page": "HR dashboard",
+    "call": "TOTAL (7 calls)",
+    "status": "",
+    "ms": 375.1,
+    "kb": 1527.5,
+    "gzipKb": 65.6,
+    "items": ""
+  },
+  {
+    "page": "Worklog (Developer)",
+    "call": "/api/dev/worklog",
+    "status": 200,
+    "ms": 38.5,
+    "kb": 58.6,
+    "gzipKb": 4.1,
+    "items": 48
+  },
+  {
+    "page": "Worklog (Developer)",
+    "call": "/api/dev/worklog/history?date=2026-11-17",
+    "status": 200,
+    "ms": 6.4,
+    "kb": 0.1,
+    "gzipKb": 0.1,
+    "items": null
+  },
+  {
+    "page": "Worklog (Developer)",
+    "call": "/api/dev/ticket-worklog",
+    "status": 200,
+    "ms": 42.5,
+    "kb": 56.9,
+    "gzipKb": 4.1,
+    "items": 88
+  },
+  {
+    "page": "Worklog (Developer)",
+    "call": "/api/dev/system-time-check",
+    "status": 200,
+    "ms": 3,
+    "kb": 0.1,
+    "gzipKb": 0.1,
+    "items": null
+  },
+  {
+    "page": "Worklog (Developer)",
+    "call": "TOTAL (4 calls)",
+    "status": "",
+    "ms": 90.5,
+    "kb": 115.8,
+    "gzipKb": 8.5,
+    "items": ""
+  },
+  {
+    "page": "Lead generation (Sales Manager)",
+    "call": "/api/lead-generation",
+    "status": 200,
+    "ms": 177,
+    "kb": 1140.6,
+    "gzipKb": 50.6,
+    "items": 1506
+  },
+  {
+    "page": "Lead generation (Sales Manager)",
+    "call": "/api/admin/users",
+    "status": 200,
+    "ms": 12.8,
+    "kb": 9.9,
+    "gzipKb": 0.8,
+    "items": 9
+  },
+  {
+    "page": "Lead generation (Sales Manager)",
+    "call": "/api/orgs",
+    "status": 200,
+    "ms": 3.8,
+    "kb": 0.4,
+    "gzipKb": 0.3,
+    "items": 1
+  },
+  {
+    "page": "Lead generation (Sales Manager)",
+    "call": "TOTAL (3 calls)",
+    "status": "",
+    "ms": 193.6,
+    "kb": 1150.9,
+    "gzipKb": 51.7,
+    "items": ""
+  },
+  {
+    "page": "Sidebar + bell polls (Admin, every 30s)",
+    "call": "/api/tickets",
+    "status": 200,
+    "ms": 1886.9,
+    "kb": 11024.2,
+    "gzipKb": 754,
+    "items": 6009
+  },
+  {
+    "page": "Sidebar + bell polls (Admin, every 30s)",
+    "call": "/api/announcements/unviewed/count",
+    "status": 200,
+    "ms": 5.6,
+    "kb": 0,
+    "gzipKb": 0,
+    "items": null
+  },
+  {
+    "page": "Sidebar + bell polls (Admin, every 30s)",
+    "call": "/api/notifications/count",
+    "status": 200,
+    "ms": 83.7,
+    "kb": 0.1,
+    "gzipKb": 0.1,
+    "items": null
+  },
+  {
+    "page": "Sidebar + bell polls (Admin, every 30s)",
+    "call": "TOTAL (3 calls)",
+    "status": "",
+    "ms": 1976.1,
+    "kb": 11024.4,
+    "gzipKb": 754.1,
+    "items": ""
+  }
+]

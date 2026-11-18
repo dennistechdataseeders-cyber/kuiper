@@ -67,3 +67,7 @@ backend/test_biometric.py
 *.backup
 # Seeded test-account credentials (seedTestUsers.js)
 backend/scripts/output/
+
+# Bundle analysis output (ANALYZE=1 npm run build)
+frontend/bundle-stats.html
+frontend/bundle-stats.json

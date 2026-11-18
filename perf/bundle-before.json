@@ -1,0 +1,92 @@
+{
+  "initial": {
+    "jsFiles": 23,
+    "cssFiles": 1,
+    "requests": 24,
+    "jsRaw": 3587160,
+    "jsGzip": 927823,
+    "jsBr": 722699,
+    "cssRaw": 165766,
+    "cssGzip": 22092
+  },
+  "totalJsChunks": 26,
+  "totalJsRaw": 4521987,
+  "top10": [
+    {
+      "file": "index-Bvm2MJYK.js",
+      "raw": 1591484,
+      "gzip": 324617,
+      "initial": true
+    },
+    {
+      "file": "exceljs-D-aILovP.js",
+      "raw": 929917,
+      "gzip": 254125,
+      "initial": false
+    },
+    {
+      "file": "@react-three-bzZd9nuf.js",
+      "raw": 907976,
+      "gzip": 239350,
+      "initial": true
+    },
+    {
+      "file": "xlsx-C9Pe4rVO.js",
+      "raw": 331638,
+      "gzip": 111674,
+      "initial": true
+    },
+    {
+      "file": "react-dom-DYL5jR6u.js",
+      "raw": 178303,
+      "gzip": 55206,
+      "initial": true
+    },
+    {
+      "file": "chart.js-VjdYavUs.js",
+      "raw": 162323,
+      "gzip": 54318,
+      "initial": true
+    },
+    {
+      "file": "framer-motion-CB_H-nG4.js",
+      "raw": 124428,
+      "gzip": 40164,
+      "initial": true
+    },
+    {
+      "file": "react-select-DeeOTli2.js",
+      "raw": 59699,
+      "gzip": 20089,
+      "initial": true
+    },
+    {
+      "file": "lucide-react-IAc-Qn0O.js",
+      "raw": 44159,
+      "gzip": 13376,
+      "initial": true
+    },
+    {
+      "file": "react-router-D271TQ2U.js",
+      "raw": 42219,
+      "gzip": 14807,
+      "initial": true
+    }
+  ],
+  "mediaFromInitialChunks": [
+    {
+      "file": "assets/Company_Logo_mp4-CmJdne5J.mp4",
+      "raw": 917080
+    }
+  ],
+  "publicImages": [
+    {
+      "file": "images/login_img.png",
+      "raw": 1332361
+    },
+    {
+      "file": "images/tab_logo.png",
+      "raw": 1210869
+    }
+  ]
+}

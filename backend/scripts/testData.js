@@ -14,6 +14,10 @@ const Ticket = require('../models/Ticket');
 const LeadGen = require('../models/LeadGen');
 const Lead = require('../models/Lead');
 const Announcement = require('../models/Announcement');
+const WorkLog = require('../models/WorkLog');
+const TicketWorkLog = require('../models/TicketWorkLog');
+const LeaveApplication = require('../models/LeaveApplication');
+const EmployeePunchLog = require('../models/EmployeePunchLog');
 
 const DAY = 24 * 60 * 60 * 1000;
 const daysAgo = (n) => new Date(Date.now() - n * DAY);
@@ -36,6 +40,11 @@ async function removeTestData(testUserIds) {
     feasibilityLeads: (await LeadGen.deleteMany({ salesRepId: ids })).deletedCount,
     crmLeads: (await Lead.deleteMany({ createdBy: ids })).deletedCount,
     announcements: (await Announcement.deleteMany({ createdBy: ids })).deletedCount,
+    // written by scripts/seedBulkData.js
+    worklogs: (await WorkLog.deleteMany({ developerId: ids })).deletedCount,
+    ticketWorklogs: (await TicketWorkLog.deleteMany({ developerId: ids })).deletedCount,
+    leaves: (await LeaveApplication.deleteMany({ employeeId: ids })).deletedCount,
+    punchLogs: (await EmployeePunchLog.deleteMany({ employeeId: ids })).deletedCount,
   };
   return counts;
 }
