@@ -444,10 +444,10 @@ function AppContent() {
                         SALES
                         ============================================ */}
                     <Route path="/sales" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><SalesDashboard /></ProtectedRoute>} />
-                    <Route path="/sales/leads" element={<Leads />} />
+                    <Route path="/sales/leads" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><Leads /></ProtectedRoute>} />
                     <Route path="/sales/lead_generation" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><LeadGeneration /></ProtectedRoute>} />
                     <Route path="/sales/accounts" element={<Accounts />} />
-                    <Route path="/sales/deals" element={<Deals />} />   
+                    <Route path="/sales/deals" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><Deals /></ProtectedRoute>} />   
                     <Route path="/sales/accounts/new" element={<CreateAccount />} />
                     <Route path="/sales/contacts" element={<Contacts />} />
                     <Route path="/sales/accounts/:id" element={<ProtectedRoute allowedRoles={['Super Admin', 'Sales', 'Admin', 'Sales Manager']}><AccountDetail /></ProtectedRoute>} />

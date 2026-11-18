@@ -14,6 +14,9 @@ const {
 } = require('../services/taskAssignmentNotifier');
 
 router.use(protect);
+// Tasks / meetings / calls: Sales roles plus PM roles (who can already create and update
+// activities and get activity notifications). Super Admin passes every authorize check.
+router.use(authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES));
 
 // Roles that may hand tasks to other people and see the whole team's activity.
 const MANAGER_ROLES = ['Sales Manager', 'Admin', 'Super Admin'];

@@ -10,6 +10,9 @@ const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
 
 router.use(protect);
+// Deals are Sales data: only the roles that have the Sales menu may read or change them
+// (Super Admin passes every authorize check).
+router.use(authorize('Admin', 'Sales', 'Sales Manager'));
 
 const POC_DEPARTMENTS = ['CEO', 'CTO', 'Sales', 'Marketing', 'Support', 'Developer', 'Other'];
 const escapeRegex = (s = '') => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
