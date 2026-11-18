@@ -1,6 +1,7 @@
 // backend/routes/workReportRoutes.js
 
 const express = require('express');
+const { PM_ROLES, isPMRole } = require('../utils/roles');
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -437,7 +438,7 @@ async function buildDeveloperReport(developer, startDate, endDate) {
 router.get(
   '/developers',
   protect,
-  authorize('Super Admin', 'Admin', 'Project Manager'),
+  authorize('Super Admin', 'Admin', ...PM_ROLES),
   async (req, res) => {
     try {
       let developerIds = null;
@@ -478,7 +479,7 @@ router.get(
 router.get(
   '/',
   protect,
-  authorize('Super Admin', 'Admin', 'Project Manager'),
+  authorize('Super Admin', 'Admin', ...PM_ROLES),
   async (req, res) => {
     try {
       const { developerId, startDate, endDate } = req.query;
@@ -548,7 +549,7 @@ router.get(
       // ============================================
       // MODE: SINGLE DEVELOPER
       // ============================================
-      if (req.user.role === 'Project Manager') {
+      if (isPMRole(req.user.role)) {
         const canView = await pmCanViewDeveloper(req.user._id, developerId);
         if (!canView) {
           return res.status(403).json({ error: 'Not authorized to view this developer' });

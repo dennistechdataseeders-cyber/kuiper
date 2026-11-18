@@ -1,4 +1,5 @@
 const express = require('express');
+const { PM_ROLES, isPMRole } = require('../utils/roles');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto'); 
@@ -44,7 +45,7 @@ function hrCannotTouchPrivilegedRoles(req) {
 // ============================================
 
 // GET /users - Fetch all users
-router.get('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager', 'Sales', 'Team Lead', 'HR', 'Finance', 'Developer'), async (req, res) => {
+router.get('/users', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Sales Manager', 'Sales', 'Team Lead', 'HR', 'Finance', 'Developer'), async (req, res) => {
   try {
     let filter = {};
     
@@ -84,7 +85,7 @@ router.get('/users', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales
 // ============================================
 // GET USERS BY ROLE - FOR TICKET ASSIGNMENT
 // ============================================
-router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'Project Manager', 'Team Lead', 'HR', 'Finance','Developer', 'Sales', 'Sales Manager'), async (req, res) => {
+router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', ...PM_ROLES, 'Team Lead', 'HR', 'Finance','Developer', 'Sales', 'Sales Manager'), async (req, res) => {
   try {
     const { role } = req.params;
 
@@ -93,13 +94,13 @@ router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'P
     }
     
     // Validate role
-    const validRoles = ['Admin', 'HR', 'Finance', 'Sales', 'Project Manager', 'Developer', 'Team Lead', 'IT', 'Client'];
+    const validRoles = ['Admin', 'HR', 'Finance', 'Sales', ...PM_ROLES, 'Developer', 'Team Lead', 'IT', 'Client'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: 'Invalid role specified' });
     }
     
-    // Find users with the specified role
-    const users = await User.find({ role: role, isActive: { $ne: false } })
+    // Find users with the specified role (asking for a PM role returns every PM-equivalent role)
+    const users = await User.find({ role: isPMRole(role) ? { $in: PM_ROLES } : role, isActive: { $ne: false } })
       .select('name email _id role githubUsername githubLinked')
       .sort({ name: 1 });
     
@@ -113,7 +114,7 @@ router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', 'P
 });
 
 // POST /change-password - Change user password
-router.post('/change-password', authorize('Super Admin', 'Admin', 'Sales Manager', 'Sales', 'Project Manager', 'Developer'), async (req, res) => {
+router.post('/change-password', authorize('Super Admin', 'Admin', 'Sales Manager', 'Sales', ...PM_ROLES, 'Developer'), async (req, res) => {
   try {
     const { currentPassword, newPassword } = req.body;
     const user = await User.findById(req.user._id);
@@ -139,7 +140,7 @@ router.post('/change-password', authorize('Super Admin', 'Admin', 'Sales Manager
 // ✅ UPDATED: POST /users - Create new user WITH PROBATION
 // ✅ HR added — HR can create users, but cannot create Admin / Super Admin
 // ============================================
-router.post('/users', authorize('Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'), async (req, res) => {
+router.post('/users', authorize('Super Admin', 'Admin', 'HR', ...PM_ROLES, 'Sales Manager'), async (req, res) => {
   try {
     const { 
       name, 
@@ -181,7 +182,7 @@ router.post('/users', authorize('Super Admin', 'Admin', 'HR', 'Project Manager',
     // Authorization Logic for Role Creation
     if (req.user.role === 'Sales Manager') {
       finalRole = 'Sales'; 
-    } else if (req.user.role === 'Project Manager') {
+    } else if (isPMRole(req.user.role)) {
       // PM can create: Client OR Team Lead
       if (role === 'Team Lead') {
         finalRole = 'Team Lead';
@@ -571,7 +572,7 @@ router.delete('/users/:id', authorize('Super Admin', 'Admin', 'HR'), async (req,
 // ✅ UPDATED: POST /users/:userId/link-github - Link GitHub account for a developer
 // ✅ HR added
 // ============================================
-router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'HR', 'Project Manager'), async (req, res) => {
+router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'HR', ...PM_ROLES), async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -726,7 +727,7 @@ router.post('/users/:userId/link-github', authorize('Super Admin', 'Admin', 'HR'
 // AUDIT & ANALYTICS ROUTES
 // ============================================
 
-router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
+router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', ...PM_ROLES, 'Sales Manager', 'HR'), async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
 
@@ -766,7 +767,7 @@ router.get('/analytics', authorize('Super Admin', 'Admin', 'Sales', 'Project Man
 // ============================================
 
 // GET /projects - General projects route
-router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Client', 'Team Lead', 'HR', 'Developer'), async (req, res) => {
+router.get('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Client', 'Team Lead', 'HR', 'Developer'), async (req, res) => {
   try {
     let query = {};
     
@@ -852,7 +853,7 @@ router.get('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Cl
 });
 
 // POST /projects - Create project with GitHub integration
-router.post('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales'), async (req, res) => {
+router.post('/projects', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Sales'), async (req, res) => {
   try {
     const { name, clients, organizations, description, country, industry, projectManager, assignedDevelopers } = req.body;
 
@@ -875,7 +876,7 @@ router.post('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'S
       organizations: organizations || [],
       description,
       adminId: req.user._id,
-      projectManager: projectManager || (req.user.role === 'Project Manager' ? req.user._id : null),
+      projectManager: projectManager || (isPMRole(req.user.role) ? req.user._id : null),
       country,
       industry,
       projectCustomId: fullFormattedName
@@ -959,7 +960,7 @@ router.post('/projects', authorize('Super Admin', 'Admin', 'Project Manager', 'S
 });
 
 // PATCH /projects/:id/status - Update project status
-router.patch('/projects/:id/status', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.patch('/projects/:id/status', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const { projectStatus } = req.body;
     const project = await Project.findById(req.params.id).populate('feeds');
@@ -1002,7 +1003,7 @@ router.patch('/projects/:id/status', authorize('Super Admin', 'Admin', 'Project 
 });
 
 // PUT /projects/:id - Update project
-router.put('/projects/:id', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.put('/projects/:id', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const updatedProject = await Project.findByIdAndUpdate(req.params.id, req.body, { new: true });
     res.json(updatedProject);
@@ -1012,7 +1013,7 @@ router.put('/projects/:id', authorize('Super Admin', 'Admin', 'Project Manager')
 });
 
 // GET /organizations - Fetch organizations
-router.get('/organizations', authorize('Super Admin', 'Admin', 'Project Manager', 'Sales Manager', 'HR'), async (req, res) => {
+router.get('/organizations', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Sales Manager', 'HR'), async (req, res) => {
   try {
     const organizations = await Organization.find({})
       .select('companyName website address pointsOfContact')
@@ -1029,7 +1030,7 @@ router.get('/organizations', authorize('Super Admin', 'Admin', 'Project Manager'
 // GIT INTEGRATION ROUTES
 // ============================================
 
-router.get('/projects/:id/invite-link', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
+router.get('/projects/:id/invite-link', authorize('Super Admin', ...PM_ROLES, 'Admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     
@@ -1058,7 +1059,7 @@ router.get('/projects/:id/invite-link', authorize('Super Admin', 'Project Manage
   }
 });
 
-router.post('/projects/:id/add-collaborator', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
+router.post('/projects/:id/add-collaborator', authorize('Super Admin', ...PM_ROLES, 'Admin'), async (req, res) => {
   try {
     const { email, permission = 'push' } = req.body;
     const project = await Project.findById(req.params.id);
@@ -1092,7 +1093,7 @@ router.post('/projects/:id/add-collaborator', authorize('Super Admin', 'Project 
   }
 });
 
-router.get('/projects/:id/collaborators', authorize('Super Admin', 'Project Manager', 'Admin'), async (req, res) => {
+router.get('/projects/:id/collaborators', authorize('Super Admin', ...PM_ROLES, 'Admin'), async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     
@@ -1113,7 +1114,7 @@ router.get('/projects/:id/collaborators', authorize('Super Admin', 'Project Mana
   }
 });
 
-router.get('/projects/:id/repo-contents', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.get('/projects/:id/repo-contents', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const project = await Project.findById(req.params.id);
     
@@ -1133,7 +1134,7 @@ router.get('/projects/:id/repo-contents', authorize('Super Admin', 'Admin', 'Pro
 // FEED MANAGEMENT ROUTES
 // ============================================
 
-router.post('/feeds', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.post('/feeds', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const {
       name,
@@ -1306,7 +1307,7 @@ router.post('/feeds', authorize('Super Admin', 'Admin', 'Project Manager'), asyn
   }
 });
 
-router.put('/feeds/:id', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.put('/feeds/:id', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const {
       name,
@@ -1339,7 +1340,7 @@ router.put('/feeds/:id', authorize('Super Admin', 'Admin', 'Project Manager'), a
   }
 });
 
-router.delete('/feeds/:id', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.delete('/feeds/:id', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const feed = await Feed.findById(req.params.id);
     if (!feed) return res.status(404).json({ error: "Feed not found" });
@@ -1353,7 +1354,7 @@ router.delete('/feeds/:id', authorize('Super Admin', 'Admin', 'Project Manager')
   }
 });
 
-router.patch('/feeds/:id/status', authorize('Super Admin', 'Admin', 'Project Manager','Team Lead'), async (req, res) => {
+router.patch('/feeds/:id/status', authorize('Super Admin', 'Admin', ...PM_ROLES,'Team Lead'), async (req, res) => {
   try {
     const { feedStatus } = req.body;
     const feed = await Feed.findById(req.params.id);
@@ -1376,7 +1377,7 @@ router.patch('/feeds/:id/status', authorize('Super Admin', 'Admin', 'Project Man
 // TASK MANAGEMENT ROUTES
 // ============================================
 
-router.post('/tasks/create', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.post('/tasks/create', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const newTask = new Task({
       projectId: req.body.projectId,
@@ -1396,7 +1397,7 @@ router.post('/tasks/create', authorize('Super Admin', 'Admin', 'Project Manager'
 // HELPER ROUTES
 // ============================================
 
-router.get('/users/developers', authorize('Super Admin','HR', 'Admin', 'Project Manager', 'Team Lead'), async (req, res) => {
+router.get('/users/developers', authorize('Super Admin','HR', 'Admin', ...PM_ROLES, 'Team Lead'), async (req, res) => {
   try {
     const developers = await User.find({ role: 'Developer' })
       .select('name email _id githubUsername githubLinked');
@@ -1406,10 +1407,10 @@ router.get('/users/developers', authorize('Super Admin','HR', 'Admin', 'Project 
   }
 });
 
-router.get('/users/project-managers', authorize('Super Admin','HR', 'Admin', 'Project Manager'), async (req, res) => {
+router.get('/users/project-managers', authorize('Super Admin','HR', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
-    const projectManagers = await User.find({ role: 'Project Manager' })
-      .select('name email')
+    const projectManagers = await User.find({ role: { $in: PM_ROLES } })
+      .select('name email role')
       .sort({ name: 1 });
     res.json(projectManagers);
   } catch (err) {
@@ -1417,7 +1418,7 @@ router.get('/users/project-managers', authorize('Super Admin','HR', 'Admin', 'Pr
   }
 });
 
-router.get('/project-status-options', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.get('/project-status-options', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   const statuses = [
     'New', 'Once off','Automation', 'Ad hoc', 'BAU Initiated', 'BAU Not Initiated',
     'ON hold[Sales]', 'ON hold[Technical]', 'ON hold[Client]', 'Closed'
@@ -1425,7 +1426,7 @@ router.get('/project-status-options', authorize('Super Admin', 'Admin', 'Project
   res.json(statuses);
 });
 
-router.get('/feed-status-options', authorize('Super Admin', 'Admin', 'Project Manager','Team Lead'), async (req, res) => {
+router.get('/feed-status-options', authorize('Super Admin', 'Admin', ...PM_ROLES,'Team Lead'), async (req, res) => {
   const statuses = [
     'New',  'In process','Awaiting Client Approval','Once off[In progress]', 'Once off[Delivered]',
     'Ad hoc In-progress', 'Ad hoc delivered','BAU Initiated',
@@ -1482,7 +1483,7 @@ router.get('/client/projects', authorize('Super Admin', 'Client'), async (req, r
 // ============================================
 
 // POST /projects/:projectId/assign-teamlead - Assign Team Lead to project
-router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Admin', 'Project Manager'), async (req, res) => {
+router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const { teamLeadId } = req.body;
     const project = await Project.findById(req.params.projectId);
@@ -1523,7 +1524,7 @@ router.post('/projects/:projectId/assign-teamlead', authorize('Super Admin', 'Ad
 });
 
 // GET /users/teamleads - Get all Team Leads
-router.get('/users/teamleads', authorize('Super Admin', 'Admin', 'Project Manager', 'HR'), async (req, res) => {
+router.get('/users/teamleads', authorize('Super Admin', 'Admin', ...PM_ROLES, 'HR'), async (req, res) => {
   try {
     const teamLeads = await User.find({ role: 'Team Lead' })
       .select('name email _id');
@@ -1653,7 +1654,7 @@ router.delete('/remove-profile-image', protect, async (req, res) => {
 // ============================================
 // BULK IMPORT FEEDS VIA EXCEL
 // ============================================
-router.post('/feeds/bulk', authorize('Super Admin', 'Admin', 'Project Manager','Team Lead'), async (req, res) => {
+router.post('/feeds/bulk', authorize('Super Admin', 'Admin', ...PM_ROLES,'Team Lead'), async (req, res) => {
   try {
     const { projectId, feeds } = req.body;
     

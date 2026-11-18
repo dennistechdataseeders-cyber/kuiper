@@ -12,6 +12,7 @@ import toast from 'react-hot-toast';
 import { Eye, EyeOff } from 'lucide-react';
 import API_BASE_URL from '../config';
 import { motion, AnimatePresence } from 'framer-motion';
+import { isPMRole } from '../utils/roles';
 
 // ============================================================
 // ✅ FIX: Lazy-load the heavy 3D background so it never blocks
@@ -172,7 +173,7 @@ const Login = () => {
           ? '/sales'
           : role === 'sales manager'
           ? '/sales-manager'
-          : role === 'project manager'
+          : isPMRole(user.role)
           ? '/admin/projects'
           : role === 'team lead'
           ? '/teamlead'

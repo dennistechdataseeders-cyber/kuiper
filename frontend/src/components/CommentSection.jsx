@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { isPMRole } from '../utils/roles';
 
 const CommentSection = ({ 
   type, // 'project' or 'feed' or 'ticket'
@@ -459,7 +460,7 @@ const CommentSection = ({
 
   const canDeleteComment = (comment) => {
     if (userRole === 'Admin') return true;
-    if (userRole === 'Project Manager') return true;
+    if (isPMRole(userRole)) return true;
     if (userRole === 'Team Lead') return true;
     return comment.userId?._id === userId || comment.userId === userId;
   };

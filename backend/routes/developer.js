@@ -3,6 +3,7 @@
 // v3: adds GET /api/dev/dashboard/overview → returns current (today) + upcoming (next 7 days) feeds
 
 const express = require('express');
+const { isPMRole } = require('../utils/roles');
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -936,7 +937,7 @@ router.post('/ticket-worklog/start/:ticketId', protect, async (req, res) => {
       ticket.assignedTo?.toString() === userId.toString() ||
       ticket.createdBy?.toString() === userId.toString() ||
       userRole === 'Admin' ||
-      userRole === 'Project Manager' ||
+      isPMRole(userRole) ||
       userRole === 'Team Lead'
     );
 

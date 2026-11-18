@@ -1,6 +1,7 @@
 // backend/controllers/ticketController.js - COMPLETE UPDATED FILE
 
 const mongoose = require('mongoose');
+const { PM_ROLES, isPMRole } = require('../utils/roles');
 const Ticket = require('../models/Ticket');
 const Project = require('../models/Project');
 const Feed = require('../models/Feed');
@@ -725,6 +726,7 @@ function getCommentEmailTemplate(recipientName, commentAuthor, commentText, tick
   const roleColor = {
     'POC': '#7c3aed',
     'Project Manager': '#2563eb',
+    'Project Coordinator': '#2563eb',
     'Team Lead': '#8b5cf6',
     'Developer': '#059669',
     'Creator': '#1e293b',
@@ -833,7 +835,7 @@ function getCommentEmailTemplate(recipientName, commentAuthor, commentText, tick
 }
 
 function isInternalTicket(creatorRole) {
-  return ['Admin', 'Project Manager', 'Developer', 'Team Lead'].includes(creatorRole);
+  return ['Admin', ...PM_ROLES, 'Developer', 'Team Lead'].includes(creatorRole);
 }
 
 // ============================================
@@ -914,12 +916,12 @@ exports.createTicket = async (req, res) => {
     if (category) {
       const catDoc = await TicketCategory.findOne({ name: category }).lean();
       const { role: requiredRole, viaOverride } = resolveAssignRole(catDoc, subcategory, userRole);
-      if (viaOverride && requiredRole === 'Project Manager') {
+      if (viaOverride && isPMRole(requiredRole)) {
         if (!finalAssignedTo) {
           return res.status(400).json({ error: 'Please assign a Project Manager for this ticket.' });
         }
         const pmUser = await User.findById(finalAssignedTo).select('role isActive');
-        if (!pmUser || pmUser.role !== 'Project Manager') {
+        if (!pmUser || !isPMRole(pmUser.role)) {
           return res.status(400).json({ error: 'Selected assignee must be a Project Manager.' });
         }
         finalAssignedPM = pmUser._id;   // assignedTo is also the PM, so the ticket lands in their bucket
@@ -1267,7 +1269,7 @@ exports.removeWatcher = async (req, res) => {
     const me = req.user.id.toString();
     const isCreator = ticket.createdBy?.toString() === me;
     const canRemove =
-      ['Admin', 'Super Admin', 'Project Manager', 'Team Lead'].includes(req.user.role) ||
+      ['Admin', 'Super Admin', ...PM_ROLES, 'Team Lead'].includes(req.user.role) ||
       isCreator ||
       userId === me;
     if (!canRemove) {
@@ -1615,7 +1617,7 @@ exports.updateStatus = async (req, res) => {
 
     const canUpdate = 
       req.user.role === 'Admin' ||
-      req.user.role === 'Project Manager' ||
+      isPMRole(req.user.role) ||
       req.user.role === 'Team Lead' ||
       ticket.createdBy.toString() === req.user.id ||
       ticket.assignedTo?.toString() === req.user.id; // any assignee (Developer, Sales, etc.)

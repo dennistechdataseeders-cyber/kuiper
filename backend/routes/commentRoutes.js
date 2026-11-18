@@ -1,6 +1,7 @@
 // backend/routes/commentRoutes.js - COMPLETE FIX WITH FILE SAVING
 
 const express = require('express');
+const { isPMRole } = require('../utils/roles');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
@@ -330,7 +331,7 @@ async function userCanCommentOnProject(user, project) {
   const userId = user._id;
   
   if (role === 'Admin') return true;
-  if (role === 'Project Manager') return true;
+  if (isPMRole(role)) return true;
   
   if (role === 'Team Lead') {
     return compareIds(project.teamLead, userId);
@@ -362,7 +363,7 @@ async function userCanDeleteComment(user, project, comment) {
   const userId = user._id;
   
   if (role === 'Admin') return true;
-  if (role === 'Project Manager') return true;
+  if (isPMRole(role)) return true;
   
   if (role === 'Team Lead') {
     return compareIds(project.teamLead, userId);
@@ -476,7 +477,7 @@ async function userCanDeleteFeedComment(user, feed, comment) {
   const userId = user._id;
   
   if (role === 'Admin') return true;
-  if (role === 'Project Manager') return true;
+  if (isPMRole(role)) return true;
   
   // Developer can delete if assigned to this feed
   if (role === 'Developer') {

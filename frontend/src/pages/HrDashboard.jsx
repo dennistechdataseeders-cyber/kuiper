@@ -36,6 +36,7 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { groupLeaves, leaveActionUrl, LeaveBreakdown } from '../utils/leaveGroups';
 import LeaveBalanceEditor from '../components/LeaveBalanceEditor';
+import { isPMRole } from '../utils/roles';
 
 // ============================================
 // HrDashboard
@@ -1268,7 +1269,7 @@ const HrDashboard = () => {
                                   ? 'bg-indigo-100 text-indigo-700'
                                   : emp.role === 'Sales'
                                   ? 'bg-emerald-100 text-emerald-700'
-                                  : emp.role === 'Project Manager'
+                                  : isPMRole(emp.role)
                                   ? 'bg-cyan-100 text-cyan-700'
                                   : 'bg-slate-100 text-slate-700'
                               }`}

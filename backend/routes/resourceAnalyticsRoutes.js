@@ -1,6 +1,7 @@
 // backend/routes/resourceAnalyticsRoutes.js
 
 const express = require('express');
+const { PM_ROLES } = require('../utils/roles');
 const router = express.Router();
 
 const { getResourceAnalytics } = require('../controllers/resourceAnalyticsController');
@@ -18,7 +19,7 @@ const { authorize } = require('../middleware/roleCheck');
 router.get(
   '/',
   protect,
-  authorize('Super Admin', 'Admin', 'Project Manager'),
+  authorize('Super Admin', 'Admin', ...PM_ROLES),
   getResourceAnalytics
 );
 

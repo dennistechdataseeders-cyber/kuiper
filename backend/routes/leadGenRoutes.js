@@ -1,6 +1,7 @@
 // backend/routes/leadGenRoutes.js
 
 const router = require('express').Router();
+const { PM_ROLES, isPMRole } = require('../utils/roles');
 const LeadGen = require('../models/LeadGen');
 const Organization = require('../models/Organization');
 const Log = require('../models/Log'); 
@@ -109,14 +110,14 @@ const upload = multer({
 // ============================================
 // GET: Fetch leads
 // ============================================
-router.get('/', authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'), async (req, res) => {
+router.get('/', authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES), async (req, res) => {
   try {
     let filter = {};
     
     if (req.user.role === 'Admin' || req.user.role === 'Sales Manager') {
       filter = {};
     } 
-    else if (req.user.role === 'Project Manager') {
+    else if (isPMRole(req.user.role)) {
       // PM sees leads where they are assigned as projectManagerId
       filter = { projectManagerId: req.user._id };
     } 
@@ -416,7 +417,7 @@ const COUNTRY_MAP = {
 // ============================================
 // PATCH: Take Action on a Lead - WITH EMAIL NOTIFICATIONS
 // ============================================
-router.patch('/:id/action', authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'), upload.single('file'), async (req, res) => {
+router.patch('/:id/action', authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES), upload.single('file'), async (req, res) => {
   try {
     const leadId = req.params.id;
     const { 
@@ -664,7 +665,7 @@ router.patch('/:id/action', authorize('Admin', 'Sales', 'Sales Manager', 'Projec
 // ============================================
 // GET: Get Feasibility Details for a Lead
 // ============================================
-router.get('/feasibility/:leadId', authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'), async (req, res) => {
+router.get('/feasibility/:leadId', authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES), async (req, res) => {
   try {
     const { leadId } = req.params;
     
@@ -690,7 +691,7 @@ router.get('/feasibility/:leadId', authorize('Admin', 'Sales', 'Sales Manager', 
       const isSalesRep = lead.salesRepId && lead.salesRepId._id.toString() === userId;
       const isFeasibility = lead.status === 'Feasibility' || lead.status === 'Feasibility Completed';
       hasAccess = isSalesRep || isFeasibility;
-    } else if (userRole === 'Project Manager') {
+    } else if (isPMRole(userRole)) {
       // PM can view if assigned
       const isPMAssigned = lead.projectManagerId && lead.projectManagerId._id.toString() === userId;
       hasAccess = isPMAssigned;
@@ -739,7 +740,7 @@ router.get('/feasibility/:leadId', authorize('Admin', 'Sales', 'Sales Manager', 
 // ============================================
 // PATCH: Add Comment to Lead
 // ============================================
-router.patch('/:id/comment', authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'), async (req, res) => {
+router.patch('/:id/comment', authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES), async (req, res) => {
   try {
     const leadId = req.params.id;
     const { lastInteractionDesc } = req.body;
@@ -764,7 +765,7 @@ router.patch('/:id/comment', authorize('Admin', 'Sales', 'Sales Manager', 'Proje
       const isSalesRep = lead.salesRepId && lead.salesRepId.toString() === userId;
       const isFeasibility = lead.status === 'Feasibility' || lead.status === 'Feasibility Completed';
       hasAccess = isSalesRep || isFeasibility;
-    } else if (userRole === 'Project Manager') {
+    } else if (isPMRole(userRole)) {
       const isPMAssigned = lead.projectManagerId && lead.projectManagerId.toString() === userId;
       hasAccess = isPMAssigned;
     }

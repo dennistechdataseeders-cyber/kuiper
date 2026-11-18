@@ -2,6 +2,7 @@
 
 const Announcement = require('../models/Announcement');
 const User = require('../models/User');
+const { PM_ROLES } = require('../utils/roles');
 const { visibleAnnouncementFilter } = require('../utils/accessBlock');
 const path = require('path');
 const fs = require('fs');
@@ -10,7 +11,7 @@ const fs = require('fs');
 // HELPER: Check if user can create announcements
 // ============================================
 const canCreateAnnouncement = (role) => {
-    const allowedRoles = ['Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'];
+    const allowedRoles = ['Super Admin', 'Admin', 'HR', ...PM_ROLES, 'Sales Manager'];
     return allowedRoles.includes(role);
 };
 
@@ -89,7 +90,7 @@ exports.createAnnouncement = async (req, res) => {
 
         if (!canCreateAnnouncement(req.user.role)) {
             return res.status(403).json({ 
-                error: 'Not authorized to create announcements. Allowed roles: Super Admin, Admin, HR, Project Manager, Sales Manager' 
+                error: 'Not authorized to create announcements. Allowed roles: Super Admin, Admin, HR, Project Manager, Project Coordinator, Sales Manager' 
             });
         }
 

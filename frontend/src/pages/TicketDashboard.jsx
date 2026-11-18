@@ -9,6 +9,7 @@ import io from 'socket.io-client';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import notificationManager from '../utils/notifications';
+import { PM_ROLES, isPMRole } from '../utils/roles';
 
 const TicketDashboard = () => {
   const [tickets, setTickets] = useState([]);
@@ -31,7 +32,7 @@ const TicketDashboard = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const canSeeInternal = ['Admin', 'Project Manager', 'Developer', 'Sales', 'Sales Manager', 'Team Lead'].includes(userRole);
+  const canSeeInternal = ['Admin', ...PM_ROLES, 'Developer', 'Sales', 'Sales Manager', 'Team Lead'].includes(userRole);
   const isClient = userRole === 'Client';
   const isHR = userRole === 'HR';
   const isFinance = userRole === 'Finance';
@@ -48,7 +49,7 @@ const TicketDashboard = () => {
       setTickets(prev => [newTicket, ...prev]);
       toast.success(`New ticket: ${newTicket.title}`);
       
-      if (userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') {
+      if (isPMRole(userRole) || userRole === 'Admin' || userRole === 'Team Lead') {
         notificationManager.notifyNewTicket(newTicket, () => {
           navigate(`/tickets/${newTicket._id}`);
         });

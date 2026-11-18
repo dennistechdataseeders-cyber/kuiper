@@ -19,6 +19,7 @@ import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import AccessBlockModal, { AccessBadge, accessStatus } from '../components/AccessBlockModal';
 import { Ban, LockOpen } from 'lucide-react';
+import { isPMRole } from '../utils/roles';
 
 const UserManagement = () => {
   const [users, setUsers] = useState([]);
@@ -68,7 +69,7 @@ const UserManagement = () => {
   const isAdmin = userRole === 'Admin';
   const isHR = userRole === 'HR';
   const isSalesManager = userRole === 'Sales Manager';
-  const isProjectManager = userRole === 'Project Manager';
+  const isProjectManager = isPMRole(userRole);
 
   // ✅ Can this user create new users at all?
   const canCreateUser = isSuperAdmin || isAdmin || isHR;
@@ -564,7 +565,8 @@ const UserManagement = () => {
       case 'Developer': return 'bg-blue-100 text-blue-700';
       case 'Sales': return 'bg-emerald-100 text-emerald-700';
       case 'Sales Manager': return 'bg-orange-100 text-orange-700';
-      case 'Project Manager': return 'bg-cyan-100 text-cyan-700';
+      case 'Project Manager':
+      case 'Project Coordinator': return 'bg-cyan-100 text-cyan-700';
       case 'Client': return 'bg-slate-100 text-slate-700';
       case 'Team Lead': return 'bg-indigo-100 text-indigo-700';
       case 'HR': return 'bg-pink-100 text-pink-700';
@@ -607,6 +609,7 @@ const UserManagement = () => {
         'Developer',
         'Sales',
         'Project Manager',
+        'Project Coordinator',
         'Sales Manager',
         'Team Lead',
         'HR',
@@ -618,6 +621,7 @@ const UserManagement = () => {
       'Developer',
       'Sales',
       'Project Manager',
+      'Project Coordinator',
       'Sales Manager',
       'Team Lead',
       'Admin',

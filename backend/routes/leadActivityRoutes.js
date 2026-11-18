@@ -1,5 +1,6 @@
 // backend/routes/leadActivityRoutes.js
 const router = require('express').Router();
+const { PM_ROLES } = require('../utils/roles');
 const mongoose = require('mongoose');
 const LeadActivity = require('../models/LeadActivity');
 const Lead = require('../models/Lead');
@@ -135,7 +136,7 @@ router.get('/:id', async (req, res) => {
 // ============================================
 router.post(
   '/',
-  authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'),
+  authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES),
   async (req, res) => {
     try {
       const {
@@ -234,7 +235,7 @@ router.post(
 // ============================================
 router.patch(
   '/:id',
-  authorize('Admin', 'Sales', 'Sales Manager', 'Project Manager'),
+  authorize('Admin', 'Sales', 'Sales Manager', ...PM_ROLES),
   async (req, res) => {
     try {
       const activity = await LeadActivity.findById(req.params.id);

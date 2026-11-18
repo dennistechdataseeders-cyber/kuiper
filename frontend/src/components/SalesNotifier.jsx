@@ -13,9 +13,10 @@ import toast from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import notificationManager from '../utils/notifications';
 import API_BASE_URL from '../config';
+import { PM_ROLES } from '../utils/roles';
 
 // Roles that can create meetings / calls / tasks (see backend leadActivityRoutes).
-const ACTIVITY_ROLES = ['Sales', 'Sales Manager', 'Admin', 'Super Admin', 'Project Manager'];
+const ACTIVITY_ROLES = ['Sales', 'Sales Manager', 'Admin', 'Super Admin', ...PM_ROLES];
 const SEEN_KEY = 'reminder_seen_ids';
 
 // With several tabs open every tab gets the event; only the first one should speak.

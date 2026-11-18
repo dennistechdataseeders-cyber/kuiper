@@ -1,5 +1,6 @@
 // backend/routes/announcementRoutes.js
 const express = require('express');
+const { PM_ROLES } = require('../utils/roles');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const { authorize } = require('../middleware/roleCheck');
@@ -177,24 +178,24 @@ router.post('/:id/viewed', protect, async (req, res) => {
 router.use(protect);
 
 // GET all announcements (all authenticated users except Client)
-router.get('/', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), getAnnouncements);
+router.get('/', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), getAnnouncements);
 
 // GET single announcement
-router.get('/:id', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), getAnnouncementById);
+router.get('/:id', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), getAnnouncementById);
 
 // POST create announcement
-router.post('/', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), createAnnouncement);
+router.post('/', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), createAnnouncement);
 
 // POST toggle like
-router.post('/:id/like', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), toggleLike);
+router.post('/:id/like', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), toggleLike);
 
 // POST add comment
-router.post('/:id/comments', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), addComment);
+router.post('/:id/comments', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), addComment);
 
 // DELETE comment
-router.delete('/:announcementId/comments/:commentId', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), deleteComment);
+router.delete('/:announcementId/comments/:commentId', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), deleteComment);
 
 // DELETE announcement
-router.delete('/:id', authorize('Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), deleteAnnouncement);
+router.delete('/:id', authorize('Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance'), deleteAnnouncement);
 
 module.exports = router;

@@ -47,6 +47,7 @@ import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
+import { isPMRole } from '../utils/roles';
 
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
@@ -293,19 +294,6 @@ const ProjectManagement = () => {
     }
   };
 
-  const updateTeamLead = async (projectId, teamLeadId) => {
-    try {
-      await axios.post(`${ADMIN_BASE}/projects/${projectId}/assign-teamlead`,
-        { teamLeadId: teamLeadId || null },
-        authHeader
-      );
-      toast.success('Team Lead updated successfully');
-      fetchInitialData();
-    } catch (err) {
-      console.error('Error updating Team Lead:', err);
-      toast.error(err.response?.data?.error || 'Failed to update Team Lead');
-    }
-  };
 
   const fetchOrganizations = async () => {
     try {
@@ -431,7 +419,7 @@ const ProjectManagement = () => {
 
       let projectsData = projRes.data;
       
-      if (userRole === 'Project Manager') {
+      if (isPMRole(userRole)) {
         projectsData = projRes.data;
       }
       
@@ -2158,7 +2146,7 @@ const ProjectManagement = () => {
               userRole={userRole}
               userId={currentUserId}
               currentUserName={userName}
-              canComment={userRole === 'Admin' || userRole === 'Project Manager'}
+              canComment={userRole === 'Admin' || isPMRole(userRole)}
               refreshTrigger={commentRefreshTrigger}
             />
           </div>

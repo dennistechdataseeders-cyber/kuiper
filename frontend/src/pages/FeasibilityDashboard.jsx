@@ -47,6 +47,7 @@ import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
+import { isPMRole } from '../utils/roles';
 
 // Country and Industry Options
 const POPULAR_COUNTRIES = [
@@ -159,7 +160,7 @@ const FeasibilityDashboard = () => {
       const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const pms = res.data.filter(u => u.role === 'Project Manager');
+      const pms = res.data.filter(u => isPMRole(u.role));
       setProjectManagersList(pms);
       setProjectManagers(pms);
     } catch (err) {
@@ -187,7 +188,7 @@ const FeasibilityDashboard = () => {
       const filtered = data.filter(lead => {
         const isFeasibility = lead.status === 'Feasibility' || lead.status === 'Feasibility Completed';
         
-        if (userRole === 'Project Manager') {
+        if (isPMRole(userRole)) {
           return isFeasibility && lead.projectManagerId === currentUserId;
         }
         

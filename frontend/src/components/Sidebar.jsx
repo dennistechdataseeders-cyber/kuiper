@@ -60,6 +60,7 @@ import NotificationBell from './NotificationBell';
 import API_BASE_URL from '../config';
 import companyLogoVideo from '../assets/Company_Logo_mp4.mp4';
 import io from 'socket.io-client';
+import { isPMRole } from '../utils/roles';
 
 // ============================================
 // ONE ICON PER PAGE
@@ -395,7 +396,7 @@ const buildMenuGroups = (role) => {
   }
 
   // ---------------- Project Manager ----------------
-  if (role === 'Project Manager') {
+  if (isPMRole(role)) {
     return [
       { key: 'main', label: 'Home', icon: null, items: [
         { path: '/pm/dashboard', icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
@@ -770,7 +771,8 @@ const Sidebar = () => {
       case 'Admin': return 'from-red-500/20 to-orange-500/20 text-orange-300 border-orange-400/20';
       case 'Sales Manager': return 'from-purple-500/20 to-blue-500/20 text-purple-300 border-purple-400/20';
       case 'Sales': return 'from-emerald-500/20 to-teal-500/20 text-emerald-300 border-emerald-400/20';
-      case 'Project Manager': return 'from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-400/20';
+      case 'Project Manager':
+      case 'Project Coordinator': return 'from-cyan-500/20 to-sky-500/20 text-cyan-300 border-cyan-400/20';
       case 'Developer': return 'from-blue-500/20 to-indigo-500/20 text-blue-300 border-blue-400/20';
       case 'Team Lead': return 'from-indigo-500/20 to-purple-500/20 text-indigo-300 border-indigo-400/20';
       case 'HR': return 'from-pink-500/20 to-rose-500/20 text-pink-300 border-pink-400/20';

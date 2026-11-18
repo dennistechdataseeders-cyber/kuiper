@@ -7,6 +7,7 @@ import { FolderKanban, Activity, Search, ChevronRight } from 'lucide-react';
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { isPMRole } from '../utils/roles';
 
 const FeedDeliveryDashboard = () => {
   const [projects, setProjects] = useState([]);
@@ -29,7 +30,7 @@ const FeedDeliveryDashboard = () => {
       // Determine which endpoint to use based on role
       if (userRole === 'Client') {
         endpoint = '/api/client/projects';
-      } else if (userRole === 'Project Manager') {
+      } else if (isPMRole(userRole)) {
         endpoint = '/api/admin/projects';
       } else if (userRole === 'Developer') {
         endpoint = '/api/dev/my-projects';
@@ -72,7 +73,8 @@ const FeedDeliveryDashboard = () => {
   const getDisplayText = () => {
     switch(userRole) {
       case 'Client': return 'Monitor feed delivery for your projects';
-      case 'Project Manager': return 'Monitor feed delivery for your managed projects';
+      case 'Project Manager':
+      case 'Project Coordinator': return 'Monitor feed delivery for your managed projects';
       case 'Developer': return 'Monitor feed delivery for your assigned feeds';
       case 'Team Lead': return 'Monitor feed delivery for your team projects';
       default: return 'Monitor feed delivery status';
@@ -85,6 +87,7 @@ const FeedDeliveryDashboard = () => {
       case 'Client':
         return `/client/projects/${projectId}/feeds`;
       case 'Project Manager':
+      case 'Project Coordinator':
         return `/pm/projects/${projectId}/feeds`;
       case 'Developer':
         return `/developer/projects/${projectId}/feeds`;

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { isPMRole } from '../utils/roles';
 
 const DeveloperProjects = () => {
   const { isCollapsed } = useSidebar();
@@ -404,7 +405,7 @@ const DeveloperProjects = () => {
 
   const canDeleteComment = (comment) => {
     const commentUserId = comment.userId?._id || comment.userId;
-    return userRole === 'Admin' || userRole === 'Project Manager' || commentUserId === userId;
+    return userRole === 'Admin' || isPMRole(userRole) || commentUserId === userId;
   };
 
   // Get unique statuses for filter
@@ -879,7 +880,7 @@ const DeveloperProjects = () => {
                               )}
                               {comment.userId?.role && !isOwn && (
                                 <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
-                                  comment.userId.role === 'Project Manager' 
+                                  isPMRole(comment.userId.role) 
                                     ? 'bg-purple-100 text-purple-700' 
                                     : comment.userId.role === 'Developer'
                                     ? 'bg-blue-100 text-blue-700'

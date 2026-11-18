@@ -18,6 +18,7 @@ import io from 'socket.io-client';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import notificationManager from '../utils/notifications';
+import { isPMRole } from '../utils/roles';
 
 const TicketDetails = () => {
   const { id } = useParams();
@@ -454,7 +455,7 @@ const TicketDetails = () => {
 
   const fetchDevelopers = async () => {
     if (userRole === 'HR' || userRole === 'Finance') return;
-    if (userRole !== 'Project Manager' && userRole !== 'Admin' && userRole !== 'Team Lead') return;
+    if (!isPMRole(userRole) && userRole !== 'Admin' && userRole !== 'Team Lead') return;
     
     try {
       const token = localStorage.getItem('token');
@@ -919,7 +920,7 @@ const TicketDetails = () => {
   const canAssignDeveloper = 
     userRole !== 'HR' && 
     userRole !== 'Finance' && 
-    (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead');
+    (userRole === 'Admin' || isPMRole(userRole) || userRole === 'Team Lead');
 
   const handleTextareaKeyDown = (e) => {
     if (isTicketClosed) {
@@ -946,7 +947,7 @@ const TicketDetails = () => {
 
   const canAddWatcher = 
     ticket &&
-    (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead' || 
+    (userRole === 'Admin' || isPMRole(userRole) || userRole === 'Team Lead' || 
      (ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId))) && 
     ticket.status !== 'Closed';
 
@@ -1051,7 +1052,7 @@ const TicketDetails = () => {
               </button>
             )}
             
-            {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
+            {(isPMRole(userRole) || userRole === 'Admin' || userRole === 'Developer' || userRole === 'Team Lead' || isTicketCreator) && 
             ticket.status !== 'Closed' && (
               <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto">
                 {ticket.status !== 'In Progress' && (
@@ -1661,7 +1662,7 @@ const TicketDetails = () => {
                     <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1 mt-2">
                       {watchers.map(watcher => {
                         const isCurrentUser = watcher._id === currentUserId;
-                        const canRemove = (userRole === 'Admin' || userRole === 'Project Manager' || userRole === 'Team Lead' || 
+                        const canRemove = (userRole === 'Admin' || isPMRole(userRole) || userRole === 'Team Lead' || 
                                           (ticket && ticket.createdBy && (ticket.createdBy._id === currentUserId || ticket.createdBy === currentUserId)) || 
                                           isCurrentUser) && 
                                           ticket.status !== 'Closed';
@@ -1723,7 +1724,7 @@ const TicketDetails = () => {
                     : 'Ticket is unassigned.'}
                 </div>
               )}
-              {(userRole === 'Project Manager' || userRole === 'Admin' || userRole === 'Team Lead') && ticket.status !== 'Closed' && (
+              {(isPMRole(userRole) || userRole === 'Admin' || userRole === 'Team Lead') && ticket.status !== 'Closed' && (
                 <select 
                   onChange={(e) => assignDeveloper(e.target.value)} 
                   disabled={assigning} 

@@ -645,7 +645,8 @@ const ProjectFeedStatus = () => {
   const getBackPath = () => {
     switch(userRole) {
       case 'Client': return '/client';
-      case 'Project Manager': return '/pm/feed-status';
+      case 'Project Manager':
+      case 'Project Coordinator': return '/pm/feed-status';
       case 'Developer': return '/developer/feed-status';
       case 'Team Lead': return '/teamlead/feed-status';
       default: return '/client';

@@ -1,6 +1,7 @@
 // backend/routes/clientRoutes.js
 
 const express = require('express');
+const { isPMRole } = require('../utils/roles');
 const router = express.Router();
 const { protect } = require('../middleware/authMiddleware');
 const Project = require('../models/Project');
@@ -38,7 +39,7 @@ router.get('/projects', protect, async (req, res) => {
       }
       query = { _id: { $in: projectIds } };
       
-    } else if (userRole === 'Project Manager') {
+    } else if (isPMRole(userRole)) {
       // PMs: projects they manage OR where they are the team lead
       query.$or = [
         { projectManager: userId },
@@ -111,7 +112,7 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
       });
       hasAccess = feedCount > 0;
       
-    } else if (userRole === 'Project Manager') {
+    } else if (isPMRole(userRole)) {
       // Check if PM manages this project OR is the team lead
       const isPM = project.projectManager && project.projectManager.toString() === userId.toString();
       const isTeamLead = project.teamLead && project.teamLead.toString() === userId.toString();

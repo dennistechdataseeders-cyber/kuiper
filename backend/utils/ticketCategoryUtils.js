@@ -1,6 +1,11 @@
 // backend/utils/ticketCategoryUtils.js
+const { PM_ROLES, isPMRole } = require('./roles');
+
+// A Project Coordinator matches any rule written for a Project Manager (and vice versa).
+const roleMatches = (roles, creatorRole) =>
+  roles.includes(creatorRole) || (isPMRole(creatorRole) && roles.some(r => PM_ROLES.includes(r)));
 const matches = (overrides = [], creatorRole) =>
-  (overrides || []).find(o => (o.creatorRoles || []).includes(creatorRole));
+  (overrides || []).find(o => roleMatches(o.creatorRoles || [], creatorRole));
 
 /**
  * Which role's users should this ticket be assigned to?

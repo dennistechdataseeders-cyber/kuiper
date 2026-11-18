@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { PM_ROLES } from '../utils/roles';
 
 const Announcements = () => {
   const { isCollapsed } = useSidebar();
@@ -74,7 +75,7 @@ const Announcements = () => {
   const isAdmin = ['Admin', 'Super Admin'].includes(userRole);
 
   // Check if user can create announcements
-  const canCreateAnnouncements = ['Super Admin', 'Admin', 'HR', 'Project Manager', 'Sales Manager'].includes(userRole);
+  const canCreateAnnouncements = ['Super Admin', 'Admin', 'HR', ...PM_ROLES, 'Sales Manager'].includes(userRole);
 
   // Check if user is HR (for display purposes)
   const isHR = userRole === 'HR';

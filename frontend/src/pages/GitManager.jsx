@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { isPMRole } from '../utils/roles';
 
 const GitManager = () => {
   const [projects, setProjects] = useState([]);
@@ -36,7 +37,7 @@ const GitManager = () => {
   
   const { isCollapsed } = useSidebar();
   const userRole = localStorage.getItem('role');
-  const isManagerOrAdmin = userRole === 'Project Manager' || userRole === 'Admin';
+  const isManagerOrAdmin = isPMRole(userRole) || userRole === 'Admin';
 
   // Helper function to format date as dd/mm/yyyy
   const formatDate = (dateString) => {

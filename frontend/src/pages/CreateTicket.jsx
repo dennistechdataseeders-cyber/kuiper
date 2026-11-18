@@ -13,6 +13,7 @@ import {
 import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import { isPMRole } from '../utils/roles';
 
 // ============================================
 // Categories now come from the backend (/api/ticket-categories) so an
@@ -139,7 +140,7 @@ const CreateTicket = () => {
   const fileInputRef = useRef(null);
 
   const isClient = userRole === 'Client';
-  const canSeeProjectFeed = userRole === 'Client' || userRole === 'Project Manager' || userRole === 'Team Lead';
+  const canSeeProjectFeed = userRole === 'Client' || isPMRole(userRole) || userRole === 'Team Lead';
   const selectedCategoryRaw = categoriesData.find(c => c.name === formData.category);
   const selectedSubRaw = selectedCategoryRaw?.subcategories?.find(sub => sub.name === formData.subcategory);
   // "special" subcategories (Production > Feasibility / Others): no Specific Issue,
@@ -149,7 +150,7 @@ const CreateTicket = () => {
   // Which role should this ticket be assigned to? subcategory override > category override > category role
   const resolveAssignRole = () => {
     if (!selectedCategoryRaw) return { role: '', viaOverride: false };
-    const hit = (list) => (list || []).find(o => (o.creatorRoles || []).includes(userRole));
+    const hit = (list) => (list || []).find(o => ((o.creatorRoles || []).includes(userRole) || (isPMRole(userRole) && (o.creatorRoles || []).some(isPMRole))));
     const subHit = hit(selectedSubRaw?.assignOverrides);
     if (subHit) return { role: subHit.assignRole, viaOverride: true };
     const catHit = hit(selectedCategoryRaw.assignOverrides);
@@ -157,7 +158,7 @@ const CreateTicket = () => {
     return { role: selectedCategoryRaw.role || '', viaOverride: false };
   };
   const { role: assignRole, viaOverride: assignViaOverride } = resolveAssignRole();
-  const isPMAssign = assignRole === 'Project Manager';
+  const isPMAssign = isPMRole(assignRole);
   // wording for the special (developer-pool) block
   const poolNoun = assignRole === 'Developer' || !assignRole ? 'developer' : assignRole;
   const poolTitle = assignRole === 'Developer' || !assignRole ? 'Developer' : assignRole;
@@ -576,7 +577,7 @@ const CreateTicket = () => {
             return false;
           });
         }
-      } else if (userRole === 'Project Manager') {
+      } else if (isPMRole(userRole)) {
         const res = await axios.get(`${API_BASE_URL}/api/admin/projects`, { headers });
         clientProjects = res.data.filter(project => 
           project.projectManager?._id === currentUserId || 
@@ -1180,7 +1181,7 @@ const CreateTicket = () => {
                         No projects assigned. Please contact your project manager.
                       </p>
                     )}
-                    {!isClient && (userRole === 'Project Manager' || userRole === 'Team Lead') && (
+                    {!isClient && (isPMRole(userRole) || userRole === 'Team Lead') && (
                       <p className="text-xs text-slate-400 mt-2">
                         Optionally associate this internal ticket with a project you manage
                       </p>

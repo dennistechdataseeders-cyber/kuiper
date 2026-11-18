@@ -39,6 +39,7 @@ import {
 import CreatableSelect from 'react-select/creatable';
 
 import API_BASE_URL from '../config';
+import { isPMRole } from '../utils/roles';
 
 // Helper for formatting Lead IDs
 const formatId = (num, prefix = "LEAD") => {
@@ -619,7 +620,7 @@ const LeadGeneration = () => {
       const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const pms = res.data.filter(u => u.role === 'Project Manager');
+      const pms = res.data.filter(u => isPMRole(u.role));
       setProjectManagersList(pms);
       setProjectManagers(pms);
     } catch (err) {

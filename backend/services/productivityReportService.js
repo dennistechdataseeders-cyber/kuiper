@@ -1,6 +1,7 @@
 // backend/services/productivityReportService.js
 
 const User = require('../models/User');
+const { PM_ROLES } = require('../utils/roles');
 const Ticket = require('../models/Ticket');
 const LeadGen = require('../models/LeadGen');
 const Prospect = require('../models/Prospect');
@@ -91,7 +92,7 @@ class ProductivityReportService {
   // ============================================
   async getPMData() {
     try {
-      const pms = await User.find({ role: 'Project Manager' }).select('name email _id');
+      const pms = await User.find({ role: { $in: PM_ROLES } }).select('name email _id');
       
       const pmData = await Promise.all(pms.map(async (pm) => {
         // Get projects managed by this PM

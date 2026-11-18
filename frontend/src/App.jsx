@@ -82,6 +82,7 @@ import { useSidebar } from './context/SidebarContext';
 import API_BASE_URL from './config';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
+import { PM_ROLES } from './utils/roles';
 
 const SessionManager = ({ children }) => {
   const navigate = useNavigate();
@@ -143,6 +144,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
       'Sales': '/sales',
       'Developer': '/developer',
       'Project Manager': '/admin/projects',
+      'Project Coordinator': '/admin/projects',
       'Client': '/client', 
       'Team Lead': '/teamlead',
       'HR': '/hr',
@@ -173,6 +175,7 @@ function AppContent() {
       'Sales Manager': '/sales-manager',
       'Sales': '/sales',
       'Project Manager': '/admin/projects',
+      'Project Coordinator': '/admin/projects',
       'Developer': '/developer',
       'Client': '/client',
       'Team Lead': '/teamlead',
@@ -480,47 +483,47 @@ function AppContent() {
                         ============================================ */}
                     
                     <Route path="/pm/dashboard" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <PmDashboard />
                       </ProtectedRoute>
                     } />
-                    <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}><ProjectManagement /></ProtectedRoute>} />
-                    <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Sales Manager', 'HR']}><UserManagement /></ProtectedRoute>} />
+                    <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}><ProjectManagement /></ProtectedRoute>} />
+                    <Route path="/admin/users" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Sales Manager', 'HR']}><UserManagement /></ProtectedRoute>} />
                     
                     {/* PM Routes */}
                     <Route path="/pm/feeds" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <ProjectFeeds />
                       </ProtectedRoute>
                     } />
                     <Route path="/pm/resource-analytics" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <ResourceAnalytics />
                       </ProtectedRoute>
                     } />
                     <Route path="/pm/git-manager" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <GitManager />
                       </ProtectedRoute>
                     } />
                     <Route path="/pm/feed-status" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <FeedDeliveryDashboard />
                       </ProtectedRoute>
                     } />
                     <Route path="/pm/projects/:projectId/feeds" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <ProjectFeedStatus />
                       </ProtectedRoute>
                     } />
                     <Route path="/pm/work-report" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES]}>
                         <WorkReport  />
                       </ProtectedRoute>
                     } />
                     {/* PM FEASIBILITY ROUTE */}
                     <Route path="/pm/feasibility" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Project Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', ...PM_ROLES]}>
                         <PmFeasibilityDashboard />
                       </ProtectedRoute>
                     } />
@@ -582,21 +585,21 @@ function AppContent() {
                     
                     {/* Ticket Dashboard - HR & Finance can view all their tickets */}
                     <Route path="/tickets" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Client', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
                         <TicketDashboard />
                       </ProtectedRoute>
                     } />
                     
                     {/* Create Ticket - HR & Finance can create tickets */}
                     <Route path="/tickets/create" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Client', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Client', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
                         <CreateTicket />
                       </ProtectedRoute>
                     } />
                     
                     {/* Ticket Details - HR & Finance can view ticket details */}
                     <Route path="/tickets/:id" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Client', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Client', 'HR', 'Finance', 'Sales', 'Sales Manager']}>
                         <TicketDetails />
                       </ProtectedRoute>
                     } />
@@ -624,7 +627,7 @@ function AppContent() {
                         ============================================ */}
                     {/* This page contains both Leave and Attendance management */}
                     <Route path="/employee" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer', 'Team Lead', 'Sales','Sales Manager', 'Project Manager', 'Client', 'Finance']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Developer', 'Team Lead', 'Sales','Sales Manager', ...PM_ROLES, 'Client', 'Finance']}>
                         <EmployeeDashboard />
                       </ProtectedRoute>
                     } />
@@ -632,15 +635,15 @@ function AppContent() {
                     {/* ============================================
                         SHARED ROUTES
                         ============================================ */}
-                    <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Sales', 'Project Manager', 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
+                    <Route path="/view_analytics" element={<ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Sales', ...PM_ROLES, 'Sales Manager', 'Team Lead']}><ViewAnalytics /></ProtectedRoute>} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/notifications" element={
-                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Client', 'HR', 'Finance','Sales Manager','Team Lead']}>
+                      <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Client', 'HR', 'Finance','Sales Manager','Team Lead']}>
                         <NotificationSettings />
                       </ProtectedRoute>
                     } />
                     <Route path="/knowledge" element={
-                        <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'HR', 'Finance','Sales','Sales Manager']}>
+                        <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'HR', 'Finance','Sales','Sales Manager']}>
                           <KnowledgeBase />
                         </ProtectedRoute>
                       } />
@@ -650,7 +653,7 @@ function AppContent() {
                         </ProtectedRoute>
                       } />
                     <Route path="/feasibility" element={
-                        <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Sales']}>
+                        <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Sales']}>
                           <FeasibilityDashboard />
                         </ProtectedRoute>
                       } />
@@ -665,7 +668,7 @@ function AppContent() {
                         </ProtectedRoute>
                       } />
                       <Route path="/announcements" element={
-                          <ProtectedRoute allowedRoles={['Super Admin', 'Admin', 'Project Manager', 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance']}>
+                          <ProtectedRoute allowedRoles={['Super Admin', 'Admin', ...PM_ROLES, 'Developer', 'Team Lead', 'Sales', 'Sales Manager', 'HR', 'Finance']}>
                             <Announcements />
                           </ProtectedRoute>
                         } />
