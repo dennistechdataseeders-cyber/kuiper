@@ -1,7 +1,6 @@
 // frontend/src/pages/CustomizeModules.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import { 
   Settings, Plus, Trash2, X, ChevronRight, Loader2, 
   Layout, Users, Building2, Handshake, CheckSquare, 
@@ -53,7 +52,6 @@ const MODULES = [
 ];
 
 export default function CustomizeModules() {
-  const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
@@ -188,33 +186,33 @@ export default function CustomizeModules() {
   };
 
   return (
-    <div className={`min-h-screen bg-[#f4f6fa] p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-[#f4f6fa]">
       
       {/* HEADER */}
-      <div className="mb-8 flex items-center gap-3">
+      <div className="flex items-center gap-3 mb-4 sm:mb-6">
         <div className="p-3 bg-blue-600 rounded-xl text-white">
           <Settings size={24} />
         </div>
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Customization</h1>
+          <h1 className="page-title">Customization</h1>
           <p className="text-sm text-slate-500">Modules and Fields</p>
         </div>
       </div>
 
       {/* MODULE GRID */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {MODULES.map((mod) => {
           const Icon = mod.icon;
           return (
             <div
               key={mod.name}
               onClick={() => handleModuleClick(mod)}
-              className="bg-white rounded-xl p-6 shadow-sm border border-slate-200 cursor-pointer hover:shadow-md hover:border-blue-300 transition-all group flex flex-col items-center justify-center h-40"
+              className="card cursor-pointer hover:shadow-md hover:border-blue-300 transition-all group flex flex-col items-center justify-center min-h-40 text-center"
             >
-              <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+              <div className="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shrink-0">
                 <Icon size={24} />
               </div>
-              <h3 className="font-bold text-slate-800 text-lg">{mod.name}</h3>
+              <h3 className="section-title">{mod.name}</h3>
               <p className="text-xs text-slate-400 mt-1">Manage Fields</p>
             </div>
           );
@@ -231,24 +229,24 @@ export default function CustomizeModules() {
           />
 
           {/* Drawer Content */}
-          <div className="relative w-full max-w-md bg-[#0f172a] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+          <div className="dark-panel relative w-full max-w-md bg-[#0f172a] h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
             
             {/* Drawer Header */}
-            <div className="p-6 border-b border-slate-700/50 flex justify-between items-center">
+            <div className="p-4 sm:p-5 border-b border-slate-700/50 flex justify-between items-center gap-3">
               <div>
-                <h2 className="text-xl font-bold text-white">{activeModule?.name}</h2>
+                <h2 className="section-title text-white">{activeModule?.name}</h2>
                 <p className="text-xs text-slate-400 mt-1">Manage custom fields</p>
               </div>
               <button 
                 onClick={() => setShowDrawer(false)}
-                className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"
+                className="btn-icon bg-slate-800 text-slate-400 hover:text-white rounded-full"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Drawer Body (Scrollable) */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
               
               {/* Existing Fields List */}
               {loadingFields ? (
@@ -262,23 +260,23 @@ export default function CustomizeModules() {
                   const TypeIcon = FIELD_TYPES.find(f => f.type === field.type)?.icon || Type;
                   return (
                     <div key={field._id} className="bg-slate-800/50 border border-slate-700/50 rounded-xl p-3 flex items-center justify-between group">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-slate-700 text-slate-300 flex items-center justify-center">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-slate-700 text-slate-300 flex items-center justify-center shrink-0">
                           <TypeIcon size={14} />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-white">
                             {field.label} {field.isRequired && <span className="text-red-400">*</span>}
                           </p>
-                          <p className="text-[10px] text-slate-400 uppercase tracking-wider">{field.type}</p>
+                          <p className="text-xs text-slate-400 uppercase tracking-wide">{field.type}</p>
                           {OPTION_TYPES.includes(field.type) && (field.options || []).length > 0 && (
-                            <p className="text-[10px] text-slate-500 mt-0.5 normal-case">{field.options.map(o => o.label).join(', ')}</p>
+                            <p className="text-xs text-slate-500 mt-0.5 normal-case">{field.options.map(o => o.label).join(', ')}</p>
                           )}
                         </div>
                       </div>
                       <button 
                         onClick={() => handleDeleteField(field._id)}
-                        className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
+                        className="btn-icon text-slate-500 hover:text-red-400 hover:bg-red-400/10 md:opacity-0 md:group-hover:opacity-100"
                       >
                         <Trash2 size={16} />
                       </button>
@@ -291,8 +289,8 @@ export default function CustomizeModules() {
               {showAddForm ? (
                 <div className="bg-slate-800 rounded-xl p-4 border border-blue-500/30 mt-4 animate-in fade-in">
                   <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-sm font-bold text-white">New Field</h3>
-                    <button onClick={() => setShowAddForm(false)} className="text-slate-400 hover:text-white">
+                    <h3 className="section-title text-white">New Field</h3>
+                    <button onClick={() => setShowAddForm(false)} className="btn-icon text-slate-400 hover:text-white">
                       <X size={16} />
                     </button>
                   </div>
@@ -300,20 +298,20 @@ export default function CustomizeModules() {
                   <form onSubmit={handleSaveField} className="space-y-4">
                     {/* Label */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Field Label *</label>
+                      <label className="label block mb-1.5">Field Label *</label>
                       <input 
                         type="text" 
                         required
                         value={formData.label}
                         onChange={(e) => setFormData({...formData, label: e.target.value})}
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white text-sm focus:border-blue-500 outline-none"
+                        className="input"
                         placeholder="e.g. Referral Source"
                       />
                     </div>
 
                     {/* Type Selector (Grid mimicking your screenshot) */}
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Field Type</label>
+                      <label className="label block mb-1.5">Field Type</label>
                       <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                         {FIELD_TYPES.map((ft) => {
                           const Icon = ft.icon;
@@ -340,14 +338,14 @@ export default function CustomizeModules() {
                     {/* Pick List Specific Options */}
                     {OPTION_TYPES.includes(formData.type) && (
                       <div className="bg-slate-900 rounded-lg p-3 border border-slate-700">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-2">{formData.type === 'Multi-Select' ? 'Choices' : 'Dropdown Options'}</label>
+                        <label className="label block mb-1.5">{formData.type === 'Multi-Select' ? 'Choices' : 'Dropdown Options'}</label>
                         
                         {/* Existing Options */}
                         <div className="space-y-1 mb-2">
                           {formData.options.map((opt, idx) => (
                             <div key={idx} className="flex justify-between items-center bg-slate-800 px-2 py-1.5 rounded text-xs text-white">
                               <span>{opt.label}</span>
-                              <button type="button" onClick={() => handleRemoveOption(idx)} className="text-red-400 hover:text-red-300">
+                              <button type="button" onClick={() => handleRemoveOption(idx)} className="btn-icon text-red-400 hover:text-red-300">
                                 <Trash2 size={12} />
                               </button>
                             </div>
@@ -361,13 +359,13 @@ export default function CustomizeModules() {
                             value={formData.newOption}
                             onChange={(e) => setFormData({...formData, newOption: e.target.value})}
                             onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddOption())}
-                            className="flex-1 bg-slate-800 border border-slate-700 rounded p-1.5 text-xs text-white outline-none focus:border-blue-500"
+                            className="input flex-1 min-w-0"
                             placeholder="Add option..."
                           />
                           <button 
                             type="button"
                             onClick={handleAddOption}
-                            className="bg-blue-600 text-white px-3 rounded text-xs font-bold hover:bg-blue-500"
+                            className="btn btn-md bg-blue-600 text-white hover:bg-blue-500"
                           >
                             Add
                           </button>
@@ -390,7 +388,7 @@ export default function CustomizeModules() {
                     <button 
                       type="submit"
                       disabled={isSubmitting}
-                      className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded-lg text-sm transition-all disabled:opacity-50 flex justify-center items-center gap-2"
+                      className="btn btn-md w-full bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50"
                     >
                       {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                       Save Field

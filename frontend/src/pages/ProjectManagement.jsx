@@ -42,7 +42,6 @@ import {
 } from 'lucide-react';
 import CreatableSelect from 'react-select/creatable';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
@@ -50,6 +49,7 @@ import { isPMRole } from '../utils/roles';
 
 import { isProjectManagerOf, projectTeamLeads, canEditProjectTeam } from '../utils/projectAccess';
 import ProjectTeamModal from '../components/ProjectTeamModal';
+import useIsMobile from '../utils/useIsMobile';
 const POPULAR_COUNTRIES = [
   { label: "Afghanistan", value: "AF" }, { label: "Albania", value: "AL" }, { label: "Algeria", value: "DZ" },
   { label: "Australia", value: "AU" }, { label: "Brazil", value: "BR" }, { label: "Canada", value: "CA" },
@@ -81,25 +81,16 @@ const ProjectManagement = () => {
   const [projects, setProjects] = useState([]);
   const [developers, setDevelopers] = useState([]);
   const [projectManagers, setProjectManagers] = useState([]);
+  const [coordinators, setCoordinators] = useState([]); // who can be a project coordinator (PCs and PMs)
   const [teamLeads, setTeamLeads] = useState([]);
   const [organizations, setOrganizations] = useState([]);
-  const { isCollapsed } = useSidebar();
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const isMobile = useIsMobile();
 
   // --- Loading States ---
   const [isSubmittingProject, setIsSubmittingProject] = useState(false);
   const [isSubmittingFeed, setIsSubmittingFeed] = useState(false);
   const [isCreatingOrg, setIsCreatingOrg] = useState(false);
 
-  // Handle resize for mobile detection
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-  
   // --- Pagination State ---
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(6);
@@ -412,10 +403,11 @@ const ProjectManagement = () => {
       const userRole = localStorage.getItem('role');
       let endpoint = `${ADMIN_BASE}/projects`;
       
-      const [projRes, devRes, pmRes, tlRes] = await Promise.all([
+      const [projRes, devRes, pmRes, pcRes, tlRes] = await Promise.all([
         axios.get(endpoint, authHeader),
         axios.get(`${ADMIN_BASE}/users/developers`, authHeader),
         axios.get(`${ADMIN_BASE}/users/project-managers`, authHeader),
+        axios.get(`${ADMIN_BASE}/users/project-coordinators`, authHeader),
         axios.get(`${ADMIN_BASE}/users/teamleads`, authHeader)
       ]);
 
@@ -428,6 +420,7 @@ const ProjectManagement = () => {
       setProjects(projectsData);
       setDevelopers(devRes.data);
       setProjectManagers(pmRes.data);
+      setCoordinators(pcRes.data);
       setTeamLeads(tlRes.data);
 
     } catch (err) {
@@ -646,6 +639,15 @@ const ProjectManagement = () => {
     setIsOrgDropdownOpen(false);
     setNewOrgData({ companyName: '', website: '', address: '' });
   };
+
+  // PM saved on the project being edited, when it is not a Project Manager (e.g. an older project
+  // with a Project Coordinator): kept as an option so the saved value is never shown as blank.
+  const legacyPm = (() => {
+    const saved = isEditing ? projects.find(p => p._id === activeProjectId)?.projectManager : null;
+    const savedId = saved?._id || saved;
+    if (!savedId || projectManagers.some(pm => pm._id === savedId)) return null;
+    return coordinators.find(u => u._id === savedId) || { _id: savedId, name: saved.name || 'Current manager' };
+  })();
 
   const handleEditClick = (project) => {
     setIsEditing(true);
@@ -935,17 +937,17 @@ const ProjectManagement = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10 sm:ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       <div className="w-full max-w-full">
         {/* HEADER SECTION */}
         <div className="mb-4 sm:mb-6">
           <div className="flex flex-col space-y-3">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
               <div>
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="page-title">
                   Workspace Project
                 </h1>
-                <p className="text-[10px] sm:text-xs font-medium text-slate-500 mt-0.5 sm:mt-1">
+                <p className="text-sm text-slate-500 mt-1">
                   Manage system flows and feeds
                 </p>
               </div>
@@ -955,7 +957,7 @@ const ProjectManagement = () => {
                   setIsEditing(false);
                   setShowProjectModal(true);
                 }}
-                className="bg-gradient-to-r from-slate-800 to-slate-900 text-white px-4 py-2 rounded-xl font-black flex items-center gap-1.5 hover:from-blue-600 hover:to-blue-700 transition-all active:scale-95 text-[10px] uppercase tracking-wider shadow-md w-full sm:w-auto justify-center"
+                className="btn btn-md bg-gradient-to-r from-slate-800 to-slate-900 text-white hover:from-blue-600 hover:to-blue-700 shadow-md w-full sm:w-auto"
               >
                 <FolderPlus size={14} />
                 New Project
@@ -963,36 +965,36 @@ const ProjectManagement = () => {
             </div>
 
             {/* STATS - compact */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="bg-white p-2 sm:p-3 rounded-xl flex items-center gap-2 sm:gap-3 border border-slate-200 shadow-sm">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+              <div className="card !p-3 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0">
                   <LayoutGrid size={14} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider truncate">Total Projects</p>
-                  <p className="text-sm sm:text-base font-black text-slate-800">{filteredProjects.length}</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Projects</p>
+                  <p className="text-sm sm:text-base font-semibold text-slate-800">{filteredProjects.length}</p>
                 </div>
               </div>
 
-              <div className="bg-white p-2 sm:p-3 rounded-xl flex items-center gap-2 sm:gap-3 border border-slate-200 shadow-sm">
+              <div className="card !p-3 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center flex-shrink-0">
                   <Activity size={14} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider truncate">Active Feeds</p>
-                  <p className="text-sm sm:text-base font-black text-slate-800">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Active Feeds</p>
+                  <p className="text-sm sm:text-base font-semibold text-slate-800">
                     {projects.reduce((acc, curr) => acc + (curr.feeds?.length || 0), 0)}
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white p-2 sm:p-3 rounded-xl flex items-center gap-2 sm:gap-3 border border-slate-200 shadow-sm">
+              <div className="card !p-3 flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0">
                   <CheckCircle2 size={14} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[8px] sm:text-[9px] font-black text-slate-400 uppercase tracking-wider truncate">On Hold</p>
-                  <p className="text-sm sm:text-base font-black text-slate-800">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">On Hold</p>
+                  <p className="text-sm sm:text-base font-semibold text-slate-800">
                     {projects.filter(p => isOnHoldStatus(p.projectStatus)).length}
                   </p>
                 </div>
@@ -1000,7 +1002,7 @@ const ProjectManagement = () => {
             </div>
 
             {/* FILTERS SECTION */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2 sm:p-3 rounded-xl shadow-sm border border-slate-200">
+            <div className="card !p-3 sm:!p-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
               {/* Search */}
               <div className="relative">
                 <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -1012,7 +1014,7 @@ const ProjectManagement = () => {
                     setSearchTerm(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-medium text-xs placeholder:text-slate-400 focus:border-blue-400 transition-colors"
+                  className="input pl-8 bg-slate-50"
                 />
               </div>
 
@@ -1025,7 +1027,7 @@ const ProjectManagement = () => {
                     setStatusFilter(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full pl-8 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
+                  className="input pl-8 bg-slate-50 cursor-pointer"
                 >
                   <option value="All">All Projects</option>
                   <option value="Active">Active</option>
@@ -1038,7 +1040,7 @@ const ProjectManagement = () => {
               {(searchTerm || statusFilter !== 'All') && (
                 <button
                   onClick={resetFilters}
-                  className="py-2 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 font-black text-[10px] uppercase tracking-wider hover:bg-slate-100 transition-all flex items-center justify-center gap-1.5"
+                  className="btn btn-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100"
                 >
                   <X size={12} />
                   Reset Filters
@@ -1050,15 +1052,15 @@ const ProjectManagement = () => {
 
         {/* Items Per Page Selector */}
         <div className="flex justify-end mb-3 sm:mb-4">
-          <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-1.5 shadow-sm">
-            <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase">Show:</span>
+          <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-0.5 md:py-1.5 shadow-sm">
+            <span className="text-xs font-semibold text-slate-500 uppercase">Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
                 setItemsPerPage(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="text-xs sm:text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+              className="text-sm font-semibold text-slate-700 bg-transparent outline-none cursor-pointer"
             >
               <option value={5}>5</option>
               <option value={10}>10</option>
@@ -1066,26 +1068,26 @@ const ProjectManagement = () => {
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <span className="text-[8px] sm:text-[10px] font-black text-slate-500">per page</span>
+            <span className="text-xs font-semibold text-slate-500">per page</span>
           </div>
         </div>
 
         {/* TABLE SECTION */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="table-scroll table-sticky-first overflow-x-auto">
             <table className="w-full min-w-[1000px]">
               <thead>
                 <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Project</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden sm:table-cell">Client Org</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Industry</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden lg:table-cell">Country</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Feeds</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden lg:table-cell">Git Activity</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Team Leads</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap hidden md:table-cell">Project Coordinators</th>
-                  <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
-                  <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Actions</th>
+                  <th className="th">Project</th>
+                  <th className="th">Client Org</th>
+                  <th className="th">Industry</th>
+                  <th className="th">Country</th>
+                  <th className="th">Feeds</th>
+                  <th className="th">Git Activity</th>
+                  <th className="th">Team Leads</th>
+                  <th className="th">Project Coordinators</th>
+                  <th className="th">Status</th>
+                  <th className="th text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1104,87 +1106,87 @@ const ProjectManagement = () => {
                         }`}
                       >
                         {/* Project */}
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center shadow-sm flex-shrink-0">
                               {isFromSales ? <ShoppingBag size={12} /> : <Activity size={12} />}
                             </div>
-                            <p className="text-xs font-bold text-slate-800 whitespace-nowrap">
+                            <p className="text-xs font-semibold text-slate-800 md:whitespace-nowrap">
                               {project.projectCustomId || 'NO_ID'}
                             </p>
                           </div>
                         </td>
 
                         {/* Client Org */}
-                        <td className="px-4 py-3 hidden sm:table-cell">
+                        <td className="td">
                           <div className="flex flex-wrap items-center gap-1">
                             {orgList.length > 0 ? (
                               orgList.slice(0, 2).map((org, orgIdx) => {
                                 const orgName = typeof org === 'object' ? org?.companyName : organizations.find(o => o._id === org)?.companyName;
                                 return (
-                                  <span key={orgIdx} className="inline-flex items-center gap-1 bg-purple-50 text-purple-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase whitespace-nowrap">
-                                    <Building2 size={8} />
+                                  <span key={orgIdx} className="badge bg-purple-50 text-purple-700 whitespace-nowrap">
+                                    <Building2 size={12} />
                                     {orgName?.substring(0, 10) || 'Org'}
                                   </span>
                                 );
                               })
                             ) : (
-                              <span className="text-[8px] text-slate-400 italic whitespace-nowrap">No clients</span>
+                              <span className="text-xs text-slate-400 italic whitespace-nowrap">No clients</span>
                             )}
                             {orgList.length > 2 && (
-                              <span className="text-[7px] font-bold text-slate-400">+{orgList.length - 2}</span>
+                              <span className="text-xs font-semibold text-slate-400">+{orgList.length - 2}</span>
                             )}
                           </div>
                         </td>
 
                         {/* Industry */}
-                        <td className="px-4 py-3 hidden md:table-cell">
-                          <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-blue-200 whitespace-nowrap">
-                            <Briefcase size={8} />
+                        <td className="td">
+                          <span className="badge bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                            <Briefcase size={12} />
                             {project.industry?.substring(0, 6) || project.industry}
                           </span>
                         </td>
 
                         {/* Country */}
-                        <td className="px-4 py-3 hidden lg:table-cell">
-                          <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase border border-slate-200 whitespace-nowrap">
-                            <Globe size={8} />
+                        <td className="td">
+                          <span className="badge bg-slate-100 text-slate-700 border border-slate-200 whitespace-nowrap">
+                            <Globe size={12} />
                             {POPULAR_COUNTRIES.find(c => c.label === project.country)?.value ||
                               (project.country?.substring(0, 2).toUpperCase()) || 'XX'}
                           </span>
                         </td>
 
                         {/* Feeds */}
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <div
                             className="flex items-center gap-1 cursor-pointer hover:text-blue-600 transition-colors group"
                             onClick={() => navigateToFeedExplorer(project)}
                           >
                             <Hash size={12} className="text-slate-400 group-hover:text-blue-600" />
-                            <span className="text-xs font-black text-slate-800 group-hover:text-blue-600">
+                            <span className="text-xs font-semibold text-slate-800 group-hover:text-blue-600">
                               {project.feeds?.length || 0}
                             </span>
-                            <span className="text-[8px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                            <span className="text-xs text-blue-500 md:opacity-0 md:group-hover:opacity-100 transition-opacity whitespace-nowrap">
                               View →
                             </span>
                           </div>
                         </td>
 
                         {/* Git Activity */}
-                        <td className="px-4 py-3 hidden lg:table-cell">
+                        <td className="td">
                           {gitActivity ? (
                             <div
                               title={`${new Date(gitActivity.time).toLocaleString()}${gitActivity.feedName ? ` • ${gitActivity.feedName}` : ''}`}
                             >
-                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg border text-[8px] font-black uppercase whitespace-nowrap ${gitFresh.chip}`}>
+                              <span className={`badge border whitespace-nowrap ${gitFresh.chip}`}>
                                 <span className={`w-1.5 h-1.5 rounded-full ${gitFresh.dot}`}></span>
-                                <GitBranch size={10} />
+                                <GitBranch size={12} />
                                 {getTimeAgo(gitActivity.time)}
                               </span>
                             </div>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[8px] text-slate-400 italic whitespace-nowrap">
-                              <GitBranch size={10} />
+                            <span className="inline-flex items-center gap-1 text-xs text-slate-400 italic whitespace-nowrap">
+                              <GitBranch size={12} />
                               No commits yet
                             </span>
                           )}
@@ -1198,9 +1200,9 @@ const ProjectManagement = () => {
                           const coordinators = (project.projectCoordinators || []).filter((c) => c && typeof c === 'object');
                           const cell = (people, chipClass) => {
                             const chips = people.length === 0
-                              ? <span className="text-[10px] text-slate-400">—</span>
+                              ? <span className="text-xs text-slate-400">—</span>
                               : people.map((p, i) => (
-                                <span key={p._id || i} className={`px-1.5 py-0.5 rounded-md text-[8px] font-black uppercase border whitespace-nowrap ${chipClass}`}>
+                                <span key={p._id || i} className={`badge border whitespace-nowrap ${chipClass}`}>
                                   {p.name}
                                 </span>
                               ));
@@ -1209,7 +1211,7 @@ const ProjectManagement = () => {
                                 type="button"
                                 onClick={() => setTeamModalProject(project)}
                                 title="Project Settings: Project Manager, Coordinators, Team Leads"
-                                className="min-w-[100px] max-w-[200px] text-left flex flex-wrap gap-1"
+                                className="min-w-[100px] max-w-[200px] text-left flex flex-wrap items-center gap-1"
                               >
                                 {chips}
                               </button>
@@ -1219,10 +1221,10 @@ const ProjectManagement = () => {
                           };
                           return (
                             <>
-                              <td className="px-4 py-3 hidden md:table-cell">
+                              <td className="td">
                                 {cell(leads, 'bg-indigo-50 text-indigo-700 border-indigo-200')}
                               </td>
-                              <td className="px-4 py-3 hidden md:table-cell">
+                              <td className="td">
                                 {cell(coordinators, 'bg-cyan-50 text-cyan-700 border-cyan-200')}
                               </td>
                             </>
@@ -1230,13 +1232,13 @@ const ProjectManagement = () => {
                         })()}
 
                         {/* Status */}
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <div className="relative min-w-[120px]">
                             <select
                               value={project.projectStatus || 'New'}
                               onChange={(e) => updateProjectStatus(project._id, e.target.value)}
                               disabled={updatingStatus[project._id]}
-                              className={`w-full px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getProjectStatusColor(project.projectStatus)}`}
+                              className={`w-full px-2 py-1 rounded-md text-xs font-semibold uppercase border cursor-pointer transition-all appearance-none pr-6 ${getProjectStatusColor(project.projectStatus)}`}
                               style={selectArrowStyle}
                             >
                               {projectStatuses.map(status => (
@@ -1252,11 +1254,11 @@ const ProjectManagement = () => {
                         </td>
 
                         {/* Actions */}
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <div className="flex items-center justify-end gap-1.5">
                             <button
                               onClick={() => handleEditClick(project)}
-                              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all flex-shrink-0"
+                              className="btn-icon bg-slate-50 border border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
                               title="Edit Project"
                             >
                               <Settings2 size={12} />
@@ -1264,7 +1266,7 @@ const ProjectManagement = () => {
                             {canEditProjectTeam(userRole, currentUserId, project) && (
                               <button
                                 onClick={() => setTeamModalProject(project)}
-                                className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-cyan-50 hover:text-cyan-600 transition-all flex-shrink-0"
+                                className="btn-icon bg-slate-50 border border-slate-200 text-slate-500 hover:bg-cyan-50 hover:text-cyan-600 flex-shrink-0"
                                 title="Project Settings (Manager, Coordinators, Team Leads)"
                               >
                                 <Users size={12} />
@@ -1272,14 +1274,14 @@ const ProjectManagement = () => {
                             )}
                             <button
                               onClick={() => { setActiveProjectId(project._id); setIsEditingFeed(false); setShowFeedModal(true); }}
-                              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 transition-all flex-shrink-0"
+                              className="btn-icon bg-slate-50 border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600 flex-shrink-0"
                               title="Add Feed"
                             >
                               <Plus size={12} />
                             </button>
                             <button
                               onClick={() => openBulkFeedModal(project._id)}
-                              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 transition-all flex-shrink-0"
+                              className="btn-icon bg-slate-50 border border-slate-200 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 flex-shrink-0"
                               title="Bulk Import Feeds"
                             >
                               <FileSpreadsheet size={12} />
@@ -1290,7 +1292,7 @@ const ProjectManagement = () => {
                                 setShowProjectCommentModal(true);
                                 setCommentRefreshTrigger(prev => prev + 1);
                               }}
-                              className="w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-purple-50 hover:text-purple-600 transition-all flex-shrink-0"
+                              className="btn-icon bg-slate-50 border border-slate-200 text-slate-500 hover:bg-purple-50 hover:text-purple-600 flex-shrink-0"
                               title="View Comments"
                             >
                               <MessageSquare size={12} />
@@ -1304,11 +1306,11 @@ const ProjectManagement = () => {
                   <tr>
                     <td colSpan={10} className="py-12 text-center">
                       <div className="flex flex-col items-center justify-center">
-                        <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3 shrink-0">
                           <Activity size={20} className="text-slate-300" />
                         </div>
-                        <p className="text-xs font-bold uppercase text-slate-400">No projects found</p>
-                        <p className="text-[9px] text-slate-300 mt-0.5">Try adjusting your filters</p>
+                        <p className="text-xs font-semibold uppercase text-slate-400">No projects found</p>
+                        <p className="text-xs text-slate-300 mt-0.5">Try adjusting your filters</p>
                       </div>
                     </td>
                   </tr>
@@ -1320,8 +1322,8 @@ const ProjectManagement = () => {
 
         {/* PAGINATION */}
         {totalPages > 1 && (
-          <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
-            <div className="text-[8px] sm:text-[10px] font-bold text-slate-400">
+          <div className="mt-4 sm:mt-6 flex flex-col lg:flex-row justify-between items-center gap-3">
+            <div className="text-sm text-slate-500">
               Showing {indexOfFirstProject + 1} to {Math.min(indexOfLastProject, filteredProjects.length)} of {filteredProjects.length} projects
             </div>
 
@@ -1329,9 +1331,9 @@ const ProjectManagement = () => {
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(prev => prev - 1)}
-                className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
-                <ChevronLeft size={isMobile ? 14 : 16} />
+                <ChevronLeft size={16} />
               </button>
 
               <div className="flex gap-0.5 sm:gap-1 bg-white p-0.5 sm:p-1 rounded-lg border border-slate-200 shadow-sm">
@@ -1351,18 +1353,18 @@ const ProjectManagement = () => {
                   }
 
                   if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                    return <span key="ellipsis1" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-[10px] sm:text-xs">...</span>;
+                    return <span key="ellipsis1" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-xs shrink-0">...</span>;
                   }
 
                   if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                    return <span key="ellipsis2" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-[10px] sm:text-xs">...</span>;
+                    return <span key="ellipsis2" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-xs shrink-0">...</span>;
                   }
 
                   return (
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-6 sm:w-7 h-6 sm:h-7 rounded-md text-[9px] sm:text-[11px] font-black transition-all ${
+                      className={`btn-icon ${
                         currentPage === pageNum
                           ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
                           : 'text-slate-500 hover:bg-slate-100'
@@ -1377,9 +1379,9 @@ const ProjectManagement = () => {
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => prev + 1)}
-                className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
-                <ChevronRight size={isMobile ? 14 : 16} />
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
@@ -1391,6 +1393,7 @@ const ProjectManagement = () => {
         <ProjectTeamModal
           project={teamModalProject}
           projectManagers={projectManagers}
+          coordinators={coordinators}
           teamLeads={teamLeads}
           adminBase={ADMIN_BASE}
           authHeader={authHeader}
@@ -1400,29 +1403,29 @@ const ProjectManagement = () => {
       )}
 
       {showProjectModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-3 sm:p-6">
-          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-xl p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 sm:mb-10">
-              <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-xl">
+            <div className="modal-header">
+              <h2 className="section-title">
                 {isEditing ? 'Modify Workspace' : 'Launch New Project'}
               </h2>
               <button 
                 onClick={closeProjectModal} 
                 disabled={isSubmittingProject}
-                className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="btn-icon text-slate-300 hover:text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <X size={isMobile ? 20 : 28} />
+                <X size={28} />
               </button>
             </div>
-            <form onSubmit={handleProjectSubmit} className="space-y-4 sm:space-y-6">
+            <form onSubmit={handleProjectSubmit} className="modal-body space-y-4 sm:space-y-6">
               <div className="space-y-1 sm:space-y-2">
-                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Brief Title</label>
+                <label className="label block mb-1.5">Project Brief Title</label>
                 <input 
                   type="text" 
                   placeholder="Title" 
                   required 
                   disabled={isSubmittingProject}
-                  className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base disabled:opacity-60" 
+                  className="input bg-slate-50" 
                   value={projectForm.name} 
                   onChange={(e) => setProjectForm({ ...projectForm, name: e.target.value })} 
                 />
@@ -1430,8 +1433,8 @@ const ProjectManagement = () => {
               
               {/* ORGANIZATION SELECTION SECTION */}
               <div className="space-y-1 sm:space-y-2" ref={orgDropdownRef}>
-                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1 sm:gap-2">
-                  <Building2 size={isMobile ? 10 : 12} />
+                <label className="label mb-1.5 flex items-center gap-1 sm:gap-2">
+                  <Building2 size={12} />
                   Assign Client Organizations *
                 </label>
                 
@@ -1441,16 +1444,16 @@ const ProjectManagement = () => {
                     {projectForm.organizations.map(orgId => {
                       const org = organizations.find(o => o._id === orgId);
                       return org ? (
-                        <span key={orgId} className="inline-flex items-center gap-1 sm:gap-1.5 bg-purple-600 text-white px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[7px] sm:text-[9px] font-black uppercase tracking-wider">
-                          <Building2 size={isMobile ? 8 : 10} />
+                        <span key={orgId} className="badge max-md:py-0 max-md:pr-0 bg-purple-600 text-white">
+                          <Building2 size={12} />
                           {org.companyName?.substring(0, 12) || org.companyName}
                           <button
                             type="button"
                             disabled={isSubmittingProject}
                             onClick={() => removeOrg(orgId)}
-                            className="hover:text-red-200 transition-colors disabled:opacity-50"
+                            className="btn-icon hover:text-red-200 disabled:opacity-50"
                           >
-                            <X size={isMobile ? 8 : 10} />
+                            <X size={12} />
                           </button>
                         </span>
                       ) : null;
@@ -1462,7 +1465,7 @@ const ProjectManagement = () => {
                   <>
                     {/* Search Input for Organizations */}
                     <div className="relative">
-                      <Search size={isMobile ? 12 : 14} className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                      <Search size={14} className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                       <input
                         type="text"
                         placeholder={isMobile ? "Search orgs..." : "Search organizations by name or website..."}
@@ -1473,15 +1476,15 @@ const ProjectManagement = () => {
                           setIsOrgDropdownOpen(true);
                         }}
                         onFocus={() => setIsOrgDropdownOpen(true)}
-                        className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-purple-500 bg-slate-50 disabled:opacity-60"
+                        className="input pl-8 bg-slate-50"
                       />
                       <button
                         type="button"
                         disabled={isSubmittingProject}
                         onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                        className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400 disabled:opacity-50"
+                        className="btn-icon absolute right-0 md:right-1 top-1/2 -translate-y-1/2 text-slate-400 disabled:opacity-50"
                       >
-                        {isOrgDropdownOpen ? <ChevronUp size={isMobile ? 12 : 14} /> : <ChevronDown size={isMobile ? 12 : 14} />}
+                        {isOrgDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                       </button>
                     </div>
 
@@ -1489,7 +1492,7 @@ const ProjectManagement = () => {
                     {isOrgDropdownOpen && !isSubmittingProject && (
                       <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-40 sm:max-h-48 overflow-y-auto z-50">
                         {filteredOrganizations.length === 0 ? (
-                          <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">No organizations found</div>
+                          <div className="p-3 sm:p-4 text-center text-slate-400 text-xs">No organizations found</div>
                         ) : (
                           filteredOrganizations.map(org => {
                             const isSelected = projectForm.organizations.includes(org._id);
@@ -1500,10 +1503,10 @@ const ProjectManagement = () => {
                                 className={`flex items-center justify-between p-2 sm:p-3 cursor-pointer transition-all hover:bg-slate-50 ${isSelected ? 'bg-purple-50' : ''}`}
                               >
                                 <div>
-                                  <p className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[120px] sm:max-w-none">{org.companyName}</p>
-                                  <p className="text-[8px] sm:text-[9px] text-slate-400 truncate max-w-[100px] sm:max-w-none">{org.website || 'No website'}</p>
+                                  <p className="text-xs sm:text-sm font-semibold text-slate-800 break-words">{org.companyName}</p>
+                                  <p className="text-xs text-slate-400 break-words">{org.website || 'No website'}</p>
                                 </div>
-                                {isSelected && <CheckCircle size={isMobile ? 12 : 14} className="text-purple-600 flex-shrink-0" />}
+                                {isSelected && <CheckCircle size={14} className="text-purple-600 flex-shrink-0" />}
                               </div>
                             );
                           })
@@ -1518,16 +1521,16 @@ const ProjectManagement = () => {
                         setShowNewOrgForm(true);
                         setIsOrgDropdownOpen(false);
                       }}
-                      className="w-full mt-1 sm:mt-2 py-1.5 sm:py-2 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[8px] sm:text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-1 sm:gap-2 disabled:opacity-50"
+                      className="btn btn-sm w-full mt-1 sm:mt-2 border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 disabled:opacity-50"
                     >
-                      <Plus size={isMobile ? 12 : 14} />
+                      <Plus size={14} />
                       Create New Organization
                     </button>
                   </>
                 ) : (
                   <div className="space-y-2 sm:space-y-3 p-3 sm:p-4 bg-blue-50 rounded-xl border border-blue-200">
                     <div className="flex items-center justify-between">
-                      <label className="text-[8px] sm:text-[10px] font-black uppercase text-blue-600 ml-1">New Organization</label>
+                      <label className="label block mb-1.5 text-blue-600">New Organization</label>
                       <button
                         type="button"
                         disabled={isSubmittingProject || isCreatingOrg}
@@ -1535,9 +1538,9 @@ const ProjectManagement = () => {
                           setShowNewOrgForm(false);
                           setNewOrgData({ companyName: '', website: '', address: '' });
                         }}
-                        className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                        className="btn-icon text-slate-400 hover:text-slate-600 disabled:opacity-50"
                       >
-                        <X size={isMobile ? 12 : 14} />
+                        <X size={14} />
                       </button>
                     </div>
                     <input
@@ -1545,7 +1548,7 @@ const ProjectManagement = () => {
                       placeholder="Organization Name *"
                       required
                       disabled={isSubmittingProject || isCreatingOrg}
-                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-xs sm:text-sm disabled:opacity-60"
+                      className="input"
                       value={newOrgData.companyName}
                       onChange={(e) => setNewOrgData({...newOrgData, companyName: e.target.value})}
                     />
@@ -1553,7 +1556,7 @@ const ProjectManagement = () => {
                       type="text"
                       placeholder="Website (optional)"
                       disabled={isSubmittingProject || isCreatingOrg}
-                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm disabled:opacity-60"
+                      className="input"
                       value={newOrgData.website}
                       onChange={(e) => setNewOrgData({...newOrgData, website: e.target.value})}
                     />
@@ -1561,19 +1564,19 @@ const ProjectManagement = () => {
                       type="text"
                       placeholder="Address (optional)"
                       disabled={isSubmittingProject || isCreatingOrg}
-                      className="w-full p-2 sm:p-3 bg-white rounded-xl border border-slate-200 outline-none text-xs sm:text-sm disabled:opacity-60"
+                      className="input"
                       value={newOrgData.address}
                       onChange={(e) => setNewOrgData({...newOrgData, address: e.target.value})}
                     />
                   </div>
                 )}
                 
-                <p className="text-[7px] sm:text-[8px] text-slate-400 mt-0.5 sm:mt-1">
+                <p className="text-xs text-slate-400 mt-0.5 sm:mt-1">
                   {projectForm.organizations.length} client organization(s) selected
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 sm:gap-6">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <CreatableSelect 
                   isClearable 
                   isDisabled={isSubmittingProject}
@@ -1594,17 +1597,18 @@ const ProjectManagement = () => {
               </div>
               <select 
                 disabled={isSubmittingProject}
-                className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700 disabled:opacity-60" 
+                className="input bg-slate-50" 
                 value={projectForm.projectManager} 
                 onChange={(e) => setProjectForm({ ...projectForm, projectManager: e.target.value })}
               >
                 <option value="">Select Manager</option>
+                {legacyPm && <option value={legacyPm._id}>{legacyPm.name}{legacyPm.role ? ` (${legacyPm.role})` : ''}</option>}
                 {projectManagers.map(pm => <option key={pm._id} value={pm._id}>{pm.name}</option>)}
               </select>
               <button 
                 type="submit" 
                 disabled={isSubmittingProject}
-                className={`w-full py-3 sm:py-5 font-black rounded-2xl uppercase text-[10px] sm:text-xs tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${
+                className={`btn btn-md w-full shadow-xl ${
                   isSubmittingProject 
                     ? 'bg-slate-400 text-white cursor-not-allowed' 
                     : 'bg-[#111C44] text-white hover:bg-blue-600'
@@ -1626,35 +1630,35 @@ const ProjectManagement = () => {
 
       {/* FEED MODAL - Responsive */}
       {showFeedModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[110] p-3 sm:p-6">
-          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-lg p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 sm:mb-10">
-              <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg">
+            <div className="modal-header">
+              <h2 className="section-title">
                 {isEditingFeed ? 'Update Stream' : 'New Feed'}
               </h2>
               <button 
                 onClick={closeFeedModal} 
                 disabled={isSubmittingFeed}
-                className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="btn-icon text-slate-300 hover:text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <X size={isMobile ? 20 : 28} />
+                <X size={28} />
               </button>
             </div>
 
-            <form onSubmit={handleFeedSubmit} className="space-y-4 sm:space-y-6">
+            <form onSubmit={handleFeedSubmit} className="modal-body space-y-4 sm:space-y-6">
               <input
                 type="text"
                 placeholder="Stream Name"
                 required
                 disabled={isSubmittingFeed}
-                className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm sm:text-base disabled:opacity-60"
+                className="input bg-slate-50"
                 value={feedForm.name}
                 onChange={(e) => setFeedForm({ ...feedForm, name: e.target.value })}
               />
 
               <select
                 disabled={isSubmittingFeed}
-                className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 disabled:opacity-60"
+                className="input bg-slate-50"
                 value={feedForm.feedType}
                 onChange={(e) => setFeedForm({ 
                   ...feedForm, 
@@ -1671,13 +1675,13 @@ const ProjectManagement = () => {
 
               {feedForm.feedType === 'Weekly' && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Select Weekly Day</label>
+                  <label className="label block mb-1.5 sm:mb-2">Select Weekly Day</label>
                   <select 
                     required 
                     disabled={isSubmittingFeed}
                     value={feedForm.weekDay} 
                     onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })} 
-                    className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 disabled:opacity-60"
+                    className="input bg-slate-50"
                   >
                     <option value="">Choose Day</option>
                     {weekDays.map(day => <option key={day} value={day}>{day}</option>)}
@@ -1687,13 +1691,13 @@ const ProjectManagement = () => {
 
               {feedForm.feedType === 'Monthly' && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Day of Month (1-31)</label>
+                  <label className="label block mb-1.5 sm:mb-2">Day of Month (1-31)</label>
                   <select 
                     required 
                     disabled={isSubmittingFeed}
                     value={feedForm.monthDay} 
                     onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })} 
-                    className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 disabled:opacity-60"
+                    className="input bg-slate-50"
                   >
                     <option value="">Select Day</option>
                     {[...Array(31)].map((_, i) => (
@@ -1705,13 +1709,13 @@ const ProjectManagement = () => {
 
               {/* FEED STATUS SELECTION */}
               <div className="space-y-1 sm:space-y-2">
-                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1 sm:gap-2">
-                  <Activity size={isMobile ? 10 : 12} />
+                <label className="label mb-1.5 flex items-center gap-1 sm:gap-2">
+                  <Activity size={12} />
                   Feed Status
                 </label>
                 <select
                   disabled={isSubmittingFeed}
-                  className="w-full p-3 sm:p-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-black text-xs sm:text-sm text-slate-700 cursor-pointer disabled:opacity-60"
+                  className="input bg-slate-50 cursor-pointer"
                   value={feedForm.feedStatus}
                   onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
                 >
@@ -1723,7 +1727,7 @@ const ProjectManagement = () => {
 
               {/* WEB / APP SELECTION */}
               <div className="space-y-2 sm:space-y-3">
-                <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Platform Type</label>
+                <label className="label block mb-1.5">Platform Type</label>
                 <div className="flex gap-2 sm:gap-3">
                   {['Web', 'App', 'Both'].map((platform) => (
                     <button
@@ -1737,7 +1741,7 @@ const ProjectManagement = () => {
                           webDomain: platform === 'App' ? '' : feedForm.webDomain
                         });
                       }}
-                      className={`flex-1 py-2 sm:py-3 rounded-xl font-black text-[8px] sm:text-xs uppercase tracking-wider transition-all disabled:opacity-50 ${
+                      className={`btn btn-md flex-1 disabled:opacity-50 ${
                         feedForm.feedPlatform === platform
                           ? 'bg-blue-600 text-white shadow-md'
                           : 'bg-slate-50 text-slate-400 border border-slate-100 hover:bg-slate-100'
@@ -1752,23 +1756,23 @@ const ProjectManagement = () => {
               {/* DOMAIN FIELD */}
               {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
                 <div className="animate-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1 sm:mb-2 ml-1">Domain URL</label>
+                  <label className="label block mb-1.5 sm:mb-2">Domain URL</label>
                   <input
                     type="url"
                     placeholder="https://example.com"
                     disabled={isSubmittingFeed}
                     value={feedForm.webDomain}
                     onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
-                    className="w-full p-3 sm:p-4 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-all disabled:opacity-60"
+                    className="input bg-slate-50"
                   />
-                  <p className="text-[7px] sm:text-[8px] text-slate-400 mt-0.5 sm:mt-1 ml-1">Enter full URL including https://</p>
+                  <p className="text-xs text-slate-400 mt-0.5 sm:mt-1 ml-1">Enter full URL including https://</p>
                 </div>
               )}
 
               {/* SEARCHABLE DEVELOPER DROPDOWN WITH GITHUB STATUS - Responsive */}
               <div className="space-y-1 sm:space-y-2" ref={developerDropdownRef}>
-                <label className="text-[8px] sm:text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 flex items-center gap-1 sm:gap-2">
-                  <UserCheck size={isMobile ? 10 : 12} />
+                <label className="label mb-1.5 flex items-center gap-1 sm:gap-2">
+                  <UserCheck size={12} />
                   Assign Developers
                 </label>
                 
@@ -1778,23 +1782,23 @@ const ProjectManagement = () => {
                     {feedForm.assignedDevelopers.map(devId => {
                       const dev = developers.find(d => d._id === devId);
                       return dev ? (
-                        <span key={devId} className={`inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[7px] sm:text-[9px] font-black uppercase tracking-wider ${
+                        <span key={devId} className={`badge sm:gap-1.5 ${
                           dev.githubLinked && dev.githubUsername 
                             ? 'bg-green-600 text-white' 
                             : 'bg-orange-500 text-white'
                         }`}>
-                          <GitFork size={isMobile ? 8 : 10} />
+                          <GitFork size={12} />
                           {dev.name?.substring(0, 10) || dev.name}
                           {(!dev.githubLinked || !dev.githubUsername) && (
-                            <span className="text-[6px] sm:text-[7px] bg-orange-700 px-0.5 sm:px-1 rounded ml-0.5 sm:ml-1">No GitHub</span>
+                            <span className="text-xs bg-orange-700 px-0.5 sm:px-1 rounded ml-0.5 sm:ml-1">No GitHub</span>
                           )}
                           <button
                             type="button"
                             disabled={isSubmittingFeed}
                             onClick={() => toggleDeveloperSelection(devId)}
-                            className="hover:text-red-200 transition-colors disabled:opacity-50"
+                            className="btn-icon hover:text-red-200 disabled:opacity-50"
                           >
-                            <X size={isMobile ? 8 : 10} />
+                            <X size={12} />
                           </button>
                         </span>
                       ) : null;
@@ -1806,8 +1810,8 @@ const ProjectManagement = () => {
                 {feedForm.assignedDevelopers.length > 0 && (
                   <div className="bg-blue-50 rounded-lg p-1.5 sm:p-2 mb-1 sm:mb-2">
                     <div className="flex items-center gap-1 sm:gap-1.5">
-                      <GitFork size={isMobile ? 8 : 10} className="text-blue-600" />
-                      <p className="text-[6px] sm:text-[7px] font-bold text-blue-700">
+                      <GitFork size={12} className="text-blue-600" />
+                      <p className="text-xs font-semibold text-blue-700">
                         Linked GitHub accounts receive repo invitations.
                       </p>
                     </div>
@@ -1817,7 +1821,7 @@ const ProjectManagement = () => {
                 {/* Search Input with Refresh Button */}
                 <div className="relative flex gap-1.5 sm:gap-2">
                   <div className="relative flex-1">
-                    <Search size={isMobile ? 12 : 14} className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <Search size={14} className="absolute left-2 sm:left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       placeholder={isMobile ? "Search devs..." : "Search developers by name or email..."}
@@ -1828,15 +1832,15 @@ const ProjectManagement = () => {
                         setIsDeveloperDropdownOpen(true);
                       }}
                       onFocus={() => setIsDeveloperDropdownOpen(true)}
-                      className="w-full h-9 sm:h-11 rounded-xl border border-slate-200 pl-8 sm:pl-9 pr-7 sm:pr-8 font-medium text-xs sm:text-sm outline-none focus:border-blue-500 bg-slate-50 disabled:opacity-60"
+                      className="input pl-8 bg-slate-50"
                     />
                     <button
                       type="button"
                       disabled={isSubmittingFeed}
                       onClick={() => setIsDeveloperDropdownOpen(!isDeveloperDropdownOpen)}
-                      className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 text-slate-400 disabled:opacity-50"
+                      className="btn-icon absolute right-0 md:right-1 top-1/2 -translate-y-1/2 text-slate-400 disabled:opacity-50"
                     >
-                      {isDeveloperDropdownOpen ? <ChevronUp size={isMobile ? 12 : 14} /> : <ChevronDown size={isMobile ? 12 : 14} />}
+                      {isDeveloperDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                     </button>
                   </div>
                   
@@ -1844,10 +1848,10 @@ const ProjectManagement = () => {
                     type="button"
                     disabled={isSubmittingFeed}
                     onClick={() => fetchInitialData()}
-                    className="px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-50"
+                    className="btn btn-sm bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                     title="Refresh developers list"
                   >
-                    <RefreshCw size={isMobile ? 14 : 16} />
+                    <RefreshCw size={16} />
                   </button>
                 </div>
 
@@ -1855,7 +1859,7 @@ const ProjectManagement = () => {
                 {isDeveloperDropdownOpen && !isSubmittingFeed && (
                   <div className="border border-slate-200 rounded-xl bg-white shadow-lg max-h-48 sm:max-h-64 overflow-y-auto z-50">
                     {filteredDevelopers.length === 0 ? (
-                      <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">No developers found</div>
+                      <div className="p-3 sm:p-4 text-center text-slate-400 text-xs">No developers found</div>
                     ) : (
                       filteredDevelopers.map(dev => {
                         const isSelected = feedForm.assignedDevelopers.includes(dev._id);
@@ -1870,22 +1874,22 @@ const ProjectManagement = () => {
                               onClick={() => toggleDeveloperSelection(dev._id)}
                             >
                               <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
-                                <p className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[80px] sm:max-w-none">{dev.name}</p>
+                                <p className="text-xs sm:text-sm font-semibold text-slate-800 truncate max-w-[80px] sm:max-w-none">{dev.name}</p>
                                 {hasGitHub ? (
-                                  <span className="inline-flex items-center gap-0.5 sm:gap-1 text-[6px] sm:text-[7px] font-black text-green-600 bg-green-50 px-1 sm:px-1.5 py-0.5 rounded-full">
-                                    <CheckCircle size={isMobile ? 6 : 8} />
+                                  <span className="badge rounded-full sm:gap-1 text-green-600 bg-green-50">
+                                    <CheckCircle size={12} />
                                     {dev.githubUsername?.substring(0, 8) || dev.githubUsername}
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-0.5 sm:gap-1 text-[6px] sm:text-[7px] font-black text-orange-600 bg-orange-50 px-1 sm:px-1.5 py-0.5 rounded-full">
-                                    <AlertCircle size={isMobile ? 6 : 8} />
+                                  <span className="badge rounded-full sm:gap-1 text-orange-600 bg-orange-50">
+                                    <AlertCircle size={12} />
                                     No GitHub
                                   </span>
                                 )}
                               </div>
-                              <p className="text-[7px] sm:text-[9px] text-slate-400 truncate max-w-[80px] sm:max-w-none">{dev.email}</p>
+                              <p className="text-xs text-slate-400 truncate max-w-[80px] sm:max-w-none">{dev.email}</p>
                               {!hasGitHub && dev.role === 'Developer' && (
-                                <p className="text-[6px] sm:text-[7px] text-orange-500 mt-0.5">
+                                <p className="text-xs text-orange-500 mt-0.5">
                                   ⚠️ No GitHub invites
                                 </p>
                               )}
@@ -1895,20 +1899,20 @@ const ProjectManagement = () => {
                                 <button
                                   onClick={(e) => handleQuickLinkGitHub(dev, e)}
                                   disabled={isSubmittingFeed}
-                                  className="p-1 sm:p-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg transition-all disabled:opacity-50"
+                                  className="btn-icon text-blue-600 hover:text-blue-700 hover:bg-blue-50 disabled:opacity-50"
                                   title="Link GitHub Account"
                                 >
-                                  <GitFork size={isMobile ? 12 : 14} />
+                                  <GitFork size={14} />
                                 </button>
                               )}
-                              {isSelected && <CheckCircle size={isMobile ? 12 : 14} className="text-blue-600 flex-shrink-0" />}
+                              {isSelected && <CheckCircle size={14} className="text-blue-600 flex-shrink-0" />}
                             </div>
                           </div>
                         );
                       })
                     )}
                     {filteredDevelopers.length === 0 && developers.length > 0 && (
-                      <div className="p-3 sm:p-4 text-center text-slate-400 text-[10px] sm:text-xs">
+                      <div className="p-3 sm:p-4 text-center text-slate-400 text-xs">
                         No matching developers. Try different search.
                       </div>
                     )}
@@ -1916,10 +1920,10 @@ const ProjectManagement = () => {
                 )}
                 
                 <div className="flex justify-between items-center mt-0.5 sm:mt-1">
-                  <p className="text-[7px] sm:text-[8px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     {feedForm.assignedDevelopers.length} developer(s) selected
                   </p>
-                  <p className="text-[7px] sm:text-[8px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     {feedForm.assignedDevelopers.filter(id => {
                       const dev = developers.find(d => d._id === id);
                       return dev && dev.githubLinked && dev.githubUsername;
@@ -1931,7 +1935,7 @@ const ProjectManagement = () => {
               <button 
                 type="submit" 
                 disabled={isSubmittingFeed}
-                className={`w-full py-3 sm:py-5 font-black rounded-2xl uppercase text-[10px] sm:text-xs tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${
+                className={`btn btn-md w-full shadow-xl ${
                   isSubmittingFeed 
                     ? 'bg-slate-400 text-white cursor-not-allowed' 
                     : 'bg-blue-600 text-white hover:bg-[#111C44]'
@@ -1955,11 +1959,11 @@ const ProjectManagement = () => {
           BULK FEED IMPORT MODAL
           ============================================ */}
       {showBulkFeedModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[115] p-3 sm:p-6">
-          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6 sm:mb-8">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">
+                <h2 className="section-title">
                   Bulk Import Feeds
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
@@ -1974,33 +1978,33 @@ const ProjectManagement = () => {
                   setBulkFeedPreview([]);
                 }} 
                 disabled={bulkFeedUploading}
-                className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="btn-icon text-slate-300 hover:text-slate-600 disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                <X size={isMobile ? 20 : 28} />
+                <X size={28} />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="modal-body stack">
               {/* Excel Format Guide */}
               <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                   <FileSpreadsheet size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-bold text-blue-700">Excel Format Guide</p>
-                    <p className="text-[10px] text-blue-600 mt-1">
+                    <p className="text-xs font-semibold text-blue-700">Excel Format Guide</p>
+                    <p className="text-xs text-blue-600 mt-1">
                       Include these columns in your Excel file (headers are case-sensitive):
                     </p>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] font-bold">name *</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedType</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">weekDay</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">monthDay</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedPlatform</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">webDomain</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">assignedDevelopers</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedStatus</span>
+                      <span className="badge bg-red-100 text-red-700">name *</span>
+                      <span className="badge bg-blue-50 text-blue-600">feedType</span>
+                      <span className="badge bg-blue-50 text-blue-600">weekDay</span>
+                      <span className="badge bg-blue-50 text-blue-600">monthDay</span>
+                      <span className="badge bg-blue-50 text-blue-600">feedPlatform</span>
+                      <span className="badge bg-blue-50 text-blue-600">webDomain</span>
+                      <span className="badge bg-blue-50 text-blue-600">assignedDevelopers</span>
+                      <span className="badge bg-blue-50 text-blue-600">feedStatus</span>
                     </div>
-                    <p className="text-[8px] text-blue-500 mt-2">
+                    <p className="text-xs text-blue-500 mt-2">
                       * Required column. Order doesn't matter. Supports .xlsx, .xls, .csv
                     </p>
                   </div>
@@ -2018,7 +2022,7 @@ const ProjectManagement = () => {
                   className="hidden"
                 />
                 <div 
-                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all ${
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${
                     bulkFeedUploading 
                       ? 'border-slate-200 bg-slate-50 cursor-not-allowed opacity-60' 
                       : bulkFeedFile 
@@ -2031,7 +2035,7 @@ const ProjectManagement = () => {
                     <div className="flex flex-col items-center gap-2">
                       <FileSpreadsheet size={40} className="text-emerald-600" />
                       <p className="text-sm font-bold text-emerald-700">{bulkFeedFile.name}</p>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-xs text-slate-500">
                         {(bulkFeedFile.size / 1024).toFixed(1)} KB • {bulkFeedPreview.length} feed(s) found
                       </p>
                       <button
@@ -2043,7 +2047,7 @@ const ProjectManagement = () => {
                           setBulkFeedPreview([]);
                           if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
-                        className="text-xs text-red-500 hover:text-red-700 font-bold disabled:opacity-50"
+                        className="text-xs text-red-500 hover:text-red-700 font-semibold disabled:opacity-50"
                       >
                         Remove file
                       </button>
@@ -2052,7 +2056,7 @@ const ProjectManagement = () => {
                     <div className="flex flex-col items-center gap-2">
                       <Upload size={40} className="text-slate-400" />
                       <p className="text-sm font-bold text-slate-600">Click to upload Excel file</p>
-                      <p className="text-[10px] text-slate-400">or drag and drop</p>
+                      <p className="text-xs text-slate-400">or drag and drop</p>
                     </div>
                   )}
                 </div>
@@ -2062,20 +2066,20 @@ const ProjectManagement = () => {
               {bulkFeedPreview.length > 0 && (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-600 flex items-center gap-2">
+                    <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
                       <FileSpreadsheet size={14} className="text-emerald-600" />
                       Preview ({bulkFeedPreview.length} feeds)
                     </p>
-                    <span className="text-[8px] text-slate-400">
+                    <span className="text-xs text-slate-400">
                       Showing first {Math.min(bulkFeedPreview.length, 10)} rows
                     </span>
                   </div>
-                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                    <table className="w-full text-xs">
+                  <div className="table-scroll table-sticky-first overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs min-w-[640px]">
                       <thead className="bg-slate-50/80 sticky top-0">
                         <tr>
                           {Object.keys(bulkFeedPreview[0] || {}).map((key, idx) => (
-                            <th key={idx} className="px-3 py-2 text-left font-bold text-slate-600 border-b border-slate-200">
+                            <th key={idx} className="th border-b border-slate-200">
                               {key}
                             </th>
                           ))}
@@ -2085,7 +2089,7 @@ const ProjectManagement = () => {
                         {bulkFeedPreview.slice(0, 10).map((row, rowIdx) => (
                           <tr key={rowIdx} className="border-b border-slate-100 hover:bg-slate-50">
                             {Object.values(row).map((val, colIdx) => (
-                              <td key={colIdx} className="px-3 py-1.5 text-slate-700 truncate max-w-[150px]">
+                              <td key={colIdx} className="td truncate max-w-[150px]">
                                 {String(val || '')}
                               </td>
                             ))}
@@ -2095,7 +2099,7 @@ const ProjectManagement = () => {
                     </table>
                   </div>
                   {bulkFeedPreview.length > 10 && (
-                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-center text-[8px] text-slate-400">
+                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-400">
                       + {bulkFeedPreview.length - 10} more rows not shown
                     </div>
                   )}
@@ -2112,7 +2116,7 @@ const ProjectManagement = () => {
                     setBulkFeedFile(null);
                     setBulkFeedPreview([]);
                   }}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -2120,7 +2124,7 @@ const ProjectManagement = () => {
                   type="button"
                   onClick={handleBulkFeedSubmit}
                   disabled={bulkFeedUploading || bulkFeedPreview.length === 0}
-                  className="flex-[2] py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn btn-md flex-[2] bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200 disabled:opacity-50"
                 >
                   {bulkFeedUploading ? (
                     <>
@@ -2142,21 +2146,21 @@ const ProjectManagement = () => {
 
       {/* TASK MODAL - Responsive */}
       {showTaskModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[120] p-3 sm:p-6">
-          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-md p-6 sm:p-10 border border-white/20">
-            <div className="flex justify-between items-center mb-6 sm:mb-8">
-              <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">Deploy Task</h2>
-              <button onClick={() => setShowTaskModal(false)} className="text-slate-300 hover:text-slate-600 transition-colors">
-                <X size={isMobile ? 20 : 28} />
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
+              <h2 className="section-title">Deploy Task</h2>
+              <button onClick={() => setShowTaskModal(false)} className="btn-icon text-slate-300 hover:text-slate-600">
+                <X size={28} />
               </button>
             </div>
-            <form onSubmit={handleCreateTask} className="space-y-4 sm:space-y-6">
-              <p className="text-[8px] sm:text-[10px] font-black uppercase text-blue-600 tracking-widest flex items-center gap-1 sm:gap-2">
-                <Hash size={isMobile ? 10 : 12} />
+            <form onSubmit={handleCreateTask} className="modal-body space-y-4">
+              <p className="text-xs font-semibold uppercase text-blue-600 tracking-wide flex items-center gap-1 sm:gap-2">
+                <Hash size={12} />
                 Stream: {activeFeed?.name}
               </p>
-              <textarea required placeholder="Enter specific instructions for developers..." className="w-full p-4 sm:p-6 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-xs sm:text-sm text-slate-700 min-h-[120px] sm:min-h-[150px] focus:border-blue-300" value={taskText} onChange={(e) => setTaskText(e.target.value)} />
-              <button type="submit" className="w-full py-3 sm:py-5 bg-[#111C44] text-white font-black rounded-2xl uppercase text-[10px] sm:text-xs tracking-widest hover:bg-blue-600 transition-all shadow-xl">
+              <textarea required placeholder="Enter specific instructions for developers..." className="input bg-slate-50 min-h-[120px]" value={taskText} onChange={(e) => setTaskText(e.target.value)} />
+              <button type="submit" className="btn btn-md w-full bg-[#111C44] text-white hover:bg-blue-600 shadow-xl">
                 Push to Bucket
               </button>
             </form>
@@ -2166,12 +2170,12 @@ const ProjectManagement = () => {
 
       {/* PROJECT COMMENT MODAL - Responsive */}
       {showProjectCommentModal && selectedProjectForComments && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[150] p-4 sm:p-6">
-          <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-6 sm:p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4 sm:mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl sm:text-2xl font-black text-[#1B2559]">Project Comments</h2>
-                <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1 truncate max-w-[150px] sm:max-w-none">
+                <h2 className="section-title">Project Comments</h2>
+                <p className="text-xs sm:text-sm text-slate-500 mt-0.5 sm:mt-1 break-words">
                   {selectedProjectForComments.projectCustomId || selectedProjectForComments.name}
                 </p>
               </div>
@@ -2180,12 +2184,13 @@ const ProjectManagement = () => {
                   setShowProjectCommentModal(false);
                   setSelectedProjectForComments(null);
                 }}
-                className="text-slate-300 hover:text-slate-600 transition-colors"
+                className="btn-icon text-slate-300 hover:text-slate-600"
               >
-                <X size={isMobile ? 20 : 28} />
+                <X size={28} />
               </button>
             </div>
             
+            <div className="modal-body">
             <CommentSection
               type="project"
               entityId={selectedProjectForComments._id}
@@ -2195,21 +2200,22 @@ const ProjectManagement = () => {
               canComment={userRole === 'Admin' || isPMRole(userRole)}
               refreshTrigger={commentRefreshTrigger}
             />
+            </div>
           </div>
         </div>
       )}
       
       {/* SUCCESS POPUP - Responsive */}
       {showSuccessPopup && (
-        <div className="fixed top-3 sm:top-6 right-3 sm:right-6 z-[200] animate-in slide-in-from-top-5 duration-300 max-w-[90vw] sm:max-w-[280px]">
-          <div className="bg-emerald-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-2xl border border-emerald-400">
+        <div className="fixed top-16 md:top-6 right-3 sm:right-6 z-[200] animate-in slide-in-from-top-5 duration-300 max-w-[90vw] sm:max-w-[320px]">
+          <div className="bg-emerald-500 text-white px-4 sm:px-6 py-3 sm:py-4 rounded-xl shadow-2xl border border-emerald-400">
             <div className="flex items-center justify-between gap-2 sm:gap-4">
               <div>
-                <p className="text-[8px] sm:text-xs font-black uppercase tracking-widest opacity-80">Success</p>
-                <p className="text-xs sm:text-sm font-bold mt-0.5 sm:mt-1 truncate">{successMessage}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Success</p>
+                <p className="text-sm font-semibold mt-0.5 sm:mt-1 break-words">{successMessage}</p>
               </div>
-              <button onClick={() => setShowSuccessPopup(false)} className="text-white/80 hover:text-white flex-shrink-0">
-                <X size={isMobile ? 14 : 18} />
+              <button onClick={() => setShowSuccessPopup(false)} className="btn-icon text-white/80 hover:text-white">
+                <X size={18} />
               </button>
             </div>
           </div>

@@ -15,7 +15,7 @@ const PersonList = ({ people, selected, onToggle, search, onSearch, emptyText, r
   }, [people, search]);
 
   return (
-    <div className="border border-slate-100 rounded-2xl bg-slate-50 overflow-hidden">
+    <div className="border border-slate-100 rounded-xl bg-slate-50 overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-100 bg-white">
         <Search size={14} className="text-slate-400" />
         <input
@@ -34,7 +34,7 @@ const PersonList = ({ people, selected, onToggle, search, onSearch, emptyText, r
               <input type="checkbox" checked={checked} onChange={() => onToggle(idOf(p))} className="accent-indigo-600" />
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-bold text-slate-700 truncate">{p.name}</span>
-                <span className="block text-[11px] text-slate-400 truncate">{p.email}</span>
+                <span className="block text-xs text-slate-400 truncate">{p.email}</span>
               </span>
               {renderBadge && renderBadge(p)}
             </label>
@@ -45,7 +45,7 @@ const PersonList = ({ people, selected, onToggle, search, onSearch, emptyText, r
   );
 };
 
-const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, authHeader, onClose, onSaved }) => {
+const ProjectTeamModal = ({ project, projectManagers, coordinators, teamLeads, adminBase, authHeader, onClose, onSaved }) => {
   const initialTeamLeads = (project.teamLeads && project.teamLeads.length ? project.teamLeads : project.teamLead ? [project.teamLead] : []).map(idOf);
 
   const [pmId, setPmId] = useState(idOf(project.projectManager));
@@ -57,7 +57,14 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
   // Only Admin / Super Admin may change the Project Manager; a PM sees it read-only
   const canChangePm = ['Super Admin', 'Admin'].includes(localStorage.getItem('role'));
 
-  const coordinatorChoices = projectManagers.filter((u) => idOf(u) !== pmId);
+  const coordinatorChoices = coordinators.filter((u) => idOf(u) !== pmId);
+  // Older projects may have someone who is not a Project Manager (e.g. a Project Coordinator)
+  // saved as PM: keep that person as an option so the saved value is never shown as blank.
+  const savedPmId = idOf(project.projectManager);
+  const legacyPm = savedPmId && !projectManagers.some((u) => idOf(u) === savedPmId)
+    ? coordinators.find((u) => idOf(u) === savedPmId) || { _id: savedPmId, name: project.projectManager.name || 'Current manager' }
+    : null;
+  const pmChoices = legacyPm ? [legacyPm, ...projectManagers] : projectManagers;
   const nameOf = (list, id) => list.find((u) => idOf(u) === id)?.name || 'Unknown user';
 
   const toggle = (setter) => (id) => setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -86,31 +93,32 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[100] p-3 sm:p-6">
-      <div className="bg-white rounded-[2rem] sm:rounded-[2.5rem] shadow-2xl w-full max-w-xl p-6 sm:p-10 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-start mb-6 gap-4">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-xl">
+        <div className="modal-header">
           <div className="min-w-0">
-            <h2 className="text-2xl sm:text-3xl font-black text-[#1B2559] tracking-tight">Project Settings</h2>
-            <p className="text-xs text-slate-400 font-bold mt-1 truncate">{project.name}</p>
+            <h2 className="section-title">Project Settings</h2>
+            <p className="text-xs text-slate-400 font-semibold mt-1 break-words">{project.name}</p>
           </div>
-          <button onClick={onClose} disabled={saving} className="text-slate-300 hover:text-slate-600 transition-colors disabled:opacity-40">
+          <button onClick={onClose} disabled={saving} className="btn-icon text-slate-300 hover:text-slate-600 disabled:opacity-40">
             <X size={24} />
           </button>
         </div>
 
-        <div className="space-y-6">
+        <div className="modal-body">
+        <div className="stack">
           {/* Project Manager */}
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Project Manager</label>
+            <label className="label block mb-1.5">Project Manager</label>
             <select
               value={pmId}
               onChange={(e) => changePm(e.target.value)}
               disabled={saving || !canChangePm}
               title={canChangePm ? undefined : 'Only Admin can change the Project Manager'}
-              className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm"
+              className="input bg-slate-50"
             >
               <option value="">— None —</option>
-              {projectManagers.map((u) => (
+              {pmChoices.map((u) => (
                 <option key={idOf(u)} value={idOf(u)}>{u.name}{u.role ? ` (${u.role})` : ''}</option>
               ))}
             </select>
@@ -119,12 +127,12 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
           {/* Coordinators */}
           <div className="space-y-2">
             <div className="flex items-center justify-between ml-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+              <label className="label mb-1.5 flex items-center gap-1.5">
                 <UserCheck size={12} /> Project Coordinators
               </label>
-              <span className="text-[10px] font-bold text-slate-400">{coordinatorIds.length} selected</span>
+              <span className="text-xs font-semibold text-slate-400">{coordinatorIds.length} selected</span>
             </div>
-            <p className="text-[11px] text-slate-400 ml-1">Coordinators get the same access to this project as its Project Manager.</p>
+            <p className="text-xs text-slate-400 ml-1">Coordinators get the same access to this project as its Project Manager.</p>
             <PersonList
               people={coordinatorChoices}
               selected={coordinatorIds}
@@ -133,7 +141,7 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
               onSearch={setCoordSearch}
               emptyText="No Project Coordinators or Project Managers found."
               renderBadge={(u) => (
-                <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 whitespace-nowrap">{u.role}</span>
+                <span className="badge rounded-full bg-cyan-50 text-cyan-700 border border-cyan-100 whitespace-nowrap">{u.role}</span>
               )}
             />
           </div>
@@ -141,10 +149,10 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
           {/* Team Leads */}
           <div className="space-y-2">
             <div className="flex items-center justify-between ml-1">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+              <label className="label mb-1.5 flex items-center gap-1.5">
                 <Users size={12} /> Team Leads
               </label>
-              <span className="text-[10px] font-bold text-slate-400">{teamLeadIds.length} selected</span>
+              <span className="text-xs font-semibold text-slate-400">{teamLeadIds.length} selected</span>
             </div>
             <PersonList
               people={teamLeads}
@@ -162,34 +170,35 @@ const ProjectTeamModal = ({ project, projectManagers, teamLeads, adminBase, auth
                     type="button"
                     onClick={() => makePrimary(id)}
                     title={i === 0 ? 'Primary Team Lead' : 'Make primary Team Lead'}
-                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-all ${
+                    className={`btn btn-sm border rounded-full max-w-full whitespace-normal text-left ${
                       i === 0 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
                     }`}
                   >
-                    <Star size={11} className={i === 0 ? 'fill-current' : ''} />
+                    <Star size={12} className={i === 0 ? 'fill-current' : ''} />
                     {nameOf(teamLeads, id)}
                   </button>
                 ))}
               </div>
             )}
             {teamLeadIds.length > 1 && (
-              <p className="text-[11px] text-slate-400 ml-1">The starred Team Lead is the primary one. Click a name to make it primary.</p>
+              <p className="text-xs text-slate-400 ml-1">The starred Team Lead is the primary one. Click a name to make it primary.</p>
             )}
           </div>
         </div>
 
-        <div className="flex justify-end gap-3 mt-8">
-          <button onClick={onClose} disabled={saving} className="px-5 py-3 rounded-2xl font-bold text-sm text-slate-500 hover:bg-slate-100 disabled:opacity-40">
+        <div className="flex justify-end gap-2 mt-4 sm:mt-6">
+          <button onClick={onClose} disabled={saving} className="btn btn-md text-slate-500 hover:bg-slate-100 disabled:opacity-40">
             Cancel
           </button>
           <button
             onClick={save}
             disabled={saving}
-            className="px-6 py-3 rounded-2xl font-black text-sm bg-[#1B2559] text-white hover:bg-indigo-700 transition-all disabled:opacity-60 inline-flex items-center gap-2"
+            className="btn btn-md bg-[#1B2559] text-white hover:bg-indigo-700 disabled:opacity-60"
           >
             {saving && <Loader2 size={16} className="animate-spin" />}
             Save
           </button>
+        </div>
         </div>
       </div>
     </div>

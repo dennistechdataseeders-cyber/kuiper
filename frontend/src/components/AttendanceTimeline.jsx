@@ -213,7 +213,7 @@ const AverageBarChart = ({ weeklyAverages }) => {
   if (filteredWeeks.length === 0) {
     return (
       <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
-        <span className="text-[8px] font-medium text-slate-400">No weeks with sufficient data</span>
+        <span className="text-xs font-medium text-slate-400">No weeks with sufficient data</span>
       </div>
     );
   }
@@ -226,19 +226,19 @@ const AverageBarChart = ({ weeklyAverages }) => {
 
   return (
     <div className="mt-2 p-2 bg-white rounded-lg border border-slate-200">
-      <div className="flex items-center gap-4 mb-2">
-        <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Avg Hours by Week</span>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
+        <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Avg Hours by Week</span>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1">
             <div className="w-3 h-2 rounded-sm bg-emerald-500"></div>
-            <span className="text-[7px] font-bold text-slate-500">Eff</span>
+            <span className="text-xs font-semibold text-slate-500">Eff</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-2 rounded-sm bg-slate-600"></div>
-            <span className="text-[7px] font-bold text-slate-500">Gross</span>
+            <span className="text-xs font-semibold text-slate-500">Gross</span>
           </div>
         </div>
-        <span className="text-[6px] text-slate-400 ml-auto">{maxDisplay}h max</span>
+        <span className="text-xs text-slate-400 ml-auto">{maxDisplay}h max</span>
       </div>
 
       <div className="space-y-1.5">
@@ -248,7 +248,7 @@ const AverageBarChart = ({ weeklyAverages }) => {
 
           return (
             <div key={week.weekNumber} className="flex items-center gap-2">
-              <span className="text-[7px] font-bold text-slate-500 w-12 flex-shrink-0">
+              <span className="text-xs font-semibold text-slate-500 min-w-12 flex-shrink-0">
                 {week.weekDisplay}
               </span>
               <div className="flex-1">
@@ -264,10 +264,10 @@ const AverageBarChart = ({ weeklyAverages }) => {
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0 min-w-[100px]">
-                <span className="text-[8px] font-bold text-emerald-700 w-[45px] text-right">
+                <span className="text-xs font-semibold text-emerald-700 min-w-[45px] whitespace-nowrap text-right">
                   {week.avgEffFormatted}
                 </span>
-                <span className="text-[8px] font-bold text-slate-600 w-[45px] text-right">
+                <span className="text-xs font-semibold text-slate-600 min-w-[45px] whitespace-nowrap text-right">
                   {week.avgGrossFormatted}
                 </span>
               </div>
@@ -343,8 +343,8 @@ const DayTimelineBar = ({ day }) => {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-        <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
-          <Gift size={10} className="text-purple-500" />
+        <span className="text-xs font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
+          <Gift size={12} className="text-purple-500" />
           {holidayName || 'Holiday'}
         </span>
       </div>
@@ -355,7 +355,7 @@ const DayTimelineBar = ({ day }) => {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-slate-100" />
-        <span className="text-[8px] font-medium text-slate-300 whitespace-nowrap">No punch data</span>
+        <span className="text-xs font-medium text-slate-300 whitespace-nowrap">No punch data</span>
       </div>
     );
   }
@@ -399,7 +399,7 @@ const DayTimelineBar = ({ day }) => {
       elements.push(
         <div
           key={`sess-${idx}`}
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
+          className={`absolute top-0 h-1 min-h-0 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer max-md:before:absolute max-md:before:-inset-y-4 max-md:before:inset-x-0 max-md:before:content-[''] hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
           onMouseEnter={(e) => handleSessionHover(e, session, idx, totalSegments)}
         />
@@ -407,8 +407,8 @@ const DayTimelineBar = ({ day }) => {
 
       if (idx === 0) {
         elements.push(
-          <div key={`start-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
-            <span className="text-[7px] font-semibold text-slate-500 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
+          <div key={`start-m-${idx}`} className="absolute -top-4 leading-none flex flex-col pointer-events-none items-center z-[1]" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
+            <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
           </div>
         );
       }
@@ -422,8 +422,8 @@ const DayTimelineBar = ({ day }) => {
         }
 
         elements.push(
-          <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>
+          <div key={`end-m-${idx}`} className="absolute -top-4 leading-none flex flex-col pointer-events-none items-center z-[1]" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
+            <span className={`text-xs font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-500'} whitespace-nowrap`}>
               {label}
             </span>
           </div>
@@ -446,7 +446,7 @@ const DayTimelineBar = ({ day }) => {
           elements.push(
             <div
               key={`break-${idx}`}
-              className="absolute top-0 h-1 rounded-full bg-amber-200/60 cursor-pointer hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 transition-all duration-200"
+              className="absolute top-0 h-1 min-h-0 rounded-full bg-amber-200/60 cursor-pointer max-md:before:absolute max-md:before:-inset-y-4 max-md:before:inset-x-0 max-md:before:content-[''] hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 transition-all duration-200"
               style={{
                 left: `${gLeft}%`,
                 width: `${gWidth}%`,
@@ -467,7 +467,7 @@ const DayTimelineBar = ({ day }) => {
 
     return (
       <div
-        className="fixed z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
+        className="fixed max-md:left-4! max-md:right-4! z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
         style={{
           left: localTooltipPosition.x,
           top: localTooltipPosition.y,
@@ -478,11 +478,11 @@ const DayTimelineBar = ({ day }) => {
           <>
             <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
               <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-              <span className="text-[11px] font-bold">
+              <span className="text-xs font-semibold">
                 Session {localHoveredSession.sessionIndex + 1} of {localHoveredSession.totalSessions}
               </span>
             </div>
-            <div className="space-y-1 text-[11px]">
+            <div className="space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">In:</span>
                 <span className="font-mono font-medium">{formatTimeDisplay(localHoveredSession.punchIn)}</span>
@@ -505,9 +505,9 @@ const DayTimelineBar = ({ day }) => {
           <>
             <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
               <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-              <span className="text-[11px] font-bold">Break {localHoveredBreak.breakIndex + 1}</span>
+              <span className="text-xs font-semibold">Break {localHoveredBreak.breakIndex + 1}</span>
             </div>
-            <div className="space-y-1 text-[11px]">
+            <div className="space-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">Started:</span>
                 <span className="font-mono font-medium">{formatTimeDisplay(localHoveredBreak.start)}</span>
@@ -528,23 +528,23 @@ const DayTimelineBar = ({ day }) => {
   };
 
   return (
-    <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
+    <div className="pt-4 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
       <div className="relative h-1 rounded-full bg-slate-100">
         {renderSegments()}
       </div>
 
-      <div className="flex items-center justify-between mt-1">
-        <span className="text-[9px] font-medium text-slate-500">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 mt-1">
+        <span className="text-xs font-medium text-slate-500">
           Effective: <span className={styles.text}>{formatDuration(day.effectiveHours)}</span>
         </span>
         {day.grossHours > 0 && day.grossHours !== day.effectiveHours && (
-          <span className="text-[8px] font-medium text-slate-400">
+          <span className="text-xs font-medium text-slate-400">
             Gross: {formatDuration(day.grossHours)}
           </span>
         )}
         {day.breakMinutes > 0 && (
-          <span className="inline-flex items-center gap-1 text-[8px] font-medium text-slate-400">
-            <Coffee size={10} className="text-amber-500" />
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400">
+            <Coffee size={12} className="text-amber-500" />
             {formatBreakMinutes(day.breakMinutes)}
           </span>
         )}
@@ -558,7 +558,7 @@ const DayTimelineBar = ({ day }) => {
 // ─────────────────────────────────────────────────────────────
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────
-const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null }) => {
+const AttendanceTimeline = ({ userId, token, targetUserId = null }) => {
   const [loading, setLoading] = useState(true);
   const [rawAttendanceData, setRawAttendanceData] = useState([]);
 
@@ -947,15 +947,15 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
 
   if (attendanceData.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
+      <div className="card text-center">
+        <div className="w-14 h-14 rounded-xl bg-slate-50 flex items-center justify-center mx-auto mb-3 shrink-0">
           <Calendar size={28} className="text-slate-300" />
         </div>
         <p className="text-sm font-semibold text-slate-500">No attendance data available</p>
         <p className="text-xs text-slate-400 mt-1">Try syncing your attendance data</p>
         <button
           onClick={fetchAttendanceData}
-          className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-all shadow-sm"
+          className="btn btn-md mt-3 bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
         >
           Refresh Data
         </button>
@@ -969,21 +969,21 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
         {/* Header with Month Navigation */}
         <div className="p-3 border-b border-slate-100 bg-gradient-to-r from-slate-50/50 to-white">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+            <div className="max-sm:relative flex flex-wrap items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                 <BarChart3 size={16} className="text-blue-600" />
               </div>
-              <h3 className="text-xs font-bold text-slate-700">
+              <h3 className="label text-slate-700">
                 Attendance Timeline
               </h3>
 
-              <div className="relative">
+              <div className="sm:relative">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     setShowMonthPicker(!showMonthPicker);
                   }}
-                  className="flex items-center gap-1.5 px-2.5 py-1 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-all text-[10px] font-semibold text-slate-700 shadow-sm"
+                  className="btn btn-sm bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 shadow-sm"
                 >
                   <span>{monthNames[selectedMonth]} {selectedYear}</span>
                   <ChevronDown size={12} className={`transition-transform duration-200 ${showMonthPicker ? 'rotate-180' : ''}`} />
@@ -994,14 +994,14 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                     <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
                       <button
                         onClick={() => handleYearSelect(selectedYear - 1)}
-                        className="p-1 rounded-lg hover:bg-slate-100 transition-all"
+                        className="btn-icon hover:bg-slate-100"
                       >
                         <ChevronLeft size={12} className="text-slate-500" />
                       </button>
                       <select
                         value={selectedYear}
                         onChange={(e) => handleYearSelect(Number(e.target.value))}
-                        className="flex-1 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-[10px] font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        className="flex-1 min-w-0 px-2 py-1 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
                       >
                         {yearOptions.map(year => (
                           <option key={year} value={year}>{year}</option>
@@ -1009,7 +1009,7 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                       </select>
                       <button
                         onClick={() => handleYearSelect(selectedYear + 1)}
-                        className="p-1 rounded-lg hover:bg-slate-100 transition-all"
+                        className="btn-icon hover:bg-slate-100"
                       >
                         <ChevronRight size={12} className="text-slate-500" />
                       </button>
@@ -1020,7 +1020,7 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                         <button
                           key={month}
                           onClick={() => handleMonthSelect(index)}
-                          className={`px-1.5 py-1 rounded-lg text-[10px] font-semibold transition-all ${selectedMonth === index ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-700'}`}
+                          className={`btn btn-sm ${selectedMonth === index ? 'bg-blue-600 text-white shadow-sm' : 'hover:bg-slate-100 text-slate-700'}`}
                         >
                           {month.substring(0, 3)}
                         </button>
@@ -1030,7 +1030,7 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                     <div className="mt-2 pt-2 border-t border-slate-100">
                       <button
                         onClick={goToCurrentMonth}
-                        className="w-full py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-semibold hover:bg-blue-100 transition-all"
+                        className="btn btn-sm w-full bg-blue-50 text-blue-600 hover:bg-blue-100"
                       >
                         Go to Current Month
                       </button>
@@ -1040,8 +1040,8 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
               </div>
 
               {stats.holidays > 0 && (
-                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-purple-100 text-purple-700 rounded-full text-[7px] font-bold">
-                  <Gift size={10} />
+                <span className="badge rounded-full bg-purple-100 text-purple-700">
+                  <Gift size={12} />
                   {stats.holidays} holidays
                 </span>
               )}
@@ -1051,26 +1051,26 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
               <div className="flex items-center gap-0.5">
                 <button
                   onClick={() => navigateMonth('prev')}
-                  className="p-1 rounded-lg hover:bg-slate-100 transition-all border border-slate-200"
+                  className="btn-icon hover:bg-slate-100 border border-slate-200"
                 >
                   <ChevronLeft size={14} className="text-slate-500" />
                 </button>
                 <button
                   onClick={() => navigateMonth('next')}
-                  className="p-1 rounded-lg hover:bg-slate-100 transition-all border border-slate-200"
+                  className="btn-icon hover:bg-slate-100 border border-slate-200"
                 >
                   <ChevronRight size={14} className="text-slate-500" />
                 </button>
               </div>
 
-              <div className="hidden sm:flex items-center gap-1 text-[7px] text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-lg">
-                <MousePointer2 size={8} />
+              <div className="hidden sm:flex items-center gap-1 text-xs text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-lg">
+                <MousePointer2 size={12} />
                 <span>Hover</span>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-[7px] font-medium text-slate-400">
+          <div className="flex items-center gap-3 mt-1.5 pt-1.5 border-t border-slate-100 text-xs font-medium text-slate-400">
             <span className="flex items-center gap-1">
               <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
               <span>Work</span>
@@ -1087,38 +1087,38 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
         </div>
 
         {/* Stats Summary */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-1.5 p-2 bg-slate-50/50 border-b border-slate-100">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-1.5 p-2 bg-slate-50/50 border-b border-slate-100">
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-slate-400 uppercase tracking-wider">Working</p>
-            <p className="text-base font-black text-slate-800">{stats.totalDays}</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Working</p>
+            <p className="text-base font-bold text-slate-800">{stats.totalDays}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Present</p>
-            <p className="text-base font-black text-emerald-700">{stats.present}</p>
+            <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Present</p>
+            <p className="text-base font-bold text-emerald-700">{stats.present}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-rose-600 uppercase tracking-wider">Absent</p>
-            <p className="text-base font-black text-rose-700">{stats.absent}</p>
+            <p className="text-xs font-semibold text-rose-600 uppercase tracking-wide">Absent</p>
+            <p className="text-base font-bold text-rose-700">{stats.absent}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-indigo-600 uppercase tracking-wider">Leave</p>
-            <p className="text-base font-black text-indigo-700">{stats.onLeave}</p>
+            <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Leave</p>
+            <p className="text-base font-bold text-indigo-700">{stats.onLeave}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-purple-600 uppercase tracking-wider">Holidays</p>
-            <p className="text-base font-black text-purple-700">{stats.holidays}</p>
+            <p className="text-xs font-semibold text-purple-600 uppercase tracking-wide">Holidays</p>
+            <p className="text-base font-bold text-purple-700">{stats.holidays}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-emerald-600 uppercase tracking-wider">Avg Eff</p>
-            <p className="text-base font-black text-emerald-700">{formatHoursToHrMin(stats.averageEffectiveHours)}</p>
+            <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Avg Eff</p>
+            <p className="text-base font-bold text-emerald-700">{formatHoursToHrMin(stats.averageEffectiveHours)}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
-            <p className="text-base font-black text-slate-700">{formatHoursToHrMin(stats.averageGrossHours)}</p>
+            <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Avg Gross</p>
+            <p className="text-base font-bold text-slate-700">{formatHoursToHrMin(stats.averageGrossHours)}</p>
           </div>
           <div className="text-center bg-white rounded-lg py-1.5 px-2 shadow-sm">
-            <p className="text-[6px] font-bold text-amber-600 uppercase tracking-wider">Late %</p>
-            <p className="text-base font-black text-amber-700">
+            <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Late %</p>
+            <p className="text-base font-bold text-amber-700">
               {stats.present > 0 ? Math.round((stats.late / stats.present) * 100) : 0}%
             </p>
           </div>
@@ -1127,12 +1127,12 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
         {/* Weekly Averages Section */}
         {stats.weeklyAverages && stats.weeklyAverages.length > 0 && (
           <div className="p-2 border-b border-slate-100 bg-slate-50/30">
-            <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[8px] font-bold text-slate-500 uppercase tracking-wider">Weekly Averages</span>
-              <span className="text-[7px] text-slate-400">(excluding today & holidays)</span>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Weekly Averages</span>
+              <span className="text-xs text-slate-400">(excluding today & holidays)</span>
               {stats.weeklyAverages.some(w => w.holidayCount > 0) && (
-                <span className="text-[6px] text-purple-500 bg-purple-50 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                  <Gift size={8} />
+                <span className="badge rounded-full text-purple-500 bg-purple-50">
+                  <Gift size={12} />
                   {stats.weeklyAverages.reduce((sum, w) => sum + w.holidayCount, 0)} holidays
                 </span>
               )}
@@ -1146,16 +1146,16 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
                 .map((week) => (
                   <div key={week.weekNumber} className="bg-white rounded-lg p-1.5 border border-slate-200 shadow-sm">
                     <div className="flex items-center justify-between">
-                      <span className="text-[7px] font-bold text-slate-600">{week.weekDisplay}</span>
-                      <span className="text-[6px] font-bold text-slate-400">({week.dayCount}d)</span>
+                      <span className="text-xs font-semibold text-slate-600">{week.weekDisplay}</span>
+                      <span className="text-xs font-semibold text-slate-400">({week.dayCount}d)</span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-[8px] font-bold text-emerald-700">{week.avgEffFormatted}</span>
-                      <span className="text-[8px] font-bold text-slate-600">{week.avgGrossFormatted}</span>
+                      <span className="text-xs font-semibold text-emerald-700">{week.avgEffFormatted}</span>
+                      <span className="text-xs font-semibold text-slate-600">{week.avgGrossFormatted}</span>
                     </div>
                     {week.holidayCount > 0 && (
-                      <div className="text-[6px] text-purple-500 mt-0.5 flex items-center gap-0.5">
-                        <Gift size={8} />
+                      <div className="text-xs text-purple-500 mt-0.5 flex items-center gap-0.5">
+                        <Gift size={12} />
                         {week.holidayCount} holiday{week.holidayCount > 1 ? 's' : ''}
                       </div>
                     )}
@@ -1165,25 +1165,25 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
 
             {stats.weeklyAverages.filter(week => week.dayCount >= 2).length === 0 && (
               <div className="mt-2 p-3 bg-white rounded-lg border border-slate-200 text-center">
-                <span className="text-[8px] font-medium text-slate-400">No weeks with sufficient data (minimum 2 days)</span>
+                <span className="text-xs font-medium text-slate-400">No weeks with sufficient data (minimum 2 days)</span>
               </div>
             )}
           </div>
         )}
 
         {/* Timeline Table */}
-        <div className="overflow-x-auto p-3">
+        <div className="table-scroll table-sticky-first overflow-x-auto py-3 md:px-3">
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="bg-slate-50/80 border-b border-slate-200">
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Date</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Day</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Timeline</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">In</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Last Out</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Eff</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Gross</th>
-                <th className="px-2 py-1.5 text-left text-[7px] font-bold uppercase text-slate-400 tracking-wider">Arrival</th>
+                <th className="th">Date</th>
+                <th className="th">Day</th>
+                <th className="th">Timeline</th>
+                <th className="th">In</th>
+                <th className="th">Last Out</th>
+                <th className="th">Eff</th>
+                <th className="th">Gross</th>
+                <th className="th">Arrival</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1239,60 +1239,60 @@ const AttendanceTimeline = ({ userId, token, isCollapsed, targetUserId = null })
 
                     return (
                       <tr key={idx} className={`hover:bg-slate-50/50 transition-all ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''}`}>
-                        <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : 'text-slate-700'}`}>
+                        <td className="td">
+                          <span className={`text-xs font-medium ${today ? 'text-blue-600 font-bold' : isHolidayDay ? 'text-purple-600' : 'text-slate-700'}`}>
                             {formatDateDisplay(day.date)}
                           </span>
                           {today && (
-                            <span className="ml-1 text-[7px] font-bold bg-blue-100 text-blue-600 px-1 py-0.5 rounded-full">Today</span>
+                            <span className="badge rounded-full ml-1 bg-blue-100 text-blue-600">Today</span>
                           )}
                           {isHolidayDay && (
-                            <span className="ml-1 text-[7px] font-bold bg-purple-100 text-purple-600 px-1 py-0.5 rounded-full flex items-center gap-0.5">
-                              <Gift size={8} />
+                            <span className="badge rounded-full ml-1 bg-purple-100 text-purple-600">
+                              <Gift size={12} />
                               Holiday
                             </span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className="text-[10px] font-medium text-slate-500">{getDayShortName(day.date)}</span>
+                        <td className="td">
+                          <span className="text-xs font-medium text-slate-500">{getDayShortName(day.date)}</span>
                         </td>
-                        <td className="px-2 py-1.5 min-w-[180px]">
+                        <td className="td min-w-[240px]">
                           {isHolidayDay ? (
                             <div className="flex items-center gap-2 h-5">
                               <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-                              <span className="text-[8px] font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
-                                <Gift size={10} className="text-purple-500" />
+                              <span className="text-xs font-medium text-purple-600 whitespace-nowrap flex items-center gap-1">
+                                <Gift size={12} className="text-purple-500" />
                                 {holidayName || 'Holiday'}
                               </span>
                             </div>
                           ) : hasIn ? (
                             <DayTimelineBar day={day} />
                           ) : (
-                            <span className="text-[9px] text-slate-400 italic">—</span>
+                            <span className="text-xs text-slate-400 italic">—</span>
                           )}
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className="text-[10px] font-mono font-medium text-slate-700">
+                        <td className="td">
+                          <span className="text-xs font-mono font-medium text-slate-700">
                             {isHolidayDay ? '—' : (day.punchInDisplay || '—')}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-mono font-medium ${isHolidayDay ? 'text-slate-400' : isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
+                        <td className="td">
+                          <span className={`text-xs font-mono font-medium ${isHolidayDay ? 'text-slate-400' : isWeekend ? 'text-slate-400' : outDisplay === 'No Out Punch' ? 'text-rose-500 font-bold' : 'text-slate-700'}`}>
                             {isHolidayDay ? '—' : outDisplay}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className="text-[10px] font-bold text-emerald-700">
+                        <td className="td">
+                          <span className="text-xs font-semibold text-emerald-700">
                             {isHolidayDay ? '—' : (day.effectiveHours ? formatHoursToHrMin(day.effectiveHours) : '0 hr 0 min')}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className="text-[10px] font-bold text-slate-700">
+                        <td className="td">
+                          <span className="text-xs font-semibold text-slate-700">
                             {isHolidayDay ? '—' : (day.grossHours ? formatHoursToHrMin(day.grossHours) : '0 hr 0 min')}
                           </span>
                         </td>
-                        <td className="px-2 py-1.5">
-                          <span className={`text-[10px] font-medium ${arrivalClass}`}>
+                        <td className="td">
+                          <span className={`text-xs font-medium ${arrivalClass}`}>
                             {arrivalLabel}
                           </span>
                         </td>

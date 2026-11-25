@@ -23,8 +23,7 @@ const normalize = (opts = []) =>
     )
     .filter(o => o.value !== '');
 
-const inputCls =
-  'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all disabled:bg-slate-100 disabled:cursor-not-allowed';
+const inputCls = 'input';
 
 export default function EditableSelect({
   fieldKey,
@@ -222,7 +221,7 @@ export default function EditableSelect({
                       {opt.value}
                     </button>
                     {opt.ghost && (
-                      <span className="mr-2 text-[9px] font-black uppercase text-amber-600">
+                      <span className="mr-2 text-xs font-semibold uppercase text-amber-600">
                         legacy
                       </span>
                     )}
@@ -236,7 +235,7 @@ export default function EditableSelect({
                           }}
                           disabled={opt.locked}
                           title={opt.locked ? 'Locked option' : 'Edit option'}
-                          className="p-1 mr-1 rounded text-slate-400 hover:bg-slate-100 disabled:opacity-30"
+                          className="btn-icon mr-1 text-slate-400 hover:bg-slate-100 disabled:opacity-30"
                         >
                           <MoreHorizontal size={14} />
                         </button>
@@ -293,7 +292,7 @@ export default function EditableSelect({
                   type="button"
                   onClick={addOption}
                   disabled={busy || !newName.trim()}
-                  className="p-1 rounded bg-blue-600 text-white disabled:opacity-50"
+                  className="btn-icon bg-blue-600 text-white disabled:opacity-50"
                 >
                   <Check size={14} />
                 </button>
@@ -301,7 +300,7 @@ export default function EditableSelect({
                   type="button"
                   onClick={() => { setAdding(false); setNewName(''); }}
                   disabled={busy}
-                  className="p-1 rounded bg-slate-200 text-slate-600"
+                  className="btn-icon bg-slate-200 text-slate-600"
                 >
                   <X size={14} />
                 </button>
@@ -310,7 +309,7 @@ export default function EditableSelect({
               <button
                 type="button"
                 onClick={() => setAdding(true)}
-                className="w-full flex items-center justify-center gap-1 py-1.5 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded"
+                className="btn btn-sm w-full text-blue-600 hover:bg-blue-50"
               >
                 <Plus size={12} /> Add option
               </button>

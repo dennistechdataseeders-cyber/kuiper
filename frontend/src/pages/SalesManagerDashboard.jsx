@@ -22,7 +22,6 @@ import {
   Bell, Trash2, CheckCircle2, ArrowUp, ArrowDown, StickyNote, Loader2, UserPlus,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import AssignTaskModal from '../components/AssignTaskModal';
 
 // ============================================
@@ -77,28 +76,28 @@ const Kpi = ({ icon, label, value, sub, tone = 'blue', alert = false, onClick, h
   return (
     <Wrapper
       {...(clickable ? { type: 'button', onClick, title: hint } : {})}
-      className={`bg-white rounded-2xl border p-4 shadow-sm text-left w-full ${alert ? 'border-red-200' : 'border-slate-200'} ${
+      className={`bg-white rounded-xl border p-4 shadow-sm text-left w-full ${alert ? 'border-red-200' : 'border-slate-200'} ${
         clickable ? 'cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md hover:border-blue-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400' : ''
       }`}
     >
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
         <span className={`p-1.5 rounded-lg ${tones[tone]}`}>{icon}</span>
       </div>
-      <p className={`mt-2 text-2xl font-black ${alert ? 'text-red-600' : 'text-slate-900'}`}>{value}</p>
-      {sub && <p className="text-[10px] font-semibold text-slate-400 mt-0.5 truncate">{sub}</p>}
+      <p className={`mt-2 text-2xl font-bold ${alert ? 'text-red-600' : 'text-slate-900'}`}>{value}</p>
+      {sub && <p className="text-xs font-semibold text-slate-400 mt-0.5 truncate">{sub}</p>}
     </Wrapper>
   );
 };
 
 const Section = ({ id, icon, title, subtitle, action, children, className = '' }) => (
-  <div id={id} className={`bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden ${className}`}>
-    <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-slate-100">
+  <div id={id} className={`bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden ${className}`}>
+    <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-5 py-4 border-b border-slate-100">
       <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">{icon}</div>
+        <div className="p-2 bg-blue-50 text-blue-600 rounded-lg shrink-0">{icon}</div>
         <div>
-          <h2 className="text-base font-black text-slate-800">{title}</h2>
-          {subtitle && <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{subtitle}</p>}
+          <h2 className="section-title">{title}</h2>
+          {subtitle && <p className="meta">{subtitle}</p>}
         </div>
       </div>
       {action}
@@ -108,7 +107,7 @@ const Section = ({ id, icon, title, subtitle, action, children, className = '' }
 );
 
 const EmptyState = ({ text = 'No records found.' }) => (
-  <div className="text-center py-10 text-slate-400 text-[10px] italic font-medium">{text}</div>
+  <div className="text-center py-10 text-slate-400 text-xs italic font-medium">{text}</div>
 );
 
 // ============================================
@@ -126,7 +125,6 @@ const SORTERS = {
 };
 
 const SalesManagerDashboard = () => {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
@@ -312,10 +310,10 @@ const SalesManagerDashboard = () => {
     setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'name' ? 'asc' : 'desc' }));
 
   const SortHead = ({ k, children, className = '' }) => (
-    <th className={`px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400 whitespace-nowrap ${className}`}>
+    <th className={`th ${className}`}>
       <button onClick={() => toggleSort(k)} className="inline-flex items-center gap-1 hover:text-slate-700">
         {children}
-        {sort.key === k && (sort.dir === 'asc' ? <ArrowUp size={10} /> : <ArrowDown size={10} />)}
+        {sort.key === k && (sort.dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
       </button>
     </th>
   );
@@ -334,25 +332,25 @@ const SalesManagerDashboard = () => {
   // render
   // ============================================
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       <div className="max-w-[1700px] mx-auto">
         {/* HEADER */}
-        <div className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-4xl font-black text-slate-900 tracking-tight">Sales Command</h1>
-            <p className="text-slate-500 font-medium mt-1">
+            <h1 className="page-title">Sales Command</h1>
+            <p className="text-sm text-slate-500 mt-1">
               {todayLabel}
               {lastUpdated && <span className="text-slate-400"> · updated {timeAgo(lastUpdated)}</span>}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex items-center bg-white rounded-2xl border border-slate-200 px-4 py-2 shadow-sm">
-              <Filter size={16} className="text-blue-600 mr-2" />
+            <div className="relative flex items-center h-10 w-full sm:w-auto max-w-full bg-white rounded-lg border border-slate-200 px-3 shadow-sm">
+              <Filter size={16} className="text-blue-600 mr-2 shrink-0" />
               <select
                 value={selectedRep}
                 onChange={(e) => setSelectedRep(e.target.value)}
-                className="bg-transparent text-sm font-bold text-slate-700 outline-none cursor-pointer pr-4"
+                className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-slate-700 outline-none cursor-pointer"
               >
                 <option value="all">Whole team ({reps.length})</option>
                 {reps.map((r) => (
@@ -364,7 +362,7 @@ const SalesManagerDashboard = () => {
            
             <button
               onClick={() => setAssign({ repId: focusedRep ? idOf(focusedRep) : null })}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 text-white text-sm font-black shadow-sm hover:bg-blue-700"
+              className="btn btn-md bg-blue-600 text-white shadow-sm hover:bg-blue-700"
             >
               <Plus size={16} /> Assign task
             </button>
@@ -378,7 +376,7 @@ const SalesManagerDashboard = () => {
         ) : (
           <>
             {/* KPI STRIP */}
-            <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
+            <div className="grid grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8 mb-4 sm:mb-6 gap-3 sm:gap-4">
               <Kpi icon={<Users size={14} />} label={focusedRep ? 'Focused on' : 'Sales team'} value={focusedRep ? focusedRep.name.split(' ')[0] : kpi.reps} sub={focusedRep ? focusedRep.email : 'active sales people'} tone="slate" onClick={scrollToTeam} hint="Jump to team performance" />
               <Kpi icon={<Target size={14} />} label="Conversion" value={`${kpi.conversion}%`} sub={`${kpi.converted} of ${kpi.pipeline} converted`} tone="blue" onClick={() => goTo('/sales/lead_generation', { focus: 'converted' })} hint="View converted leads" />
               <Kpi icon={<Wallet size={14} />} label="Open pipeline" value={fmtMoney(kpi.openValue)} sub={`${kpi.openDeals} open deals`} tone="purple" onClick={() => goTo('/sales/deals', { focus: 'open' })} hint="View open deals" />
@@ -390,8 +388,8 @@ const SalesManagerDashboard = () => {
             </div>
 
             {overview?.totals?.unassignedProspects > 0 && selectedRep === 'all' && (
-              <div className="mb-6 flex items-center gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800">
-                <UserPlus size={14} />
+              <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs font-semibold text-amber-800 mb-4 sm:mb-6">
+                <UserPlus size={16} className="shrink-0" />
                 {overview.totals.unassignedProspects} prospect{overview.totals.unassignedProspects === 1 ? '' : 's'} waiting in the shared bucket – nobody has picked them up yet.
               </div>
             )}
@@ -402,17 +400,17 @@ const SalesManagerDashboard = () => {
               icon={<TrendingUp size={18} />}
               title="Team performance"
               subtitle="Click a person to focus the whole dashboard on them"
-              className="mb-6"
+              className="mb-4 sm:mb-6"
               action={
                 selectedRep !== 'all' && (
-                  <button onClick={() => setSelectedRep('all')} className="text-xs font-black text-blue-600 hover:underline">
+                  <button onClick={() => setSelectedRep('all')} className="text-xs font-semibold text-blue-600 hover:underline">
                     Show whole team
                   </button>
                 )
               }
             >
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
+              <div className="table-scroll table-sticky-first overflow-x-auto">
+                <table className="w-full text-left min-w-[1100px]">
                   <thead className="bg-slate-50/70">
                     <tr>
                       <SortHead k="name" className="pl-6">Sales person</SortHead>
@@ -423,8 +421,8 @@ const SalesManagerDashboard = () => {
                       <SortHead k="overdue">Overdue</SortHead>
                       <SortHead k="meetings">Meetings</SortHead>
                       <SortHead k="calls">Calls</SortHead>
-                      <th className="px-3 py-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Last active</th>
-                      <th className="px-3 py-3 pr-6" />
+                      <th className="th">Last active</th>
+                      <th className="th pr-6" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -439,48 +437,48 @@ const SalesManagerDashboard = () => {
                           onClick={() => setSelectedRep(active ? 'all' : idOf(r))}
                           className={`cursor-pointer transition-colors ${active ? 'bg-blue-50/70' : 'hover:bg-slate-50'}`}
                         >
-                          <td className="pl-6 pr-3 py-3">
+                          <td className="td pl-6 pr-3">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-xl bg-blue-900 text-white text-xs font-black flex items-center justify-center">
+                              <div className="w-8 h-8 rounded-xl bg-blue-900 text-white text-xs font-semibold flex items-center justify-center shrink-0">
                                 {r.name.charAt(0).toUpperCase()}
                               </div>
-                              <div className="min-w-0">
-                                <p className="text-sm font-bold text-slate-800 truncate">{r.name}</p>
-                                <p className="text-[10px] text-slate-400 truncate">{r.email}</p>
+                              <div className="min-w-0 max-w-[200px]">
+                                <p className="text-sm font-bold text-slate-800 truncate" title={r.name}>{r.name}</p>
+                                <p className="text-xs text-slate-400 truncate">{r.email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-sm font-bold text-slate-700">
+                          <td className="td font-bold">
                             {r.leadGen.total + r.prospects.total}
-                            <span className="block text-[10px] font-semibold text-slate-400">
+                            <span className="block text-xs font-semibold text-slate-400">
                               {r.leadGen.total} leads · {r.prospects.total} prospects
                             </span>
                           </td>
-                          <td className="px-3 py-3 min-w-[110px]">
+                          <td className="td min-w-[110px]">
                             <div className="flex items-center gap-2">
                               <div className="flex-1 bg-slate-200 h-1.5 rounded-full overflow-hidden">
                                 <div className="bg-blue-500 h-full" style={{ width: `${Math.min(100, r.conversionRate)}%` }} />
                               </div>
-                              <span className="text-xs font-black text-blue-600 w-10 text-right">{r.conversionRate}%</span>
+                              <span className="text-xs font-semibold text-blue-600 w-10 text-right">{r.conversionRate}%</span>
                             </div>
                           </td>
-                          <td className="px-3 py-3 text-sm font-bold text-slate-700">
+                          <td className="td font-bold">
                             {r.deals.open}
-                            <span className="block text-[10px] font-semibold text-slate-400">{fmtMoney(r.deals.openValue)}</span>
+                            <span className="block text-xs font-semibold text-slate-400">{fmtMoney(r.deals.openValue)}</span>
                           </td>
-                          <td className="px-3 py-3 text-sm font-bold text-slate-700">{r.tasks.open}</td>
-                          <td className="px-3 py-3">
-                            <span className={`text-xs font-black px-2 py-0.5 rounded-full ${r.tasks.overdue ? 'bg-red-50 text-red-600' : 'text-slate-300'}`}>
+                          <td className="td font-bold">{r.tasks.open}</td>
+                          <td className="td">
+                            <span className={`badge rounded-full ${r.tasks.overdue ? 'bg-red-50 text-red-600' : 'text-slate-300'}`}>
                               {r.tasks.overdue}
                             </span>
                           </td>
-                          <td className="px-3 py-3 text-sm font-bold text-slate-700">{r.meetingsToday}</td>
-                          <td className="px-3 py-3 text-sm font-bold text-slate-700">{r.callsToday}</td>
-                          <td className="px-3 py-3 text-[11px] font-semibold text-slate-400 whitespace-nowrap">{timeAgo(r.lastActive)}</td>
-                          <td className="px-3 py-3 pr-6 text-right">
+                          <td className="td font-bold">{r.meetingsToday}</td>
+                          <td className="td font-bold">{r.callsToday}</td>
+                          <td className="td font-semibold text-slate-400 whitespace-nowrap">{timeAgo(r.lastActive)}</td>
+                          <td className="td pr-6 text-right">
                             <button
                               onClick={(e) => { e.stopPropagation(); setAssign({ repId: idOf(r) }); }}
-                              className="px-3 py-1.5 rounded-lg border border-blue-200 text-[11px] font-black text-blue-600 hover:bg-blue-50 whitespace-nowrap"
+                              className="btn btn-sm border border-blue-200 text-blue-600 hover:bg-blue-50"
                             >
                               Assign task
                             </button>
@@ -494,7 +492,7 @@ const SalesManagerDashboard = () => {
             </Section>
 
             {/* TASKS + SCHEDULE */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
+            <div className="grid grid-cols-1 xl:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
               {/* Assigned tasks tracker */}
               <Section
                 className="xl:col-span-2"
@@ -512,7 +510,7 @@ const SalesManagerDashboard = () => {
                       <button
                         key={key}
                         onClick={() => setTaskFilter(key)}
-                        className={`px-3 py-1.5 rounded-full text-[11px] font-black border transition ${
+                        className={`btn btn-sm border rounded-full ${
                           taskFilter === key
                             ? key === 'overdue' ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600'
                             : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
@@ -531,7 +529,7 @@ const SalesManagerDashboard = () => {
                       <p className="text-xs font-semibold text-slate-400">
                         {taskFilter === 'overdue' ? 'Nothing overdue 🎉' : 'No tasks here yet.'}
                       </p>
-                      <button onClick={() => setAssign({ repId: focusedRep ? idOf(focusedRep) : null })} className="mt-2 text-xs font-black text-blue-600 hover:underline">
+                      <button onClick={() => setAssign({ repId: focusedRep ? idOf(focusedRep) : null })} className="mt-2 text-xs font-semibold text-blue-600 hover:underline">
                         Assign a task
                       </button>
                     </div>
@@ -542,31 +540,31 @@ const SalesManagerDashboard = () => {
                       return (
                         <div
                           key={t._id}
-                          className={`p-3.5 rounded-2xl border bg-white ${late ? 'border-red-200 bg-red-50/30' : 'border-slate-100'} ${busyTask === t._id ? 'opacity-60' : ''}`}
+                          className={`p-3.5 rounded-xl border bg-white ${late ? 'border-red-200 bg-red-50/30' : 'border-slate-100'} ${busyTask === t._id ? 'opacity-60' : ''}`}
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
+                          <div className="flex flex-wrap items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1 basis-48">
                               <p className={`text-sm font-bold ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{t.title}</p>
-                              {t.content && <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{t.content}</p>}
+                              {t.content && <p className="text-xs text-slate-500 mt-0.5 line-clamp-2">{t.content}</p>}
                             </div>
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border ${priorityStyle[t.priority] || priorityStyle.Medium}`}>
+                              <span className={`badge rounded-full border ${priorityStyle[t.priority] || priorityStyle.Medium}`}>
                                 {t.priority || 'Medium'}
                               </span>
-                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border ${done ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
+                              <span className={`badge rounded-full border ${done ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-slate-50 text-slate-500 border-slate-200'}`}>
                                 {t.status}
                               </span>
                             </div>
                           </div>
 
                           <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 min-w-0">
                               <select
                                 value={idOf(t.assignedTo)}
                                 disabled={done || busyTask === t._id}
                                 onChange={(e) => reassign(t, e.target.value)}
                                 onClick={(e) => e.stopPropagation()}
-                                className="bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[11px] font-bold text-slate-700 outline-none cursor-pointer disabled:opacity-60"
+                                className="max-w-full md:h-9 bg-slate-50 border border-slate-200 rounded-lg px-2 text-sm text-slate-700 outline-none cursor-pointer disabled:opacity-60"
                                 title="Re-assign"
                               >
                                 {!reps.some((r) => idOf(r) === idOf(t.assignedTo)) && (
@@ -579,15 +577,15 @@ const SalesManagerDashboard = () => {
                             </div>
 
                             <div className="flex items-center gap-2">
-                              <span className={`text-[11px] font-bold whitespace-nowrap ${late ? 'text-red-500' : 'text-slate-500'}`}>
+                              <span className={`text-xs font-semibold whitespace-nowrap ${late ? 'text-red-500' : 'text-slate-500'}`}>
                                 {late ? 'Overdue · ' : ''}{fmtDate(t.dueAt)}
                               </span>
                               {!done && (
-                                <button onClick={() => remind(t)} title="Send a reminder" className="p-1.5 rounded-lg text-slate-400 hover:bg-amber-50 hover:text-amber-600">
+                                <button onClick={() => remind(t)} title="Send a reminder" className="btn-icon text-slate-400 hover:bg-amber-50 hover:text-amber-600">
                                   <Bell size={14} />
                                 </button>
                               )}
-                              <button onClick={() => removeTask(t)} title="Delete task" className="p-1.5 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600">
+                              <button onClick={() => removeTask(t)} title="Delete task" className="btn-icon text-slate-400 hover:bg-red-50 hover:text-red-600">
                                 <Trash2 size={14} />
                               </button>
                             </div>
@@ -600,7 +598,7 @@ const SalesManagerDashboard = () => {
               </Section>
 
               {/* Schedule + recent activity */}
-              <div className="space-y-6">
+              <div className="stack">
                 <Section icon={<Calendar size={18} />} title="Today's schedule" subtitle={`${schedule.length} meeting${schedule.length === 1 ? '' : 's'} & calls`}>
                   <div className="p-4 space-y-2 max-h-[250px] overflow-y-auto">
                     {schedule.length === 0 ? (
@@ -610,12 +608,12 @@ const SalesManagerDashboard = () => {
                         <div key={a._id} className="flex items-start gap-3 p-2.5 rounded-xl border border-slate-100">
                           <span className={`p-1.5 rounded-lg ${typeTone[a.type]}`}>{typeIcon[a.type]}</span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-800 truncate">{a.title}</p>
-                            <p className="text-[10px] text-slate-400 truncate">
+                            <p className="text-xs font-semibold text-slate-800 truncate">{a.title}</p>
+                            <p className="text-xs text-slate-400 truncate">
                               {ownerOf(a)?.name || '—'}{a.leadId?.companyName ? ` · ${a.leadId.companyName}` : ''}
                             </p>
                           </div>
-                          <span className="text-[10px] font-black text-slate-600 whitespace-nowrap">{fmtTime(a.scheduledAt)}</span>
+                          <span className="text-xs font-semibold text-slate-600 whitespace-nowrap">{fmtTime(a.scheduledAt)}</span>
                         </div>
                       ))
                     )}
@@ -631,14 +629,14 @@ const SalesManagerDashboard = () => {
                         <div key={a._id} className="flex items-start gap-3 p-2.5 rounded-xl border border-slate-100">
                           <span className={`p-1.5 rounded-lg ${typeTone[a.type]}`}>{typeIcon[a.type]}</span>
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-bold text-slate-800 truncate">
+                            <p className="text-xs font-semibold text-slate-800 truncate">
                               {a.title || (a.content ? a.content.slice(0, 60) : `New ${a.type}`)}
                             </p>
-                            <p className="text-[10px] text-slate-400 truncate">
+                            <p className="text-xs text-slate-400 truncate">
                               {a.createdBy?.name || '—'} · {a.type}{a.assignedTo ? ` → ${a.assignedTo.name}` : ''}{a.leadId?.companyName ? ` · ${a.leadId.companyName}` : ''}
                             </p>
                           </div>
-                          <span className="text-[10px] font-semibold text-slate-400 whitespace-nowrap">{timeAgo(a.createdAt)}</span>
+                          <span className="text-xs font-semibold text-slate-400 whitespace-nowrap">{timeAgo(a.createdAt)}</span>
                         </div>
                       ))
                     )}

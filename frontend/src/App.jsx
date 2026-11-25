@@ -1,7 +1,7 @@
 // frontend/src/App.jsx
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
-import Sidebar from './components/Sidebar';
+import PageLayout from './components/PageLayout';
 import { pageLoaders } from './pageLoaders';
 import PageLoader from './components/PageLoader';
 const ViewAnalytics = lazy(pageLoaders.ViewAnalytics);
@@ -80,7 +80,6 @@ import NotificationBell from './components/NotificationBell';
 import SalesNotifier from './components/SalesNotifier';
 
 import { AnimatePresence } from 'framer-motion';
-import { useSidebar } from './context/SidebarContext';
 import API_BASE_URL from './config';
 import toast from 'react-hot-toast';
 import { io } from 'socket.io-client';
@@ -163,7 +162,6 @@ function AppContent() {
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const location = useLocation();
-  const { isCollapsed } = useSidebar();
   const userId = localStorage.getItem('userId');
   const socketRef = useRef(null);
   const [socketConnected, setSocketConnected] = useState(false);
@@ -402,11 +400,7 @@ function AppContent() {
           
           <Route path="/*" element={
             <ProtectedRoute>
-              <div className="flex bg-[#f8fafc] min-h-screen">
-                <Sidebar />
-                <main className={`flex-1 w-full overflow-x-hidden transition-all duration-300 ease-in-out ${
-                  isCollapsed ? 'pl-[84px]' : 'pl-[28px]'
-                }`}>
+              <PageLayout>
                   <Suspense fallback={<PageLoader />}>
                   <Routes key={location.pathname}>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
@@ -683,9 +677,7 @@ function AppContent() {
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
                   </Routes>
                   </Suspense>
-                  
-                </main>
-              </div>
+                                </PageLayout>
             </ProtectedRoute>
           } />
         </Routes>

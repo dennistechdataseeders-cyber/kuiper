@@ -10,7 +10,6 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import CustomFieldsSection, { useCustomFields, validateCustomFields, buildCustomFieldsPayload } from './CustomFieldsSection';
-import { useSidebar } from '../context/SidebarContext';
 import ConvertDealModal from './ConvertDealModal';
 import useRecordTags from '../utils/useRecordTags';
 import { TagChip, TagDialogs, useTagDialogs } from './RecordTags';
@@ -49,8 +48,7 @@ const fmtDateTime = (d) =>
 const fmtDate = (d) =>
   d ? new Date(d).toLocaleDateString([], { dateStyle: 'medium' }) : '';
 
-const inputCls =
-  'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all disabled:bg-slate-100';
+const inputCls = 'input';
 
 const MODAL_META = {
   note:    { title: 'Add Note',     icon: StickyNote },
@@ -146,7 +144,7 @@ function leadToForm(lead) {
 // floats at the bottom of the screen (Ctrl/Cmd + S also saves), so there is
 // no need to scroll back up to save.
 // ============================================
-function LeadDetailsPanel({ lead, authHeader, onSaved, onDirtyChange, isCollapsed }) {
+function LeadDetailsPanel({ lead, authHeader, onSaved, onDirtyChange }) {
   const CAN_EDIT = canEditLead();
   const [form, setForm] = useState(() => leadToForm(lead));
   const [baseline, setBaseline] = useState(() => leadToForm(lead));
@@ -307,9 +305,9 @@ function LeadDetailsPanel({ lead, authHeader, onSaved, onDirtyChange, isCollapse
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-100">
-        <h2 className="text-sm font-black text-slate-800">Lead Details</h2>
-        <span className="text-[11px] font-semibold text-slate-400">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-slate-100">
+        <h2 className="section-title">Lead Details</h2>
+        <span className="text-xs font-semibold text-slate-400">
           {CAN_EDIT ? 'Click any field to edit' : 'Read only'}
         </span>
       </div>
@@ -381,7 +379,6 @@ function LeadDetailsPanel({ lead, authHeader, onSaved, onDirtyChange, isCollapse
         saving={saving}
         onSave={save}
         onDiscard={discard}
-        isCollapsed={isCollapsed}
       />
     </div>
   );
@@ -419,13 +416,13 @@ function QuickNote({ leadId, authHeader, onAdded }) {
         className="w-full px-3 pt-2 text-sm outline-none resize-none rounded-lg"
       />
       <div className="flex items-center justify-between px-2 pb-2">
-        <span className="text-[10px] text-slate-400 pl-1">Ctrl + Enter to add</span>
+        <span className="text-xs text-slate-400 pl-1">Ctrl + Enter to add</span>
         <button
           onClick={add}
           disabled={!text.trim() || busy}
-          className="flex items-center gap-1 px-3 py-1 rounded-md bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-40"
+          className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
         >
-          {busy ? <Loader2 size={11} className="animate-spin" /> : <Plus size={12} />} Add
+          {busy ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Add
         </button>
       </div>
     </div>
@@ -436,7 +433,6 @@ function QuickNote({ leadId, authHeader, onAdded }) {
 // MAIN COMPONENT
 // ============================================
 export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsApi: tagsFromList }) {
-  const { isCollapsed } = useSidebar();
   const CAN_EDIT = canEditLead();
   const [lead, setLead] = useState(initialLead); // local copy so edits show immediately
   const navigate = useNavigate();
@@ -555,36 +551,36 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
   // RENDER
   // ============================================
   return (
-    <div className={`min-h-screen bg-slate-50 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page-flush bg-slate-50">
       {/* ---------- Header ---------- */}
-      <div className={`fixed top-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 ${isCollapsed ? 'left-20' : 'left-64'}`}>
-        <div className="px-6 pt-3 pb-2.5 flex items-center gap-4">
+      <div className="app-bar max-md:static">
+        <div className="app-bar-row !pb-2">
           <button
             onClick={goBack}
-            className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition shrink-0"
+            className="btn-icon bg-slate-100 hover:bg-slate-200 shrink-0"
             title="Back to leads"
           >
             <ArrowLeft size={16} />
           </button>
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-sm font-black shrink-0">
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-sm font-semibold shrink-0">
             {leadName.charAt(0).toUpperCase()}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-xl font-black text-slate-900 truncate">{leadName}</h1>
+          <div className="min-w-0 flex-1 basis-48">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+              <h1 className="page-title md:truncate">{leadName}</h1>
               {lead.leadStatus && (
-                <span className="shrink-0 px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-black uppercase tracking-wide">
+                <span className="badge rounded-full shrink-0 bg-blue-50 border border-blue-100 text-blue-700">
                   {lead.leadStatus}
                 </span>
               )}
               {lead.isConverted && (
-                <span className="shrink-0 px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wide">
+                <span className="badge rounded-full shrink-0 bg-emerald-50 border border-emerald-100 text-emerald-700">
                   Converted
                 </span>
               )}
             </div>
-            <p className="text-xs font-semibold text-slate-500 truncate flex items-center gap-1">
-              <Building2 size={12} className="text-slate-400" />
+            <p className="text-xs font-semibold text-slate-500 md:truncate flex flex-wrap items-center gap-1">
+              <Building2 size={12} className="text-slate-400 shrink-0" />
               {lead.companyName}
               {primary?.title && <span className="text-slate-400">· {primary.title}</span>}
               {lead.leadSource && <span className="text-slate-400">· {lead.leadSource}</span>}
@@ -592,11 +588,11 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
           </div>
 
           {/* Convert Deal + Add Note + Activity dropdown */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {!lead.isConverted && (
               <button
                 onClick={() => setShowConvert(true)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition"
+                className="btn btn-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm"
               >
                 <Handshake size={14} /> Convert Deal
               </button>
@@ -604,7 +600,7 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
             <div className="relative">
               <button
                 onClick={() => setShowActivityMenu((v) => !v)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm transition"
+                className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
               >
                 <Plus size={14} /> New
                 <ChevronDown size={14} className={`transition-transform ${showActivityMenu ? 'rotate-180' : ''}`} />
@@ -636,7 +632,7 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
         </div>
 
         {/* quick facts + tags */}
-        <div className="px-6 pb-2.5 pl-[112px] flex items-center gap-x-4 gap-y-1.5 flex-wrap">
+        <div className="px-3 sm:px-6 pb-3 md:pl-[112px] flex items-center gap-x-4 gap-y-1.5 flex-wrap">
           {quick.map(({ icon: Icon, text, href, external }) => (
             href ? (
               <a
@@ -663,9 +659,9 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
             {CAN_EDIT && (
               <button
                 onClick={() => tagDialogs.openTags('add', [lead._id])}
-                className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-slate-300 text-[11px] font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600"
+                className="btn btn-sm border border-dashed border-slate-300 text-slate-500 hover:border-blue-400 hover:text-blue-600 rounded-full"
               >
-                <TagIcon size={11} /> Add Tags
+                <TagIcon size={12} /> Add Tags
               </button>
             )}
           </div>
@@ -673,7 +669,7 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
       </div>
 
       {/* ---------- Body ---------- */}
-      <div className="px-6 pt-[124px] pb-24 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-24 grid grid-cols-1 xl:grid-cols-12 items-start gap-3 sm:gap-4">
         {/* Lead details (edit in place) */}
         <div className="xl:col-span-7">
           <LeadDetailsPanel
@@ -681,24 +677,23 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
             authHeader={authHeader}
             onSaved={handleLeadSaved}
             onDirtyChange={setDirty}
-            isCollapsed={isCollapsed}
           />
         </div>
 
         {/* Notes + activities: stays in view, scrolls inside itself */}
         <div className="xl:col-span-5 xl:sticky xl:top-[124px]">
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col xl:max-h-[calc(100vh-148px)]">
-            <div className="flex items-center gap-1 px-2 pt-2 border-b border-slate-100">
+            <div className="flex items-center gap-1 px-2 pt-2 border-b border-slate-100 overflow-x-auto">
               {TABS.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => setTab(t.id)}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-bold border-b-2 -mb-px transition ${
+                  className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold whitespace-nowrap border-b-2 -mb-px transition ${
                     tab === t.id ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'
                   }`}
                 >
                   {t.label}
-                  <span className={`px-1.5 py-0.5 rounded-full text-[9px] font-black ${tab === t.id ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
+                  <span className={`badge rounded-full ${tab === t.id ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-500'}`}>
                     {t.count}
                   </span>
                 </button>
@@ -716,13 +711,13 @@ export default function LeadDetail({ lead: initialLead, onBack, onUpdated, tagsA
                       <div key={n._id} className="rounded-lg border border-amber-100 bg-amber-50/60 p-3 group">
                         <p className="text-sm text-slate-800 whitespace-pre-wrap">{n.content}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <span className="text-[10px] font-semibold text-slate-400">
+                          <span className="text-xs font-semibold text-slate-400">
                             {n.createdBy?.name || 'Unknown'} · {fmtDateTime(n.createdAt)}
                           </span>
                           {canDelete(n) && (
                             <button
                               onClick={() => deleteActivity(n._id)}
-                              className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition"
+                              className="btn-icon text-slate-300 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
                               title="Delete note"
                             >
                               <Trash2 size={13} />
@@ -805,7 +800,7 @@ function ActivityGroup({ label, items, onComplete, onDelete, canDelete }) {
   if (items.length === 0) return null;
   return (
     <div>
-      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-2">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
         {label} ({items.length})
       </p>
       <div className="space-y-2">
@@ -841,7 +836,7 @@ function ActivityCard({ item, onComplete, onDelete, canDelete }) {
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm font-bold text-slate-800">{item.title}</span>
           {item.type === 'task' && (
-            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${
+            <span className={`badge rounded-full ${
               item.priority === 'High' ? 'bg-red-100 text-red-700'
               : item.priority === 'Low' ? 'bg-slate-100 text-slate-600'
               : 'bg-blue-100 text-blue-700'
@@ -850,27 +845,27 @@ function ActivityCard({ item, onComplete, onDelete, canDelete }) {
             </span>
           )}
           {showStatusBadge(item.status) && (
-            <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${statusBadgeCls(item.status)}`}>
+            <span className={`badge rounded-full ${statusBadgeCls(item.status)}`}>
               {item.status}
             </span>
           )}
           {item.type === 'call' && item.callOutcome && (
-            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-slate-100 text-slate-600">
+            <span className="badge rounded-full bg-slate-100 text-slate-600">
               {item.callOutcome}
             </span>
           )}
         </div>
         {item.content && <p className="text-xs text-slate-600 mt-1 line-clamp-2">{item.content}</p>}
-        <div className="flex items-center gap-3 mt-1.5 text-[10px] font-semibold text-slate-400 flex-wrap">
+        <div className="flex items-center gap-3 mt-1.5 text-xs font-semibold text-slate-400 flex-wrap">
           {when && (
             <span className="flex items-center gap-1">
-              <Clock size={10} />
+              <Clock size={12} />
               {item.type === 'task' ? `Due ${fmtDate(when)}` : fmtDateTime(when)}
             </span>
           )}
           {item.durationMinutes ? <span>{item.durationMinutes} min</span> : null}
           {item.location && (
-            <span className="flex items-center gap-1"><MapPin size={10} />{item.location}</span>
+            <span className="flex items-center gap-1"><MapPin size={12} />{item.location}</span>
           )}
           <span>by {item.createdBy?.name || 'Unknown'}</span>
         </div>
@@ -879,7 +874,7 @@ function ActivityCard({ item, onComplete, onDelete, canDelete }) {
         {onComplete && !isClosed(item.status) && (
           <button
             onClick={() => onComplete(item._id)}
-            className="p-1.5 rounded-md text-slate-300 hover:text-emerald-600 hover:bg-emerald-50 transition"
+            className="btn-icon text-slate-300 hover:text-emerald-600 hover:bg-emerald-50"
             title="Mark as completed"
           >
             <CheckCircle2 size={16} />
@@ -888,7 +883,7 @@ function ActivityCard({ item, onComplete, onDelete, canDelete }) {
         {canDelete && (
           <button
             onClick={() => onDelete(item._id)}
-            className="p-1.5 rounded-md text-slate-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition"
+            className="btn-icon text-slate-300 hover:text-red-500 hover:bg-red-50 md:opacity-0 md:group-hover:opacity-100"
             title="Delete"
           >
             <Trash2 size={14} />
@@ -978,21 +973,21 @@ export function ActivityModal({ type, leadId, authHeader, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-slate-100">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-lg">
+        <div className="modal-header">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
               <HeaderIcon size={16} />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">{meta.title}</h3>
+            <h3 className="section-title">{meta.title}</h3>
           </div>
-          <button onClick={onClose} disabled={saving} className="text-slate-400 hover:text-slate-600 disabled:opacity-50">
+          <button onClick={onClose} disabled={saving} className="btn-icon text-slate-400 hover:text-slate-600 disabled:opacity-50">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={submit} className="px-6 py-5 space-y-4">
+        <form onSubmit={submit} className="modal-body space-y-4">
           {/* ---------- NOTE ---------- */}
           {type === 'note' && (
             <Field label="Note" required>
@@ -1115,14 +1110,14 @@ export function ActivityModal({ type, leadId, authHeader, onClose, onSaved }) {
               type="button"
               onClick={onClose}
               disabled={saving}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+              className="btn btn-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-70 shadow-lg shadow-blue-200"
+              className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70 shadow-lg shadow-blue-200"
             >
               {saving ? <><Loader2 size={14} className="animate-spin" /> Saving...</> : <><Save size={14} /> Save</>}
             </button>
@@ -1136,7 +1131,7 @@ export function ActivityModal({ type, leadId, authHeader, onClose, onSaved }) {
 function Field({ label, required, children }) {
   return (
     <div>
-      <label className="text-xs font-bold text-slate-600 block mb-1">
+      <label className="label block mb-1.5">
         {label}{required && <span className="text-red-500 ml-1">*</span>}
       </label>
       {children}

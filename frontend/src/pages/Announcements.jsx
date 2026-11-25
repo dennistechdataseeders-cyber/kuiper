@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Megaphone,
@@ -29,7 +28,6 @@ import toast from 'react-hot-toast';
 import { PM_ROLES } from '../utils/roles';
 
 const Announcements = () => {
-  const { isCollapsed } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -526,7 +524,7 @@ const Announcements = () => {
   // ============================================
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Loading announcements...</p>
@@ -536,28 +534,28 @@ const Announcements = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
       
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl">
                 <Megaphone size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="page-title">
                   Announcements
                 </h1>
-                <p className="text-slate-500 mt-1">Stay updated with team news and celebrations</p>
+                <p className="text-sm text-slate-500 mt-1">Stay updated with team news and celebrations</p>
               </div>
             </div>
           </div>
           {canCreateAnnouncements && (
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-200"
+              className="btn btn-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200"
             >
               <Plus size={18} />
               Create Post
@@ -567,10 +565,10 @@ const Announcements = () => {
       </div>
 
       {/* Announcements Feed */}
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-3xl mx-auto stack">
         {announcements.length === 0 ? (
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-            <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+          <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+            <div className="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
               <Megaphone size={32} className="text-slate-300" />
             </div>
             <p className="text-lg font-bold text-slate-500">No announcements yet</p>
@@ -619,7 +617,7 @@ const Announcements = () => {
             return (
               <div
                 key={announcement._id}
-                className={`bg-white rounded-2xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${
+                className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${
                   isAutomated 
                     ? isBirthday 
                       ? 'border-pink-200 bg-gradient-to-br from-pink-50/50 to-white' 
@@ -631,7 +629,7 @@ const Announcements = () => {
               >
                 {/* Automated Badge */}
                 {isAutomated && (
-                  <div className={`px-4 py-1.5 text-xs font-bold flex items-center gap-2 ${
+                  <div className={`px-4 py-1.5 text-xs font-semibold flex items-center gap-2 ${
                     isBirthday 
                       ? 'bg-pink-100 text-pink-700' 
                       : isHoliday
@@ -649,9 +647,9 @@ const Announcements = () => {
                 )}
 
                 {/* Post Header */}
-                <div className="p-6 pb-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
+                <div className="p-4 sm:p-6 pb-4">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-3 min-w-0">
                       <div className={`w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-white font-bold text-sm ${
                         isHoliday 
                           ? 'bg-red-500' 
@@ -676,20 +674,20 @@ const Announcements = () => {
                           </div>
                         )}
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <p className="font-bold text-slate-800 text-sm">
                           {creatorName}
                           {isHR && !isAutomated && (
-                            <span className="ml-2 text-[8px] font-bold uppercase tracking-wider text-pink-500 bg-pink-50 px-2 py-0.5 rounded-full">
+                            <span className="badge rounded-full ml-2 text-pink-500 bg-pink-50">
                               HR
                             </span>
                           )}
                         </p>
-                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                        <div className="flex flex-wrap items-center gap-x-2 text-xs text-slate-500">
                           <span>{creatorRole || 'Team Member'}</span>
                           <span>•</span>
                           <span className="flex items-center gap-1">
-                            <Clock size={10} />
+                            <Clock size={12} />
                             {formatTime(announcement.createdAt)}
                           </span>
                         </div>
@@ -700,7 +698,7 @@ const Announcements = () => {
                       <button
                         onClick={() => handleDeleteAnnouncement(announcement._id)}
                         disabled={deleting === announcement._id}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all disabled:opacity-50"
+                        className="btn-icon text-slate-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"
                         title={isAutomated ? 'Delete automated post' : 'Delete announcement'}
                       >
                         {deleting === announcement._id ? (
@@ -713,12 +711,12 @@ const Announcements = () => {
                   </div>
 
                   {/* Title */}
-                  <h2 className="text-xl font-bold text-slate-800 mt-3 mb-2">
+                  <h2 className="section-title mt-3 mb-2">
                     {announcement.title}
                   </h2>
 
                   {/* Description */}
-                  <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap">
+                  <p className="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap break-words">
                     {announcement.description}
                   </p>
 
@@ -737,16 +735,16 @@ const Announcements = () => {
                         }}
                       />
                       {/* Expand icon overlay */}
-                      <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white p-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
+                      <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white p-2 rounded-lg md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center gap-1.5">
                         <Expand size={14} />
-                        <span className="text-[10px] font-medium">Expand</span>
+                        <span className="text-xs font-medium">Expand</span>
                       </div>
                     </div>
                   )}
                 </div>
 
                 {/* Engagement Bar */}
-                <div className="px-6 py-3 border-t border-slate-100 flex items-center gap-6">
+                <div className="px-4 sm:px-6 py-3 border-t border-slate-100 flex items-center gap-6">
                   <div 
                     className="relative"
                     onMouseEnter={() => setHoveredLike(announcement._id)}
@@ -754,7 +752,7 @@ const Announcements = () => {
                   >
                     <button
                       onClick={() => handleLike(announcement._id)}
-                      className={`flex items-center gap-2 text-sm font-medium transition-all ${
+                      className={`flex items-center gap-2 text-sm font-medium transition-all min-w-10 ${
                         isLiked ? 'text-blue-600' : 'text-slate-500 hover:text-blue-600'
                       }`}
                     >
@@ -767,23 +765,23 @@ const Announcements = () => {
                     </button>
 
                     {showTooltip && (
-                      <div className="absolute bottom-full left-0 mb-2 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[180px] max-w-[280px] z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <div className="absolute bottom-full left-0 mb-2 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[180px] max-w-[min(280px,75vw)] z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
                         <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-700">
                           <Users size={14} className="text-blue-400" />
-                          <span className="text-xs font-bold">Liked by</span>
+                          <span className="text-xs font-semibold">Liked by</span>
                           <span className="text-xs text-slate-400">({likeCount})</span>
                         </div>
                         <div className="max-h-[120px] overflow-y-auto space-y-1.5">
                           {likeUsers && likeUsers.length > 0 ? (
                             likeUsers.map((user, idx) => (
                               <div key={idx} className="flex items-center gap-2 text-xs">
-                                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-[8px] font-bold flex-shrink-0">
+                                <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                                   {user.name?.charAt(0)?.toUpperCase() || '?'}
                                 </div>
                                 <span className="text-slate-200 font-medium">
                                   {user.name || 'Team Member'}
                                   {user._id === userId && (
-                                    <span className="ml-1 text-[8px] text-blue-400">(You)</span>
+                                    <span className="ml-1 text-xs text-blue-400">(You)</span>
                                   )}
                                 </span>
                               </div>
@@ -799,7 +797,7 @@ const Announcements = () => {
 
                   <button
                     onClick={() => toggleComments(announcement._id)}
-                    className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-blue-600 transition-all"
+                    className="flex items-center gap-2 min-w-10 text-sm font-medium text-slate-500 hover:text-blue-600 transition-all"
                   >
                     <MessageSquare size={18} />
                     <span>{commentCount}</span>
@@ -808,7 +806,7 @@ const Announcements = () => {
 
                 {/* Comments Section */}
                 {isExpanded && (
-                  <div className="px-6 pb-6 pt-3 border-t border-slate-100">
+                  <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-3 border-t border-slate-100">
                     <div className="space-y-3 max-h-60 overflow-y-auto mb-4">
                       {announcement.comments && announcement.comments.length > 0 ? (
                         announcement.comments.map((comment) => {
@@ -839,19 +837,19 @@ const Announcements = () => {
                                     }}
                                   />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-bold">
+                                  <div className="w-full h-full flex items-center justify-center text-white text-xs font-semibold">
                                     {commentName?.charAt(0)?.toUpperCase() || '?'}
                                   </div>
                                 )}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-x-2">
                                   <span className="font-bold text-sm text-slate-800">{commentName}</span>
-                                  <span className="text-[10px] text-slate-400">{formatTime(comment.createdAt)}</span>
+                                  <span className="text-xs text-slate-400">{formatTime(comment.createdAt)}</span>
                                   {canDelete && (
                                     <button
                                       onClick={() => handleDeleteComment(announcement._id, comment._id)}
-                                      className="text-slate-400 hover:text-red-600 transition-colors"
+                                      className="btn-icon text-slate-400 hover:text-red-600"
                                     >
                                       <Trash2 size={12} />
                                     </button>
@@ -876,7 +874,7 @@ const Announcements = () => {
                           ...prev,
                           [announcement._id]: e.target.value
                         }))}
-                        className="flex-1 px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                        className="input flex-1 min-w-0 bg-slate-50"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
@@ -887,7 +885,7 @@ const Announcements = () => {
                       <button
                         onClick={() => handleAddComment(announcement._id)}
                         disabled={submittingComment[announcement._id] || !commentTexts[announcement._id]?.trim()}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                       >
                         {submittingComment[announcement._id] ? (
                           <Loader2 size={16} className="animate-spin" />
@@ -926,7 +924,7 @@ const Announcements = () => {
         >
           <button
             onClick={closeImageModal}
-            className="absolute top-4 right-4 text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all z-10"
+            className="btn-icon absolute top-4 right-4 text-white/60 hover:text-white hover:bg-white/10 z-10"
             aria-label="Close image"
           >
             <X size={28} />
@@ -937,7 +935,7 @@ const Announcements = () => {
             download
             target="_blank"
             rel="noopener noreferrer"
-            className="absolute top-4 right-16 text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all z-10"
+            className="absolute top-4 right-16 min-w-10 inline-flex items-center justify-center text-white/60 hover:text-white p-2 rounded-lg hover:bg-white/10 transition-all z-10"
             onClick={(e) => e.stopPropagation()}
             aria-label="Download image"
           >
@@ -973,24 +971,24 @@ const Announcements = () => {
 
       {/* Create Announcement Modal */}
       {showCreateModal && canCreateAnnouncements && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-2xl">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800">Create Announcement</h2>
+                <h2 className="section-title">Create Announcement</h2>
                 <p className="text-sm text-slate-500 mt-0.5">Share news with the team</p>
               </div>
               <button
                 onClick={() => setShowCreateModal(false)}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateAnnouncement} className="p-6 space-y-5">
+            <form onSubmit={handleCreateAnnouncement} className="modal-body space-y-5">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5 block">
+                <label className="label block mb-1.5">
                   Title <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -999,12 +997,12 @@ const Announcements = () => {
                   placeholder="Enter announcement title..."
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm font-medium focus:border-blue-400 transition-all"
+                  className="input bg-slate-50"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5 block">
+                <label className="label block mb-1.5">
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -1013,12 +1011,12 @@ const Announcements = () => {
                   placeholder="Write your announcement..."
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm font-medium resize-none focus:border-blue-400 transition-all"
+                  className="input bg-slate-50 resize-none"
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-1.5 block">
+                <label className="label block mb-1.5">
                   Image (Optional)
                 </label>
                 
@@ -1032,7 +1030,7 @@ const Announcements = () => {
                     <button
                       type="button"
                       onClick={removeImage}
-                      className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors shadow-lg"
+                      className="btn-icon absolute top-2 right-2 bg-red-500 text-white hover:bg-red-600 shadow-lg"
                     >
                       <X size={16} />
                     </button>
@@ -1059,7 +1057,7 @@ const Announcements = () => {
               <button
                 type="submit"
                 disabled={creating}
-                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg shadow-blue-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-md w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-200 disabled:opacity-50"
               >
                 {creating ? (
                   <><Loader2 size={18} className="animate-spin" /> Creating...</>

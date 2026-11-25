@@ -21,7 +21,7 @@ export const VIEW_META = {
 // tiny pieces
 // ============================================
 export const ViewAll = ({ onClick }) => (
-  <button onClick={onClick} className="text-[11px] font-bold text-blue-600 hover:underline flex-shrink-0">
+  <button onClick={onClick} className="text-xs font-semibold text-blue-600 hover:underline flex-shrink-0">
     View all
   </button>
 );
@@ -38,7 +38,7 @@ export const Loading = () => (
 
 export const MoreLink = ({ shown, total, onClick }) =>
   total > shown ? (
-    <button onClick={onClick} className="mt-2 w-full text-center text-[11px] font-bold text-blue-600 hover:underline">
+    <button onClick={onClick} className="mt-2 w-full text-center text-xs font-semibold text-blue-600 hover:underline">
       +{total - shown} more
     </button>
   ) : null;
@@ -56,7 +56,7 @@ export const PeriodBar = ({ p, hint }) => {
   const yearOptions = [...years].sort();
 
   const inputCls =
-    'px-2 py-1 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-700 outline-none focus:border-blue-400 bg-white';
+    'h-10 md:h-9 px-2 rounded-lg border border-slate-200 text-sm text-slate-700 outline-none focus:border-blue-400 bg-white';
 
   return (
     <div className="mb-3">
@@ -66,7 +66,7 @@ export const PeriodBar = ({ p, hint }) => {
             <button
               key={m}
               onClick={() => p.setMode(m)}
-              className={`px-2.5 py-1 rounded-md text-[10px] font-black transition-all ${
+              className={`btn btn-sm ${
                 p.mode === m ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
@@ -78,7 +78,7 @@ export const PeriodBar = ({ p, hint }) => {
         {p.mode !== 'all' && (
           <>
             <div className="flex items-center gap-1">
-              <button onClick={() => p.shift(-1)} className="p-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600">
+              <button onClick={() => p.shift(-1)} className="btn-icon border border-slate-200 hover:bg-slate-50 text-slate-600">
                 <ChevronLeft size={13} />
               </button>
               {p.mode === 'day' && (
@@ -92,17 +92,17 @@ export const PeriodBar = ({ p, hint }) => {
                   {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
                 </select>
               )}
-              <button onClick={() => p.shift(1)} className="p-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600">
+              <button onClick={() => p.shift(1)} className="btn-icon border border-slate-200 hover:bg-slate-50 text-slate-600">
                 <ChevronRight size={13} />
               </button>
             </div>
-            <button onClick={p.reset} className="text-[10px] font-bold text-blue-600 hover:underline">
+            <button onClick={p.reset} className="text-xs font-semibold text-blue-600 hover:underline">
               Today
             </button>
           </>
         )}
       </div>
-      <p className="mt-1.5 text-[10px] font-bold text-slate-400">
+      <p className="mt-1.5 text-xs font-semibold text-slate-400">
         {p.label}{hint ? ` · ${hint}` : ''}
       </p>
     </div>
@@ -115,8 +115,8 @@ export const PeriodBar = ({ p, hint }) => {
 // ============================================
 const BigNumber = ({ value, label }) => (
   <div className="py-8 text-center">
-    <p className="text-4xl font-black text-slate-800 break-words">{value}</p>
-    {label && <p className="text-xs font-bold text-slate-400 mt-1.5">{label}</p>}
+    <p className="text-4xl font-bold text-slate-800 break-words">{value}</p>
+    {label && <p className="text-xs font-semibold text-slate-400 mt-1.5">{label}</p>}
   </div>
 );
 
@@ -126,7 +126,7 @@ const Bars = ({ rows, fmt }) => {
     <div className="space-y-3">
       {rows.map((r) => (
         <div key={r.label}>
-          <div className="flex items-center justify-between text-[11px] mb-1 gap-2">
+          <div className="flex items-center justify-between text-xs mb-1 gap-2">
             <span className="font-bold text-slate-700 truncate" title={r.label}>{r.label}</span>
             <span className="text-slate-500 whitespace-nowrap">
               {r.extra || <b className="text-slate-800">{fmt(r.value)}</b>}
@@ -183,7 +183,7 @@ const Donut = ({ rows, total, fmt, money }) => {
   const shown = active !== null ? positive[active] : null;
   const main = fmtCompact(shown ? shown.value : total);
   const sub = shown ? truncate(shown.label, 14) : money ? 'Rs. total' : 'Total';
-  const mainSize = clamp(HOLE_WIDTH / (main.length * 0.62), 8, 16);
+  const mainSize = clamp(HOLE_WIDTH / (main.length * 0.62), 10, 16);
 
   return (
     <div className="flex flex-wrap items-center gap-4">
@@ -210,7 +210,7 @@ const Donut = ({ rows, total, fmt, money }) => {
           <text x="60" y="60" textAnchor="middle" className="fill-slate-800" style={{ fontSize: mainSize, fontWeight: 900 }}>
             {main}
           </text>
-          <text x="60" y="72" textAnchor="middle" className="fill-slate-400" style={{ fontSize: 7.5, fontWeight: 700 }}>
+          <text x="60" y="72" textAnchor="middle" className="fill-slate-400" style={{ fontSize: 11, fontWeight: 600 }}>
             {sub}
           </text>
         </g>
@@ -220,7 +220,7 @@ const Donut = ({ rows, total, fmt, money }) => {
         {positive.map((r, i) => (
           <div
             key={`${r.label}-${i}`}
-            className={`flex items-center gap-2 text-[11px] rounded px-1 -mx-1 transition-colors ${active === i ? 'bg-slate-50' : ''}`}
+            className={`flex items-center gap-2 text-xs rounded px-1 -mx-1 transition-colors ${active === i ? 'bg-slate-50' : ''}`}
             onMouseEnter={() => setActive(i)}
             onMouseLeave={() => setActive(null)}
           >
@@ -288,9 +288,9 @@ const SIZES = [[2, 'S'], [3, 'M'], [6, 'L']];
 
 export const EditBar = ({ ed }) => {
   const seg = (active) =>
-    `p-1.5 rounded-md transition-all ${active ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`;
+    `btn-icon ${active ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`;
   return (
-    <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-blue-50 border-b border-blue-100 rounded-t-2xl">
+    <div className="flex flex-wrap items-center gap-1.5 px-3 py-2 bg-blue-50 border-b border-blue-100 rounded-t-xl">
       <GripVertical size={14} className="text-blue-400 cursor-grab" title="Drag to reorder" />
 
       <div className="flex bg-white p-0.5 rounded-lg border border-blue-100" title="Display as">
@@ -309,7 +309,7 @@ export const EditBar = ({ ed }) => {
           <button
             key={s}
             onClick={() => ed.onSpan(s)}
-            className={`px-2 py-1 rounded-md text-[10px] font-black ${ed.span === s ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
+            className={`btn btn-sm ${ed.span === s ? 'bg-blue-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}
           >
             {text}
           </button>
@@ -320,24 +320,24 @@ export const EditBar = ({ ed }) => {
         value={ed.periodMode}
         onChange={(e) => ed.onPeriodMode(e.target.value)}
         title="Default period"
-        className="px-1.5 py-1 rounded-lg border border-blue-100 bg-white text-[10px] font-bold text-slate-600 outline-none"
+        className="h-10 md:h-9 px-2 rounded-lg border border-blue-100 bg-white text-sm text-slate-600 outline-none"
       >
         {MODES.map(([m, text]) => <option key={m} value={m}>{text}</option>)}
       </select>
 
       <div className="ml-auto flex items-center gap-1">
-        <button onClick={() => ed.onMove(-1)} title="Move earlier" className="p-1.5 rounded-md text-slate-500 hover:bg-white">
+        <button onClick={() => ed.onMove(-1)} title="Move earlier" className="btn-icon text-slate-500 hover:bg-white">
           <ChevronLeft size={13} />
         </button>
-        <button onClick={() => ed.onMove(1)} title="Move later" className="p-1.5 rounded-md text-slate-500 hover:bg-white">
+        <button onClick={() => ed.onMove(1)} title="Move later" className="btn-icon text-slate-500 hover:bg-white">
           <ChevronRight size={13} />
         </button>
         {ed.onEdit && (
-          <button onClick={ed.onEdit} title="Edit analytics" className="p-1.5 rounded-md text-blue-600 hover:bg-white">
+          <button onClick={ed.onEdit} title="Edit analytics" className="btn-icon text-blue-600 hover:bg-white">
             <Pencil size={13} />
           </button>
         )}
-        <button onClick={ed.onHide} title={ed.hideLabel} className="p-1.5 rounded-md text-red-500 hover:bg-white">
+        <button onClick={ed.onHide} title={ed.hideLabel} className="btn-icon text-red-500 hover:bg-white">
           {ed.hideLabel === 'Delete' ? <Trash2 size={13} /> : <EyeOff size={13} />}
         </button>
       </div>
@@ -349,14 +349,14 @@ export const EditBar = ({ ed }) => {
 // CARD + WIDGET FRAME
 // ============================================
 export const Card = ({ title, icon, count, action, ed, children }) => (
-  <div className={`h-full bg-white rounded-2xl border shadow-sm flex flex-col ${ed ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}>
+  <div className={`h-full bg-white rounded-xl border shadow-sm flex flex-col ${ed ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-200'}`}>
     {ed && <EditBar ed={ed} />}
     <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-100">
       <div className="flex items-center gap-2 min-w-0">
         <span className="p-1.5 rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">{icon}</span>
-        <h3 className="text-sm font-black text-slate-800 truncate" title={title}>{title}</h3>
+        <h3 className="section-title truncate" title={title}>{title}</h3>
         {count !== undefined && (
-          <span className="text-[10px] font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{count}</span>
+          <span className="badge rounded-full bg-slate-100 text-slate-600">{count}</span>
         )}
       </div>
       {action}

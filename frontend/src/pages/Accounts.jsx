@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { Building2, Search, ExternalLink, Users, Loader2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import Pagination from '../components/Pagination';
 import AddAccountModal from '../components/AddAccountModal';
 import AddContactModal from '../components/AddContactModal';
@@ -95,7 +94,6 @@ const ACCOUNT_COLUMNS = [
 ];
 
 export default function Accounts() {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -156,19 +154,19 @@ export default function Accounts() {
     tagsColumn(tagsApi, (a) => a._id), // Tag column first (after the checkbox / quick-action columns)
     ...ACCOUNT_COLUMNS,
     {
-      key: 'actions', label: '', menu: false, fixed: 'end', thClass: 'px-6 py-4 text-right',
+      key: 'actions', label: '', menu: false, fixed: 'end', thClass: 'th text-right',
       tdClass: 'text-right whitespace-nowrap',
       render: (acc) => (
         <>
           <button
             onClick={() => setContactForAccount(acc._id)}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-50 px-3 py-1.5 rounded-lg transition mr-2"
+            className="btn btn-sm text-emerald-700 hover:text-emerald-900 bg-emerald-50 mr-2"
           >
             <UserPlus size={12} /> Add Contact
           </button>
           <button
             onClick={() => navigate(`/sales/contacts?accountId=${acc._id}`)}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 px-3 py-1.5 rounded-lg transition"
+            className="btn btn-sm text-blue-600 hover:text-blue-800 bg-blue-50"
           >
             View Contacts <ExternalLink size={12} />
           </button>
@@ -198,34 +196,34 @@ export default function Accounts() {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Accounts</h1>
+          <h1 className="page-title">Accounts</h1>
           <p className="text-sm text-slate-500">Companies and Organizations</p>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
-          <div className="relative flex-1 sm:w-72">
+          <div className="relative flex-1 basis-48 lg:w-72">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search accounts..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 shadow-sm"
+              className="input pl-10"
             />
           </div>
           <button
             onClick={() => setShowAddAccount(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-blue-700 transition whitespace-nowrap"
+            className="btn btn-md bg-blue-600 text-white shadow-sm hover:bg-blue-700"
           >
             + Add Account
           </button>
           <button
             onClick={() => navigate('/sales/accounts/new')}
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition whitespace-nowrap"
+            className="btn btn-md bg-white border border-slate-200 text-slate-600 shadow-sm hover:bg-slate-50"
             title="Open the full form with multiple contacts"
           >
             Full Form
@@ -252,7 +250,7 @@ export default function Accounts() {
         <ColumnToolbar ct={ct} className="flex-1" />
       </div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="table-scroll overflow-x-auto">
           <table className="w-full text-left min-w-[800px]">
             <ColumnHead ct={ct} />
             <tbody className="divide-y divide-slate-100">
@@ -266,7 +264,7 @@ export default function Accounts() {
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={colCount} className="text-center py-10 text-slate-400">No accounts found.</td></tr>
+                <tr><td colSpan={colCount} className="py-10"><p className="text-center text-sm text-slate-400">No accounts found.</p></td></tr>
               ) : (
                 paged.map((acc) => (
                   <tr
@@ -275,7 +273,7 @@ export default function Accounts() {
                     className={`hover:bg-slate-50 transition group cursor-pointer ${sel.isSelected(acc._id) ? 'bg-blue-50/60' : ''}`}
                   >
                     {ct.visibleColumns.map((col) => (
-                      <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'px-6 py-4'} ${col.tdClass || ''}`)}>
+                      <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'td'} ${col.tdClass || ''}`)}>
                         {col.render(acc)}
                       </td>
                     ))}

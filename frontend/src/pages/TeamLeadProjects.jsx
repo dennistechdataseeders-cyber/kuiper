@@ -3,21 +3,20 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { useSidebar } from '../context/SidebarContext';
 import { 
   FolderKanban, Briefcase, Users, Activity,
   ChevronLeft, ChevronRight, Search, X,
   Filter, ChevronDown, Globe, LayoutGrid,
   MessageSquare, Eye, Send, Loader2, Clock,
   User, Paperclip, Image, File, Download, Trash2,
-  CheckCircle, AlertCircle, FileSpreadsheet, Upload, Plus
+  CheckCircle, AlertCircle, FileSpreadsheet, Upload, Plus,
+  FileText, FileArchive, FileAudio, FileVideo, FileCode
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { isPMRole } from '../utils/roles';
 
 const TeamLeadProjects = () => {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -598,10 +597,10 @@ const TeamLeadProjects = () => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-slate-700 truncate" title={displayName}>
+                <p className="text-xs font-semibold text-slate-700 truncate" title={displayName}>
                   {displayName}
                 </p>
-                <p className="text-[8px] text-slate-400 flex items-center gap-1">
+                <p className="text-xs text-slate-400 flex items-center gap-1">
                   {file.size && <span>{formatFileSize(file.size)}</span>}
                   {file.size && <span>•</span>}
                   <span>{getFileTypeLabel(file)}</span>
@@ -609,7 +608,7 @@ const TeamLeadProjects = () => {
               </div>
               <button
                 onClick={() => window.open(fileUrl, '_blank')}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
+                className="btn-icon hover:bg-slate-100 text-slate-400 hover:text-blue-600"
                 title={isImage ? "View image" : "Download file"}
               >
                 {isImage ? <Eye size={12} /> : <Download size={12} />}
@@ -623,7 +622,7 @@ const TeamLeadProjects = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-500 font-medium">Loading projects...</p>
@@ -633,30 +632,30 @@ const TeamLeadProjects = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
       
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl">
             <FolderKanban size={24} className="text-white" />
           </div>
           <div>
-            <h1 className="text-3xl font-black text-slate-900">My Projects</h1>
-            <p className="text-slate-500 mt-1">Projects where you are the Team Lead</p>
+            <h1 className="page-title">My Projects</h1>
+            <p className="text-sm text-slate-500 mt-1">Projects where you are the Team Lead</p>
           </div>
         </div>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total Projects</p>
-              <p className="text-2xl font-black text-white">{projects.length}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Total Projects</p>
+              <p className="text-2xl font-bold text-white">{projects.length}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <LayoutGrid size={18} className="text-white" />
             </div>
           </div>
@@ -665,12 +664,12 @@ const TeamLeadProjects = () => {
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Active</p>
-              <p className="text-2xl font-black text-white">
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Active</p>
+              <p className="text-2xl font-bold text-white">
                 {projects.filter(p => p.projectStatus !== 'Closed').length}
               </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <Activity size={18} className="text-white" />
             </div>
           </div>
@@ -679,12 +678,12 @@ const TeamLeadProjects = () => {
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">On Hold</p>
-              <p className="text-2xl font-black text-white">
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">On Hold</p>
+              <p className="text-2xl font-bold text-white">
                 {projects.filter(p => p.projectStatus?.includes('ON hold')).length}
               </p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <Activity size={18} className="text-white" />
             </div>
           </div>
@@ -692,7 +691,7 @@ const TeamLeadProjects = () => {
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
+      <div className="card mb-4 sm:mb-6">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -700,12 +699,12 @@ const TeamLeadProjects = () => {
             placeholder="Search by project ID or name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm"
+            className="input pl-10"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
             >
               <X size={16} />
             </button>
@@ -715,18 +714,18 @@ const TeamLeadProjects = () => {
 
       {/* Projects Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll table-sticky-first overflow-x-auto">
           <table className="w-full min-w-[900px]">
             <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Industry</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Country</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project Manager</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feeds</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Comments</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Bulk Import</th>
+                <th className="th">Project</th>
+                <th className="th">Status</th>
+                <th className="th">Industry</th>
+                <th className="th">Country</th>
+                <th className="th">Project Manager</th>
+                <th className="th">Feeds</th>
+                <th className="th">Comments</th>
+                <th className="th">Bulk Import</th>
               </tr>
             </thead>
             <tbody>
@@ -743,39 +742,39 @@ const TeamLeadProjects = () => {
               ) : (
                 currentProjects.map((project) => (
                   <tr key={project._id} className="border-b border-slate-100 hover:bg-slate-50/60 transition-all">
-                    <td className="px-6 py-4">
+                    <td className="td">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-600 to-indigo-600 text-white flex items-center justify-center shadow-sm flex-shrink-0">
                           <Briefcase size={14} />
                         </div>
-                        <div>
-                          <p className="text-sm font-black text-slate-800">{project.projectCustomId}</p>
-                          <p className="text-[10px] text-slate-400 truncate max-w-[200px]">{project.name}</p>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-800">{project.projectCustomId}</p>
+                          <p className="text-xs text-slate-400 md:truncate md:max-w-[200px]">{project.name}</p>
                         </div>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getStatusColor(project.projectStatus)}`}>
+                    <td className="td">
+                      <span className={`badge border ${getStatusColor(project.projectStatus)}`}>
                         {project.projectStatus || 'New'}
                       </span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 bg-blue-50 text-blue-700 px-2 py-1 rounded-lg text-[9px] font-black uppercase">
-                        <Briefcase size={8} />
+                    <td className="td">
+                      <span className="badge bg-blue-50 text-blue-700">
+                        <Briefcase size={12} />
                         {project.industry || 'N/A'}
                       </span>
                     </td>
 
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 px-2 py-1 rounded-lg text-[9px] font-black uppercase">
-                        <Globe size={8} />
+                    <td className="td">
+                      <span className="badge bg-slate-100 text-slate-600">
+                        <Globe size={12} />
                         {project.country || 'N/A'}
                       </span>
                     </td>
 
-                    <td className="px-6 py-4">
+                    <td className="td">
                       <div className="flex items-center gap-1.5">
                         <Users size={12} className="text-slate-400" />
                         <span className="text-xs font-medium text-slate-600">
@@ -784,34 +783,34 @@ const TeamLeadProjects = () => {
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
+                    <td className="td">
                       <div 
                         className="flex items-center gap-1.5 cursor-pointer group"
                         onClick={() => navigateToFeedsWithProject(project)}
                       >
-                        <span className="text-sm font-black text-purple-600 group-hover:text-blue-600 transition-colors">
+                        <span className="text-sm font-semibold text-purple-600 group-hover:text-blue-600 transition-colors">
                           {project.feeds?.length || 0}
                         </span>
-                        <span className="text-[8px] font-bold text-slate-400 group-hover:text-blue-500 transition-colors">
+                        <span className="text-xs font-semibold text-slate-400 group-hover:text-blue-500 transition-colors">
                           View Feeds →
                         </span>
                       </div>
                     </td>
 
-                    <td className="px-6 py-4">
+                    <td className="td">
                       <button
                         onClick={() => openCommentModal(project)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-wider"
+                        className="btn btn-sm bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white"
                       >
                         <MessageSquare size={14} />
                         Comments
                       </button>
                     </td>
 
-                    <td className="px-6 py-4">
+                    <td className="td">
                       <button
                         onClick={() => openBulkFeedModal(project)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-wider"
+                        className="btn btn-sm bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white"
                         title="Bulk Import Feeds from Excel"
                       >
                         <FileSpreadsheet size={14} />
@@ -832,7 +831,7 @@ const TeamLeadProjects = () => {
           <button
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => p - 1)}
-            className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 transition-all"
+            className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
           >
             <ChevronLeft size={14} />
           </button>
@@ -857,7 +856,7 @@ const TeamLeadProjects = () => {
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                  className={`btn-icon ${
                     currentPage === pageNum
                       ? 'bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-sm'
                       : 'text-slate-500 hover:bg-slate-100'
@@ -872,7 +871,7 @@ const TeamLeadProjects = () => {
           <button
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage(p => p + 1)}
-            className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 transition-all"
+            className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
           >
             <ChevronRight size={14} />
           </button>
@@ -883,11 +882,11 @@ const TeamLeadProjects = () => {
           BULK FEED IMPORT MODAL
           ============================================ */}
       {showBulkFeedModal && selectedProjectForBulk && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[250] p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop z-[250]">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <FileSpreadsheet size={20} className="text-emerald-600" />
                   Bulk Import Feeds
                 </h2>
@@ -902,33 +901,33 @@ const TeamLeadProjects = () => {
                   setBulkFeedPreview([]);
                   setSelectedProjectForBulk(null);
                 }} 
-                className="text-slate-300 hover:text-slate-600 transition-colors"
+                className="btn-icon text-slate-300 hover:text-slate-600"
               >
                 <X size={24} />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="modal-body stack">
               {/* Excel Format Guide */}
               <div className="bg-blue-50/80 border border-blue-200 rounded-xl p-4">
                 <div className="flex items-start gap-3">
                   <FileSpreadsheet size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
                   <div>
-                    <p className="text-xs font-bold text-blue-700">Excel Format Guide</p>
-                    <p className="text-[10px] text-blue-600 mt-1">
+                    <p className="text-xs font-semibold text-blue-700">Excel Format Guide</p>
+                    <p className="text-xs text-blue-600 mt-1">
                       Include these columns in your Excel file (headers are case-sensitive):
                     </p>
                     <div className="flex flex-wrap gap-1.5 mt-2">
-                      <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded text-[8px] font-bold">name *</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedType</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">weekDay</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">monthDay</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedPlatform</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">webDomain</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">assignedDevelopers</span>
-                      <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[8px]">feedStatus</span>
+                      <span className="badge bg-red-100 text-red-700">name *</span>
+                      <span className="badge bg-blue-50 text-blue-600">feedType</span>
+                      <span className="badge bg-blue-50 text-blue-600">weekDay</span>
+                      <span className="badge bg-blue-50 text-blue-600">monthDay</span>
+                      <span className="badge bg-blue-50 text-blue-600">feedPlatform</span>
+                      <span className="badge bg-blue-50 text-blue-600">webDomain</span>
+                      <span className="badge bg-blue-50 text-blue-600">assignedDevelopers</span>
+                      <span className="badge bg-blue-50 text-blue-600">feedStatus</span>
                     </div>
-                    <p className="text-[8px] text-blue-500 mt-2">
+                    <p className="text-xs text-blue-500 mt-2">
                       * Required column. Order doesn't matter. Supports .xlsx, .xls, .csv
                     </p>
                   </div>
@@ -945,7 +944,7 @@ const TeamLeadProjects = () => {
                   className="hidden"
                 />
                 <div 
-                  className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${
+                  className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
                     bulkFeedFile ? 'border-emerald-400 bg-emerald-50' : 'border-slate-300 hover:border-blue-400'
                   }`}
                   onClick={() => fileInputRef.current?.click()}
@@ -954,7 +953,7 @@ const TeamLeadProjects = () => {
                     <div className="flex flex-col items-center gap-2">
                       <FileSpreadsheet size={40} className="text-emerald-600" />
                       <p className="text-sm font-bold text-emerald-700">{bulkFeedFile.name}</p>
-                      <p className="text-[10px] text-slate-500">
+                      <p className="text-xs text-slate-500">
                         {(bulkFeedFile.size / 1024).toFixed(1)} KB • {bulkFeedPreview.length} feed(s) found
                       </p>
                       <button
@@ -965,7 +964,7 @@ const TeamLeadProjects = () => {
                           setBulkFeedPreview([]);
                           if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
-                        className="text-xs text-red-500 hover:text-red-700 font-bold"
+                        className="text-xs text-red-500 hover:text-red-700 font-semibold"
                       >
                         Remove file
                       </button>
@@ -974,7 +973,7 @@ const TeamLeadProjects = () => {
                     <div className="flex flex-col items-center gap-2">
                       <Upload size={40} className="text-slate-400" />
                       <p className="text-sm font-bold text-slate-600">Click to upload Excel file</p>
-                      <p className="text-[10px] text-slate-400">or drag and drop</p>
+                      <p className="text-xs text-slate-400">or drag and drop</p>
                     </div>
                   )}
                 </div>
@@ -984,20 +983,20 @@ const TeamLeadProjects = () => {
               {bulkFeedPreview.length > 0 && (
                 <div className="border border-slate-200 rounded-xl overflow-hidden">
                   <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-                    <p className="text-xs font-bold text-slate-600 flex items-center gap-2">
+                    <p className="text-xs font-semibold text-slate-600 flex items-center gap-2">
                       <FileSpreadsheet size={14} className="text-emerald-600" />
                       Preview ({bulkFeedPreview.length} feeds)
                     </p>
-                    <span className="text-[8px] text-slate-400">
+                    <span className="text-xs text-slate-400">
                       Showing first {Math.min(bulkFeedPreview.length, 10)} rows
                     </span>
                   </div>
-                  <div className="overflow-x-auto max-h-64 overflow-y-auto">
-                    <table className="w-full text-xs">
+                  <div className="table-scroll table-sticky-first overflow-x-auto max-h-64 overflow-y-auto">
+                    <table className="w-full text-xs min-w-[480px]">
                       <thead className="bg-slate-50/80 sticky top-0">
                         <tr>
                           {Object.keys(bulkFeedPreview[0] || {}).map((key, idx) => (
-                            <th key={idx} className="px-3 py-2 text-left font-bold text-slate-600 border-b border-slate-200">
+                            <th key={idx} className="th border-b border-slate-200">
                               {key}
                             </th>
                           ))}
@@ -1007,7 +1006,7 @@ const TeamLeadProjects = () => {
                         {bulkFeedPreview.slice(0, 10).map((row, rowIdx) => (
                           <tr key={rowIdx} className="border-b border-slate-100 hover:bg-slate-50">
                             {Object.values(row).map((val, colIdx) => (
-                              <td key={colIdx} className="px-3 py-1.5 text-slate-700 truncate max-w-[150px]">
+                              <td key={colIdx} className="td truncate max-w-[150px]">
                                 {String(val || '')}
                               </td>
                             ))}
@@ -1017,7 +1016,7 @@ const TeamLeadProjects = () => {
                     </table>
                   </div>
                   {bulkFeedPreview.length > 10 && (
-                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-center text-[8px] text-slate-400">
+                    <div className="px-4 py-2 bg-slate-50 border-t border-slate-200 text-center text-xs text-slate-400">
                       + {bulkFeedPreview.length - 10} more rows not shown
                     </div>
                   )}
@@ -1034,7 +1033,7 @@ const TeamLeadProjects = () => {
                     setBulkFeedPreview([]);
                     setSelectedProjectForBulk(null);
                   }}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Cancel
                 </button>
@@ -1042,7 +1041,7 @@ const TeamLeadProjects = () => {
                   type="button"
                   onClick={handleBulkFeedSubmit}
                   disabled={bulkFeedUploading || bulkFeedPreview.length === 0}
-                  className="flex-[2] py-3 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="btn btn-md flex-[2] bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-200 disabled:opacity-50"
                 >
                   {bulkFeedUploading ? (
                     <>
@@ -1066,27 +1065,27 @@ const TeamLeadProjects = () => {
           COMMENT MODAL
           ============================================ */}
       {showCommentModal && selectedProject && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[200] p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-2xl">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <MessageSquare size={20} className="text-purple-600" />
                   Project Comments
                 </h2>
-                <p className="text-sm text-slate-500 truncate max-w-[300px]">
+                <p className="text-sm text-slate-500 truncate sm:max-w-[300px]">
                   {selectedProject.projectCustomId} • {selectedProject.name}
                 </p>
               </div>
               <button
                 onClick={closeCommentModal}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="modal-body">
               {/* Comments List */}
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 mb-4">
                 {loadingComments ? (
@@ -1113,24 +1112,24 @@ const TeamLeadProjects = () => {
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs ${isOwn ? 'bg-purple-600' : 'bg-slate-400'}`}>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0 ${isOwn ? 'bg-purple-600' : 'bg-slate-400'}`}>
                                 {getInitials(commenterName)}
                               </div>
                               <span className="font-bold text-sm text-slate-800">
                                 {commenterName}
                               </span>
-                              <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                <Clock size={10} />
+                              <span className="text-xs text-slate-400 flex items-center gap-1">
+                                <Clock size={12} />
                                 {formatTime(comment.createdAt)}
                               </span>
                               {isOwn && (
-                                <span className="text-[8px] font-bold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">
+                                <span className="badge rounded-full text-purple-600 bg-purple-100">
                                   You
                                 </span>
                               )}
                               {comment.userId?.role && !isOwn && (
-                                <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
+                                <span className={`badge rounded-full ${
                                   isPMRole(comment.userId.role) 
                                     ? 'bg-purple-100 text-purple-700' 
                                     : comment.userId.role === 'Developer'
@@ -1157,7 +1156,7 @@ const TeamLeadProjects = () => {
                             <button
                               onClick={() => handleDeleteComment(comment._id)}
                               disabled={deletingComment === comment._id}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all flex-shrink-0 disabled:opacity-50"
+                              className="btn-icon text-slate-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0 disabled:opacity-50"
                               title="Delete comment"
                             >
                               {deletingComment === comment._id ? (
@@ -1193,16 +1192,16 @@ const TeamLeadProjects = () => {
                             )}
                           </div>
                           <div className="min-w-0 max-w-[120px]">
-                            <p className="text-[10px] font-semibold text-slate-700 truncate">{preview.name}</p>
-                            <p className="text-[8px] text-slate-400">{formatFileSize(preview.size)}</p>
+                            <p className="text-xs font-semibold text-slate-700 truncate">{preview.name}</p>
+                            <p className="text-xs text-slate-400">{formatFileSize(preview.size)}</p>
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeFile(idx)}
-                          className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md opacity-0 group-hover:opacity-100"
+                          className="btn-icon absolute -top-1 -right-1 bg-red-500 text-white hover:bg-red-600 shadow-md md:opacity-0 md:group-hover:opacity-100 rounded-full"
                         >
-                          <X size={10} />
+                          <X size={12} />
                         </button>
                       </div>
                     ))}
@@ -1215,7 +1214,7 @@ const TeamLeadProjects = () => {
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       placeholder="Write a comment... (attachments supported)"
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-purple-400 transition-all resize-none min-h-[48px] max-h-[100px]"
+                      className="input bg-slate-50 resize-none min-h-[48px]"
                       rows={1}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1240,7 +1239,7 @@ const TeamLeadProjects = () => {
                       type="button"
                       onClick={() => commentFileInputRef.current?.click()}
                       disabled={uploadingFiles}
-                      className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-50"
+                      className="btn-icon bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                       title="Attach files (images up to 5MB, documents up to 50MB)"
                     >
                       <Paperclip size={18} />
@@ -1249,7 +1248,7 @@ const TeamLeadProjects = () => {
                     <button
                       type="submit"
                       disabled={submittingComment || uploadingFiles}
-                      className="p-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm"
+                      className="btn-icon bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 shadow-sm"
                     >
                       {submittingComment ? (
                         <Loader2 size={18} className="animate-spin" />
@@ -1260,7 +1259,7 @@ const TeamLeadProjects = () => {
                   </div>
                 </form>
                 
-                <div className="flex justify-between text-[10px] text-slate-400 px-1 mt-2">
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-slate-400 px-1 mt-2">
                   <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
                   <span>
                     <button 

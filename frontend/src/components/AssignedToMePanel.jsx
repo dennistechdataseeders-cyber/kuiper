@@ -82,28 +82,28 @@ const AssignedToMePanel = () => {
   const overdue = open.filter((t) => t.late).length;
 
   return (
-    <div className="mb-6 rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-sm overflow-hidden">
-      <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 border-b border-blue-100">
+    <div className="rounded-xl border border-blue-200 bg-gradient-to-br from-blue-50 to-white shadow-sm overflow-hidden mb-4 sm:mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-blue-100">
         <div className="flex items-center gap-3">
           <div className="p-2 rounded-xl bg-blue-600 text-white">
             <UserCheck size={16} />
           </div>
           <div>
-            <h2 className="text-sm font-black text-slate-800">Assigned to you by your manager</h2>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <h2 className="section-title">Assigned to you by your manager</h2>
+            <p className="meta">
               {open.length} open{overdue ? ` · ${overdue} overdue` : ''}
             </p>
           </div>
         </div>
         <button
           onClick={() => navigate('/sales/activities/tasks')}
-          className="flex items-center gap-1 text-[11px] font-black text-blue-600 hover:underline"
+          className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"
         >
           Open task board <ArrowRight size={12} />
         </button>
       </div>
 
-      <div className="p-4 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="p-4 grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         {open.slice(0, 6).map((t) => (
           <div
             key={t._id}
@@ -112,7 +112,7 @@ const AssignedToMePanel = () => {
             <div className="flex items-start justify-between gap-2">
               <p className="text-sm font-bold text-slate-800 leading-snug">{t.title}</p>
               <span
-                className={`shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full border ${
+                className={`badge rounded-full shrink-0 border ${
                   priorityStyle[t.priority] || priorityStyle.Medium
                 }`}
               >
@@ -120,9 +120,9 @@ const AssignedToMePanel = () => {
               </span>
             </div>
 
-            {t.content && <p className="mt-1 text-[11px] text-slate-500 line-clamp-2">{t.content}</p>}
+            {t.content && <p className="mt-1 text-xs text-slate-500 line-clamp-2">{t.content}</p>}
 
-            <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
+            <div className="mt-2 flex items-center justify-between gap-2 text-xs">
               <span className="text-slate-400 truncate">
                 From <b className="text-slate-600">{t.assignedBy?.name || 'Manager'}</b>
                 {t.leadId?.companyName ? ` · ${t.leadId.companyName}` : ''}
@@ -132,7 +132,7 @@ const AssignedToMePanel = () => {
                   t.late ? 'text-red-500' : 'text-slate-500'
                 }`}
               >
-                {t.late ? <AlertTriangle size={10} /> : <Clock size={10} />}
+                {t.late ? <AlertTriangle size={12} /> : <Clock size={12} />}
                 {t.late ? 'Overdue · ' : ''}
                 {fmtDate(t.dueAt)}
               </span>
@@ -143,17 +143,17 @@ const AssignedToMePanel = () => {
                 <button
                   disabled={busyId === t._id}
                   onClick={() => setStatus(t, 'In Progress')}
-                  className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+                  className="btn btn-sm flex-1 border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
                 >
-                  <Play size={11} /> Start
+                  <Play size={12} /> Start
                 </button>
               )}
               <button
                 disabled={busyId === t._id}
                 onClick={() => setStatus(t, 'Completed')}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg bg-emerald-600 text-[11px] font-black text-white hover:bg-emerald-700 disabled:opacity-50"
+                className="btn btn-sm flex-1 bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
               >
-                {busyId === t._id ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />} Done
+                {busyId === t._id ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Done
               </button>
             </div>
           </div>
@@ -163,7 +163,7 @@ const AssignedToMePanel = () => {
       {open.length > 6 && (
         <button
           onClick={() => navigate('/sales/activities/tasks')}
-          className="w-full py-2 text-[11px] font-black text-blue-600 hover:bg-blue-50 border-t border-blue-100"
+          className="w-full py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 border-t border-blue-100"
         >
           +{open.length - 6} more on the task board
         </button>

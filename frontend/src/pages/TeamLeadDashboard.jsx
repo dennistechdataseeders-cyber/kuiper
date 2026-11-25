@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { useSidebar } from '../context/SidebarContext';
 import {
   LayoutDashboard,
   FolderKanban,
@@ -42,7 +41,6 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const TeamLeadDashboard = () => {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -59,7 +57,6 @@ const TeamLeadDashboard = () => {
   });
   const [expandedProject, setExpandedProject] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
   const token = localStorage.getItem('token');
   const userRole = localStorage.getItem('role');
@@ -70,15 +67,6 @@ const TeamLeadDashboard = () => {
       'Content-Type': 'application/json'
     } 
   };
-
-  // Handle resize for mobile detection
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   useEffect(() => {
     if (userRole !== 'Team Lead') {
@@ -144,10 +132,10 @@ const TeamLeadDashboard = () => {
 
   const getFeedTypeIcon = (type) => {
     switch(type) {
-      case 'Daily': return <Clock size={10} />;
-      case 'Weekly': return <Calendar size={10} />;
-      case 'Monthly': return <Calendar size={10} />;
-      default: return <Activity size={10} />;
+      case 'Daily': return <Clock size={12} />;
+      case 'Weekly': return <Calendar size={12} />;
+      case 'Monthly': return <Calendar size={12} />;
+      default: return <Activity size={12} />;
     }
   };
 
@@ -176,14 +164,14 @@ const TeamLeadDashboard = () => {
 
   if (error) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-        <div className="text-center max-w-md p-8 bg-white rounded-2xl shadow-lg border border-red-200">
+      <div className="page bg-slate-50 flex items-center justify-center">
+        <div className="card text-center max-w-md border-red-200">
           <AlertTriangle size={48} className="text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-black text-red-600 mb-2">Access Error</h2>
+          <h2 className="section-title text-red-600 mb-2">Access Error</h2>
           <p className="text-slate-600">{error}</p>
           <button
             onClick={() => navigate('/login')}
-            className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+            className="btn btn-md mt-4 bg-blue-600 text-white hover:bg-blue-700"
           >
             Go to Login
           </button>
@@ -194,7 +182,7 @@ const TeamLeadDashboard = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
         <div className="text-center">
           <div className="relative w-16 h-16 mx-auto mb-4">
             <div className="absolute inset-0 border-4 border-blue-200 rounded-full"></div>
@@ -207,10 +195,10 @@ const TeamLeadDashboard = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50/80 p-4 md:p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 via-white to-slate-50/80">
       
       {/* Header */}
-      <div className="mb-6 md:mb-8">
+      <div className="mb-4 sm:mb-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
@@ -218,7 +206,7 @@ const TeamLeadDashboard = () => {
                 <LayoutDashboard size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-2xl md:text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="page-title">
                   Team Lead Workspace
                 </h1>
                 <p className="text-slate-500 text-sm mt-0.5">Manage your projects, teams, and tickets</p>
@@ -228,39 +216,39 @@ const TeamLeadDashboard = () => {
           <div className="flex items-center gap-3 flex-wrap">
             <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[9px] font-black text-slate-500 uppercase">Active</span>
+              <span className="text-xs font-semibold text-slate-500 uppercase">Active</span>
             </div>
             <button
               onClick={fetchData}
-              className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+              className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">Refresh</span>
+              Refresh
             </button>
             <button
               onClick={() => navigate('/tickets/create')}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all shadow-md shadow-blue-200"
+              className="btn btn-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-md shadow-blue-200"
             >
               <Plus size={16} />
-              <span className="hidden sm:inline">New Ticket</span>
+              New Ticket
             </button>
           </div>
         </div>
       </div>
 
       {/* Stats Cards - Enhanced */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 mb-4 sm:mb-6 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white shadow-lg shadow-blue-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Projects</p>
-              <p className="text-2xl font-black">{stats.totalProjects}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Projects</p>
+              <p className="text-2xl font-bold">{stats.totalProjects}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0">
               <FolderKanban size={18} className="text-white" />
             </div>
           </div>
-          <div className="mt-2 text-[9px] text-white/60">
+          <div className="mt-2 text-xs text-white/60">
             {activeProjects} active · {onHoldProjects} on hold
           </div>
         </div>
@@ -268,14 +256,14 @@ const TeamLeadDashboard = () => {
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white shadow-lg shadow-emerald-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total Feeds</p>
-              <p className="text-2xl font-black">{totalFeeds}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Total Feeds</p>
+              <p className="text-2xl font-bold">{totalFeeds}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0">
               <Activity size={18} className="text-white" />
             </div>
           </div>
-          <div className="mt-2 text-[9px] text-white/60">
+          <div className="mt-2 text-xs text-white/60">
             Across {stats.totalProjects} projects
           </div>
         </div>
@@ -283,14 +271,14 @@ const TeamLeadDashboard = () => {
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white shadow-lg shadow-purple-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Tickets</p>
-              <p className="text-2xl font-black">{stats.totalTickets}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Tickets</p>
+              <p className="text-2xl font-bold">{stats.totalTickets}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0">
               <Ticket size={18} className="text-white" />
             </div>
           </div>
-          <div className="mt-2 text-[9px] text-white/60">
+          <div className="mt-2 text-xs text-white/60">
             {stats.resolvedTickets} resolved
           </div>
         </div>
@@ -298,14 +286,14 @@ const TeamLeadDashboard = () => {
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white shadow-lg shadow-amber-200/50 hover:shadow-xl hover:scale-[1.02] transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Open Tickets</p>
-              <p className="text-2xl font-black">{stats.openTickets}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Open Tickets</p>
+              <p className="text-2xl font-bold">{stats.openTickets}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center backdrop-blur-sm shrink-0">
               <AlertCircle size={18} className="text-white" />
             </div>
           </div>
-          <div className="mt-2 text-[9px] text-white/60">
+          <div className="mt-2 text-xs text-white/60">
             {stats.inProgressTickets} in progress
           </div>
         </div>
@@ -314,7 +302,7 @@ const TeamLeadDashboard = () => {
   
 
       {/* Search */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 md:p-4 mb-6">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3 md:p-4 mb-4 sm:mb-6">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -322,12 +310,12 @@ const TeamLeadDashboard = () => {
             placeholder="Search projects by ID or name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm bg-slate-50"
+            className="input pl-10 bg-slate-50"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
             >
               <X size={16} />
             </button>
@@ -340,14 +328,14 @@ const TeamLeadDashboard = () => {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <FolderKanban size={18} className="text-blue-600" />
-            <h2 className="text-sm md:text-base font-black text-slate-800">Your Projects</h2>
-            <span className="text-xs font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+            <h2 className="section-title">Your Projects</h2>
+            <span className="badge rounded-full text-slate-400 bg-slate-100">
               {filteredProjects.length}
             </span>
           </div>
           <button
             onClick={() => navigate('/teamlead/projects')}
-            className="text-[9px] font-black text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
+            className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors flex items-center gap-1"
           >
             View All →
           </button>
@@ -355,14 +343,14 @@ const TeamLeadDashboard = () => {
 
         {filteredProjects.length === 0 ? (
           <div className="bg-white rounded-xl border border-slate-200 p-12 text-center shadow-sm">
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
               <Briefcase size={28} className="text-slate-300" />
             </div>
             <p className="text-sm font-bold text-slate-500">No projects assigned to you yet</p>
             <p className="text-xs text-slate-400 mt-1">Projects will appear here once assigned by a Project Manager</p>
           </div>
         ) : (
-          filteredProjects.slice(0, isMobile ? 3 : 5).map(project => {
+          filteredProjects.slice(0, 5).map(project => {
             const isExpanded = expandedProject === project._id;
             const projectFeeds = project.feeds || [];
             const assignedDevs = projectFeeds.flatMap(f => f.assignedDevelopers || []);
@@ -378,7 +366,7 @@ const TeamLeadDashboard = () => {
               >
                 {/* Project Header */}
                 <div
-                  className="px-4 md:px-6 py-3 md:py-4 flex items-center justify-between cursor-pointer hover:bg-slate-50/70 transition-all"
+                  className="px-4 md:px-6 py-3 md:py-4 flex items-start sm:items-center justify-between gap-2 cursor-pointer hover:bg-slate-50/70 transition-all"
                   onClick={() => setExpandedProject(isExpanded ? null : project._id)}
                 >
                   <div className="flex items-center gap-3 md:gap-4 min-w-0">
@@ -387,42 +375,42 @@ const TeamLeadDashboard = () => {
                         ? 'bg-slate-400 text-white' 
                         : 'bg-gradient-to-br from-indigo-600 to-blue-600 text-white'
                     }`}>
-                      <Briefcase size={isMobile ? 14 : 16} />
+                      <Briefcase size={16} />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-slate-800 truncate">{project.projectCustomId}</p>
-                      <p className="text-[10px] text-slate-500 truncate">{project.name}</p>
+                      <p className="text-sm font-semibold text-slate-800 break-words">{project.projectCustomId}</p>
+                      <p className="text-xs text-slate-500 truncate">{project.name}</p>
                       <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                        <span className="text-[8px] font-bold text-slate-400">
+                        <span className="text-xs font-semibold text-slate-400">
                           {projectFeeds.length} feed{projectFeeds.length !== 1 ? 's' : ''}
                         </span>
                         {project.teamLead && (
-                          <span className="text-[8px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full">
+                          <span className="badge rounded-full text-indigo-600 bg-indigo-50">
                             TL: {project.teamLead.name}
                           </span>
                         )}
                         {uniqueDevs.length > 0 && (
-                          <span className="text-[8px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+                          <span className="badge rounded-full text-blue-600 bg-blue-50">
                             {uniqueDevs.length} dev{uniqueDevs.length !== 1 ? 's' : ''}
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 md:gap-4 flex-shrink-0">
-                    <span className={`text-[7px] md:text-[8px] font-black px-2 py-1 rounded-lg border ${getProjectStatusColor(project.projectStatus)}`}>
+                  <div className="flex flex-col items-end sm:flex-row sm:items-center gap-2 md:gap-4 flex-shrink-0">
+                    <span className={`badge border ${getProjectStatusColor(project.projectStatus)}`}>
                       {project.projectStatus || 'Active'}
                     </span>
                     <div className="flex items-center gap-1">
                       {ticketCount > 0 && (
-                        <span className="text-[8px] font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full hidden sm:inline">
+                        <span className="badge rounded-full text-purple-600 bg-purple-50">
                           {ticketCount} tickets
                         </span>
                       )}
                       {isExpanded ? (
-                        <ChevronUp size={isMobile ? 16 : 18} className="text-slate-400" />
+                        <ChevronUp size={18} className="text-slate-400" />
                       ) : (
-                        <ChevronDown size={isMobile ? 16 : 18} className="text-slate-400" />
+                        <ChevronDown size={18} className="text-slate-400" />
                       )}
                     </div>
                   </div>
@@ -432,22 +420,22 @@ const TeamLeadDashboard = () => {
                 {isExpanded && (
                   <div className="px-4 md:px-6 pb-4 md:pb-6 pt-2 border-t border-slate-100 bg-gradient-to-b from-slate-50/50 to-white animate-in slide-in-from-top-2 duration-200">
                     {/* Stats Row */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 mb-4">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-3 mb-4">
                       <div className="bg-white rounded-lg p-2 md:p-3 border border-slate-200 shadow-sm text-center">
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Feeds</p>
-                        <p className="text-base md:text-lg font-black text-slate-800">{projectFeeds.length}</p>
+                        <p className="text-xs font-semibold text-slate-400 uppercase">Feeds</p>
+                        <p className="text-base md:text-lg font-bold text-slate-800">{projectFeeds.length}</p>
                       </div>
                       <div className="bg-white rounded-lg p-2 md:p-3 border border-slate-200 shadow-sm text-center">
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Developers</p>
-                        <p className="text-base md:text-lg font-black text-slate-800">{uniqueDevs.length}</p>
+                        <p className="text-xs font-semibold text-slate-400 uppercase">Developers</p>
+                        <p className="text-base md:text-lg font-bold text-slate-800">{uniqueDevs.length}</p>
                       </div>
                       <div className="bg-white rounded-lg p-2 md:p-3 border border-slate-200 shadow-sm text-center">
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Tickets</p>
-                        <p className="text-base md:text-lg font-black text-purple-600">{ticketCount}</p>
+                        <p className="text-xs font-semibold text-slate-400 uppercase">Tickets</p>
+                        <p className="text-base md:text-lg font-bold text-purple-600">{ticketCount}</p>
                       </div>
                       <div className="bg-white rounded-lg p-2 md:p-3 border border-slate-200 shadow-sm text-center">
-                        <p className="text-[8px] font-black text-slate-400 uppercase">Status</p>
-                        <span className={`text-[8px] font-black px-2 py-0.5 rounded-lg inline-block ${getProjectStatusColor(project.projectStatus)}`}>
+                        <p className="text-xs font-semibold text-slate-400 uppercase">Status</p>
+                        <span className={`badge ${getProjectStatusColor(project.projectStatus)}`}>
                           {project.projectStatus || 'Active'}
                         </span>
                       </div>
@@ -456,13 +444,13 @@ const TeamLeadDashboard = () => {
                     {/* Feeds List */}
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-[9px] font-black uppercase text-slate-400 flex items-center gap-1.5">
+                        <h3 className="label uppercase flex items-center gap-1.5">
                           <Activity size={12} />
                           Feeds ({projectFeeds.length})
                         </h3>
                         <button
                           onClick={() => navigate('/teamlead/feeds')}
-                          className="text-[8px] font-black text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
+                          className="text-xs font-semibold text-indigo-600 hover:text-indigo-700 transition-colors flex items-center gap-1"
                         >
                           Manage All →
                         </button>
@@ -474,31 +462,31 @@ const TeamLeadDashboard = () => {
                             const devs = feed.assignedDevelopers || [];
                             return (
                               <div key={feed._id} className="border border-slate-100 rounded-lg p-3 bg-white hover:border-blue-200 hover:shadow-sm transition-all">
-                                <div className="flex items-start justify-between">
+                                <div className="flex items-start justify-between gap-2">
                                   <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className={`badge border ${getFeedTypeStyle(feed.feedType)}`}>
                                         {getFeedTypeIcon(feed.feedType)}
                                         {feed.feedType || 'Daily'}
                                       </span>
-                                      <p className="text-xs font-bold text-slate-800 truncate">{feed.name}</p>
+                                      <p className="text-sm font-semibold text-slate-800 min-w-0 break-words">{feed.name}</p>
                                     </div>
                                     <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                                       {devs.slice(0, 2).map(dev => (
-                                        <span key={dev._id} className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-lg text-[7px] font-bold">
-                                          <UserCheck size={7} />
+                                        <span key={dev._id} className="badge bg-blue-50 text-blue-700">
+                                          <UserCheck size={12} />
                                           {dev.name}
                                         </span>
                                       ))}
                                       {devs.length > 2 && (
-                                        <span className="text-[7px] font-bold text-slate-400">+{devs.length - 2}</span>
+                                        <span className="text-xs font-semibold text-slate-400">+{devs.length - 2}</span>
                                       )}
                                       {devs.length === 0 && (
-                                        <span className="text-[7px] font-bold text-slate-400 italic">Unassigned</span>
+                                        <span className="text-xs font-semibold text-slate-400 italic">Unassigned</span>
                                       )}
                                     </div>
                                   </div>
-                                  <span className="text-[7px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-lg flex-shrink-0">
+                                  <span className="badge text-slate-400 bg-slate-50 flex-shrink-0">
                                     {devs.length} dev{devs.length !== 1 ? 's' : ''}
                                   </span>
                                 </div>
@@ -518,21 +506,21 @@ const TeamLeadDashboard = () => {
                       <div className="flex items-center gap-2 flex-wrap">
                         <button
                           onClick={() => navigate('/teamlead/feeds')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-indigo-600 hover:text-white transition-all"
+                          className="btn btn-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
                         >
                           <Activity size={12} />
                           Manage Feeds
                         </button>
                         <button
                           onClick={() => navigate('/tickets')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-purple-600 hover:text-white transition-all"
+                          className="btn btn-sm bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white"
                         >
                           <Ticket size={12} />
                           View Tickets ({ticketCount})
                         </button>
                         <button
                           onClick={() => navigate('/teamlead/developers')}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-blue-600 hover:text-white transition-all"
+                          className="btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white"
                         >
                           <Users size={12} />
                           Team ({uniqueDevs.length})
@@ -550,7 +538,7 @@ const TeamLeadDashboard = () => {
                             } 
                           });
                         }}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[8px] font-black uppercase tracking-wider hover:bg-blue-700 transition-all shadow-sm"
+                        className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
                       >
                         <Plus size={12} />
                         New Ticket
@@ -563,11 +551,11 @@ const TeamLeadDashboard = () => {
           })
         )}
 
-        {filteredProjects.length > (isMobile ? 3 : 5) && (
+        {filteredProjects.length > 5 && (
           <div className="text-center pt-2">
             <button
               onClick={() => navigate('/teamlead/projects')}
-              className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors"
+              className="text-xs font-semibold text-blue-600 hover:text-blue-700 transition-colors"
             >
               View all {filteredProjects.length} projects →
             </button>

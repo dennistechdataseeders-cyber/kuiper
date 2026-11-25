@@ -9,8 +9,8 @@ import CustomFieldsSection, { useCustomFields, validateCustomFields, buildCustom
 const NEW_ACCOUNT = '__new__';
 const EMPTY = { accountId: '', newCompany: '', firstName: '', lastName: '', email: '', phone: '', title: '', isPrimary: false };
 
-const inputCls = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500';
-const labelCls = 'text-xs font-bold text-slate-600 block mb-1';
+const inputCls = 'input';
+const labelCls = 'label block mb-1.5';
 
 /**
  * accounts:         list of organizations (for the dropdown)
@@ -76,17 +76,17 @@ export default function AddContactModal({ open, onClose, accounts = [], defaultA
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
           <div className="flex items-center gap-2">
             <UserPlus size={18} className="text-blue-600" />
-            <h2 className="text-lg font-black text-slate-800">Add Contact</h2>
+            <h2 className="section-title">Add Contact</h2>
           </div>
-          <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-700"><X size={18} /></button>
+          <button onClick={onClose} className="btn-icon text-slate-400 hover:text-slate-700"><X size={18} /></button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="modal-body space-y-4">
           <div>
             <label className={labelCls}>Account *</label>
             <select name="accountId" value={form.accountId} onChange={set} className={inputCls}>
@@ -103,7 +103,7 @@ export default function AddContactModal({ open, onClose, accounts = [], defaultA
             </div>
           )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className={labelCls}>First Name *</label>
               <input name="firstName" value={form.firstName} onChange={set} className={inputCls} />
@@ -141,9 +141,9 @@ export default function AddContactModal({ open, onClose, accounts = [], defaultA
           )}
         </div>
 
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-lg transition">Cancel</button>
-          <button onClick={save} disabled={saving} className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 disabled:opacity-70 transition">
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-md text-slate-600 hover:bg-slate-100">Cancel</button>
+          <button onClick={save} disabled={saving} className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70">
             {saving && <Loader2 size={14} className="animate-spin" />}
             {saving ? 'Saving...' : 'Save Contact'}
           </button>

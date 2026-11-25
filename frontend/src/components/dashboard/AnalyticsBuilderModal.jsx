@@ -11,9 +11,8 @@ import {
 } from './dashboardUtils';
 import { ChartView, VIEW_META } from './DashboardParts';
 
-const inputCls =
-  'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 bg-white';
-const labelCls = 'text-xs font-bold text-slate-600 block mb-1';
+const inputCls = 'input min-w-0';
+const labelCls = 'label block mb-1.5';
 
 const slim = (f) => (f ? { key: f.key, label: f.label, kind: f.kind, ...(f.money ? { money: true } : {}) } : null);
 
@@ -154,18 +153,18 @@ export default function AnalyticsBuilderModal({
       : `${draft.module.toLowerCase()}`;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm">
-      <div className="bg-white w-full max-w-4xl max-h-[92vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-4xl">
         {/* header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+        <div className="modal-header">
           <div>
-            <h2 className="text-lg font-black text-slate-800">{initial ? 'Edit analytics' : 'Add analytics'}</h2>
+            <h2 className="section-title">{initial ? 'Edit analytics' : 'Add analytics'}</h2>
             <p className="text-xs text-slate-400 mt-0.5">Choose what to track and how to show it on your dashboard.</p>
           </div>
-          <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><X size={18} /></button>
+          <button onClick={onClose} className="btn-icon hover:bg-slate-100 text-slate-500"><X size={18} /></button>
         </div>
 
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+        <div className="modal-body grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           {/* ---------- form ---------- */}
           <div className="space-y-4">
             <div>
@@ -187,7 +186,7 @@ export default function AnalyticsBuilderModal({
 
             <div>
               <label className={labelCls}>Measure</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={f.measureType}
                   onChange={(e) => set({ measureType: e.target.value, measureKey: '' })}
@@ -204,12 +203,12 @@ export default function AnalyticsBuilderModal({
                   </select>
                 )}
               </div>
-              {needsField && <p className="text-[11px] text-red-500 mt-1">Pick the number field to {f.measureType === 'sum' ? 'add up' : 'average'}.</p>}
+              {needsField && <p className="text-xs text-red-500 mt-1">Pick the number field to {f.measureType === 'sum' ? 'add up' : 'average'}.</p>}
             </div>
 
             <div>
               <label className={labelCls}>Only include records where (optional)</label>
-              <div className="flex gap-2">
+              <div className="flex flex-col sm:flex-row gap-2">
                 <select
                   value={f.whereKey}
                   onChange={(e) => set({ whereKey: e.target.value, whereValue: '' })}
@@ -287,7 +286,7 @@ export default function AnalyticsBuilderModal({
                       key={v}
                       disabled={disabled}
                       onClick={() => set({ view: v })}
-                      className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-bold transition-all ${
+                      className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-xs font-semibold transition-all ${
                         active ? 'border-blue-500 bg-blue-50 text-blue-600' : 'border-slate-200 text-slate-500 hover:bg-slate-50'
                       } disabled:opacity-40 disabled:cursor-not-allowed`}
                     >
@@ -297,13 +296,13 @@ export default function AnalyticsBuilderModal({
                   );
                 })}
               </div>
-              {!canChart && <p className="text-[11px] text-slate-400 mt-1.5">Choose a "Group by" to unlock bar and pie charts.</p>}
+              {!canChart && <p className="text-xs text-slate-400 mt-1.5">Choose a "Group by" to unlock bar and pie charts.</p>}
             </div>
 
             <div>
               <label className={labelCls}>Preview (all time)</label>
               <div className="border border-slate-200 rounded-xl p-4 min-h-[200px] bg-slate-50/50">
-                <p className="text-xs font-black text-slate-700 mb-3 truncate">{draft.title || autoTitle(draft)}</p>
+                <p className="text-xs font-semibold text-slate-700 mb-3 truncate">{draft.title || autoTitle(draft)}</p>
                 <ChartView
                   view={draft.view}
                   rows={preview.rows}
@@ -311,23 +310,23 @@ export default function AnalyticsBuilderModal({
                   money={preview.money}
                   numberLabel={numberLabel}
                 />
-                <p className="text-[10px] text-slate-400 mt-3">{preview.count} matching record{preview.count === 1 ? '' : 's'}</p>
+                <p className="text-xs text-slate-400 mt-3">{preview.count} matching record{preview.count === 1 ? '' : 's'}</p>
               </div>
             </div>
 
-            <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 text-[11px] text-amber-800 leading-relaxed">
+            <div className="rounded-xl bg-amber-50 border border-amber-100 p-3 text-xs text-amber-800 leading-relaxed">
               <b>Track something new</b> (e.g. "Email Sent", "LinkedIn Request Sent") in {f.module}
-              <div className="flex gap-2 mt-2">
+              <div className="flex flex-wrap gap-2 mt-2">
                 <input
                   value={nf.label}
                   onChange={(e) => setNf((p) => ({ ...p, label: e.target.value }))}
                   placeholder="Field name, e.g. Email Sent"
-                  className="flex-1 min-w-0 px-2.5 py-1.5 border border-amber-200 rounded-lg text-xs outline-none focus:border-amber-500 bg-white text-slate-700"
+                  className="flex-1 basis-40 min-w-0 h-10 md:h-9 px-3 border border-amber-200 rounded-lg text-sm outline-none focus:border-amber-500 bg-white text-slate-700"
                 />
                 <select
                   value={nf.type}
                   onChange={(e) => setNf((p) => ({ ...p, type: e.target.value }))}
-                  className="px-2 py-1.5 border border-amber-200 rounded-lg text-xs outline-none bg-white text-slate-700"
+                  className="h-10 md:h-9 px-2 border border-amber-200 rounded-lg text-sm outline-none bg-white text-slate-700"
                 >
                   <option value="Checkbox">Yes / No</option>
                   <option value="Number">Number</option>
@@ -336,7 +335,7 @@ export default function AnalyticsBuilderModal({
                 <button
                   onClick={createField}
                   disabled={!nf.label.trim() || creating || !onCreateField}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-50"
+                  className="btn btn-sm bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50"
                 >
                   {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Create
                 </button>
@@ -345,7 +344,7 @@ export default function AnalyticsBuilderModal({
                 The field is added to {f.module} and will appear on its forms. Fill it in on your records
                 (e.g. tick "Email Sent") and it is counted here.
               </p>
-              <div className="flex gap-3 mt-2">
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2">
                 <button
                   onClick={() => window.open('/admin/customize', '_blank')}
                   className="flex items-center gap-1 font-bold text-amber-900 hover:underline"
@@ -361,14 +360,14 @@ export default function AnalyticsBuilderModal({
         </div>
 
         {/* footer */}
-        <div className="flex justify-end gap-3 px-6 py-4 border-t border-slate-100">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-200">
+        <div className="modal-footer">
+          <button onClick={onClose} className="btn btn-md bg-slate-100 text-slate-600 hover:bg-slate-200">
             Cancel
           </button>
           <button
             onClick={submit}
             disabled={needsField}
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50"
+            className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
           >
             {initial ? 'Update analytics' : 'Add to dashboard'}
           </button>

@@ -6,7 +6,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Building2, UserPlus, Star } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import AddContactModal from '../components/AddContactModal';
 import { useCustomFields, validateCustomFields, buildCustomFieldsPayload } from '../components/CustomFieldsSection';
 import useRecordTags from '../utils/useRecordTags';
@@ -40,7 +39,6 @@ const toDraft = (a) => ({
 export default function AccountDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isCollapsed } = useSidebar();
   const canEdit = canEditSales();
   const users = useSalesUsers();
   const customDefs = useCustomFields('Accounts');
@@ -79,10 +77,10 @@ export default function AccountDetail() {
     return list;
   }, [users, account]);
 
-  if (loading) return <DetailLoading isCollapsed={isCollapsed} message="Loading account..." />;
+  if (loading) return <DetailLoading message="Loading account..." />;
   if (!account) {
     return (
-      <DetailShell isCollapsed={isCollapsed} onBack={() => navigate('/sales/accounts')} backLabel="Back to Accounts" title="Account not found" />
+      <DetailShell onBack={() => navigate('/sales/accounts')} backLabel="Back to Accounts" title="Account not found" />
     );
   }
 
@@ -137,14 +135,13 @@ export default function AccountDetail() {
 
   return (
     <DetailShell
-      isCollapsed={isCollapsed}
       onBack={() => navigate('/sales/accounts')}
       backLabel="Back to Accounts"
       icon={Building2}
       title={account.companyName}
       subtitle={<>Owner: <b className="text-slate-700">{account.salesRepId?.name || 'Unassigned'}</b></>}
       badges={
-        <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-slate-100 text-slate-600">{account.status || 'New'}</span>
+        <span className="badge rounded-full bg-slate-100 text-slate-600">{account.status || 'New'}</span>
       }
       tags={tags}
       onAddTags={canEdit ? () => tagDialogs.openTags('add', [account._id]) : undefined}
@@ -171,7 +168,7 @@ export default function AccountDetail() {
         right={canEdit && (
           <button
             onClick={() => setAddContact(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 text-xs font-bold hover:bg-emerald-100"
+            className="btn btn-sm bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
           >
             <UserPlus size={13} /> Add Contact
           </button>
@@ -187,7 +184,7 @@ export default function AccountDetail() {
               render: (c) => (
                 <span className="font-semibold text-slate-800 inline-flex items-center gap-1.5">
                   {c.pocName}
-                  {c.isPrimary && <Star size={11} className="text-amber-500" fill="currentColor" />}
+                  {c.isPrimary && <Star size={12} className="text-amber-500" fill="currentColor" />}
                 </span>
               ),
             },

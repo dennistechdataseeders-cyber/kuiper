@@ -12,10 +12,9 @@ import {
 } from 'lucide-react';
 import { EMPTY_TOKEN, opsFor, sortLabels } from '../utils/useColumnTable';
 
-const DEFAULT_TH = 'px-6 py-4 text-xs font-black text-slate-500 uppercase tracking-wider';
+const DEFAULT_TH = 'th';
 
-const inputCls =
-  'w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all';
+const inputCls = 'input';
 
 // ============================================
 // Floating popup (portal → never clipped by the table's overflow-x-auto)
@@ -131,7 +130,7 @@ function FilterPanel({ ct, col, onClose }) {
 
   return (
     <div className="p-3 space-y-3">
-      <p className="text-xs font-black uppercase tracking-wider text-slate-500">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
         Filter by <span className="text-slate-800">{col.label}</span>
       </p>
 
@@ -147,7 +146,7 @@ function FilterPanel({ ct, col, onClose }) {
               className={`${inputCls} pl-8`}
             />
           </div>
-          <div className="flex items-center justify-between text-[11px] font-bold">
+          <div className="flex items-center justify-between text-xs font-semibold">
             <button
               onClick={() => setPicked(shown.map((o) => o.val))}
               className="text-blue-600 hover:underline"
@@ -174,7 +173,7 @@ function FilterPanel({ ct, col, onClose }) {
                     className="accent-blue-600"
                   />
                   <span className="truncate flex-1">{o.label}</span>
-                  <span className="text-[10px] font-bold text-slate-400">{o.count}</span>
+                  <span className="text-xs font-semibold text-slate-400">{o.count}</span>
                 </label>
               ))
             )}
@@ -206,13 +205,13 @@ function FilterPanel({ ct, col, onClose }) {
       <div className="flex justify-end gap-2 pt-1">
         <button
           onClick={clear}
-          className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50"
+          className="btn btn-sm border border-slate-300 text-slate-700 hover:bg-slate-50"
         >
           Clear
         </button>
         <button
           onClick={apply}
-          className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700"
+          className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700"
         >
           Apply
         </button>
@@ -247,7 +246,7 @@ function HeaderCell({ ct, col, thClass }) {
   const active = !!sortDir || filtered || pinned;
 
   const item =
-    'w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-semibold text-left transition disabled:opacity-40 disabled:cursor-not-allowed';
+    'w-full flex items-center gap-2.5 px-3.5 py-2 text-sm font-medium text-left transition disabled:opacity-40 disabled:cursor-not-allowed';
 
   return (
     <th className={className} style={style}>
@@ -255,14 +254,14 @@ function HeaderCell({ ct, col, thClass }) {
         <span className="truncate">{col.renderHeader ? col.renderHeader() : col.label}</span>
         {sortDir === 'asc' && <ArrowUp size={12} className="text-blue-600 shrink-0" />}
         {sortDir === 'desc' && <ArrowDown size={12} className="text-blue-600 shrink-0" />}
-        {filtered && <Filter size={11} className="text-blue-600 shrink-0" fill="currentColor" />}
-        {pinned && <Pin size={11} className="text-blue-600 shrink-0" />}
+        {filtered && <Filter size={12} className="text-blue-600 shrink-0" fill="currentColor" />}
+        {pinned && <Pin size={12} className="text-blue-600 shrink-0" />}
 
         {hasMenu && (
           <button
             onClick={open}
             title="Column options"
-            className={`ml-auto shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-slate-500 hover:bg-slate-200 transition ${
+            className={`btn-icon ml-auto shrink-0 text-slate-500 hover:bg-slate-200 rounded-full ${
               mode ? 'bg-slate-200 opacity-100' : active ? 'opacity-100' : 'opacity-60 md:opacity-0 md:group-hover:opacity-100'
             }`}
           >
@@ -361,26 +360,26 @@ export function ColumnToolbar({ ct, className = '' }) {
   const dirty = layoutChanged || !!sortCol || filterChips.length > 0;
 
   const chip =
-    'inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-[11px] font-bold text-blue-700';
+    'inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full bg-blue-50 border border-blue-200 text-xs font-bold text-blue-700';
 
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {sortCol && (
         <span className={chip}>
-          {ct.sort.dir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+          {ct.sort.dir === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
           {sortCol.label}
-          <button onClick={() => ct.setSort(null)} title="Clear sort" className="p-0.5 rounded-full hover:bg-blue-100">
-            <X size={11} />
+          <button onClick={() => ct.setSort(null)} title="Clear sort" className="btn-icon hover:bg-blue-100 rounded-full">
+            <X size={12} />
           </button>
         </span>
       )}
 
       {filterChips.map(([k, f]) => (
         <span key={k} className={chip}>
-          <Filter size={11} />
+          <Filter size={12} />
           {colByKey.get(k).label} {describeFilter(colByKey.get(k), f)}
-          <button onClick={() => ct.setFilter(k, null)} title="Remove filter" className="p-0.5 rounded-full hover:bg-blue-100">
-            <X size={11} />
+          <button onClick={() => ct.setFilter(k, null)} title="Remove filter" className="btn-icon hover:bg-blue-100 rounded-full">
+            <X size={12} />
           </button>
         </span>
       ))}
@@ -388,20 +387,20 @@ export function ColumnToolbar({ ct, className = '' }) {
       {filterChips.length > 1 && (
         <button
           onClick={ct.clearFilters}
-          className="flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-red-500 transition"
+          className="flex items-center gap-1 text-xs font-semibold text-slate-400 hover:text-red-500 transition"
         >
-          <RotateCcw size={11} /> Clear filters
+          <RotateCcw size={12} /> Clear filters
         </button>
       )}
 
       <div className="ml-auto">
         <button
           onClick={(e) => setAnchor(rectOf(e.currentTarget))}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600 shadow-sm transition"
+          className="btn btn-sm border border-slate-200 bg-white text-slate-600 hover:border-blue-400 hover:text-blue-600 shadow-sm"
         >
           <Columns3 size={13} /> Columns
           {ct.hidden.length > 0 && (
-            <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-black">
+            <span className="badge rounded-full bg-amber-100 text-amber-700">
               {ct.hidden.length} hidden
             </span>
           )}
@@ -411,7 +410,7 @@ export function ColumnToolbar({ ct, className = '' }) {
       {anchor && (
         <Popup anchor={anchor} onClose={() => setAnchor(null)} width={230} align="right">
           <div className="py-2">
-            <p className="px-3.5 pb-1.5 text-[10px] font-black uppercase tracking-wider text-slate-400">
+            <p className="px-3.5 pb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
               Show / hide columns
             </p>
             {toggleable.map((c) => {
@@ -432,7 +431,7 @@ export function ColumnToolbar({ ct, className = '' }) {
                     className="accent-blue-600"
                   />
                   <span className="truncate">{c.label}</span>
-                  {ct.isPinned(c.key) && <Pin size={11} className="ml-auto text-blue-600 shrink-0" />}
+                  {ct.isPinned(c.key) && <Pin size={12} className="ml-auto text-blue-600 shrink-0" />}
                 </label>
               );
             })}
@@ -440,9 +439,9 @@ export function ColumnToolbar({ ct, className = '' }) {
               <div className="border-t border-slate-100 mt-2 pt-2 px-3.5">
                 <button
                   onClick={() => { ct.resetView(); setAnchor(null); }}
-                  className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-red-500 transition"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 hover:text-red-500 transition"
                 >
-                  <RotateCcw size={11} /> Reset columns, sort &amp; filters
+                  <RotateCcw size={12} /> Reset columns, sort &amp; filters
                 </button>
               </div>
             )}

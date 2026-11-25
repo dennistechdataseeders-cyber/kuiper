@@ -6,6 +6,7 @@ import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock, Megap
 import axios from 'axios';
 import API_BASE_URL from '../config';
 import notificationManager from '../utils/notifications';
+import useIsMobile from '../utils/useIsMobile';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 
@@ -19,7 +20,7 @@ const NotificationBell = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(false);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 640);
+  const isMobile = useIsMobile();
   
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -29,16 +30,6 @@ const NotificationBell = () => {
   const [voiceOn, setVoiceOn] = useState(() => notificationManager.isVoiceEnabled());
   const showDropdownRef = useRef(false);
   showDropdownRef.current = showDropdown;
-
-  // Handle resize for mobile detection
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 640);
-    };
-    
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
 
   // Initialize notification permission
   useEffect(() => {
@@ -533,7 +524,7 @@ const NotificationBell = () => {
     return createPortal(
       <>
         <div 
-          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[99998] sm:hidden"
+          className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[99998] md:hidden"
           onClick={() => setShowDropdown(false)}
         />
         
@@ -543,7 +534,7 @@ const NotificationBell = () => {
           style={{
             position: 'fixed',
             top: isMobileFull ? '60px' : `${dropdownPosition.top}px`,
-            right: isMobileFull ? '50%' : `${dropdownPosition.right}px`,
+            right: isMobileFull ? '50%' : `min(${dropdownPosition.right}px, calc(100% - ${maxWidth + 8}px))`,
             left: isMobileFull ? '50%' : 'auto',
             transform: isMobileFull ? 'translateX(-50%)' : 'none',
             width: isMobileFull ? 'calc(100vw - 32px)' : `${maxWidth}px`,
@@ -551,11 +542,11 @@ const NotificationBell = () => {
             minWidth: isMobileFull ? 'calc(100vw - 32px)' : '320px',
             zIndex: 99999,
             transformOrigin: 'top right',
-            maxHeight: '90vh',
+            maxHeight: isMobileFull ? 'calc(100dvh - 76px)' : `min(90vh, calc(100dvh - ${dropdownPosition.top + 10}px))`,
           }}
         >
           {/* Header */}
-          <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white flex justify-between items-center sticky top-0 bg-white z-10">
+          <div className="p-3 border-b border-gray-100 bg-gradient-to-r from-blue-50 to-white flex flex-wrap justify-between items-center gap-x-2 sticky top-0 bg-white z-10">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-gray-800">Notifications</span>
               {notificationCount + announcementCount > 0 && (
@@ -568,7 +559,7 @@ const NotificationBell = () => {
               {canTestReminders && (
                 <button
                   onClick={sendTestReminder}
-                  className="text-[10px] text-gray-500 hover:text-gray-800 font-medium border border-gray-200 rounded px-1.5 py-0.5"
+                  className="text-xs text-gray-500 hover:text-gray-800 font-medium border border-gray-200 rounded-md px-2 py-0.5"
                   title="Send a sample meeting reminder to check desktop alert and voice"
                 >
                   Test
@@ -576,7 +567,7 @@ const NotificationBell = () => {
               )}
               <button
                 onClick={toggleVoice}
-                className={`p-1 rounded ${voiceOn ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-400 hover:bg-gray-100'}`}
+                className={`btn-icon ${voiceOn ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-400 hover:bg-gray-100'}`}
                 title={voiceOn ? 'Voice reminders on (click to mute)' : 'Voice reminders muted'}
               >
                 {voiceOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
@@ -644,7 +635,7 @@ const NotificationBell = () => {
                             <p className={`text-sm ${!isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
                               {notification.message || notification.title || 'New Announcement'}
                             </p>
-                            <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
+                            <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
                               {getTimeAgo(notification.createdAt)}
                             </span>
                           </div>
@@ -653,7 +644,7 @@ const NotificationBell = () => {
                               {notification.description}
                             </p>
                           )}
-                          <p className="text-[10px] text-gray-400 mt-1">
+                          <p className="text-xs text-gray-400 mt-1">
                             {notification.createdByName || 'System'}
                           </p>
                         </div>
@@ -695,15 +686,15 @@ const NotificationBell = () => {
                           <p className={`text-sm ${!isRead ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
                             {ticketTitle || notification.message}
                           </p>
-                          <span className="text-[10px] text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
+                          <span className="text-xs text-gray-400 whitespace-nowrap flex-shrink-0 mt-0.5">
                             {getTimeAgo(notification.createdAt)}
                           </span>
                         </div>
                         
                         {notification.type === 'ticket_commented' && lastComment && (
                           <div className="mt-1.5 p-2 bg-gray-50 rounded-lg border border-gray-100">
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[10px] font-semibold text-gray-600">
+                            <div className="flex flex-wrap items-center gap-x-1.5">
+                              <span className="text-xs font-semibold text-gray-600">
                                 {lastComment.userName || 'User'}: 
                               </span>
                               <span className="text-xs text-gray-600 line-clamp-2">
@@ -711,7 +702,7 @@ const NotificationBell = () => {
                               </span>
                             </div>
                             {notification.hasAttachments && (
-                              <div className="mt-1 text-[10px] text-purple-500">
+                              <div className="mt-1 text-xs text-purple-500">
                                 📎 Has attachments
                               </div>
                             )}
@@ -722,7 +713,7 @@ const NotificationBell = () => {
                           <p className="text-xs text-gray-400 mt-1">
                             {notification.ticketId.ticketNumber}
                             {notification.ticketId.status && (
-                              <span className={`ml-2 px-1.5 py-0.5 rounded text-[8px] font-medium ${
+                              <span className={`ml-2 px-1.5 py-0.5 rounded-md text-xs font-medium ${
                                 notification.ticketId.status === 'Open' ? 'bg-blue-100 text-blue-700' :
                                 notification.ticketId.status === 'In Progress' ? 'bg-yellow-100 text-yellow-700' :
                                 notification.ticketId.status === 'Resolved' ? 'bg-green-100 text-green-700' :
@@ -778,19 +769,19 @@ const NotificationBell = () => {
       <button
         ref={buttonRef}
         onClick={handleBellClick}
-        className={`relative p-1.5 rounded-lg transition-colors group ${getStatusColor()}`}
+        className={`relative inline-flex items-center justify-center min-w-10 md:min-w-0 p-1.5 rounded-lg transition-colors group outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${getStatusColor()}`}
         title={permission === 'granted' ? 'Notifications Active' : 'Notifications Disabled'}
       >
         {permission === 'granted' ? (
-          <Bell size={18} className="text-green-500" />
+          <Bell size={18} className="text-green-700" />
         ) : permission === 'denied' ? (
-          <BellOff size={18} className="text-red-500" />
+          <BellOff size={18} className="text-red-700" />
         ) : (
-          <Bell size={18} className="text-yellow-500 animate-pulse" />
+          <Bell size={18} className="text-yellow-800" />
         )}
         
         {totalCount > 0 && (
-          <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[8px] font-black rounded-full flex items-center justify-center border-2 border-white shadow-md">
+          <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-red-600 text-white text-xs leading-none font-bold rounded-full flex items-center justify-center border-2 border-white shadow-md">
             {totalCount > 99 ? '99+' : totalCount}
           </span>
         )}

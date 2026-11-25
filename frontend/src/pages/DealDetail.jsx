@@ -6,7 +6,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Handshake, Building2, User } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import { useCustomFields, validateCustomFields, buildCustomFieldsPayload } from '../components/CustomFieldsSection';
 import useRecordTags from '../utils/useRecordTags';
 import { TagDialogs, useTagDialogs } from '../components/RecordTags';
@@ -38,7 +37,6 @@ const toDraft = (d) => ({
 export default function DealDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isCollapsed } = useSidebar();
   const canEdit = canEditSales();
   const users = useSalesUsers();
   const customDefs = useCustomFields('Deals');
@@ -76,9 +74,9 @@ export default function DealDetail() {
     return list;
   }, [users, deal]);
 
-  if (loading) return <DetailLoading isCollapsed={isCollapsed} message="Loading deal..." />;
+  if (loading) return <DetailLoading message="Loading deal..." />;
   if (!deal) {
-    return <DetailShell isCollapsed={isCollapsed} onBack={() => navigate('/sales/deals')} backLabel="Back to Deals" title="Deal not found" />;
+    return <DetailShell onBack={() => navigate('/sales/deals')} backLabel="Back to Deals" title="Deal not found" />;
   }
 
   const org = deal.organizationId;
@@ -156,7 +154,6 @@ export default function DealDetail() {
 
   return (
     <DetailShell
-      isCollapsed={isCollapsed}
       onBack={() => navigate('/sales/deals')}
       backLabel="Back to Deals"
       icon={Handshake}
@@ -164,8 +161,8 @@ export default function DealDetail() {
       subtitle={<>{org?.companyName || '—'} · <b className="text-slate-700">{fmtAmount(deal.amount)}</b></>}
       badges={
         <>
-          <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-teal-100 text-teal-800">{deal.stage}</span>
-          {overdue && <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black bg-red-100 text-red-700">Overdue</span>}
+          <span className="badge rounded-full bg-teal-100 text-teal-800">{deal.stage}</span>
+          {overdue && <span className="badge rounded-full bg-red-100 text-red-700">Overdue</span>}
         </>
       }
       tags={tagsApi.tagsOf(deal._id)}

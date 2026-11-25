@@ -34,7 +34,6 @@ import {
   ArcElement
 } from 'chart.js';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 
 // Register ChartJS components
@@ -94,7 +93,6 @@ function formatHoursMinutes(seconds = 0) {
 }
 
 const ResourceAnalytics = () => {
-  const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
 
   const [loading, setLoading] = useState(true);
@@ -351,9 +349,7 @@ const ResourceAnalytics = () => {
   if (loading) {
     return (
       <div
-        className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center transition-all duration-300 ${
-          isCollapsed ? 'ml-20' : 'ml-64'
-        }`}
+        className="page bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center"
       >
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
@@ -365,24 +361,22 @@ const ResourceAnalytics = () => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 transition-all duration-300 ${
-        isCollapsed ? 'ml-20' : 'ml-64'
-      }`}
+      className="page bg-gradient-to-br from-slate-50 to-slate-100"
     >
       {/* Header */}
       <div className="mb-4 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+          <h1 className="page-title">
             Resource Analytics
           </h1>
-          <p className="text-[10px] font-medium text-slate-500 mt-0.5">
+          <p className="text-xs font-medium text-slate-500 mt-0.5">
             Net time developers spend on feeds and tickets, overlap-corrected per developer
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button
             onClick={() => setShowCharts(!showCharts)}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+            className="btn btn-sm bg-white border border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50"
           >
             {showCharts ? <BarChart3 size={13} /> : <TrendingUp size={13} />}
             {showCharts ? 'Hide Charts' : 'Show Charts'}
@@ -390,7 +384,7 @@ const ResourceAnalytics = () => {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all disabled:opacity-50"
+            className="btn btn-sm bg-white border border-slate-200 text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50"
           >
             <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
             Refresh
@@ -401,9 +395,9 @@ const ResourceAnalytics = () => {
       {/* Filters */}
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-3 mb-4">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-2 items-end">
-          <div className="lg:col-span-4">
-            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">
-              <Users size={11} />
+          <div className="lg:col-span-3">
+            <label className="label mb-1.5 flex items-center gap-1">
+              <Users size={12} />
               Developers
             </label>
             <Select
@@ -418,14 +412,14 @@ const ResourceAnalytics = () => {
           </div>
 
           <div className="lg:col-span-3">
-            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">
-              <Briefcase size={11} />
+            <label className="label mb-1.5 flex items-center gap-1">
+              <Briefcase size={12} />
               Project
             </label>
             <select
               value={projectId}
               onChange={(e) => setProjectId(e.target.value)}
-              className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+              className="input"
             >
               <option value="all">All Projects</option>
               {projectOptions.map((p) => (
@@ -437,35 +431,35 @@ const ResourceAnalytics = () => {
           </div>
 
           <div className="lg:col-span-2">
-            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">
-              <Calendar size={11} />
+            <label className="label mb-1.5 flex items-center gap-1">
+              <Calendar size={12} />
               Start Date
             </label>
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
-              className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+              className="input"
             />
           </div>
           <div className="lg:col-span-2">
-            <label className="flex items-center gap-1 text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-0.5">
-              <Calendar size={11} />
+            <label className="label mb-1.5 flex items-center gap-1">
+              <Calendar size={12} />
               End Date
             </label>
             <input
               type="date"
               value={endDate}
               onChange={(e) => setEndDate(e.target.value)}
-              className="w-full px-2.5 py-1 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+              className="input"
             />
           </div>
 
-          <div className="lg:col-span-1 flex gap-1.5">
+          <div className="lg:col-span-2 flex gap-1.5">
             <button
               onClick={handleGenerate}
               disabled={generating}
-              className={`flex-1 px-2.5 py-1 rounded-lg text-xs font-semibold shadow-sm transition-all flex items-center justify-center gap-1 ${
+              className={`btn btn-md flex-1 shadow-sm ${
                 filtersDirty
                   ? 'bg-blue-600 text-white hover:bg-blue-700'
                   : 'bg-emerald-600 text-white hover:bg-emerald-700'
@@ -491,12 +485,12 @@ const ResourceAnalytics = () => {
             {selectedDevelopers.map((d) => (
               <span
                 key={d.value}
-                className="flex items-center gap-0.5 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-semibold rounded-full border border-blue-100"
+                className="badge rounded-full bg-blue-50 text-blue-700 border border-blue-100"
               >
                 {d.label}
                 <X
                   size={10}
-                  className="cursor-pointer"
+                  className="cursor-pointer max-md:box-content max-md:p-3.5 max-md:-m-2.5"
                   onClick={() =>
                     setSelectedDevelopers((prev) =>
                       prev.filter((x) => x.value !== d.value)
@@ -508,7 +502,7 @@ const ResourceAnalytics = () => {
             {(selectedDevelopers.length > 0 || projectId !== 'all') && (
               <button
                 onClick={handleReset}
-                className="text-[10px] font-semibold text-slate-400 hover:text-slate-600 ml-0.5"
+                className="text-xs font-semibold text-slate-400 hover:text-slate-600 ml-0.5"
               >
                 Reset all
               </button>
@@ -517,16 +511,16 @@ const ResourceAnalytics = () => {
 
           {filtersDirty && !generating ? (
             <div className="flex items-center gap-1 px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg">
-              <AlertCircle size={11} className="text-amber-500" />
-              <span className="text-[9px] font-bold text-amber-700 uppercase tracking-wide">
+              <AlertCircle size={12} className="text-amber-500" />
+              <span className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
                 Filters changed — click Generate
               </span>
             </div>
           ) : (
             data && (
               <div className="flex items-center gap-1 px-2 py-1 bg-emerald-50 border border-emerald-200 rounded-lg">
-                <Clock size={11} className="text-emerald-500" />
-                <span className="text-[9px] font-bold text-emerald-700 uppercase tracking-wide">
+                <Clock size={12} className="text-emerald-500" />
+                <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
                   {startDate === endDate
                     ? `Data for ${startDate}`
                     : `Data from ${startDate} to ${endDate}`}
@@ -538,7 +532,7 @@ const ResourceAnalytics = () => {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 mb-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-2 mb-4">
         <SummaryCard
           icon={Layers}
           iconColor="text-indigo-600"
@@ -589,7 +583,7 @@ const ResourceAnalytics = () => {
       {showCharts && chartData && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
           <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-3">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <h3 className="label uppercase mb-2 flex items-center gap-1.5">
               <Users size={12} />
               Developer Distribution
             </h3>
@@ -602,7 +596,7 @@ const ResourceAnalytics = () => {
                   plugins: {
                     legend: {
                       position: 'right',
-                      labels: { boxWidth: 10, padding: 8, font: { size: 9 } }
+                      labels: { boxWidth: 10, padding: 8, font: { size: 11 } }
                     },
                     tooltip: {
                       callbacks: {
@@ -628,7 +622,7 @@ const ResourceAnalytics = () => {
           </div>
 
           <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-3 lg:col-span-2">
-            <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <h3 className="label uppercase mb-2 flex items-center gap-1.5">
               <BarChart3 size={12} />
               Developer Time Breakdown (Top 10)
             </h3>
@@ -641,7 +635,7 @@ const ResourceAnalytics = () => {
                   plugins: {
                     legend: {
                       position: 'top',
-                      labels: { boxWidth: 10, padding: 8, font: { size: 9 } }
+                      labels: { boxWidth: 10, padding: 8, font: { size: 11 } }
                     },
                     tooltip: {
                       callbacks: {
@@ -655,11 +649,11 @@ const ResourceAnalytics = () => {
                   },
                   scales: {
                     x: {
-                      ticks: { font: { size: 8 }, maxRotation: 45 }
+                      ticks: { font: { size: 11 }, maxRotation: 45 }
                     },
                     y: {
                       ticks: {
-                        font: { size: 8 },
+                        font: { size: 11 },
                         callback: function (value) {
                           return formatTimeFromSeconds(value);
                         }
@@ -675,7 +669,7 @@ const ResourceAnalytics = () => {
 
       {/* Tabs */}
       <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
-        <div className="flex border-b border-slate-200">
+        <div className="flex flex-wrap border-b border-slate-200">
           {TABS.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.key;
@@ -686,7 +680,7 @@ const ResourceAnalytics = () => {
                   setActiveTab(tab.key);
                   setSearchQuery('');
                 }}
-                className={`flex items-center gap-1 px-3 py-2 text-[10px] font-semibold border-b-2 transition-all ${
+                className={`flex items-center gap-1 px-3 py-2 text-xs font-semibold border-b-2 transition-all ${
                   isActive
                     ? 'border-blue-600 text-blue-700 bg-blue-50/50'
                     : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50'
@@ -695,7 +689,7 @@ const ResourceAnalytics = () => {
                 <Icon size={13} />
                 {tab.label}
                 <span
-                  className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-bold ${
+                  className={`badge rounded-full ml-0.5 ${
                     isActive
                       ? 'bg-blue-100 text-blue-700'
                       : 'bg-slate-100 text-slate-500'
@@ -713,7 +707,7 @@ const ResourceAnalytics = () => {
 
           <button
             onClick={() => setSortDesc((s) => !s)}
-            className="ml-auto flex items-center gap-0.5 px-3 py-2 text-[9px] font-semibold text-slate-500 hover:text-slate-700"
+            className="ml-auto flex items-center gap-0.5 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-700"
           >
             {sortDesc ? <ChevronDown size={12} /> : <ChevronUp size={12} />}
             {sortDesc ? 'Highest' : 'Lowest'}
@@ -737,12 +731,12 @@ const ResourceAnalytics = () => {
                     ? 'feeds, projects, or developers'
                     : 'tickets, projects, or developers'
                 }...`}
-                className="w-full pl-8 pr-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs font-medium text-slate-700 placeholder:text-slate-400 outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                className="input pl-8"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="btn-icon absolute top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
                 >
                   <X size={14} />
                 </button>
@@ -751,7 +745,7 @@ const ResourceAnalytics = () => {
           </div>
         )}
 
-        <div className="overflow-x-auto">
+        <div className="table-scroll table-sticky-first overflow-x-auto">
           {sortedRows.length === 0 ? (
             <div className="text-center py-8">
               <Clock size={28} className="mx-auto text-slate-300 mb-1.5" />
@@ -760,7 +754,7 @@ const ResourceAnalytics = () => {
                   ? 'No results found for your search'
                   : 'No time logged for the selected filters'}
               </p>
-              <p className="text-slate-400 text-[10px] mt-0.5">
+              <p className="text-slate-400 text-xs mt-0.5">
                 {searchQuery
                   ? 'Try adjusting your search terms'
                   : 'Try widening the date range or clearing developer filters'}
@@ -792,17 +786,17 @@ const SummaryCard = ({ icon: Icon, iconColor, iconBg, label, value, sub }) => (
         <Icon size={12} className={iconColor} />
       </div>
     </div>
-    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wide mb-0.5">
+    <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">
       {label}
     </p>
-    <p className="text-base font-black text-slate-800">{value}</p>
-    <p className="text-[9px] text-slate-400 mt-0.5">{sub}</p>
+    <p className="text-base font-bold text-slate-800">{value}</p>
+    <p className="text-xs text-slate-400 mt-0.5">{sub}</p>
   </div>
 );
 
 const Th = ({ children, align = 'left' }) => (
   <th
-    className={`px-3 py-1.5 text-[9px] font-bold text-slate-400 uppercase tracking-wide text-${align}`}
+    className={`th text-${align}`}
   >
     {children}
   </th>
@@ -812,7 +806,7 @@ const DeveloperTable = ({ rows }) => {
   const [expandedId, setExpandedId] = useState(null);
 
   return (
-    <table className="w-full">
+    <table className="w-full min-w-[640px]">
       <thead className="bg-slate-50 border-b border-slate-200">
         <tr>
           <Th>Developer</Th>
@@ -833,9 +827,9 @@ const DeveloperTable = ({ rows }) => {
                   isExpanded ? 'bg-blue-50/40' : 'hover:bg-slate-50/70'
                 }`}
               >
-                <td className="px-3 py-2.5">
+                <td className="td">
                   <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-bold text-slate-400 w-4">
+                    <span className="text-xs font-semibold text-slate-400 shrink-0">
                       #{index + 1}
                     </span>
                     {isExpanded ? (
@@ -846,24 +840,24 @@ const DeveloperTable = ({ rows }) => {
                         className="text-slate-400 shrink-0"
                       />
                     )}
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-semibold text-slate-800 text-xs">
                         {r.developerName}
                       </p>
-                      <p className="text-[9px] text-slate-400">{r.email}</p>
+                      <p className="text-xs text-slate-400">{r.email}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-3 py-2.5 text-right text-xs font-medium text-emerald-700">
+                <td className="td text-right font-medium text-emerald-700">
                   {r.netFeedTimeFormatted}
                 </td>
-                <td className="px-3 py-2.5 text-right text-xs font-medium text-amber-700">
+                <td className="td text-right font-medium text-amber-700">
                   {r.netTicketTimeFormatted}
                 </td>
-                <td className="px-3 py-2.5 text-right text-xs font-bold text-slate-800">
+                <td className="td text-right font-bold text-slate-800">
                   {r.netCombinedTimeFormatted}
                 </td>
-                <td className="px-3 py-2.5 text-right text-[10px] font-medium text-slate-400">
+                <td className="td text-right font-medium text-slate-400">
                   {formatTimeFromSeconds(r.overlapTime)}
                 </td>
               </tr>
@@ -871,7 +865,7 @@ const DeveloperTable = ({ rows }) => {
                 <tr>
                   <td
                     colSpan={5}
-                    className="bg-slate-50/60 px-3 py-3 border-b border-slate-100"
+                    className="td bg-slate-50/60 border-b border-slate-100"
                   >
                     <DeveloperDailyBreakdown developer={r} />
                   </td>
@@ -915,7 +909,7 @@ const DeveloperDailyBreakdown = ({ developer }) => {
 
   if (rows.length === 0) {
     return (
-      <p className="text-[11px] text-slate-400 text-center py-4">
+      <p className="text-xs text-slate-400 text-center py-4">
         No day-wise activity for {developer.developerName} in the selected range
       </p>
     );
@@ -923,8 +917,8 @@ const DeveloperDailyBreakdown = ({ developer }) => {
 
   return (
     <div>
-      <h4 className="flex items-center gap-1.5 text-[9px] font-bold text-slate-500 uppercase tracking-wide mb-2">
-        <Calendar size={11} />
+      <h4 className="text-sm font-semibold flex items-center gap-1.5 text-slate-500 mb-2">
+        <Calendar size={12} />
         {developer.developerName} — Day-wise Breakdown
       </h4>
 
@@ -938,7 +932,7 @@ const DeveloperDailyBreakdown = ({ developer }) => {
               plugins: {
                 legend: {
                   position: 'top',
-                  labels: { boxWidth: 10, padding: 8, font: { size: 9 } }
+                  labels: { boxWidth: 10, padding: 8, font: { size: 11 } }
                 },
                 tooltip: {
                   callbacks: {
@@ -952,12 +946,12 @@ const DeveloperDailyBreakdown = ({ developer }) => {
               scales: {
                 x: {
                   stacked: true,
-                  ticks: { font: { size: 8 }, maxRotation: 45 }
+                  ticks: { font: { size: 11 }, maxRotation: 45 }
                 },
                 y: {
                   stacked: true,
                   ticks: {
-                    font: { size: 8 },
+                    font: { size: 11 },
                     callback: (value) => formatTimeFromSeconds(value)
                   }
                 }
@@ -967,8 +961,8 @@ const DeveloperDailyBreakdown = ({ developer }) => {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="w-full">
+      <div className="table-scroll table-sticky-first overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="w-full min-w-[480px]">
           <thead className="bg-slate-50 border-b border-slate-200">
             <tr>
               <Th>Date</Th>
@@ -983,16 +977,16 @@ const DeveloperDailyBreakdown = ({ developer }) => {
                 key={d.date}
                 className="hover:bg-slate-50/70 transition-colors"
               >
-                <td className="px-3 py-1.5 text-xs font-medium text-slate-700">
+                <td className="td font-medium">
                   {d.date}
                 </td>
-                <td className="px-3 py-1.5 text-right text-xs font-medium text-emerald-700">
+                <td className="td text-right font-medium text-emerald-700">
                   {d.netFeedTimeFormatted}
                 </td>
-                <td className="px-3 py-1.5 text-right text-xs font-medium text-amber-700">
+                <td className="td text-right font-medium text-amber-700">
                   {d.netTicketTimeFormatted}
                 </td>
-                <td className="px-3 py-1.5 text-right text-xs font-bold text-slate-800">
+                <td className="td text-right font-bold text-slate-800">
                   {d.netCombinedTimeFormatted}
                 </td>
               </tr>
@@ -1006,7 +1000,7 @@ const DeveloperDailyBreakdown = ({ developer }) => {
 
 const DeveloperList = ({ developers }) => {
   if (!developers || developers.length === 0) {
-    return <span className="text-slate-300 text-[10px]">No one yet</span>;
+    return <span className="text-slate-300 text-xs">No one yet</span>;
   }
   if (developers.length === 1) {
     return (
@@ -1020,7 +1014,7 @@ const DeveloperList = ({ developers }) => {
       <span className="text-xs text-slate-600">
         {developers[0].developerName}
       </span>
-      <span className="ml-1 px-1 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-500">
+      <span className="badge rounded-full ml-1 bg-slate-100 text-slate-500">
         +{developers.length - 1}
       </span>
     </div>
@@ -1028,7 +1022,7 @@ const DeveloperList = ({ developers }) => {
 };
 
 const FeedTable = ({ rows }) => (
-  <table className="w-full">
+  <table className="w-full min-w-[760px]">
     <thead className="bg-slate-50 border-b border-slate-200">
       <tr>
         <Th>Feed</Th>
@@ -1042,26 +1036,26 @@ const FeedTable = ({ rows }) => (
     <tbody className="divide-y divide-slate-100">
       {rows.map((r) => (
         <tr key={r.feedId} className="hover:bg-slate-50/70 transition-colors">
-          <td className="px-3 py-2.5 font-semibold text-slate-800 text-xs">
+          <td className="td font-semibold text-slate-800">
             {r.feedName}
           </td>
-          <td className="px-3 py-2.5 text-xs text-slate-500">
+          <td className="td text-slate-500">
             {r.projectName}
           </td>
-          <td className="px-3 py-2.5">
+          <td className="td">
             <DeveloperList developers={r.developers} />
           </td>
           <td
-            className={`px-3 py-2.5 text-right text-xs font-bold ${
+            className={`td text-right font-bold ${
               r.netTime > 0 ? 'text-emerald-700' : 'text-slate-300'
             }`}
           >
             {r.netTimeFormatted}
           </td>
-          <td className="px-3 py-2.5 text-right text-[10px] font-medium text-slate-400">
+          <td className="td text-right font-medium text-slate-400">
             {r.rawTimeFormatted}
           </td>
-          <td className="px-3 py-2.5 text-right text-[10px] font-medium text-slate-400">
+          <td className="td text-right font-medium text-slate-400">
             {r.lastDate || '—'}
           </td>
         </tr>
@@ -1071,7 +1065,7 @@ const FeedTable = ({ rows }) => (
 );
 
 const TicketTable = ({ rows }) => (
-  <table className="w-full">
+  <table className="w-full min-w-[860px]">
     <thead className="bg-slate-50 border-b border-slate-200">
       <tr>
         <Th>Ticket</Th>
@@ -1085,23 +1079,23 @@ const TicketTable = ({ rows }) => (
     <tbody className="divide-y divide-slate-100">
       {rows.map((r) => (
         <tr key={r.ticketId} className="hover:bg-slate-50/70 transition-colors">
-          <td className="px-3 py-2.5">
+          <td className="td">
             <p className="font-semibold text-slate-800 text-xs">
               {r.ticketNumber}
             </p>
-            <p className="text-[9px] text-slate-400 truncate max-w-xs">
+            <p className="text-xs text-slate-400 md:truncate md:max-w-xs">
               {r.ticketTitle}
             </p>
           </td>
-          <td className="px-3 py-2.5 text-xs text-slate-500">
+          <td className="td text-slate-500">
             {r.projectName}
           </td>
-          <td className="px-3 py-2.5">
+          <td className="td">
             <DeveloperList developers={r.developers} />
           </td>
-          <td className="px-3 py-2.5">
+          <td className="td">
             <span
-              className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${
+              className={`badge rounded-full ${
                 r.status === 'Completed'
                   ? 'bg-emerald-100 text-emerald-700'
                   : r.status === 'In Progress'
@@ -1115,13 +1109,13 @@ const TicketTable = ({ rows }) => (
             </span>
           </td>
           <td
-            className={`px-3 py-2.5 text-right text-xs font-bold ${
+            className={`td text-right font-bold ${
               r.netTime > 0 ? 'text-amber-700' : 'text-slate-300'
             }`}
           >
             {r.netTimeFormatted}
           </td>
-          <td className="px-3 py-2.5 text-right text-[10px] font-medium text-slate-400">
+          <td className="td text-right font-medium text-slate-400">
             {r.rawTimeFormatted}
           </td>
         </tr>
@@ -1150,8 +1144,8 @@ const selectStyles = {
     borderRadius: '0.375rem',
     borderColor: state.isFocused ? '#93c5fd' : '#e2e8f0',
     boxShadow: state.isFocused ? '0 0 0 3px rgba(59,130,246,0.1)' : 'none',
-    minHeight: '28px',
-    fontSize: '0.75rem'
+    minHeight: '40px',
+    fontSize: '0.875rem'
   }),
   multiValue: (base) => ({
     ...base,
@@ -1162,7 +1156,7 @@ const selectStyles = {
     ...base,
     color: '#1d4ed8',
     fontWeight: 600,
-    fontSize: '0.625rem'
+    fontSize: '0.75rem'
   })
 };
 

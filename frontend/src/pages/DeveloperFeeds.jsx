@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import { Copy, Check, X, MessageSquare } from 'lucide-react';
 import CommentSection from '../components/CommentSection';
 
@@ -13,7 +12,6 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const DeveloperFeeds = () => {
-  const { isCollapsed } = useSidebar();
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -91,10 +89,10 @@ const DeveloperFeeds = () => {
 
   const getFeedTypeIcon = (type) => {
     switch(type) {
-      case 'Daily': return <Clock size={10} />;
-      case 'Weekly': return <Calendar size={10} />;
-      case 'Monthly': return <Calendar size={10} />;
-      default: return <Target size={10} />;
+      case 'Daily': return <Clock size={12} />;
+      case 'Weekly': return <Calendar size={12} />;
+      case 'Monthly': return <Calendar size={12} />;
+      default: return <Target size={12} />;
     }
   };
 
@@ -126,7 +124,7 @@ const DeveloperFeeds = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-500 font-medium">Loading feeds...</p>
@@ -136,26 +134,26 @@ const DeveloperFeeds = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
       
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-3 bg-gradient-to-br from-emerald-600 to-emerald-700 rounded-xl">
                 <Database size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-black text-slate-900">My Feeds</h1>
-                <p className="text-slate-500 mt-1">View all feeds assigned to you</p>
+                <h1 className="page-title">My Feeds</h1>
+                <p className="text-sm text-slate-500 mt-1">View all feeds assigned to you</p>
               </div>
             </div>
           </div>
           
           <button
             onClick={fetchFeeds}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+            className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -166,47 +164,47 @@ const DeveloperFeeds = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-2 lg:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <Database size={16} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Total Feeds</p>
-              <p className="text-2xl font-black text-slate-800">{feeds.length}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase">Total Feeds</p>
+              <p className="text-2xl font-bold text-slate-800">{feeds.length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg">
               <Clock size={16} className="text-emerald-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Daily Feeds</p>
-              <p className="text-2xl font-black text-slate-800">{feeds.filter(f => f.feedType === 'Daily').length}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase">Daily Feeds</p>
+              <p className="text-2xl font-bold text-slate-800">{feeds.filter(f => f.feedType === 'Daily').length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-100 rounded-lg">
               <Calendar size={16} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Weekly/Monthly</p>
-              <p className="text-2xl font-black text-slate-800">{feeds.filter(f => f.feedType === 'Weekly' || f.feedType === 'Monthly').length}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase">Weekly/Monthly</p>
+              <p className="text-2xl font-bold text-slate-800">{feeds.filter(f => f.feedType === 'Weekly' || f.feedType === 'Monthly').length}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Search and Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -214,12 +212,12 @@ const DeveloperFeeds = () => {
               placeholder="Search feeds by name or project..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm"
+              className="input pl-10"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
               >
                 <X size={16} />
               </button>
@@ -234,7 +232,7 @@ const DeveloperFeeds = () => {
                   setSelectedType(type);
                   setCurrentPage(1);
                 }}
-                className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap ${
+                className={`btn btn-md ${
                   selectedType === type
                     ? 'bg-slate-900 text-white shadow-md'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
@@ -249,8 +247,8 @@ const DeveloperFeeds = () => {
 
       {/* Feeds Table */}
       {currentFeeds.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
-          <div className="w-20 h-20 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+          <div className="w-20 h-20 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
             <Database size={32} className="text-slate-300" />
           </div>
           <p className="text-lg font-bold text-slate-500">No feeds found</p>
@@ -259,16 +257,16 @@ const DeveloperFeeds = () => {
       ) : (
         <>
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="table-scroll table-sticky-first overflow-x-auto">
+              <table className="w-full min-w-[720px]">
                 <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
                   <tr>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed Name</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Type</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Platform</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">ID</th>
-                    <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                    <th className="th">Feed Name</th>
+                    <th className="th">Project</th>
+                    <th className="th">Type</th>
+                    <th className="th">Platform</th>
+                    <th className="th">ID</th>
+                    <th className="th">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -278,52 +276,52 @@ const DeveloperFeeds = () => {
                     
                     return (
                       <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all">
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0 ${
                               hasGit ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' : 'bg-slate-200 text-slate-500'
                             }`}>
                               <Database size={16} />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-sm font-bold text-slate-800">{feed.name}</p>
                             </div>
                           </div>
                         </td>
                         
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div>
                             <p className="text-sm font-semibold text-slate-700">{feed.projectCustomId || 'N/A'}</p>
-                            <p className="text-[9px] text-slate-400">{feed.projectName}</p>
+                            <p className="text-xs text-slate-400">{feed.projectName}</p>
                           </div>
                         </td>
                         
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
+                        <td className="td">
+                          <span className={`badge border ${getFeedTypeStyle(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
                             {feed.feedType}
                           </span>
                         </td>
                         
-                        <td className="px-6 py-4">
+                        <td className="td">
                           {platformInfo ? (
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[7px] font-black uppercase ${platformInfo.color}`}>
+                            <span className={`badge ${platformInfo.color}`}>
                               {platformInfo.icon}
                               {platformInfo.text}
                             </span>
                           ) : (
-                            <span className="text-[8px] text-slate-400 italic">—</span>
+                            <span className="text-xs text-slate-400 italic">—</span>
                           )}
                         </td>
                         
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-mono text-slate-600 bg-slate-100 px-2 py-1 rounded-md">
+                            <span className="badge text-slate-600 bg-slate-100">
                               {feed._id}
                             </span>
                             <button
                               onClick={() => handleCopyId(feed._id)}
-                              className="p-1 rounded-lg hover:bg-slate-200 transition-colors text-slate-400 hover:text-slate-600"
+                              className="btn-icon hover:bg-slate-200 text-slate-400 hover:text-slate-600"
                               title="Copy Feed ID"
                             >
                               {copiedId === feed._id ? (
@@ -335,10 +333,10 @@ const DeveloperFeeds = () => {
                           </div>
                         </td>
                         
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <button
                             onClick={() => openFeedCommentModal(feed)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all text-[10px] font-black uppercase tracking-wider"
+                            className="btn btn-sm bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white"
                             title="View Comments"
                           >
                             <MessageSquare size={14} />
@@ -359,7 +357,7 @@ const DeveloperFeeds = () => {
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(p => p - 1)}
-                className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 transition-all"
+                className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
                 <ChevronLeft size={14} />
               </button>
@@ -384,7 +382,7 @@ const DeveloperFeeds = () => {
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                      className={`btn-icon ${
                         currentPage === pageNum
                           ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
                           : 'text-slate-500 hover:bg-slate-100'
@@ -399,7 +397,7 @@ const DeveloperFeeds = () => {
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(p => p + 1)}
-                className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 transition-all"
+                className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
                 <ChevronRight size={14} />
               </button>
@@ -410,26 +408,27 @@ const DeveloperFeeds = () => {
 
       {/* FEED COMMENT MODAL */}
       {showFeedCommentModal && selectedFeedForComments && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[150] p-6">
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-2xl p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl font-black text-[#1B2559]">Feed Comments</h2>
+                <h2 className="section-title">Feed Comments</h2>
                 <p className="text-sm text-slate-500 mt-1">
                   {selectedFeedForComments.name}
-                  <span className="text-[9px] text-slate-400 ml-2">
+                  <span className="text-xs text-slate-400 ml-2">
                     {selectedFeedForComments.projectCustomId}
                   </span>
                 </p>
               </div>
               <button 
                 onClick={closeFeedCommentModal}
-                className="text-slate-300 hover:text-slate-600 transition-colors"
+                className="btn-icon text-slate-300 hover:text-slate-600"
               >
                 <X size={28} />
               </button>
             </div>
             
+            <div className="modal-body">
             <CommentSection
               type="feed"
               entityId={selectedFeedForComments._id}
@@ -439,6 +438,7 @@ const DeveloperFeeds = () => {
               canComment={true}
               refreshTrigger={commentRefreshTrigger}
             />
+            </div>
           </div>
         </div>
       )}

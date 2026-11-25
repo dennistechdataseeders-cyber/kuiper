@@ -95,32 +95,32 @@ const LeaveBalanceEditor = ({ leave }) => {
       onSubmit={handleSave}
       className="rounded-xl border border-slate-200 p-4 space-y-4"
     >
-      <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+      <h3 className="section-title flex items-center gap-2">
         <Pencil size={16} className="text-blue-600" /> Edit Paid Leave Balance
       </h3>
 
       <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
         <div className="flex items-center gap-2 mb-2">
           <AlertCircle size={16} className="text-blue-600" />
-          <p className="text-[10px] font-bold text-slate-700">Current Balance</p>
+          <p className="text-xs font-semibold text-slate-700">Current Balance</p>
         </div>
         {currentBalance === null ? (
           <Loader2 size={18} className="animate-spin text-slate-400" />
         ) : (
           <div className="flex items-center gap-2">
-            <span className="text-2xl font-black text-blue-600">{currentBalance}</span>
+            <span className="text-2xl font-bold text-blue-600">{currentBalance}</span>
             <span className="text-sm text-slate-500">days</span>
           </div>
         )}
         {employee?.isProbationary && (
-          <p className="text-[9px] text-amber-600 font-bold mt-2 flex items-center gap-1">
-            <AlertCircle size={11} /> On probation — can only use Unpaid Leave, but
+          <p className="text-xs text-amber-600 font-semibold mt-2 flex items-center gap-1">
+            <AlertCircle size={12} /> On probation — can only use Unpaid Leave, but
             the Paid Leave balance still accrues/can be adjusted.
           </p>
         )}
         {isPaid && currentBalance !== null && (
           <p
-            className={`text-[10px] font-bold mt-2 ${
+            className={`text-xs font-semibold mt-2 ${
               tooLow ? 'text-red-600' : 'text-slate-500'
             }`}
           >
@@ -131,7 +131,7 @@ const LeaveBalanceEditor = ({ leave }) => {
       </div>
 
       <div>
-        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">
+        <label className="label block mb-1.5">
           New Balance (days) *
         </label>
         <div className="relative">
@@ -142,33 +142,33 @@ const LeaveBalanceEditor = ({ leave }) => {
             required
             value={newBalance}
             onChange={(e) => setNewBalance(parseFloat(e.target.value) || 0)}
-            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-all"
+            className="input pr-24 bg-slate-50"
           />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
+          <div className="absolute right-1 md:right-2 top-1/2 -translate-y-1/2 flex gap-1">
             <button
               type="button"
               onClick={() => setNewBalance(Math.max(0, newBalance - 0.5))}
-              className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+              className="btn-icon bg-slate-200 text-slate-600 hover:bg-slate-300"
             >
               <Minus size={12} />
             </button>
             <button
               type="button"
               onClick={() => setNewBalance(newBalance + 0.5)}
-              className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+              className="btn-icon bg-slate-200 text-slate-600 hover:bg-slate-300"
             >
               <Plus size={12} />
             </button>
           </div>
         </div>
-        <p className="text-[7px] text-slate-400 mt-1">
+        <p className="text-xs text-slate-400 mt-1">
           Half-day increments (0.5 days). Set below current balance to penalize,
           above to reward.
         </p>
       </div>
 
       <div>
-        <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">
+        <label className="label block mb-1.5">
           Reason for Change *
         </label>
         <textarea
@@ -177,13 +177,13 @@ const LeaveBalanceEditor = ({ leave }) => {
           placeholder="e.g., Reward for extra hours worked, Penalty for unapproved absence, Carry forward balance, etc."
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm text-slate-700 focus:border-blue-400 transition-all resize-none"
+          className="input bg-slate-50 resize-none"
         />
       </div>
 
       {dirty && (
-        <p className="text-[10px] font-bold text-amber-600 flex items-center gap-1">
-          <AlertCircle size={11} /> Not saved yet — click Save Balance before
+        <p className="text-xs font-semibold text-amber-600 flex items-center gap-1">
+          <AlertCircle size={12} /> Not saved yet — click Save Balance before
           approving or rejecting.
         </p>
       )}
@@ -191,7 +191,7 @@ const LeaveBalanceEditor = ({ leave }) => {
       <button
         type="submit"
         disabled={saving || currentBalance === null || !dirty}
-        className="w-full py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+        className="btn btn-md w-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
       >
         {saving ? (
           <>

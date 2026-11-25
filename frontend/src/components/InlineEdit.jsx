@@ -10,7 +10,7 @@ import { ChevronRight, Loader2, Save } from 'lucide-react';
 // INLINE FIELD (label on top, compact input; changed fields are highlighted)
 // ============================================
 export const cellInput = (changed, disabled) =>
-  `w-full h-9 px-2.5 rounded-md border text-sm text-slate-800 outline-none transition-all ${
+  `w-full h-10 lg:h-9 px-2.5 rounded-md border text-sm text-slate-800 outline-none transition-all ${
     disabled
       ? 'bg-slate-50 border-slate-100 text-slate-600 cursor-default'
       : changed
@@ -21,7 +21,7 @@ export const cellInput = (changed, disabled) =>
 export function Cell({ label, required, changed, wide, children }) {
   return (
     <div className={`min-w-0 ${wide ? 'col-span-full' : ''}`}>
-      <label className="flex items-center gap-1 mb-1 text-[11px] font-bold text-slate-500">
+      <label className="label mb-1.5 flex items-center gap-1">
         <span className="truncate">{label}</span>
         {required && <span className="text-red-500">*</span>}
         {changed && <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" title="Unsaved change" />}
@@ -87,18 +87,18 @@ export function FieldGroup({ id, title, count, children }) {
       <button
         type="button"
         onClick={toggle}
-        className="w-full flex items-center gap-2 px-5 py-3 text-left hover:bg-slate-50/70 transition"
+        className="w-full flex items-center gap-2 px-4 sm:px-5 py-3 text-left hover:bg-slate-50/70 transition"
       >
         <ChevronRight size={14} className={`text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
-        <span className="text-[11px] font-black uppercase tracking-wider text-slate-600">{title}</span>
+        <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{title}</span>
         {count > 0 && (
-          <span className="ml-1 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[9px] font-black">
+          <span className="badge rounded-full ml-1 bg-amber-100 text-amber-700">
             {count} changed
           </span>
         )}
       </button>
       {open && (
-        <div className="px-5 pb-4 grid gap-x-4 gap-y-2.5 [grid-template-columns:repeat(auto-fill,minmax(200px,1fr))]">
+        <div className="px-4 sm:px-5 pb-4 grid gap-x-4 gap-y-3 [grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr))]">
           {children}
         </div>
       )}
@@ -162,27 +162,27 @@ export function useUnsavedChanges(form, baseline, onSave) {
 // ============================================
 // Floating save bar — sits at the bottom of the screen while there are changes
 // ============================================
-export function FloatingSaveBar({ show, count, saving, onSave, onDiscard, isCollapsed }) {
+export function FloatingSaveBar({ show, count, saving, onSave, onDiscard }) {
   if (!show) return null;
   return (
-    <div className={`fixed bottom-5 right-0 z-[60] flex justify-center pointer-events-none transition-all duration-300 ${isCollapsed ? 'left-20' : 'left-64'}`}>
-      <div className="pointer-events-auto flex items-center gap-3 pl-4 pr-2 py-2 rounded-xl bg-slate-900 text-white shadow-2xl shadow-slate-900/30 border border-slate-700">
+    <div className="fixed app-fixed-left bottom-3 sm:bottom-5 right-0 z-[60] flex justify-center px-3 pointer-events-none">
+      <div className="pointer-events-auto flex flex-wrap items-center gap-2 sm:gap-3 pl-4 pr-2 py-2 rounded-xl bg-slate-900 text-white shadow-2xl shadow-slate-900/30 border border-slate-700">
         <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
         <span className="text-sm font-semibold">
           {count} unsaved change{count === 1 ? '' : 's'}
         </span>
-        <span className="hidden md:inline text-[11px] text-slate-400">Ctrl + S to save</span>
+        <span className="hidden md:inline text-xs text-slate-400">Ctrl + S to save</span>
         <button
           onClick={onDiscard}
           disabled={saving}
-          className="ml-2 px-3 py-1.5 rounded-lg text-xs font-bold text-slate-200 hover:bg-slate-800 disabled:opacity-50"
+          className="btn btn-sm ml-2 text-slate-200 hover:bg-slate-800 disabled:opacity-50"
         >
           Discard
         </button>
         <button
           onClick={onSave}
           disabled={saving}
-          className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 disabled:opacity-70"
+          className="btn btn-sm bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-70"
         >
           {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
           {saving ? 'Saving...' : 'Save'}

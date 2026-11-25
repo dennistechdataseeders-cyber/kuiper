@@ -15,7 +15,6 @@ import {
   Clock, Settings
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import AccessBlockModal, { AccessBadge, accessStatus } from '../components/AccessBlockModal';
 import { Ban, LockOpen } from 'lucide-react';
@@ -60,7 +59,6 @@ const UserManagement = () => {
   const userRole = localStorage.getItem('role');
   const token = localStorage.getItem('token');
   const storedId = localStorage.getItem('userId');
-  const { isCollapsed } = useSidebar();
 
   // ============================================
   // ✅ ROLE-BASED PERMISSION HELPERS
@@ -684,17 +682,15 @@ const UserManagement = () => {
 
   return (
     <div
-      className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
-        isCollapsed ? 'ml-20' : 'ml-64'
-      }`}
+      className="page bg-slate-50"
     >
       {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+          <h1 className="page-title">
             {getHeaderTitle()}
           </h1>
-          <p className="text-slate-500 font-medium mt-1">
+          <p className="text-sm text-slate-500 mt-1">
             {getHeaderSubtitle()}
           </p>
         </div>
@@ -702,7 +698,7 @@ const UserManagement = () => {
         {canCreateUser && (
           <button
             onClick={openCreateModal}
-            className="flex items-center gap-2 bg-slate-900 text-white px-6 py-3 rounded-xl hover:bg-blue-600 transition-all shadow-xl shadow-slate-200"
+            className="btn btn-md bg-slate-900 text-white hover:bg-blue-600 shadow-xl shadow-slate-200"
           >
             <UserPlus size={20} /> {getAddButtonLabel()}
           </button>
@@ -710,50 +706,50 @@ const UserManagement = () => {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 mb-4 sm:mb-6 gap-3 sm:gap-4">
+        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Total Users</p>
-              <p className="text-2xl font-black text-white">{filteredUsers.length}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Total Users</p>
+              <p className="text-2xl font-bold text-white">{filteredUsers.length}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <Users size={18} className="text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-br from-pink-500 to-pink-600 rounded-xl p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">HR Team</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'HR').length}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">HR Team</p>
+              <p className="text-2xl font-bold text-white">{users.filter(u => u.role === 'HR').length}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <Users size={18} className="text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Finance Team</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Finance').length}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Finance Team</p>
+              <p className="text-2xl font-bold text-white">{users.filter(u => u.role === 'Finance').length}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <Users size={18} className="text-white" />
             </div>
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between">
+        <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl p-3 sm:p-4 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
             <div>
-              <p className="text-[8px] font-black text-white/70 uppercase tracking-wider">Team Leads</p>
-              <p className="text-2xl font-black text-white">{users.filter(u => u.role === 'Team Lead').length}</p>
+              <p className="text-xs font-semibold text-white/70 uppercase tracking-wide">Team Leads</p>
+              <p className="text-2xl font-bold text-white">{users.filter(u => u.role === 'Team Lead').length}</p>
             </div>
-            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center shrink-0">
               <Users size={18} className="text-white" />
             </div>
           </div>
@@ -761,8 +757,8 @@ const UserManagement = () => {
       </div>
 
       {/* Filters Bar */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row gap-4">
           <div className="relative flex-1">
             <SearchIcon size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -770,7 +766,7 @@ const UserManagement = () => {
               placeholder="Search by name, email, employee code, contact, or organization..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400 transition-colors"
+              className="input pl-9"
             />
           </div>
 
@@ -779,7 +775,7 @@ const UserManagement = () => {
             <select
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 outline-none text-sm font-medium text-slate-700 focus:border-blue-400 transition-colors cursor-pointer appearance-none"
+              className="input pl-9 cursor-pointer appearance-none"
             >
               {roleOptions.map(role => (
                 <option key={role} value={role}>
@@ -797,7 +793,7 @@ const UserManagement = () => {
                 setItemsPerPage(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="w-full px-3 py-2 rounded-lg border border-slate-200 outline-none text-sm font-medium text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+              className="input cursor-pointer"
             >
               <option value={5}>5 per page</option>
               <option value={10}>10 per page</option>
@@ -809,7 +805,7 @@ const UserManagement = () => {
           {(selectedRole !== 'ALL' || searchTerm) && (
             <button
               onClick={resetFilters}
-              className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors text-sm font-medium flex items-center gap-2"
+              className="btn btn-md border border-slate-200 text-slate-600 hover:bg-slate-50"
             >
               <X size={14} />
               Reset Filters
@@ -819,20 +815,20 @@ const UserManagement = () => {
       </div>
 
       {/* Table Section with Expandable Rows */}
-      <div className="bg-white rounded-[2rem] shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="table-scroll overflow-x-auto">
+          <table className="w-full text-left min-w-[840px]">
             <thead className="bg-slate-50/50 border-b border-slate-100">
               <tr>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 w-8">
+                <th className="th w-8">
                   {/* Expand/Collapse all - optional */}
                 </th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Identity</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Email</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Employee Code</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">GitHub</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400">Role / Organization</th>
-                <th className="p-5 text-[10px] font-black uppercase tracking-widest text-slate-400 text-right">Actions</th>
+                <th className="th max-md:sticky max-md:left-0 max-md:z-10 max-md:bg-slate-50">Identity</th>
+                <th className="th">Email</th>
+                <th className="th">Employee Code</th>
+                <th className="th">GitHub</th>
+                <th className="th">Role / Organization</th>
+                <th className="th text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -857,11 +853,11 @@ const UserManagement = () => {
                   <>
                     {/* Main Row */}
                     <tr key={user._id} className={`hover:bg-blue-50/30 transition-colors group ${access === 'blocked' ? 'opacity-60' : ''}`}>
-                      <td className="p-5">
+                      <td className="td">
                         {showExpandButton && (
                           <button
                             onClick={() => toggleExpandRow(user._id)}
-                            className="p-1 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 hover:text-blue-600"
+                            className="btn-icon hover:bg-slate-100 text-slate-400 hover:text-blue-600"
                           >
                             {isExpanded ? (
                               <ChevronUp size={16} />
@@ -871,96 +867,96 @@ const UserManagement = () => {
                           </button>
                         )}
                       </td>
-                      <td className="p-5">
+                      <td className="td max-md:sticky max-md:left-0 max-md:z-10 max-md:bg-white max-md:max-w-[45vw] max-md:break-words">
                         <div>
                           <p className="font-bold text-slate-800">{user.name}</p>
                           <div className="flex items-center gap-2 mt-1 flex-wrap">
                             <AccessBadge user={user} />
                             {isPOC && user.organizationId && (
-                              <span className="inline-flex items-center gap-1 text-[8px] font-black bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                                <Building2 size={8} />
+                              <span className="badge rounded-full bg-purple-100 text-purple-700">
+                                <Building2 size={12} />
                                 {typeof user.organizationId === 'object' ? user.organizationId.companyName : 'Organization'}
                               </span>
                             )}
                             {user.isPrimaryPOC && isPOC && (
-                              <span className="inline-flex items-center gap-1 text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                <CheckCircle size={8} />
+                              <span className="badge rounded-full bg-blue-100 text-blue-700">
+                                <CheckCircle size={12} />
                                 Primary POC
                               </span>
                             )}
                             {isTeamLead && (
-                              <span className="inline-flex items-center gap-1 text-[8px] font-black bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
-                                <Users size={8} />
+                              <span className="badge rounded-full bg-indigo-100 text-indigo-700">
+                                <Users size={12} />
                                 Team Lead
                               </span>
                             )}
                             {canEditProfile && shiftDisplay && (
-                              <span className="inline-flex items-center gap-1 text-[7px] font-black px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                                <ClockIcon size={8} />
+                              <span className="badge rounded-full bg-blue-100 text-blue-700">
+                                <ClockIcon size={12} />
                                 {shiftDisplay}
                               </span>
                             )}
                           </div>
                           {canEditProfile && user.contactNumber && (
-                            <p className="text-[8px] text-slate-400 mt-0.5 flex items-center gap-1">
-                              <Phone size={8} />
+                            <p className="text-xs text-slate-400 mt-0.5 flex items-center gap-1">
+                              <Phone size={12} />
                               {user.contactNumber}
                             </p>
                           )}
                         </div>
                       </td>
-                      <td className="p-5 text-slate-500 font-medium text-sm">{user.email}</td>
-                      <td className="p-5">
+                      <td className="td text-slate-500 font-medium">{user.email}</td>
+                      <td className="td">
                         {user.employeeCode ? (
-                          <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 px-2.5 py-1 rounded-lg text-[10px] font-black font-mono">
+                          <span className="badge bg-slate-100 text-slate-700">
                             <Hash size={12} />
                             {user.employeeCode}
                           </span>
                         ) : (
-                          <span className="text-[10px] text-slate-400 italic">Not set</span>
+                          <span className="text-xs text-slate-400 italic">Not set</span>
                         )}
                       </td>
-                      <td className="p-5">
+                      <td className="td">
                         {isDeveloper ? (
                           <div className="flex items-center gap-1.5">
                             {user.githubLinked && user.githubUsername ? (
-                              <span className="inline-flex items-center gap-1 text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                                <CheckCircle size={8} />
+                              <span className="badge rounded-full text-green-600 bg-green-50">
+                                <CheckCircle size={12} />
                                 {user.githubUsername}
                               </span>
                             ) : (
                               <button
                                 onClick={() => handleLinkGitHub(user._id)}
                                 disabled={isLinking}
-                                className="inline-flex items-center gap-1 text-[8px] font-black text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full hover:bg-orange-100 transition-all disabled:opacity-50"
+                                className="btn btn-sm text-orange-600 bg-orange-50 hover:bg-orange-100 disabled:opacity-50 rounded-full"
                                 title="Verify and link GitHub account"
                               >
                                 {isLinking ? (
-                                  <RefreshCw size={8} className="animate-spin" />
+                                  <RefreshCw size={12} className="animate-spin" />
                                 ) : (
-                                  <GitFork size={8} />
+                                  <GitFork size={12} />
                                 )}
                                 {isLinking ? 'Verifying...' : 'Verify GitHub'}
                               </button>
                             )}
                           </div>
                         ) : (
-                          <span className="text-[8px] text-slate-400 italic">—</span>
+                          <span className="text-xs text-slate-400 italic">—</span>
                         )}
                       </td>
-                      <td className="p-5">
+                      <td className="td">
                         <div>
-                          <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-tighter ${getRoleColor(user.role)}`}>
+                          <span className={`badge ${getRoleColor(user.role)}`}>
                             {getRoleDisplayName(user.role)}
                           </span>
                           {isPOC && user.organizationId && (
-                            <p className="text-[9px] text-slate-900 mt-1">
+                            <p className="text-xs text-slate-900 mt-1">
                               Client : {typeof user.organizationId === 'object' ? user.organizationId.companyName : 'Organization'}
                             </p>
                           )}
                         </div>
                       </td>
-                      <td className="p-5 text-right">
+                      <td className="td text-right">
                         <div className="flex justify-end gap-2 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
                           {isDeveloper && user.githubLinked && user.githubUsername && (
                             <div className="p-2 text-green-600 rounded-lg" title={`GitHub: ${user.githubUsername}`}>
@@ -972,7 +968,7 @@ const UserManagement = () => {
                           {rowEditable && (
                             <button
                               onClick={() => handleEditClick(user)}
-                              className="p-2 text-slate-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all shadow-sm"
+                              className="btn-icon text-slate-400 hover:text-blue-600 hover:bg-white shadow-sm"
                               title="Edit User"
                             >
                               <Edit2 size={16}/>
@@ -983,7 +979,7 @@ const UserManagement = () => {
                           {rowBlockable && (
                             <button
                               onClick={() => setAccessUser(user)}
-                              className={`p-2 rounded-lg transition-all shadow-sm hover:bg-white ${access === 'active' ? 'text-slate-400 hover:text-orange-600' : 'text-red-500 hover:text-emerald-600'}`}
+                              className={`btn-icon shadow-sm hover:bg-white ${access === 'active' ? 'text-slate-400 hover:text-orange-600' : 'text-red-500 hover:text-emerald-600'}`}
                               title={access === 'active' ? 'Block login' : 'Login access (blocked / scheduled)'}
                             >
                               {access === 'active' ? <Ban size={16}/> : <LockOpen size={16}/>}
@@ -994,7 +990,7 @@ const UserManagement = () => {
                           {rowDeletable && (
                             <button
                               onClick={() => handleDelete(user)}
-                              className="p-2 text-slate-400 hover:text-red-600 hover:bg-white rounded-lg transition-all shadow-sm"
+                              className="btn-icon text-slate-400 hover:text-red-600 hover:bg-white shadow-sm"
                               title="Delete User"
                             >
                               <Trash2 size={16}/>
@@ -1007,19 +1003,19 @@ const UserManagement = () => {
                     {/* Expanded Employee Details Row */}
                     {isExpanded && canEditProfile && hasDetails && (
                       <tr className="bg-blue-50/20">
-                        <td colSpan="7" className="p-4">
-                          <div className="bg-white rounded-xl border border-blue-100 p-4">
+                        <td colSpan="7" className="td">
+                          <div className="card border-blue-100">
                             <div className="flex items-center gap-2 mb-3">
                               <div className="p-1.5 bg-blue-100 rounded-lg">
                                 <UserIcon size={14} className="text-blue-600" />
                               </div>
-                              <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Employee Profile Details</p>
+                              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Employee Profile Details</p>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
-                                  <Calendar size={10} className="inline mr-1" />
+                                <label className="label block mb-1.5">
+                                  <Calendar size={12} className="inline mr-1" />
                                   Date of Joining
                                 </label>
                                 <p className="text-sm font-bold text-slate-700">
@@ -1028,8 +1024,8 @@ const UserManagement = () => {
                               </div>
 
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
-                                  <Calendar size={10} className="inline mr-1" />
+                                <label className="label block mb-1.5">
+                                  <Calendar size={12} className="inline mr-1" />
                                   Date of Birth
                                 </label>
                                 <p className="text-sm font-bold text-slate-700">
@@ -1038,8 +1034,8 @@ const UserManagement = () => {
                               </div>
 
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
-                                  <ClockIcon size={10} className="inline mr-1" />
+                                <label className="label block mb-1.5">
+                                  <ClockIcon size={12} className="inline mr-1" />
                                   Shift Timing
                                 </label>
                                 <p className="text-sm font-bold text-slate-700">
@@ -1048,8 +1044,8 @@ const UserManagement = () => {
                               </div>
 
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
-                                  <Phone size={10} className="inline mr-1" />
+                                <label className="label block mb-1.5">
+                                  <Phone size={12} className="inline mr-1" />
                                   Contact Number
                                 </label>
                                 <p className="text-sm font-bold text-slate-700">
@@ -1058,8 +1054,8 @@ const UserManagement = () => {
                               </div>
 
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
-                                  <AlertCircle size={10} className="inline mr-1" />
+                                <label className="label block mb-1.5">
+                                  <AlertCircle size={12} className="inline mr-1" />
                                   Emergency Contact
                                 </label>
                                 <p className="text-sm font-bold text-slate-700">
@@ -1068,8 +1064,8 @@ const UserManagement = () => {
                               </div>
 
                               <div className="bg-slate-50 rounded-lg p-3 border border-slate-100 md:col-span-2 lg:col-span-1">
-                                <label className="text-[8px] font-black uppercase text-slate-400 block mb-1">
-                                  <MapPin size={10} className="inline mr-1" />
+                                <label className="label block mb-1.5">
+                                  <MapPin size={12} className="inline mr-1" />
                                   Address
                                 </label>
                                 <p className="text-sm font-bold text-slate-700 break-words">
@@ -1087,7 +1083,7 @@ const UserManagement = () => {
                 <tr>
                   <td colSpan="7" className="p-10 text-center">
                     <div className="flex flex-col items-center justify-center">
-                      <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+                      <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mb-4 shrink-0">
                         <Users size={28} className="text-slate-300" />
                       </div>
                       <p className="text-sm font-bold text-slate-500">No users found</p>
@@ -1103,16 +1099,16 @@ const UserManagement = () => {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-between">
-          <p className="text-[10px] font-black text-slate-400">
+        <div className="mt-4 sm:mt-6 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs font-semibold text-slate-400">
             Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} users
           </p>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
             >
               <ChevronLeft size={14} />
             </button>
@@ -1134,18 +1130,18 @@ const UserManagement = () => {
                 }
 
                 if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                  return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                  return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs shrink-0">...</span>;
                 }
 
                 if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                  return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs">...</span>;
+                  return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-slate-400 text-xs shrink-0">...</span>;
                 }
 
                 return (
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                    className={`btn-icon ${
                       currentPage === pageNum
                         ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
                         : 'text-slate-500 hover:bg-slate-100'
@@ -1160,7 +1156,7 @@ const UserManagement = () => {
             <button
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages}
-              className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
             >
               <ChevronRight size={14} />
             </button>
@@ -1172,37 +1168,38 @@ const UserManagement = () => {
       {showModal && (
         <div
           key={modalKey}
-          className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[100] p-4"
+          className="modal-backdrop"
         >
-          <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-md p-8 relative max-h-[90vh] overflow-y-auto">
-            <button onClick={closeModal} className="absolute top-6 right-6 p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors">
-              <X size={20} />
-            </button>
-
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <ShieldCheck className="text-blue-600" size={24} />
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg shrink-0">
+                  <ShieldCheck className="text-blue-600" size={20} />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="section-title">
+                    {isEditing ? 'Update Profile' : 'Create New Account'}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {isEditing ? 'Modify user details and permissions' : 'Add a new user to the system'}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-2xl font-black text-slate-800">
-                  {isEditing ? 'Update Profile' : 'Create New Account'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  {isEditing ? 'Modify user details and permissions' : 'Add a new user to the system'}
-                </p>
-              </div>
+              <button onClick={closeModal} className="btn-icon text-slate-400 hover:bg-slate-100">
+                <X size={18} />
+              </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form onSubmit={handleSubmit} className="modal-body space-y-5">
               {/* Name Field */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   {formData.role === 'Client' ? 'POC Name *' : 'Full Name *'}
                 </label>
                 <input
                   type="text"
                   required
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all"
+                  className="input bg-slate-50"
                   value={formData.name}
                   onChange={(e) => setFormData({...formData, name: e.target.value})}
                   placeholder={formData.role === 'Client' ? "John Doe" : "Full Name"}
@@ -1211,14 +1208,14 @@ const UserManagement = () => {
 
               {/* Email Field */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">Email Address *</label>
+                <label className="label block mb-1.5">Email Address *</label>
                 <input
                   type="email"
                   required
                   autoComplete="off"
                   readOnly={emailReadOnly}
                   onFocus={() => setEmailReadOnly(false)}
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all"
+                  className="input bg-slate-50"
                   value={formData.email}
                   onChange={(e) => setFormData({...formData, email: e.target.value})}
                   placeholder="john.doe@example.com"
@@ -1227,7 +1224,7 @@ const UserManagement = () => {
 
               {/* Employee Code Field */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   Employee Code {!isEditing && '(Optional - auto-generated if blank)'}
                 </label>
                 <div className="relative">
@@ -1235,19 +1232,19 @@ const UserManagement = () => {
                   <input
                     type="text"
                     autoComplete="off"
-                    className="w-full p-4 pl-11 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all font-mono"
+                    className="input pl-11 bg-slate-50 font-mono"
                     value={formData.employeeCode}
                     onChange={(e) => setFormData({...formData, employeeCode: e.target.value.toUpperCase()})}
                     placeholder={isEditing ? "e.g., EMP000001" : "Leave blank for auto-generation"}
                   />
                 </div>
                 {!isEditing && (
-                  <p className="text-[8px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     If left blank, an employee code will be auto-generated (e.g., EMP000001).
                   </p>
                 )}
                 {isEditing && (
-                  <p className="text-[8px] text-amber-500 mt-1">
+                  <p className="text-xs text-amber-500 mt-1">
                     ⚠️ Changing this code may affect attendance sync and integrations.
                   </p>
                 )}
@@ -1255,7 +1252,7 @@ const UserManagement = () => {
 
               {/* Password Field */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   {isEditing ? 'New Password (Optional)' : 'Temporary Password *'}
                 </label>
                 <div className="relative">
@@ -1265,20 +1262,20 @@ const UserManagement = () => {
                     autoComplete="off"
                     readOnly={passwordReadOnly}
                     onFocus={() => setPasswordReadOnly(false)}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 pr-12 transition-all"
+                    className="input bg-slate-50 pr-12"
                     value={formData.password}
                     onChange={(e) => setFormData({...formData, password: e.target.value})}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                    className="btn-icon absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
                   >
                     {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
                 </div>
                 {!isEditing && (
-                  <p className="text-[8px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     A temporary password will be generated if left blank.
                   </p>
                 )}
@@ -1286,9 +1283,9 @@ const UserManagement = () => {
 
               {/* Role Selection */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">User Type *</label>
+                <label className="label block mb-1.5">User Type *</label>
                 <select
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 appearance-none cursor-pointer transition-all"
+                  className="input bg-slate-50 appearance-none cursor-pointer"
                   value={formData.role}
                   disabled={isSalesManager}
                   onChange={(e) => {
@@ -1316,7 +1313,7 @@ const UserManagement = () => {
                 <div className="space-y-3">
                   {!showNewOrgForm ? (
                     <>
-                      <label className="text-[10px] font-black uppercase text-slate-500 ml-1 flex items-center gap-2">
+                      <label className="label mb-1.5 flex items-center gap-2">
                         <Building2 size={12} />
                         Select Organization *
                       </label>
@@ -1332,12 +1329,12 @@ const UserManagement = () => {
                             setIsOrgDropdownOpen(true);
                           }}
                           onFocus={() => setIsOrgDropdownOpen(true)}
-                          className="w-full h-12 rounded-xl border border-slate-200 pl-9 pr-8 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
+                          className="input pl-9 pr-10 bg-slate-50"
                         />
                         <button
                           type="button"
                           onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+                          className="btn-icon absolute right-0 md:right-1 top-1/2 -translate-y-1/2 text-slate-400"
                         >
                           {isOrgDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
@@ -1356,11 +1353,11 @@ const UserManagement = () => {
                                   setSearchOrgTerm(org.companyName);
                                   setIsOrgDropdownOpen(false);
                                 }}
-                                className="flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-slate-50"
+                                className="flex items-center justify-between gap-2 p-3 cursor-pointer transition-all hover:bg-slate-50"
                               >
-                                <div>
+                                <div className="min-w-0 break-words">
                                   <p className="text-sm font-bold text-slate-800">{org.companyName}</p>
-                                  <p className="text-[9px] text-slate-400">{org.website || 'No website'}</p>
+                                  <p className="text-xs text-slate-400">{org.website || 'No website'}</p>
                                 </div>
                                 {formData.organizationId === org._id && (
                                   <CheckCircle size={14} className="text-blue-600" />
@@ -1377,7 +1374,7 @@ const UserManagement = () => {
                           setShowNewOrgForm(true);
                           setIsOrgDropdownOpen(false);
                         }}
-                        className="w-full mt-2 py-2.5 rounded-xl border-2 border-dashed border-blue-300 text-blue-600 text-[10px] font-black uppercase tracking-wider hover:bg-blue-50 transition-all flex items-center justify-center gap-2"
+                        className="btn btn-md w-full mt-2 border-2 border-dashed border-blue-300 text-blue-600 hover:bg-blue-50"
                       >
                         <Plus size={14} />
                         Create New Organization
@@ -1386,14 +1383,14 @@ const UserManagement = () => {
                   ) : (
                     <div className="space-y-3 p-4 bg-blue-50 rounded-xl border border-blue-200">
                       <div className="flex items-center justify-between">
-                        <label className="text-[10px] font-black uppercase text-blue-600 ml-1">New Organization Details</label>
+                        <label className="label block mb-1.5 text-blue-600">New Organization Details</label>
                         <button
                           type="button"
                           onClick={() => {
                             setShowNewOrgForm(false);
                             setNewOrgData({ companyName: '', website: '', address: '' });
                           }}
-                          className="text-slate-400 hover:text-slate-600"
+                          className="btn-icon text-slate-400 hover:text-slate-600"
                         >
                           <X size={14} />
                         </button>
@@ -1402,21 +1399,21 @@ const UserManagement = () => {
                         type="text"
                         placeholder="Organization Name *"
                         required
-                        className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none font-bold text-sm"
+                        className="input"
                         value={newOrgData.companyName}
                         onChange={(e) => setNewOrgData({...newOrgData, companyName: e.target.value})}
                       />
                       <input
                         type="text"
                         placeholder="Website (optional)"
-                        className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                        className="input"
                         value={newOrgData.website}
                         onChange={(e) => setNewOrgData({...newOrgData, website: e.target.value})}
                       />
                       <input
                         type="text"
                         placeholder="Address (optional)"
-                        className="w-full p-3 bg-white rounded-xl border border-slate-200 outline-none text-sm"
+                        className="input"
                         value={newOrgData.address}
                         onChange={(e) => setNewOrgData({...newOrgData, address: e.target.value})}
                       />
@@ -1425,9 +1422,9 @@ const UserManagement = () => {
 
                   {/* Department Selection */}
                   <div>
-                    <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-1">Department</label>
+                    <label className="label block mb-1.5">Department</label>
                     <select
-                      className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-slate-700 cursor-pointer"
+                      className="input bg-slate-50 cursor-pointer"
                       value={formData.department}
                       onChange={(e) => setFormData({...formData, department: e.target.value})}
                     >
@@ -1449,7 +1446,7 @@ const UserManagement = () => {
                       onChange={(e) => setFormData({...formData, isPrimaryPOC: e.target.checked})}
                       className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="text-[10px] font-black uppercase text-slate-600">Mark as Primary Point of Contact</span>
+                    <span className="text-xs font-semibold uppercase text-slate-600">Mark as Primary Point of Contact</span>
                   </label>
                 </div>
               )}
@@ -1457,7 +1454,7 @@ const UserManagement = () => {
               {/* Show selected organization when editing POC */}
               {isEditing && formData.role === 'Client' && formData.organizationId && (
                 <div className="bg-slate-100 rounded-xl p-4">
-                  <label className="text-[10px] font-black uppercase text-slate-500 ml-1 block mb-2">Organization</label>
+                  <label className="label block mb-1.5">Organization</label>
                   <div className="flex items-center gap-2">
                     <Building2 size={16} className="text-purple-600" />
                     <span className="text-sm font-bold text-slate-700">
@@ -1468,12 +1465,12 @@ const UserManagement = () => {
                   </div>
                   {formData.department && (
                     <div className="mt-2 flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1 text-[8px] font-black px-2 py-0.5 rounded-full ${getDepartmentColor(formData.department)}`}>
+                      <span className={`badge rounded-full ${getDepartmentColor(formData.department)}`}>
                         {formData.department}
                       </span>
                       {formData.isPrimaryPOC && (
-                        <span className="inline-flex items-center gap-1 text-[8px] font-black bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                          <CheckCircle size={8} />
+                        <span className="badge rounded-full bg-blue-100 text-blue-700">
+                          <CheckCircle size={12} />
                           Primary POC
                         </span>
                       )}
@@ -1489,19 +1486,19 @@ const UserManagement = () => {
                     <div className="p-1.5 bg-blue-100 rounded-lg">
                       <UserIcon size={14} className="text-blue-600" />
                     </div>
-                    <p className="text-[9px] font-black text-slate-500 uppercase tracking-wider">Employee Profile Details</p>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Employee Profile Details</p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Date of Joining */}
                     <div>
-                      <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
-                        <Calendar size={10} className="inline mr-1" />
+                      <label className="label block mb-1.5">
+                        <Calendar size={12} className="inline mr-1" />
                         Date of Joining
                       </label>
                       <input
                         type="date"
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                        className="input bg-slate-50"
                         value={formData.dateOfJoining}
                         onChange={(e) => setFormData({...formData, dateOfJoining: e.target.value})}
                       />
@@ -1509,13 +1506,13 @@ const UserManagement = () => {
 
                     {/* Date of Birth */}
                     <div>
-                      <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
-                        <Calendar size={10} className="inline mr-1" />
+                      <label className="label block mb-1.5">
+                        <Calendar size={12} className="inline mr-1" />
                         Date of Birth
                       </label>
                       <input
                         type="date"
-                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                        className="input bg-slate-50"
                         value={formData.dateOfBirth}
                         onChange={(e) => setFormData({...formData, dateOfBirth: e.target.value})}
                       />
@@ -1523,14 +1520,14 @@ const UserManagement = () => {
 
                     {/* Shift Timing */}
                     <div className="md:col-span-2">
-                      <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
-                        <ClockIcon size={10} className="inline mr-1" />
+                      <label className="label block mb-1.5">
+                        <ClockIcon size={12} className="inline mr-1" />
                         Shift Timing
                       </label>
                       <div className="flex gap-2">
                         <div className="flex-1">
                           <select
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
+                            className="input bg-slate-50 cursor-pointer"
                             value={formData.shiftHour}
                             onChange={(e) => setFormData({...formData, shiftHour: parseInt(e.target.value)})}
                           >
@@ -1538,12 +1535,12 @@ const UserManagement = () => {
                               <option key={i + 1} value={i + 1}>{String(i + 1).padStart(2, '0')}</option>
                             ))}
                           </select>
-                          <p className="text-[6px] text-slate-400 text-center mt-0.5">Hour</p>
+                          <p className="text-xs text-slate-400 text-center mt-0.5">Hour</p>
                         </div>
 
                         <div className="flex-1">
                           <select
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
+                            className="input bg-slate-50 cursor-pointer"
                             value={formData.shiftMinute}
                             onChange={(e) => setFormData({...formData, shiftMinute: parseInt(e.target.value)})}
                           >
@@ -1551,34 +1548,34 @@ const UserManagement = () => {
                               <option key={i} value={i}>{String(i).padStart(2, '0')}</option>
                             ))}
                           </select>
-                          <p className="text-[6px] text-slate-400 text-center mt-0.5">Minute</p>
+                          <p className="text-xs text-slate-400 text-center mt-0.5">Minute</p>
                         </div>
 
                         <div className="flex-1">
                           <select
-                            className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none font-bold text-slate-700 transition-all text-sm cursor-pointer"
+                            className="input bg-slate-50 cursor-pointer"
                             value={formData.shiftAmPm}
                             onChange={(e) => setFormData({...formData, shiftAmPm: e.target.value})}
                           >
                             <option value="AM">AM</option>
                             <option value="PM">PM</option>
                           </select>
-                          <p className="text-[6px] text-slate-400 text-center mt-0.5">AM/PM</p>
+                          <p className="text-xs text-slate-400 text-center mt-0.5">AM/PM</p>
                         </div>
                       </div>
-                      <p className="text-[7px] text-slate-400 mt-1">Select the start time of your shift</p>
+                      <p className="text-xs text-slate-400 mt-1">Select the start time of your shift</p>
                     </div>
                   </div>
 
                   {/* Contact Number */}
                   <div className="mt-3">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
-                      <Phone size={10} className="inline mr-1" />
+                    <label className="label block mb-1.5">
+                      <Phone size={12} className="inline mr-1" />
                       Contact Number
                     </label>
                     <input
                       type="tel"
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                      className="input bg-slate-50"
                       placeholder="e.g., +91 98765 43210"
                       value={formData.contactNumber}
                       onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
@@ -1587,29 +1584,29 @@ const UserManagement = () => {
 
                   {/* Emergency Contact */}
                   <div className="mt-3">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
-                      <AlertCircle size={10} className="inline mr-1" />
+                    <label className="label block mb-1.5">
+                      <AlertCircle size={12} className="inline mr-1" />
                       Emergency Contact
                     </label>
                     <input
                       type="tel"
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-bold text-slate-700 transition-all text-sm"
+                      className="input bg-slate-50"
                       placeholder="e.g., +91 98765 43210 (Name)"
                       value={formData.emergencyContact}
                       onChange={(e) => setFormData({...formData, emergencyContact: e.target.value})}
                     />
-                    <p className="text-[7px] text-slate-400 mt-1">Name and contact number of emergency contact person</p>
+                    <p className="text-xs text-slate-400 mt-1">Name and contact number of emergency contact person</p>
                   </div>
 
                   {/* Address */}
                   <div className="mt-3">
-                    <label className="text-[8px] font-black uppercase text-slate-400 ml-1 block mb-1">
-                      <MapPin size={10} className="inline mr-1" />
+                    <label className="label block mb-1.5">
+                      <MapPin size={12} className="inline mr-1" />
                       Address
                     </label>
                     <textarea
                       rows={2}
-                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none font-medium text-slate-700 transition-all text-sm resize-none"
+                      className="input bg-slate-50 resize-none"
                       placeholder="Enter full address..."
                       value={formData.address}
                       onChange={(e) => setFormData({...formData, address: e.target.value})}
@@ -1623,9 +1620,9 @@ const UserManagement = () => {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <GitFork size={14} className="text-blue-600" />
-                    <p className="text-[9px] font-black text-blue-700 uppercase tracking-wider">GitHub Auto-Linking</p>
+                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">GitHub Auto-Linking</p>
                   </div>
-                  <p className="text-[8px] text-blue-600">
+                  <p className="text-xs text-blue-600">
                     We'll automatically search for a GitHub account with the email <strong>{formData.email || '[your email]'}</strong> and link it if found.
                   </p>
                 </div>
@@ -1636,9 +1633,9 @@ const UserManagement = () => {
                 <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Users size={14} className="text-indigo-600" />
-                    <p className="text-[9px] font-black text-indigo-700 uppercase tracking-wider">Team Lead Account</p>
+                    <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Team Lead Account</p>
                   </div>
-                  <p className="text-[8px] text-indigo-600">
+                  <p className="text-xs text-indigo-600">
                     Team Leads can manage projects, assign developers to feeds, and view project tickets.
                   </p>
                 </div>
@@ -1649,9 +1646,9 @@ const UserManagement = () => {
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-3">
                   <div className="flex items-center gap-2 mb-2">
                     <Building2 size={14} className="text-purple-600" />
-                    <p className="text-[9px] font-black text-purple-700 uppercase tracking-wider">Point of Contact Account</p>
+                    <p className="text-xs font-semibold text-purple-700 uppercase tracking-wide">Point of Contact Account</p>
                   </div>
-                  <p className="text-[8px] text-purple-600">
+                  <p className="text-xs text-purple-600">
                     This POC will be associated with the selected organization.
                     Multiple POCs can be added to the same organization.
                   </p>
@@ -1662,7 +1659,7 @@ const UserManagement = () => {
               <button
                 type="submit"
                 disabled={submitting}
-                className={`w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl transition-all font-black uppercase text-xs tracking-[0.2em] shadow-lg shadow-blue-200 mt-4 ${
+                className={`btn btn-md w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-200 mt-4 ${
                   submitting ? 'opacity-50 cursor-not-allowed' : 'hover:from-blue-700 hover:to-indigo-700 hover:shadow-xl active:scale-98'
                 }`}
               >

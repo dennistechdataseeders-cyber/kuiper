@@ -14,6 +14,7 @@ import API_BASE_URL from '../config';
 import { motion, AnimatePresence } from 'framer-motion';
 import { isPMRole } from '../utils/roles';
 import { prefetchLanding } from '../pageLoaders';
+import { isMobileNow } from '../utils/useIsMobile';
 
 // ============================================================
 // ✅ FIX: Lazy-load the heavy 3D background so it never blocks
@@ -33,7 +34,7 @@ function shouldLoad3DBackground() {
   if (prefersReducedMotion) return false;
 
   // 2. Skip on small screens (phones) — it's a battery/CPU hog
-  const isSmallScreen = window.innerWidth < 768;
+  const isSmallScreen = isMobileNow();
   if (isSmallScreen) return false;
 
   // 3. Skip if the device reports few CPU cores
@@ -192,7 +193,7 @@ const Login = () => {
   };
 
   return (
-    <div className="bg-[#020617] min-h-screen relative overflow-hidden">
+    <div className="bg-[#020617] min-h-dvh relative overflow-hidden">
       {/* ✅ FIX: Static CSS background renders instantly */}
       <StaticBackground />
 
@@ -215,16 +216,16 @@ const Login = () => {
               filter: 'blur(10px)',
               transition: { duration: 0.8, ease: 'easeInOut' }
             }}
-            className="min-h-screen flex items-center justify-center p-4 relative z-10"
+            className="min-h-dvh flex items-center justify-center p-3 sm:p-4 relative z-10"
           >
             <form
               onSubmit={handleLogin}
-              className="bg-white/5 backdrop-blur-3xl p-8 md:p-12 rounded-[3rem] shadow-2xl w-full max-w-md border border-white/10"
+              className="bg-white/5 backdrop-blur-3xl p-6 sm:p-8 md:p-12 rounded-2xl shadow-2xl w-full max-w-md border border-white/10"
             >
-              <div className="mb-10 text-center">
+              <div className="mb-6 sm:mb-10 text-center">
                 <div className="relative w-24 h-24 mx-auto mb-6">
-                  <div className="absolute inset-0 rounded-3xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-500 blur-xl opacity-40 animate-pulse" />
-                  <div className="relative w-full h-full bg-blue-600/20 border border-blue-500/30 rounded-3xl flex items-center justify-center shadow-2xl backdrop-blur-md overflow-hidden">
+                  <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-cyan-400 via-blue-500 to-purple-500 blur-xl opacity-40 animate-pulse" />
+                  <div className="relative w-full h-full bg-blue-600/20 border border-blue-500/30 rounded-2xl flex items-center justify-center shadow-2xl backdrop-blur-md overflow-hidden">
                     <img
                       src="/images/login_img.webp"
                       alt="logo"
@@ -236,39 +237,39 @@ const Login = () => {
                 <span className="font-[Orbitron] text-3xl tracking-tight bg-gradient-to-t to-white via-blue-400 from-cyan-400 bg-clip-text text-transparent">
                   K U I P E R
                 </span>
-                <p className="text-slate-400 font-bold text-xs tracking-[0.3em] mt-2">
+                <p className="text-slate-400 font-bold text-xs tracking-widest mt-2">
                   Engineered for Operations
                 </p>
               </div>
 
               <div className="space-y-6">
                 <div className="group">
-                  <label className="block text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2 ml-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
                     Credential Email
                   </label>
                   <input
                     type="email"
                     required
-                    className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 text-white transition-all"
+                    className="w-full p-3.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 text-white transition-all"
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </div>
 
                 <div className="group">
-                  <label className="block text-[10px] font-black uppercase tracking-[0.25em] text-slate-500 mb-2 ml-2">
+                  <label className="block text-xs font-semibold uppercase tracking-wide text-slate-400 mb-2">
                     Secure Key
                   </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
-                      className="w-full p-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:ring-2 focus:ring-blue-500/50 text-white pr-12 transition-all"
+                      className="w-full p-3.5 bg-white/5 border border-white/10 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/50 text-white pr-12 transition-all"
                       onChange={(e) => setPassword(e.target.value)}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"
+                      className="btn-icon absolute right-1.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                     >
                       {showPassword ? (
                         <EyeOff size={20} />
@@ -281,14 +282,14 @@ const Login = () => {
 
                 <button
                   disabled={isSubmitting}
-                  className={`w-full py-5 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-500 transition-all uppercase tracking-widest mt-4 ${
+                  className={`w-full py-4 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-500 transition-all uppercase tracking-wide mt-4 ${
                     isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
                   }`}
                 >
                   {isSubmitting ? 'Syncing...' : 'Login'}
                 </button>
 
-                <div className="justify-center mt-3 text-[11px] font-semibold tracking-[0.25em] uppercase text-slate-400 flex items-center gap-2">
+                <div className="justify-center mt-3 text-xs font-semibold tracking-wide uppercase text-slate-400 flex flex-wrap items-center gap-x-2">
                   <span className="opacity-60">Powered by</span>
                   <span className="relative font-bold bg-gradient-to-r from-cyan-400 via-blue-500 to-purple-500 bg-clip-text text-transparent animate-pulse">
                     TECHDATASEEDERS

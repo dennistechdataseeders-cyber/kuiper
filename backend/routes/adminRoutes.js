@@ -120,8 +120,8 @@ router.get('/users/by-role/:role', protect, authorize('Super Admin', 'Admin', ..
       return res.status(400).json({ error: 'Invalid role specified' });
     }
     
-    // Find users with the specified role (asking for a PM role returns every PM-equivalent role)
-    const users = await User.find({ role: isPMRole(role) ? { $in: PM_ROLES } : role, isActive: { $ne: false } })
+    // Find users with exactly the specified role (a Project Coordinator is not listed as a Project Manager)
+    const users = await User.find({ role, isActive: { $ne: false } })
       .select('name email _id role githubUsername githubLinked')
       .sort({ name: 1 });
     
@@ -1455,10 +1455,22 @@ router.get('/users/developers', authorize('Super Admin','HR', 'Admin', ...PM_ROL
 
 router.get('/users/project-managers', authorize('Super Admin','HR', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
-    const projectManagers = await User.find({ role: { $in: PM_ROLES } })
+    const projectManagers = await User.find({ role: 'Project Manager' })
       .select('name email role')
       .sort({ name: 1 });
     res.json(projectManagers);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Users who can be picked as a project's coordinator: Project Coordinators and Project Managers
+router.get('/users/project-coordinators', authorize('Super Admin','HR', 'Admin', ...PM_ROLES), async (req, res) => {
+  try {
+    const coordinators = await User.find({ role: { $in: PM_ROLES } })
+      .select('name email role')
+      .sort({ name: 1 });
+    res.json(coordinators);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1559,8 +1571,11 @@ router.put('/projects/:projectId/team', authorize(...TEAM_EDIT_ROLES), async (re
       if (!p || p.isActive === false || !roles.includes(p.role)) return `${p ? p.name : id} cannot be a ${label}`;
       return null;
     };
+    // Only a real Project Manager can be chosen; a Project Coordinator already saved as this
+    // project's PM (older data) is accepted as long as it is not being changed.
+    const pmAllowedRoles = pmId === idOf(project.projectManager) ? PM_ROLES : ['Project Manager'];
     const errors = [
-      ...(pmId ? [bad(pmId, PM_ROLES, 'Project Manager')] : []),
+      ...(pmId ? [bad(pmId, pmAllowedRoles, 'Project Manager')] : []),
       ...coordinatorIds.map((id) => bad(id, PM_ROLES, 'Project Coordinator')),
       ...teamLeadIds.map((id) => bad(id, ['Team Lead'], 'Team Lead')),
     ].filter(Boolean);

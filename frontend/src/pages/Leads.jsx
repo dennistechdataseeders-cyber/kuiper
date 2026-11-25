@@ -8,7 +8,6 @@ import {
   StickyNote, ListTodo, Video
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import LeadDetail, { ActivityModal } from '../components/LeadDetail';
 import EditableSelect from '../components/EditableSelect';
 import ZohoFilterSidebar, {
@@ -295,7 +294,6 @@ const LEAD_SYSTEM_FILTERS = [
 ];
 
 export default function Leads() {
-  const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
 
@@ -502,7 +500,7 @@ export default function Leads() {
   // Zoho-style per-column menu (sort / pin / filter by / hide)
   // Runs on top of the left-side filter panel + alphabet + search.
   // ============================================
-  const LEAD_TH = 'px-5 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500';
+  const LEAD_TH = 'th';
   const leadColumns = [
     selectionColumn({
       sel, tagsApi, getId: (l) => l._id, getPageRows: () => leadRows,
@@ -511,15 +509,15 @@ export default function Leads() {
     tagsColumn(tagsApi, (l) => l._id), // Tag column first (after the checkbox / quick-action columns)
     {
       key: 'quick', label: 'Quick Actions', menu: false, fixed: 'start', width: 120,
-      thClass: 'px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 w-[120px]',
-      tdBase: 'px-4 py-3',
+      thClass: 'th w-[120px]',
+      tdBase: 'td',
       stopClick: true,
       render: (lead) => (
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setQuickModal({ lead, type: 'note' })}
             title="Add note"
-            className="w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition"
+            className="btn-icon border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200"
           >
             <StickyNote size={14} />
           </button>
@@ -544,7 +542,7 @@ export default function Leads() {
       getValue: (lead) => getLeadName(lead),
       render: (lead) => (
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-xs font-black shrink-0">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-xs font-semibold shrink-0">
             {getLeadName(lead).charAt(0).toUpperCase()}
           </div>
           <span className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition truncate">
@@ -590,7 +588,7 @@ export default function Leads() {
       key: 'leadSource', label: 'Lead Source', type: 'select',
       getValue: (lead) => lead.leadSource || 'Web Research',
       render: (lead) => (
-        <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-100">
+        <span className="badge rounded-full bg-blue-50 text-blue-700 border border-blue-100">
           {lead.leadSource || 'Web Research'}
         </span>
       ),
@@ -819,7 +817,7 @@ export default function Leads() {
             value={LOGGED_IN_USER_NAME}
             readOnly
             title="Automatically set to the logged-in sales rep"
-            className="w-full px-3 py-2 pr-9 rounded-lg border border-slate-200 bg-slate-100 text-sm font-semibold text-slate-600 cursor-not-allowed outline-none"
+            className="input pr-9 bg-slate-100 cursor-not-allowed"
           />
           <Lock size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
@@ -911,15 +909,15 @@ export default function Leads() {
   // ============================================
   if (view === 'list') {
     return (
-      <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="page bg-slate-50">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-2xl font-black text-slate-800">All Leads</h1>
+            <h1 className="page-title">All Leads</h1>
             <p className="text-sm text-slate-500">Track and follow up with your leads</p>
           </div>
           <button
             onClick={() => setView('form')}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all"
+            className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-200"
           >
             <Plus size={16} />
             Create Lead
@@ -928,15 +926,15 @@ export default function Leads() {
 
         <div>
           <div className="flex flex-col gap-3 mb-5">
-            <div className="flex flex-col md:flex-row md:items-center gap-3">
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3">
               <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
               <div className="relative">
                 <button
                   onClick={() => setShowAlphabetDropdown(v => !v)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-200 bg-white text-sm font-bold text-slate-700 hover:bg-slate-50 shadow-sm"
+                  className="btn btn-md border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 shadow-sm"
                 >
-                  <span className="text-xs uppercase tracking-wider text-slate-400">Lead Name</span>
-                  <span className="w-8 h-8 rounded-md bg-blue-50 text-blue-700 font-black flex items-center justify-center">
+                  <span className="text-xs uppercase tracking-wide text-slate-400">Lead Name</span>
+                  <span className="w-8 h-8 rounded-md bg-blue-50 text-blue-700 font-bold flex items-center justify-center shrink-0">
                     {alphabetFilter === 'All' ? 'A–Z' : alphabetFilter}
                   </span>
                   <ChevronDown size={14} className={`text-slate-400 transition-transform ${showAlphabetDropdown ? 'rotate-180' : ''}`} />
@@ -952,7 +950,7 @@ export default function Leads() {
                             setAlphabetFilter(letter);
                             setShowAlphabetDropdown(false);
                           }}
-                          className={`h-8 rounded-md text-xs font-black transition-all ${
+                          className={`h-9 rounded-md text-xs font-semibold transition-all ${
                             alphabetFilter === letter
                               ? 'bg-blue-600 text-white'
                               : 'text-slate-600 hover:bg-slate-100'
@@ -972,11 +970,11 @@ export default function Leads() {
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   placeholder="Search by name, company, email or phone..."
-                  className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-500 shadow-sm"
+                  className="input pl-10"
                 />
               </div>
 
-              <div className="md:ml-auto text-xs font-bold text-slate-400">
+              <div className="md:ml-auto text-xs font-semibold text-slate-400">
                 {leadRows.length} of {leads.length} leads
               </div>
             </div>
@@ -1002,7 +1000,7 @@ export default function Leads() {
             <ColumnToolbar ct={ct} className="flex-1" />
           </div>
           <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-            <div className="overflow-x-auto">
+            <div className="table-scroll overflow-x-auto">
               <table className="w-full min-w-[900px] text-left">
                 <ColumnHead ct={ct} thClass={LEAD_TH} />
                 <tbody className="divide-y divide-slate-100">
@@ -1028,7 +1026,7 @@ export default function Leads() {
                               setFilters(EMPTY_FILTERS);
                               ct.clearFilters();
                             }}
-                            className="text-xs font-bold text-blue-600 hover:underline"
+                            className="text-xs font-semibold text-blue-600 hover:underline"
                           >
                             Clear all filters
                           </button>
@@ -1045,7 +1043,7 @@ export default function Leads() {
                         {ct.visibleColumns.map((col) => (
                           <td
                             key={col.key}
-                            {...ct.cellProps(col, `${col.tdBase || 'px-5 py-3'} ${col.tdClass || ''}`)}
+                            {...ct.cellProps(col, `${col.tdBase || 'td'} ${col.tdClass || ''}`)}
                             onClick={col.stopClick ? (e) => e.stopPropagation() : undefined}
                           >
                             {col.render(lead)}
@@ -1108,39 +1106,37 @@ export default function Leads() {
   // FORM VIEW
   // ============================================
   return (
-    <div className={`min-h-screen bg-white transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page-flush bg-white">
       <div
-        className={`fixed top-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 ${
-          isCollapsed ? 'left-20' : 'left-64'
-        }`}
+        className="app-bar"
       >
-        <div className="px-6 py-4 flex justify-between items-center">
+        <div className="app-bar-row justify-between">
           <div className="flex items-center gap-3">
             <button
               onClick={() => { setView('list'); setForm(buildEmptyForm()); }}
               disabled={saving}
-              className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition disabled:opacity-50"
+              className="btn-icon bg-slate-100 hover:bg-slate-200 disabled:opacity-50"
               title="Back to leads"
             >
               <ArrowLeft size={16} />
             </button>
             <div>
-              <h1 className="text-3xl font-black text-slate-900">Create Lead</h1>
+              <h1 className="page-title">Create Lead</h1>
               <p className="text-xs font-semibold text-slate-400 mt-0.5">Fill in the details below</p>
             </div>
           </div>
-          <div className="flex gap-2 shrink-0">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setShowAddField(true)}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn btn-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <Plus size={14} /> Add Field
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-blue-200 transition-all"
+              className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70 shadow-lg shadow-blue-200"
             >
               {saving ? (
                 <><Loader2 size={14} className="animate-spin" /> Saving...</>
@@ -1152,9 +1148,9 @@ export default function Leads() {
         </div>
       </div>
 
-      <div className="px-6 pt-[88px] pb-12">
-        <div className="mb-8">
-          <h2 className="text-base font-bold text-slate-800 mb-4">Lead Information</h2>
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-12">
+        <div className="mb-4 sm:mb-6">
+          <h2 className="section-title mb-4">Lead Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
             {grouped['Lead Information'].map(field => (
               <FieldRow key={field.fieldKey} field={field} onRemove={handleRemoveField}>
@@ -1165,8 +1161,8 @@ export default function Leads() {
         </div>
 
         {grouped['Address Information'].length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-base font-bold text-slate-800 mb-4">Address Information</h2>
+          <div className="mb-4 sm:mb-6">
+            <h2 className="section-title mb-4">Address Information</h2>
             <div className="rounded-xl border border-slate-200 p-5">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-3">
                 {grouped['Address Information'].map(field => (
@@ -1195,8 +1191,8 @@ export default function Leads() {
         )}
 
         {grouped['Description Information'].length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-base font-bold text-slate-800 mb-4">Description Information</h2>
+          <div className="mb-4 sm:mb-6">
+            <h2 className="section-title mb-4">Description Information</h2>
             <div className="grid grid-cols-1 gap-y-3">
               {grouped['Description Information'].map(field => (
                 <FieldRow key={field.fieldKey} field={field} onRemove={handleRemoveField}>
@@ -1210,30 +1206,30 @@ export default function Leads() {
 
       {saving && (
         <div className="fixed inset-0 z-[100] bg-slate-900/20 backdrop-blur-[2px] flex items-center justify-center pointer-events-none">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 px-8 py-6 flex flex-col items-center gap-3 pointer-events-auto">
+          <div className="bg-white rounded-xl shadow-2xl border border-slate-200 px-8 py-6 flex flex-col items-center gap-3 pointer-events-auto">
             <Loader2 size={36} className="text-blue-600 animate-spin" />
-            <p className="text-sm font-black text-slate-800">Saving lead...</p>
-            <p className="text-[10px] font-semibold text-slate-400">Please wait, this won't take long</p>
+            <p className="text-sm font-semibold text-slate-800">Saving lead...</p>
+            <p className="text-xs font-semibold text-slate-400">Please wait, this won't take long</p>
           </div>
         </div>
       )}
 
       {showAddField && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold text-slate-800">Add New Field</h3>
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
+              <h3 className="section-title">Add New Field</h3>
               <button
                 onClick={() => setShowAddField(false)}
                 disabled={saving}
-                className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                className="btn-icon text-slate-400 hover:text-slate-600 disabled:opacity-50"
               >
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleAddField} className="space-y-4">
+            <form onSubmit={handleAddField} className="modal-body space-y-4">
               <div>
-                <label className="text-xs font-bold text-slate-600 block mb-1">Field Label *</label>
+                <label className="label block mb-1.5">Field Label *</label>
                 <input
                   required
                   value={newField.label}
@@ -1244,7 +1240,7 @@ export default function Leads() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Type</label>
+                  <label className="label block mb-1.5">Type</label>
                   <select
                     value={newField.type}
                     onChange={(e) => setNewField({ ...newField, type: e.target.value })}
@@ -1260,7 +1256,7 @@ export default function Leads() {
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">Section</label>
+                  <label className="label block mb-1.5">Section</label>
                   <select
                     value={newField.section}
                     onChange={(e) => setNewField({ ...newField, section: e.target.value })}
@@ -1275,7 +1271,7 @@ export default function Leads() {
 
               {newField.type === 'select' && (
                 <div>
-                  <label className="text-xs font-bold text-slate-600 block mb-1">
+                  <label className="label block mb-1.5">
                     Options (comma-separated)
                   </label>
                   <input
@@ -1284,7 +1280,7 @@ export default function Leads() {
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm"
                     placeholder="Option A, Option B, Option C"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     You can add, rename, or remove these later from the dropdown itself.
                   </p>
                 </div>
@@ -1301,7 +1297,7 @@ export default function Leads() {
               </div>
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-lg bg-blue-600 text-white font-bold text-sm hover:bg-blue-700"
+                className="btn btn-md w-full bg-blue-600 text-white hover:bg-blue-700"
               >
                 Add Field
               </button>
@@ -1315,21 +1311,21 @@ export default function Leads() {
 
 function FieldRow({ field, onRemove, children }) {
   return (
-    <div className="flex items-start gap-2 group">
-      <div className="w-40 shrink-0 pt-2 text-right">
+    <div className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2 group">
+      <div className="sm:w-40 shrink-0 sm:pt-2 sm:text-right">
         <span className="text-xs font-semibold text-slate-500">
           {field.label}
           {field.required && <span className="text-red-500 ml-1">*</span>}
         </span>
       </div>
-      <div className="flex-1 relative">
+      <div className={`flex-1 min-w-0 relative ${field.isDefault ? '' : 'max-md:pr-11'}`}>
         <div className={field.required ? 'ring-1 ring-red-300 rounded-lg' : ''}>
           {children}
         </div>
         {!field.isDefault && (
           <button
             onClick={() => onRemove(field.fieldKey)}
-            className="absolute -right-7 top-1/2 -translate-y-1/2 p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+            className="btn-icon absolute right-0 md:-right-7 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 md:opacity-0 md:group-hover:opacity-100"
             title="Remove field"
           >
             <Trash2 size={13} />

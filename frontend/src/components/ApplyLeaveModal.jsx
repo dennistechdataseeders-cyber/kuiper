@@ -131,62 +131,63 @@ export default function ApplyLeaveModal({ open, onClose, onSubmitted, authHeader
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4" onMouseDown={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}>
-      <div className="bg-white w-full max-w-5xl rounded-2xl shadow-2xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="modal-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget && !submitting) onClose(); }}>
+      <div className="modal-panel max-w-5xl">
         {/* header */}
-        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+        <div className="modal-header">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Apply for Leave</h2>
+            <h2 className="section-title">Apply for Leave</h2>
             <p className="text-xs text-slate-500 mt-0.5">One request for all your days. Choose Paid or Unpaid per day, or leave it on Auto (paid first, then unpaid). Weekends and holidays are not counted.</p>
           </div>
-          <button onClick={onClose} disabled={submitting} className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200">
+          <button onClick={onClose} disabled={submitting} className="btn-icon bg-slate-100 hover:bg-slate-200">
             <X size={18} />
           </button>
         </div>
 
         {/* balance strip */}
-        <div className="grid grid-cols-3 gap-3 px-6 py-3 bg-slate-50 border-b border-slate-200">
+        <div className="modal-body p-0 sm:p-0">
+        <div className="sm:sticky sm:top-0 sm:z-10 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 px-4 sm:px-6 py-3 bg-slate-50 border-b border-slate-200">
           <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center"><Wallet size={15} /></span>
+            <span className="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0"><Wallet size={15} /></span>
             <div>
-              <p className="text-sm font-black text-slate-800">{balance ? (balance.isProbationary ? 'On probation' : fmtDays(balance.availablePaid)) : '—'}</p>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-sm font-semibold text-slate-800">{balance ? (balance.isProbationary ? 'On probation' : fmtDays(balance.availablePaid)) : '—'}</p>
+              <p className="text-xs text-slate-500">
                 Paid leave available{balance?.pendingPaid ? ` (${balance.pendingPaid} in pending requests)` : ''}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center"><Gauge size={15} /></span>
+            <span className="w-8 h-8 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center shrink-0"><Gauge size={15} /></span>
             <div>
-              <p className="text-sm font-black text-slate-800">{monthly ? `${monthly.remaining} of ${monthly.limit} left` : '—'}</p>
-              <p className="text-[11px] text-slate-500">This month{monthly ? ` · ${monthly.used} used${monthly.pending ? `, ${monthly.pending} pending` : ''}` : ''}</p>
+              <p className="text-sm font-semibold text-slate-800">{monthly ? `${monthly.remaining} of ${monthly.limit} left` : '—'}</p>
+              <p className="text-xs text-slate-500">This month{monthly ? ` · ${monthly.used} used${monthly.pending ? `, ${monthly.pending} pending` : ''}` : ''}</p>
             </div>
           </div>
           <div className="flex items-center gap-2.5">
-            <span className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center"><CalendarDays size={15} /></span>
+            <span className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0"><CalendarDays size={15} /></span>
             <div>
-              <p className="text-sm font-black text-slate-800">{fmtDays(totals.totalDays)}</p>
-              <p className="text-[11px] text-slate-500">This request</p>
+              <p className="text-sm font-semibold text-slate-800">{fmtDays(totals.totalDays)}</p>
+              <p className="text-xs text-slate-500">This request</p>
             </div>
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 md:grid-cols-5">
+        <div className="grid grid-cols-1 md:grid-cols-5">
           {/* left: dates + days */}
-          <div className="md:col-span-3 p-6 md:border-r border-slate-100 space-y-4">
+          <div className="md:col-span-3 min-w-0 p-4 sm:p-6 md:border-r border-slate-100 space-y-4">
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex-1 min-w-[140px]">
-                <span className="block text-[11px] font-bold text-slate-500 mb-1">From</span>
-                <input type="date" value={from} min={addDays(today, -60)} onChange={(e) => { setFrom(e.target.value); setPortions({}); setTypes({}); }} className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                <span className="block text-xs font-semibold text-slate-500 mb-1">From</span>
+                <input type="date" value={from} min={addDays(today, -60)} onChange={(e) => { setFrom(e.target.value); setPortions({}); setTypes({}); }} className="input" />
               </label>
               <label className="flex-1 min-w-[140px]">
-                <span className="block text-[11px] font-bold text-slate-500 mb-1">To</span>
-                <input type="date" value={to} min={from} onChange={(e) => { setTo(e.target.value); setPortions({}); setTypes({}); }} className="w-full h-10 px-3 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                <span className="block text-xs font-semibold text-slate-500 mb-1">To</span>
+                <input type="date" value={to} min={from} onChange={(e) => { setTo(e.target.value); setPortions({}); setTypes({}); }} className="input" />
               </label>
-              <div className="flex gap-1.5">
+              <div className="flex flex-wrap gap-1.5">
                 {quick.map((q) => (
                   <button key={q.label} onClick={() => { setFrom(q.f); setTo(q.t); setPortions({}); setTypes({}); }}
-                    className={`h-10 px-3 rounded-lg border text-xs font-bold ${from === q.f && to === q.t ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    className={`btn btn-md border ${from === q.f && to === q.t ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
                     {q.label}
                   </button>
                 ))}
@@ -194,17 +195,17 @@ export default function ApplyLeaveModal({ open, onClose, onSubmitted, authHeader
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-black uppercase tracking-wider text-slate-500">Days</p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Days</p>
                 {dates.filter((d) => !d.off).length > 1 && (
-                  <div className="flex items-center gap-1 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1 text-xs">
                     <span className="text-slate-400 mr-1">Set all:</span>
                     {PORTIONS.slice(0, 3).map((p) => (
-                      <button key={p.id} onClick={() => setAll(p.id)} title={p.title} className="px-2 py-0.5 rounded-md border border-slate-200 font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600">{p.label}</button>
+                      <button key={p.id} onClick={() => setAll(p.id)} title={p.title} className="btn btn-sm border border-slate-200 text-slate-600 hover:border-blue-400 hover:text-blue-600">{p.label}</button>
                     ))}
                     <span className="w-px h-4 bg-slate-200 mx-1" />
                     {TYPES.filter((t) => !(onProbation && t.id === 'paid')).map((t) => (
-                      <button key={t.id} onClick={() => setAllTypes(t.id)} title={t.title} className="px-2 py-0.5 rounded-md border border-slate-200 font-bold text-slate-600 hover:border-blue-400 hover:text-blue-600">{t.label}</button>
+                      <button key={t.id} onClick={() => setAllTypes(t.id)} title={t.title} className="btn btn-sm border border-slate-200 text-slate-600 hover:border-blue-400 hover:text-blue-600">{t.label}</button>
                     ))}
                   </div>
                 )}
@@ -220,24 +221,24 @@ export default function ApplyLeaveModal({ open, onClose, onSubmitted, authHeader
                     : piece.every((p) => p.leaveType === 'Paid Leave') ? 'Paid'
                     : piece.every((p) => p.leaveType === 'Unpaid Leave') ? 'Unpaid' : '½ Paid + ½ Unpaid';
                   return (
-                    <div key={d.date} className={`flex items-center gap-3 px-3 py-2 ${d.off ? 'bg-slate-50' : ''}`}>
+                    <div key={d.date} className={`flex flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 ${d.off ? 'bg-slate-50' : ''}`}>
                       <div className="min-w-[96px] shrink-0">
                         <p className={`text-sm font-bold ${d.off ? 'text-slate-400' : 'text-slate-800'}`}>{dayLabel(d.date)}</p>
                         {tag && (
-                          <p className={`text-[10px] font-black uppercase tracking-wide ${tag === 'Paid' ? 'text-blue-600' : tag === 'Unpaid' ? 'text-slate-500' : 'text-violet-600'}`}>{tag}</p>
+                          <p className={`text-xs font-semibold uppercase tracking-wide ${tag === 'Paid' ? 'text-blue-600' : tag === 'Unpaid' ? 'text-slate-500' : 'text-violet-600'}`}>{tag}</p>
                         )}
                       </div>
                       {d.off ? (
                         <span className="text-xs font-semibold text-slate-400 italic">{d.off} — not counted</span>
                       ) : (
-                        <div className="flex items-center gap-2 ml-auto">
+                        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                           <div className="flex p-0.5 rounded-lg bg-slate-100">
                             {PORTIONS.map((p) => (
                               <button
                                 key={p.id}
                                 title={p.title}
                                 onClick={() => setPortions((m) => ({ ...m, [d.date]: p.id }))}
-                                className={`px-2 py-1 rounded-md text-xs font-bold transition ${
+                                className={`btn btn-sm ${
                                   d.portion === p.id
                                     ? p.id === 'none' ? 'bg-white text-slate-500 shadow-sm' : 'bg-white text-blue-700 shadow-sm'
                                     : 'text-slate-500 hover:text-slate-800'
@@ -258,7 +259,7 @@ export default function ApplyLeaveModal({ open, onClose, onSubmitted, authHeader
                                     title={disabled ? 'Not available during probation' : t.title}
                                     disabled={disabled}
                                     onClick={() => setTypes((m) => ({ ...m, [d.date]: t.id }))}
-                                    className={`px-2 py-1 rounded-md text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed ${
+                                    className={`btn btn-sm disabled:opacity-30 ${
                                       active ? TYPE_ACTIVE[t.id] : 'text-slate-500 hover:text-slate-800'
                                     }`}
                                   >
@@ -278,22 +279,22 @@ export default function ApplyLeaveModal({ open, onClose, onSubmitted, authHeader
           </div>
 
           {/* right: split + reason */}
-          <div className="md:col-span-2 p-6 space-y-4 bg-white">
+          <div className="md:col-span-2 min-w-0 p-4 sm:p-6 space-y-4 bg-white">
             <div>
-              <p className="text-[11px] font-black uppercase tracking-wider text-slate-500 mb-2">How it will be counted</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">How it will be counted</p>
               <div className="rounded-xl border border-slate-200 p-4">
                 <div className="flex items-baseline justify-between">
-                  <span className="text-2xl font-black text-slate-900">{totals.totalDays}</span>
+                  <span className="text-2xl font-bold text-slate-900">{totals.totalDays}</span>
                   <span className="text-xs font-semibold text-slate-500">{previewing ? 'checking…' : 'day(s) of leave'}</span>
                 </div>
                 <div className="h-2.5 rounded-full bg-slate-200 overflow-hidden mt-3 flex">
                   <div className="h-full bg-blue-600 transition-all" style={{ width: `${paidPct}%` }} />
                 </div>
-                <div className="flex justify-between mt-2 text-xs font-bold">
+                <div className="flex justify-between mt-2 text-xs font-semibold">
                   <span className="text-blue-700">{totals.paidDays} paid</span>
                   <span className="text-slate-500">{totals.unpaidDays} unpaid</span>
                 </div>
-                <label className={`flex items-center gap-2 mt-3 text-xs font-semibold ${balance?.isProbationary ? 'text-slate-400' : 'text-slate-600 cursor-pointer'}`}>
+                <label className={`label mb-1.5 flex items-center gap-2 mt-3 ${balance?.isProbationary ? 'text-slate-400' : 'text-slate-600 cursor-pointer'}`}>
                   <input type="checkbox" checked={usePaid && !balance?.isProbationary} disabled={balance?.isProbationary} onChange={(e) => setUsePaid(e.target.checked)} className="w-4 h-4 accent-blue-600" />
                   Use paid balance for <b className="font-bold">Auto</b> days
                 </label>
@@ -316,31 +317,32 @@ export default function ApplyLeaveModal({ open, onClose, onSubmitted, authHeader
             )}
 
             <label className="block">
-              <span className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-2">Reason</span>
+              <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Reason</span>
               <textarea
                 rows={4}
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="e.g. Family function in my hometown"
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none resize-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="input resize-none"
               />
             </label>
           </div>
         </div>
+        </div>
 
         {/* footer */}
-        <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-3 bg-white">
+        <div className="modal-footer">
           <p className="text-xs text-slate-500">
             {totals.totalDays > 0
               ? <>Sending <b className="text-slate-800">{fmtDays(totals.totalDays)}</b>{totals.paidDays && totals.unpaidDays ? <> ({totals.paidDays} paid + {totals.unpaidDays} unpaid)</> : totals.unpaidDays ? ' (unpaid)' : ' (paid)'} for approval</>
               : 'Select at least one working day'}
           </p>
           <div className="flex gap-2">
-            <button onClick={onClose} disabled={submitting} className="px-4 py-2.5 rounded-lg border border-slate-300 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+            <button onClick={onClose} disabled={submitting} className="btn btn-md border border-slate-300 text-slate-700 hover:bg-slate-50">Cancel</button>
             <button
               onClick={submit}
               disabled={!canSubmit}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm"
             >
               {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />} Submit Request
             </button>

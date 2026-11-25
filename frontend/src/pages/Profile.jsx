@@ -44,7 +44,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="p-8 max-w-xl mx-auto relative">
+    <div className="page relative">
       <AnimatePresence>
         {isSuccess && (
           <motion.div 
@@ -53,67 +53,67 @@ const Profile = () => {
             exit={{ opacity: 0, scale: 0.9, y: -20 }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 pointer-events-none"
           >
-            <div className="bg-white border border-emerald-100 shadow-[0_20px_50px_rgba(16,185,129,0.2)] px-10 py-12 rounded-[3rem] flex flex-col items-center text-center max-w-xs pointer-events-auto">
-              <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mb-6 animate-bounce">
+            <div className="bg-white border border-emerald-100 shadow-[0_20px_50px_rgba(16,185,129,0.2)] px-6 sm:px-10 py-8 sm:py-12 rounded-xl flex flex-col items-center text-center max-w-xs pointer-events-auto">
+              <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center animate-bounce shrink-0 mb-4 sm:mb-6">
                 <CheckCircle2 size={48} strokeWidth={2.5} />
               </div>
-              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Updated!</h3>
+              <h3 className="section-title">Updated!</h3>
               <p className="text-sm font-bold text-slate-400 mt-2">Your password has been securely changed.</p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className={`bg-white rounded-[2.5rem] p-10 shadow-xl border border-slate-100 relative overflow-hidden transition-all duration-500 ${isSuccess ? 'blur-sm grayscale' : ''}`}>
+      <div className={`max-w-xl mx-auto bg-white rounded-xl p-4 sm:p-8 shadow-xl border border-slate-100 relative overflow-hidden transition-all duration-500 ${isSuccess ? 'blur-sm grayscale' : ''}`}>
         <div className="relative z-10">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="p-3 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-200">
+          <div className="flex items-center gap-4 mb-4 sm:mb-6">
+            <div className="p-3 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-200">
               <ShieldCheck size={24} />
             </div>
             <div>
-              <h2 className="text-xl font-black text-slate-800 tracking-tight uppercase">User Security</h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Update your authentication credentials</p>
+              <h2 className="section-title">User Security</h2>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Update your authentication credentials</p>
             </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Current Password */}
             <div className="relative">
-              <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block tracking-widest">Current Password</label>
+              <label className="label block mb-1.5">Current Password</label>
               <div className="relative">
                 <input 
                   type={showPass.current ? "text" : "password"} 
                   required 
-                  className="w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-100 outline-none transition-all font-medium pr-12"
+                  className="input bg-slate-50 pr-12"
                   value={data.currentPassword}
                   onChange={(e) => setData({...data, currentPassword: e.target.value})}
                 />
                 <button 
                   type="button"
                   onClick={() => toggleVisibility('current')}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                  className="btn-icon absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
                 >
                   {showPass.current ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* New Password */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block tracking-widest">New Password</label>
+                <label className="label block mb-1.5">New Password</label>
                 <div className="relative">
                   <input 
                     type={showPass.new ? "text" : "password"} 
                     required 
-                    className={`w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 outline-none transition-all font-medium pr-12 ${isOldPassword ? 'ring-2 ring-red-100' : 'focus:ring-blue-100'}`}
+                    className={`input bg-slate-50 pr-12 ${isOldPassword ? 'ring-2 ring-red-100' : 'focus:ring-blue-100'}`}
                     value={data.newPassword}
                     onChange={(e) => setData({...data, newPassword: e.target.value})}
                   />
                   <button 
                     type="button"
                     onClick={() => toggleVisibility('new')}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                    className="btn-icon absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
                   >
                     {showPass.new ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -122,19 +122,19 @@ const Profile = () => {
 
               {/* Confirm Password */}
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 ml-2 mb-2 block tracking-widest">Confirm New</label>
+                <label className="label block mb-1.5">Confirm New</label>
                 <div className="relative">
                   <input 
                     type={showPass.confirm ? "text" : "password"} 
                     required 
-                    className={`w-full p-4 bg-slate-50 border-none rounded-2xl focus:ring-2 outline-none transition-all font-medium pr-12 ${!passwordsMatch && data.confirmPassword ? 'ring-2 ring-red-100' : 'focus:ring-blue-100'}`}
+                    className={`input bg-slate-50 pr-12 ${!passwordsMatch && data.confirmPassword ? 'ring-2 ring-red-100' : 'focus:ring-blue-100'}`}
                     value={data.confirmPassword}
                     onChange={(e) => setData({...data, confirmPassword: e.target.value})}
                   />
                   <button 
                     type="button"
                     onClick={() => toggleVisibility('confirm')}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
+                    className="btn-icon absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600"
                   >
                     {showPass.confirm ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -151,16 +151,16 @@ const Profile = () => {
                   exit={{ height: 0, opacity: 0 }}
                   className="overflow-hidden"
                 >
-                  <div className="bg-red-50 border border-red-100 p-4 rounded-2xl space-y-2">
+                  <div className="bg-red-50 border border-red-100 p-4 rounded-xl space-y-2">
                     {isOldPassword && (
-                      <div className="flex items-center gap-2 text-red-600 text-[11px] font-bold uppercase tracking-wider">
-                        <AlertCircle size={14} />
+                      <div className="flex items-center gap-2 text-red-600 text-xs font-semibold uppercase tracking-wide">
+                        <AlertCircle size={14} className="shrink-0" />
                         <span>New password cannot be the same as current</span>
                       </div>
                     )}
                     {!passwordsMatch && data.confirmPassword && (
-                      <div className="flex items-center gap-2 text-red-600 text-[11px] font-bold uppercase tracking-wider">
-                        <AlertCircle size={14} />
+                      <div className="flex items-center gap-2 text-red-600 text-xs font-semibold uppercase tracking-wide">
+                        <AlertCircle size={14} className="shrink-0" />
                         <span>Passwords do not match yet</span>
                       </div>
                     )}
@@ -171,7 +171,7 @@ const Profile = () => {
 
             <button 
               disabled={loading || (data.newPassword !== '' && !canSubmit)}
-              className={`w-full py-5 text-white font-black rounded-2xl transition-all uppercase tracking-widest text-xs flex items-center justify-center gap-2 ${
+              className={`btn btn-md w-full text-white ${
                 !canSubmit && data.newPassword !== '' 
                 ? 'bg-slate-200 cursor-not-allowed text-slate-400' 
                 : 'bg-slate-900 hover:bg-blue-600'

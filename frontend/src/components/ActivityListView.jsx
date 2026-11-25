@@ -15,7 +15,6 @@ import {
   Search, Loader2, List, CalendarDays, ChevronLeft, ChevronRight, Video, PhoneIncoming, PhoneOutgoing, Phone,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import Pagination from './Pagination';
 import { getActivityLeadName } from '../utils/useAlphaPagination';
 import useDashboardFilter, { filterActivities, idOf, isTodayLocal } from '../utils/useDashboardFilter';
@@ -74,7 +73,7 @@ const priorityCls = (p) =>
   p === 'High' ? 'text-red-600' : p === 'Low' ? 'text-slate-500' : 'text-slate-700';
 
 const Badge = ({ cls, children }) => (
-  <span className={`inline-flex px-2 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wide ${cls}`}>{children}</span>
+  <span className={`badge rounded-full border ${cls}`}>{children}</span>
 );
 
 // ============================================
@@ -82,7 +81,6 @@ const Badge = ({ cls, children }) => (
 // ============================================
 export default function ActivityListView({ type }) {
   const cfg = CONFIG[type];
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
@@ -217,7 +215,7 @@ export default function ActivityListView({ type }) {
         <div className="min-w-0">
           <p className="text-sm font-semibold text-slate-700 truncate">{getActivityLeadName(a) || '—'}</p>
           {a.leadId?.companyName && a.leadId.companyName !== getActivityLeadName(a) && (
-            <p className="text-[11px] text-slate-400 truncate">{a.leadId.companyName}</p>
+            <p className="text-xs text-slate-400 truncate">{a.leadId.companyName}</p>
           )}
         </div>
       ),
@@ -259,23 +257,23 @@ export default function ActivityListView({ type }) {
   // RENDER
   // ============================================
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-5 gap-4">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">{cfg.title}</h1>
+          <h1 className="page-title">{cfg.title}</h1>
           <p className="text-sm text-slate-500">{cfg.subtitle}</p>
         </div>
 
-        <div className="flex items-center gap-3 w-full lg:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <FilterToggleButton open={showFilters} onClick={() => setShowFilters((v) => !v)} count={countActiveFilters(filters)} />
-          <div className="relative flex-1 lg:w-72">
+          <div className="relative flex-1 basis-48 lg:w-72">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={`Search ${cfg.nouns}...`}
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 shadow-sm bg-white"
+              className="input pl-10"
             />
           </div>
           {/* view toggle */}
@@ -287,7 +285,7 @@ export default function ActivityListView({ type }) {
               <button
                 key={id}
                 onClick={() => setView(id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition ${
+                className={`btn btn-sm ${
                   view === id ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -327,7 +325,7 @@ export default function ActivityListView({ type }) {
               <ColumnToolbar ct={ct} className="flex-1" />
             </div>
             <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
+              <div className="table-scroll overflow-x-auto">
                 <table className="w-full text-left min-w-[1000px]">
                   <ColumnHead ct={ct} />
                   <tbody className="divide-y divide-slate-100">
@@ -348,7 +346,7 @@ export default function ActivityListView({ type }) {
                           className={`hover:bg-slate-50 transition group cursor-pointer ${sel.isSelected(a._id) ? 'bg-blue-50/60' : ''}`}
                         >
                           {ct.visibleColumns.map((col) => (
-                            <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'px-5 py-3'} ${col.tdClass || ''}`)}>
+                            <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'td'} ${col.tdClass || ''}`)}>
                               {col.render(a)}
                             </td>
                           ))}
@@ -441,12 +439,12 @@ function CalendarView({ items, type, onOpen }) {
         className={`w-full text-left rounded-md border px-1.5 ${compact ? 'py-0.5' : 'py-1.5'} hover:shadow-sm hover:brightness-95 transition ${chipCls(a)}`}
       >
         <div className="flex items-center gap-1 min-w-0">
-          <Icon size={10} className="shrink-0 opacity-70" />
-          <span className="text-[10px] font-black shrink-0">{fmtTime(a.scheduledAt)}</span>
-          <span className="text-[11px] font-semibold truncate">{a.title || 'Untitled'}</span>
+          <Icon size={12} className="shrink-0 opacity-70" />
+          <span className="text-xs font-semibold shrink-0">{fmtTime(a.scheduledAt)}</span>
+          <span className="text-xs font-semibold truncate">{a.title || 'Untitled'}</span>
         </div>
         {!compact && getActivityLeadName(a) && (
-          <p className="text-[10px] opacity-70 truncate mt-0.5 pl-3.5">{getActivityLeadName(a)}</p>
+          <p className="text-xs opacity-70 truncate mt-0.5 pl-3.5">{getActivityLeadName(a)}</p>
         )}
       </button>
     );
@@ -457,15 +455,15 @@ function CalendarView({ items, type, onOpen }) {
       {/* toolbar */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-slate-100">
         <div className="flex items-center gap-1">
-          <button onClick={() => move(-1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50" title="Previous"><ChevronLeft size={16} /></button>
-          <button onClick={() => move(1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50" title="Next"><ChevronRight size={16} /></button>
-          <button onClick={() => setCursor(startOfDay(new Date()))} className="ml-1 px-3 h-8 rounded-lg border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">Today</button>
+          <button onClick={() => move(-1)} className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50" title="Previous"><ChevronLeft size={16} /></button>
+          <button onClick={() => move(1)} className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50" title="Next"><ChevronRight size={16} /></button>
+          <button onClick={() => setCursor(startOfDay(new Date()))} className="btn btn-sm ml-1 border border-slate-200 text-slate-600 hover:bg-slate-50">Today</button>
         </div>
-        <h3 className="text-base font-black text-slate-800">{label}</h3>
-        <span className="text-[11px] font-semibold text-slate-400">{inPeriod} in view{unscheduled ? ` · ${unscheduled} without a date` : ''}</span>
+        <h3 className="section-title">{label}</h3>
+        <span className="text-xs font-semibold text-slate-400">{inPeriod} in view{unscheduled ? ` · ${unscheduled} without a date` : ''}</span>
 
-        <div className="ml-auto flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-3 text-[10px] font-bold text-slate-500">
+        <div className="lg:ml-auto flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-200" /> Upcoming</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-amber-200" /> Past, open</span>
             <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-emerald-200" /> Completed</span>
@@ -475,7 +473,7 @@ function CalendarView({ items, type, onOpen }) {
               <button
                 key={m}
                 onClick={() => changeMode(m)}
-                className={`px-3 py-1 rounded-md text-xs font-bold capitalize transition ${mode === m ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`btn btn-sm capitalize ${mode === m ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 {m}
               </button>
@@ -484,10 +482,12 @@ function CalendarView({ items, type, onOpen }) {
         </div>
       </div>
 
+      <div className="overflow-x-auto">
+      <div className="min-w-[760px]">
       {/* weekday header */}
       <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50">
         {WEEKDAYS.map((w) => (
-          <div key={w} className="px-2 py-2 text-[10px] font-black uppercase tracking-wider text-slate-500">{w}</div>
+          <div key={w} className="px-2 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{w}</div>
         ))}
       </div>
 
@@ -505,14 +505,14 @@ function CalendarView({ items, type, onOpen }) {
             >
               <div className="flex items-center justify-between mb-1">
                 <span
-                  className={`inline-flex items-center justify-center text-xs font-bold ${
+                  className={`inline-flex items-center justify-center text-xs font-semibold ${
                     isToday ? 'w-6 h-6 rounded-full bg-blue-600 text-white' : outside ? 'text-slate-300' : 'text-slate-600'
                   }`}
                 >
                   {d.getDate()}
                 </span>
                 {mode === 'week' && (
-                  <span className="text-[10px] font-semibold text-slate-400">{d.toLocaleDateString('en-IN', { month: 'short' })}</span>
+                  <span className="text-xs font-semibold text-slate-400">{d.toLocaleDateString('en-IN', { month: 'short' })}</span>
                 )}
               </div>
               <div className="space-y-1">
@@ -520,7 +520,7 @@ function CalendarView({ items, type, onOpen }) {
                 {list.length > max && (
                   <button
                     onClick={() => { setCursor(startOfDay(d)); changeMode('week'); }}
-                    className="w-full text-left px-1.5 text-[10px] font-bold text-blue-600 hover:underline"
+                    className="w-full text-left px-1.5 text-xs font-semibold text-blue-600 hover:underline"
                   >
                     +{list.length - max} more
                   </button>
@@ -529,6 +529,8 @@ function CalendarView({ items, type, onOpen }) {
             </div>
           );
         })}
+      </div>
+      </div>
       </div>
     </div>
   );

@@ -34,7 +34,7 @@ const ARROW = 'polygon(0 0, calc(100% - 7px) 0, 100% 50%, calc(100% - 7px) 100%,
 export function TagChip({ tag, onRemove, size = 'sm' }) {
   const bg = tag.color || '#ffffff';
   const fg = textOn(bg);
-  const pad = size === 'md' ? 'pl-2.5 pr-3.5 py-1 text-[13px]' : 'pl-2 pr-3 py-0.5 text-[11px]';
+  const pad = size === 'md' ? 'pl-2.5 pr-3.5 py-1 text-sm' : 'pl-2 pr-3 py-0.5 text-xs';
   return (
     // outer layer = 1px border, inner layer = colour (clip-path can't draw borders itself)
     <span className="inline-flex p-px bg-slate-400/60 shrink-0 max-w-full" style={{ clipPath: ARROW, borderRadius: 3 }}>
@@ -49,9 +49,9 @@ export function TagChip({ tag, onRemove, size = 'sm' }) {
             type="button"
             onClick={(e) => { e.stopPropagation(); onRemove(tag); }}
             title={`Remove "${tag.name}"`}
-            className="opacity-60 hover:opacity-100 -mr-1"
+            className="btn-icon w-8 md:!w-5 md:!h-5 opacity-60 hover:opacity-100 -mr-1"
           >
-            <X size={11} />
+            <X size={12} />
           </button>
         )}
       </span>
@@ -67,7 +67,7 @@ export function TagList({ tags = [], onRemove, max = 3 }) {
     <div className="flex flex-wrap items-center gap-1">
       {shown.map((t) => <TagChip key={t._id} tag={t} onRemove={onRemove} />)}
       {more > 0 && (
-        <span className="text-[11px] font-bold text-slate-500" title={tags.slice(max).map((t) => t.name).join(', ')}>
+        <span className="text-xs font-semibold text-slate-500" title={tags.slice(max).map((t) => t.name).join(', ')}>
           +{more}
         </span>
       )}
@@ -124,7 +124,7 @@ function RowMenuButton({ hasTags, onAddTags, onRemoveTags, onManage }) {
           setAnchor(anchor ? null : { left: r.left, bottom: r.bottom });
         }}
         title="Record actions"
-        className={`w-7 h-7 rounded-full flex items-center justify-center text-slate-500 border transition ${
+        className={`btn-icon text-slate-500 border rounded-full ${
           anchor ? 'bg-slate-100 border-slate-300' : 'border-transparent hover:bg-slate-100 hover:border-slate-200'
         }`}
       >
@@ -249,12 +249,12 @@ export const tagFilterField = (tagsApi, getId) => ({
 // Toolbar: selection actions + Manage Tags
 // ============================================
 export function TagToolbar({ sel, openTags, openManage, className = '' }) {
-  const btn = 'flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold shadow-sm transition';
+  const btn = 'btn btn-sm border shadow-sm';
   return (
     <div className={`flex flex-wrap items-center gap-2 ${className}`}>
       {sel.count > 0 && (
         <>
-          <span className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-[11px] font-black">
+          <span className="badge rounded-full bg-blue-600 text-white">
             {sel.count} selected
           </span>
           <button type="button" onClick={() => openTags('add', sel.ids)} className={`${btn} border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100`}>
@@ -263,7 +263,7 @@ export function TagToolbar({ sel, openTags, openManage, className = '' }) {
           <button type="button" onClick={() => openTags('remove', sel.ids)} className={`${btn} border-slate-200 bg-white text-slate-600 hover:border-red-300 hover:text-red-600`}>
             <X size={13} /> Remove Tags
           </button>
-          <button type="button" onClick={sel.clear} className="text-xs font-bold text-slate-400 hover:text-slate-600 px-1">
+          <button type="button" onClick={sel.clear} className="text-xs font-semibold text-slate-400 hover:text-slate-600 px-1">
             Clear selection
           </button>
         </>
@@ -288,22 +288,22 @@ export function ColorSwatches({ value, onChange }) {
           key={c}
           onClick={() => onChange(c)}
           title={c}
-          className={`w-5 h-5 rounded-full border flex items-center justify-center transition ${
+          className={`btn-icon md:!w-6 md:!h-6 border rounded-full ${
             value === c ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-300 hover:scale-110'
           }`}
           style={{ background: c }}
         >
-          {value === c && <Check size={11} style={{ color: textOn(c) }} />}
+          {value === c && <Check size={12} style={{ color: textOn(c) }} />}
         </button>
       ))}
       <label
         title="Custom colour"
-        className={`relative w-5 h-5 rounded-full border cursor-pointer overflow-hidden flex items-center justify-center ${
+        className={`relative w-10 h-10 md:w-6 md:h-6 rounded-full border cursor-pointer overflow-hidden flex items-center justify-center shrink-0 ${
           custom ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-300'
         }`}
         style={{ background: custom ? value : 'conic-gradient(#f28b82, #f6c344, #5cc47a, #7bc8f6, #d6a0f0, #f28b82)' }}
       >
-        {custom && <Check size={11} style={{ color: textOn(value) }} />}
+        {custom && <Check size={12} style={{ color: textOn(value) }} />}
         <input
           type="color"
           value={custom ? value : '#3b82f6'}
@@ -321,14 +321,14 @@ export function ColorSwatches({ value, onChange }) {
 function Modal({ title, onClose, children, width = 'max-w-lg' }) {
   return createPortal(
     <div
-      className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] z-[200] flex items-start justify-center p-4 pt-[12vh]"
+      className="fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] z-[200] flex items-start justify-center p-3 pt-[6vh] sm:p-4 sm:pt-[12vh]"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className={`bg-white rounded-2xl w-full ${width} shadow-2xl`}>
-        <div className="flex justify-between items-center px-6 pt-5 pb-2">
-          <h3 className="text-xl font-bold text-slate-800">{title}</h3>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+      <div className={`bg-white rounded-xl w-full ${width} shadow-2xl`}>
+        <div className="shrink-0 flex justify-between items-center gap-3 px-4 sm:px-6 pt-4 sm:pt-5 pb-2">
+          <h3 className="section-title">{title}</h3>
+          <button type="button" onClick={onClose} className="btn-icon text-slate-400 hover:text-slate-600"><X size={18} /></button>
         </div>
         {children}
       </div>
@@ -502,13 +502,13 @@ export function TagsModal({ state, tagsApi, onClose, onDone }) {
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 mt-2">
+            <p className="text-xs text-slate-400 mt-2">
               Pick a tag or type a new one. Press Enter or comma to add more than one.
             </p>
 
             {picked.length > 0 && (
               <div className="mt-4">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500 mb-2">Tag colour</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">Tag colour</p>
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {picked.map((p) => (
                     <div key={p._id || `new:${p.name}`} className="flex items-center gap-3 flex-wrap">
@@ -516,9 +516,9 @@ export function TagsModal({ state, tagsApi, onClose, onDone }) {
                         <TagChip tag={{ ...p, _id: p._id || p.name }} size="md" />
                       </div>
                       <ColorSwatches value={p.color} onChange={(c) => setPickColor(p, c)} />
-                      {!p._id && <span className="text-[10px] font-bold text-emerald-600">NEW</span>}
+                      {!p._id && <span className="text-xs font-semibold text-emerald-600">NEW</span>}
                       {p._id && p.color !== p.originalColor && (
-                        <span className="text-[10px] font-bold text-amber-600" title="This tag's colour changes for everyone">
+                        <span className="text-xs font-semibold text-amber-600" title="This tag's colour changes for everyone">
                           colour changed
                         </span>
                       )}
@@ -543,7 +543,7 @@ export function TagsModal({ state, tagsApi, onClose, onDone }) {
                   }
                 />
                 <TagChip tag={tag} size="md" />
-                {ids.length > 1 && <span className="ml-auto text-[11px] font-bold text-slate-400">on {count}</span>}
+                {ids.length > 1 && <span className="ml-auto text-xs font-semibold text-slate-400">on {count}</span>}
               </label>
             ))}
           </div>
@@ -553,7 +553,7 @@ export function TagsModal({ state, tagsApi, onClose, onDone }) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50"
+            className="btn btn-md border border-slate-300 text-slate-700 hover:bg-slate-50"
           >
             Cancel
           </button>
@@ -561,7 +561,7 @@ export function TagsModal({ state, tagsApi, onClose, onDone }) {
             type="button"
             onClick={save}
             disabled={!ready || saving}
-            className={`flex items-center gap-2 px-5 py-2 rounded-lg text-white text-sm font-bold disabled:opacity-50 ${
+            className={`btn btn-md text-white disabled:opacity-50 ${
               mode === 'add' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'
             }`}
           >
@@ -643,14 +643,14 @@ export function ManageTagsModal({ tagsApi, onClose }) {
                   ) : (
                     <div className="flex-1 min-w-0"><TagChip tag={{ ...t, color: colorOf(t) }} size="md" /></div>
                   )}
-                  <span className="text-[11px] font-bold text-slate-400 whitespace-nowrap">
+                  <span className="text-xs font-semibold text-slate-400 whitespace-nowrap">
                     {usage.get(String(t._id)) || 0} record{(usage.get(String(t._id)) || 0) === 1 ? '' : 's'}
                   </span>
                   <button
                     type="button"
                     onClick={() => { setEditing(String(t._id)); setName(t.name); }}
                     title="Rename"
-                    className="p-1.5 rounded-md text-slate-400 hover:text-blue-600 hover:bg-blue-50"
+                    className="btn-icon text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                   >
                     <Pencil size={14} />
                   </button>
@@ -658,7 +658,7 @@ export function ManageTagsModal({ tagsApi, onClose }) {
                     type="button"
                     onClick={() => setConfirmDel(confirmDel === String(t._id) ? null : String(t._id))}
                     title="Delete"
-                    className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50"
+                    className="btn-icon text-slate-400 hover:text-red-600 hover:bg-red-50"
                   >
                     <Trash2 size={14} />
                   </button>
@@ -682,7 +682,7 @@ export function ManageTagsModal({ tagsApi, onClose }) {
                         setBusy(false);
                         if (ok) { setConfirmDel(null); toast.success('Tag deleted'); }
                       }}
-                      className="px-3 py-1 rounded-md bg-red-600 text-white text-xs font-bold hover:bg-red-700 disabled:opacity-60"
+                      className="btn btn-sm bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
                     >
                       {busy ? 'Deleting...' : 'Delete'}
                     </button>
@@ -699,7 +699,7 @@ export function ManageTagsModal({ tagsApi, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700"
+            className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"
           >
             Done
           </button>

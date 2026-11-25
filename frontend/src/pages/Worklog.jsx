@@ -10,7 +10,6 @@ import React, {
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import { io } from 'socket.io-client';
-import { useSidebar } from '../context/SidebarContext';
 import {
   Play,
   Pause,
@@ -60,7 +59,6 @@ const Worklog = () => {
   // ========================================
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { isCollapsed } = useSidebar();
 
   const [selectedProject, setSelectedProject] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -501,7 +499,7 @@ const Worklog = () => {
             <div>
               <p className="font-bold text-sm">System Auto-Stop</p>
               <p className="text-xs mt-1">{data.message}</p>
-              <p className="text-[10px] mt-2 text-amber-600 italic">
+              <p className="text-xs mt-2 text-amber-600 italic">
                 Your timer has been stopped at the end of the work day (11:55 PM IST).
                 The displayed time is now the final, server-calculated duration.
               </p>
@@ -1120,17 +1118,17 @@ const Worklog = () => {
 
   const getStatusBadge = (status) => {
     switch(status) {
-      case 'running': return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <Play size={10} className="text-emerald-600" />, label: 'Running' };
-      case 'paused': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Pause size={10} className="text-amber-600" />, label: 'Paused' };
-      default: return { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', icon: <Square size={10} className="text-slate-500" />, label: 'Stopped' };
+      case 'running': return { bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', icon: <Play size={12} className="text-emerald-600" />, label: 'Running' };
+      case 'paused': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Pause size={12} className="text-amber-600" />, label: 'Paused' };
+      default: return { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', icon: <Square size={12} className="text-slate-500" />, label: 'Stopped' };
     }
   };
 
   const getTicketStatusBadge = (status) => {
     switch(status) {
-      case 'running': return { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', icon: <Play size={10} className="text-purple-600" />, label: 'Running' };
-      case 'paused': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Pause size={10} className="text-amber-600" />, label: 'Paused' };
-      default: return { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', icon: <Square size={10} className="text-slate-500" />, label: 'Stopped' };
+      case 'running': return { bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', icon: <Play size={12} className="text-purple-600" />, label: 'Running' };
+      case 'paused': return { bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', icon: <Pause size={12} className="text-amber-600" />, label: 'Paused' };
+      default: return { bg: 'bg-slate-100', text: 'text-slate-500', border: 'border-slate-200', icon: <Square size={12} className="text-slate-500" />, label: 'Stopped' };
     }
   };
 
@@ -1152,8 +1150,8 @@ const Worklog = () => {
     if (isSyncing) {
       return (
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200">
-          <RefreshCw size={10} className="text-blue-500 animate-spin" />
-          <span className="text-[8px] font-black text-blue-600 uppercase tracking-wider">Syncing...</span>
+          <RefreshCw size={12} className="text-blue-500 animate-spin" />
+          <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">Syncing...</span>
         </div>
       );
     }
@@ -1161,8 +1159,8 @@ const Worklog = () => {
     if (!synced) {
       return (
         <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200">
-          <WifiOff size={10} className="text-slate-400" />
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Not synced</span>
+          <WifiOff size={12} className="text-slate-400" />
+          <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Not synced</span>
         </div>
       );
     }
@@ -1171,11 +1169,11 @@ const Worklog = () => {
       return (
         <button
           onClick={handleManualRefresh}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all"
+          className="btn btn-sm bg-amber-50 border border-amber-200 hover:bg-amber-100 rounded-full"
           title="Sync is stale — click to refresh"
         >
-          <AlertTriangle size={10} className="text-amber-500" />
-          <span className="text-[8px] font-black text-amber-600 uppercase tracking-wider">Stale · {ageLabel}</span>
+          <AlertTriangle size={12} className="text-amber-500" />
+          <span className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Stale · {ageLabel}</span>
         </button>
       );
     }
@@ -1193,11 +1191,11 @@ const Worklog = () => {
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
           <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
         </span>
-        <ShieldCheck size={10} className="text-emerald-600" />
-        <span className="text-[8px] font-black text-emerald-700 uppercase tracking-wider">
+        <ShieldCheck size={12} className="text-emerald-600" />
+        <span className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">
           Synced with server
         </span>
-        <span className="text-[7px] text-emerald-500 font-bold">· {ageLabel}</span>
+        <span className="text-xs text-emerald-500 font-semibold">· {ageLabel}</span>
       </div>
     );
   };
@@ -1213,15 +1211,15 @@ const Worklog = () => {
     const { totalSeconds, totalFeeds, totalTickets } = historyData.summary;
 
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-5">
         <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
               <Timer size={14} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Total Time</p>
-              <p className="text-sm font-black text-blue-700 font-mono">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Time</p>
+              <p className="text-sm font-semibold text-blue-700 font-mono">
                 {formatDurationFromSeconds(totalSeconds)}
               </p>
             </div>
@@ -1230,36 +1228,36 @@ const Worklog = () => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
               <Activity size={14} className="text-emerald-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Feeds</p>
-              <p className="text-sm font-black text-emerald-700">{totalFeeds}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Feeds</p>
+              <p className="text-sm font-semibold text-emerald-700">{totalFeeds}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
               <Ticket size={14} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Tickets</p>
-              <p className="text-sm font-black text-purple-700">{totalTickets}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Tickets</p>
+              <p className="text-sm font-semibold text-purple-700">{totalTickets}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
               <TrendingUp size={14} className="text-amber-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Entries</p>
-              <p className="text-sm font-black text-amber-700">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Entries</p>
+              <p className="text-sm font-semibold text-amber-700">
                 {totalFeeds + totalTickets}
               </p>
             </div>
@@ -1272,7 +1270,7 @@ const Worklog = () => {
   const renderHistoryTimeBlocks = (entry) => {
     if (!entry.timeBlocks || entry.timeBlocks.length === 0) {
       return (
-        <p className="text-[10px] text-slate-400 italic px-2 py-3">
+        <p className="text-xs text-slate-400 italic px-2 py-3">
           No time blocks recorded for this entry.
         </p>
       );
@@ -1283,10 +1281,10 @@ const Worklog = () => {
         {entry.timeBlocks.map((block, idx) => (
           <div
             key={idx}
-            className="flex items-center justify-between text-[10px] bg-white border border-slate-100 rounded-lg px-3 py-1.5"
+            className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs bg-white border border-slate-100 rounded-lg px-3 py-1.5"
           >
             <div className="flex items-center gap-2">
-              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 font-black flex items-center justify-center text-[8px]">
+              <span className="w-5 h-5 rounded-md bg-slate-100 text-slate-500 font-semibold flex items-center justify-center text-xs shrink-0">
                 {idx + 1}
               </span>
               <span className="font-mono font-semibold text-slate-700">
@@ -1297,7 +1295,7 @@ const Worklog = () => {
                 {formatClockTime(block.endTime)}
               </span>
             </div>
-            <span className="font-black text-blue-700 font-mono">
+            <span className="font-bold text-blue-700 font-mono">
               {block.duration ? `${block.duration}s` : '—'}
             </span>
           </div>
@@ -1309,7 +1307,7 @@ const Worklog = () => {
   const renderHistorySection = () => {
     if (historyLoading) {
       return (
-        <div className="flex justify-center py-20 text-slate-400 font-black">
+        <div className="flex justify-center py-20 text-slate-400 font-bold">
           LOADING HISTORY...
         </div>
       );
@@ -1329,8 +1327,8 @@ const Worklog = () => {
       return (
         <div className="bg-white border border-slate-200 rounded-xl p-10 text-center">
           <History size={32} className="mx-auto text-slate-300 mb-2" />
-          <p className="text-sm font-black text-slate-500">No work logged on this date</p>
-          <p className="text-[10px] text-slate-400 mt-1">
+          <p className="text-sm font-semibold text-slate-500">No work logged on this date</p>
+          <p className="text-xs text-slate-400 mt-1">
             Try picking a different date from the calendar above.
           </p>
         </div>
@@ -1338,7 +1336,7 @@ const Worklog = () => {
     }
 
     return (
-      <div className="space-y-6">
+      <div className="stack">
         {/* ========================================
             FEEDS HISTORY
         ======================================== */}
@@ -1346,12 +1344,12 @@ const Worklog = () => {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-gradient-to-r from-emerald-50 to-white border-b border-emerald-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
                   <Activity size={12} className="text-emerald-600" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black text-slate-800">Feeds Worked On</p>
-                  <p className="text-[8px] text-slate-500">
+                  <p className="text-xs font-semibold text-slate-800">Feeds Worked On</p>
+                  <p className="text-xs text-slate-500">
                     {feeds.length} feed{feeds.length !== 1 ? 's' : ''} · {' '}
                     {formatDurationFromSeconds(feeds.reduce((s, f) => s + f.seconds, 0))} total
                   </p>
@@ -1359,15 +1357,15 @@ const Worklog = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="table-scroll table-sticky-first overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Feed</th>
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Time</th>
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Sessions</th>
-                    <th className="text-right px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500"></th>
+                    <th className="th">Feed</th>
+                    <th className="th">Project</th>
+                    <th className="th">Time</th>
+                    <th className="th">Sessions</th>
+                    <th className="th text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1379,36 +1377,36 @@ const Worklog = () => {
                           onClick={() => setExpandedHistoryRow(isExpanded ? null : `feed-${entry.feedId}`)}
                           className="border-b border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-all"
                         >
-                          <td className="px-4 py-2.5">
+                          <td className="td">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Hash size={11} className="text-slate-400" />
-                              <span className="text-xs font-bold text-slate-800">{entry.feedName}</span>
+                              <Hash size={12} className="text-slate-400" />
+                              <span className="text-xs font-semibold text-slate-800 max-w-full break-words">{entry.feedName}</span>
                               {entry.stoppedBySystem && (
-                                <span className="text-[7px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase">
+                                <span className="badge rounded-full bg-slate-200 text-slate-600">
                                   System
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-[10px] font-medium text-slate-600">
+                          <td className="td">
+                            <span className="text-xs font-medium text-slate-600">
                               {entry.projectCustomId || entry.projectName}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td className="td">
                             <div className="flex items-center gap-1.5">
-                              <Clock3 size={11} className="text-emerald-500" />
-                              <span className="text-xs font-black text-emerald-700 font-mono">
+                              <Clock3 size={12} className="text-emerald-500" />
+                              <span className="text-xs font-semibold text-emerald-700 font-mono">
                                 {formatDurationFromSeconds(entry.seconds)}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-[10px] font-bold text-slate-500">
+                          <td className="td">
+                            <span className="text-xs font-semibold text-slate-500">
                               {entry.timeBlocks?.length || 0}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5 text-right">
+                          <td className="td text-right">
                             {isExpanded ? (
                               <ChevronUp size={14} className="inline text-slate-400" />
                             ) : (
@@ -1419,18 +1417,18 @@ const Worklog = () => {
 
                         {isExpanded && (
                           <tr className="bg-slate-50/50">
-                            <td colSpan={5} className="px-4 py-3">
+                            <td colSpan={5} className="td">
                               {entry.description && (
                                 <div className="mb-3 bg-white border border-slate-200 rounded-lg p-3">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
                                     Work Description
                                   </p>
-                                  <p className="text-[11px] text-slate-700 whitespace-pre-wrap">
+                                  <p className="text-xs text-slate-700 whitespace-pre-wrap">
                                     {entry.description}
                                   </p>
                                 </div>
                               )}
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
                                 Time Blocks
                               </p>
                               {renderHistoryTimeBlocks(entry)}
@@ -1453,12 +1451,12 @@ const Worklog = () => {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="px-4 py-3 bg-gradient-to-r from-purple-50 to-white border-b border-purple-100 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
                   <Ticket size={12} className="text-purple-600" />
                 </div>
                 <div>
-                  <p className="text-[11px] font-black text-slate-800">Tickets Worked On</p>
-                  <p className="text-[8px] text-slate-500">
+                  <p className="text-xs font-semibold text-slate-800">Tickets Worked On</p>
+                  <p className="text-xs text-slate-500">
                     {tickets.length} ticket{tickets.length !== 1 ? 's' : ''} · {' '}
                     {formatDurationFromSeconds(tickets.reduce((s, t) => s + t.seconds, 0))} total
                   </p>
@@ -1466,15 +1464,15 @@ const Worklog = () => {
               </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="table-scroll table-sticky-first overflow-x-auto">
+              <table className="w-full min-w-[600px]">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Ticket</th>
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Time</th>
-                    <th className="text-left px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500">Sessions</th>
-                    <th className="text-right px-4 py-2 text-[9px] font-black uppercase tracking-wider text-slate-500"></th>
+                    <th className="th">Ticket</th>
+                    <th className="th">Project</th>
+                    <th className="th">Time</th>
+                    <th className="th">Sessions</th>
+                    <th className="th text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1486,38 +1484,38 @@ const Worklog = () => {
                           onClick={() => setExpandedHistoryRow(isExpanded ? null : `ticket-${entry.ticketId}`)}
                           className="border-b border-slate-100 hover:bg-slate-50/70 cursor-pointer transition-all"
                         >
-                          <td className="px-4 py-2.5">
+                          <td className="td">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <Ticket size={11} className="text-slate-400" />
-                              <span className="text-xs font-bold text-slate-800">
+                              <Ticket size={12} className="text-slate-400" />
+                              <span className="text-xs font-semibold text-slate-800">
                                 #{entry.ticketNumber} — {entry.ticketTitle}
                               </span>
                               {entry.stoppedBySystem && (
-                                <span className="text-[7px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase">
+                                <span className="badge rounded-full bg-slate-200 text-slate-600">
                                   System
                                 </span>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-[10px] font-medium text-slate-600">
+                          <td className="td">
+                            <span className="text-xs font-medium text-slate-600">
                               {entry.projectCustomId || entry.projectName}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5">
+                          <td className="td">
                             <div className="flex items-center gap-1.5">
-                              <Clock3 size={11} className="text-purple-500" />
-                              <span className="text-xs font-black text-purple-700 font-mono">
+                              <Clock3 size={12} className="text-purple-500" />
+                              <span className="text-xs font-semibold text-purple-700 font-mono">
                                 {formatDurationFromSeconds(entry.seconds)}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-2.5">
-                            <span className="text-[10px] font-bold text-slate-500">
+                          <td className="td">
+                            <span className="text-xs font-semibold text-slate-500">
                               {entry.timeBlocks?.length || 0}
                             </span>
                           </td>
-                          <td className="px-4 py-2.5 text-right">
+                          <td className="td text-right">
                             {isExpanded ? (
                               <ChevronUp size={14} className="inline text-slate-400" />
                             ) : (
@@ -1528,18 +1526,18 @@ const Worklog = () => {
 
                         {isExpanded && (
                           <tr className="bg-slate-50/50">
-                            <td colSpan={5} className="px-4 py-3">
+                            <td colSpan={5} className="td">
                               {entry.description && (
                                 <div className="mb-3 bg-white border border-slate-200 rounded-lg p-3">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
                                     Work Description
                                   </p>
-                                  <p className="text-[11px] text-slate-700 whitespace-pre-wrap">
+                                  <p className="text-xs text-slate-700 whitespace-pre-wrap">
                                     {entry.description}
                                   </p>
                                 </div>
                               )}
-                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">
+                              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5">
                                 Time Blocks
                               </p>
                               {renderHistoryTimeBlocks(entry)}
@@ -1559,25 +1557,25 @@ const Worklog = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
 
       {/* HEADER */}
-      <div className="mb-6">
-        <div className="flex justify-between items-start">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between items-start gap-3">
           <div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+            <h1 className="page-title">
               Worklog
             </h1>
-            <p className="text-[10px] uppercase tracking-[0.35em] font-black text-blue-600 mt-1">
+            <p className="text-xs uppercase tracking-wide font-semibold text-blue-600 mt-1">
               Time Tracking (Overlap-Aware)
             </p>
           </div>
 
-          <div className="flex flex-col items-end gap-2">
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm text-right">
+          <div className="flex flex-col items-start sm:items-end gap-2">
+            <div className="bg-white/80 backdrop-blur-sm rounded-xl px-4 py-2 border border-slate-200 shadow-sm sm:text-right">
               <div className="flex items-center gap-2">
                 <Globe size={12} className="text-blue-500" />
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider">IST (Server-Corrected)</span>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">IST (Server-Corrected)</span>
               </div>
               <p className="text-sm font-mono font-bold text-slate-700">{getCurrentISTTime()}</p>
             </div>
@@ -1589,8 +1587,8 @@ const Worklog = () => {
       {serverSyncStatus.synced && Math.abs(serverSyncStatus.offsetMs) > 1000 && (
         <div className="mb-4 p-2 bg-blue-50/50 border border-blue-200/50 rounded-lg">
           <div className="flex items-center gap-2">
-            <Info size={12} className="text-blue-500" />
-            <p className="text-[8px] text-blue-600">
+            <Info size={12} className="text-blue-500 shrink-0" />
+            <p className="text-xs text-blue-600">
               Server time offset detected: {Math.abs(serverSyncStatus.offsetMs) >= 1000
                 ? `${(Math.abs(serverSyncStatus.offsetMs) / 1000).toFixed(1)}s`
                 : `${Math.abs(serverSyncStatus.offsetMs)}ms`}
@@ -1601,11 +1599,11 @@ const Worklog = () => {
 
       {/* BREAK BUTTON */}
       {selectedTab !== 'history' && (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
           <button
             onClick={handleBreak}
             disabled={isStoppingAll || activeRunningCount === 0}
-            className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black uppercase text-xs tracking-wider transition-all shadow-md ${
+            className={`btn btn-md shadow-md ${
               isBreakMode
                 ? 'bg-green-500 text-white shadow-green-200'
                 : isStoppingAll || activeRunningCount === 0
@@ -1630,58 +1628,58 @@ const Worklog = () => {
               </>
             )}
           </button>
-          <span className="text-[8px] text-slate-400 ml-3">
+          <span className="text-xs text-slate-400">
             {activeRunningCount === 0 ? 'No timers running' : `Stops ${activeRunningCount} running timer(s)`}
           </span>
         </div>
       )}
 
       {/* STATS BAR */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 mb-4 sm:mb-6">
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
               <Timer size={14} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Actual Time</p>
-              <p className="text-sm font-black text-blue-700 font-mono">{formatTimeWithSeconds(actualWorkingTime)}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Actual Time</p>
+              <p className="text-sm font-semibold text-blue-700 font-mono">{formatTimeWithSeconds(actualWorkingTime)}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
               <AlertCircle size={14} className="text-amber-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Overlap</p>
-              <p className="text-sm font-black text-amber-700 font-mono">{formatTimeWithSeconds(overlapTime)}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Overlap</p>
+              <p className="text-sm font-semibold text-amber-700 font-mono">{formatTimeWithSeconds(overlapTime)}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
               <Activity size={14} className="text-emerald-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Active Timers</p>
-              <p className="text-sm font-black text-emerald-600">{activeRunningCount}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Active Timers</p>
+              <p className="text-sm font-semibold text-emerald-600">{activeRunningCount}</p>
             </div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
               <Ticket size={14} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">Ticket Timers</p>
-              <p className="text-sm font-black text-purple-600">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Ticket Timers</p>
+              <p className="text-sm font-semibold text-purple-600">
                 {ticketLogs.filter(item => item.worklog?.isRunning).length}
               </p>
             </div>
@@ -1693,10 +1691,10 @@ const Worklog = () => {
       {activeRunningCount > 1 && selectedTab !== 'history' && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="flex items-start gap-2">
-            <Info size={14} className="text-blue-600 mt-0.5" />
+            <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
             <div>
-              <p className="text-[9px] font-black text-blue-700">Multiple timers running simultaneously</p>
-              <p className="text-[8px] text-blue-600 mt-0.5">
+              <p className="text-xs font-semibold text-blue-700">Multiple timers running simultaneously</p>
+              <p className="text-xs text-blue-600 mt-0.5">
                 Time is counted only once in "Actual Time" (overlapping periods are merged using server timestamps)
               </p>
             </div>
@@ -1705,9 +1703,9 @@ const Worklog = () => {
       )}
 
       {/* TABS */}
-      <div className="flex gap-2 mb-6 border-b border-slate-200">
+      <div className="flex sm:gap-2 overflow-x-auto border-b border-slate-200 mb-4 sm:mb-6">
         <button
-          className={`px-6 py-3 text-sm font-black uppercase tracking-wider transition-all border-b-2 ${
+          className={`shrink-0 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-semibold uppercase tracking-wide transition-all border-b-2 ${
             selectedTab === 'feeds'
               ? 'border-blue-600 text-blue-600'
               : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1717,13 +1715,13 @@ const Worklog = () => {
           <div className="flex items-center gap-2">
             <Activity size={16} />
             Feeds
-            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full">
+            <span className="badge rounded-full bg-slate-100">
               {logs.length}
             </span>
           </div>
         </button>
         <button
-          className={`px-6 py-3 text-sm font-black uppercase tracking-wider transition-all border-b-2 ${
+          className={`shrink-0 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-semibold uppercase tracking-wide transition-all border-b-2 ${
             selectedTab === 'tickets'
               ? 'border-purple-600 text-purple-600'
               : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1733,13 +1731,13 @@ const Worklog = () => {
           <div className="flex items-center gap-2">
             <Ticket size={16} />
             Tickets
-            <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded-full">
+            <span className="badge rounded-full bg-slate-100">
               {ticketLogs.length}
             </span>
           </div>
         </button>
         <button
-          className={`px-6 py-3 text-sm font-black uppercase tracking-wider transition-all border-b-2 ${
+          className={`shrink-0 px-2.5 sm:px-6 py-3 text-xs sm:text-sm font-semibold uppercase tracking-wide transition-all border-b-2 ${
             selectedTab === 'history'
               ? 'border-slate-800 text-slate-800'
               : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -1759,26 +1757,26 @@ const Worklog = () => {
       {selectedTab === 'history' && (
         <>
           {/* Date Picker */}
-          <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+          <div className="card mb-4 sm:mb-6">
             <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-3">
               <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
-                    <Calendar size={11} /> Select Date
+                  <label className="label mb-1.5 flex items-center gap-1">
+                    <Calendar size={12} /> Select Date
                   </label>
                   <input
                     type="date"
                     value={historyDate}
                     max={new Date().toISOString().split('T')[0]}
                     onChange={(e) => setHistoryDate(e.target.value)}
-                    className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-slate-800 bg-slate-50"
+                    className="input sm:w-auto bg-slate-50"
                   />
                 </div>
 
                 <button
                   onClick={() => fetchHistory(historyDate)}
                   disabled={historyLoading}
-                  className="h-10 rounded-lg bg-slate-900 text-white px-5 font-black text-xs uppercase tracking-wider hover:bg-blue-600 transition-all disabled:opacity-50 flex items-center gap-2"
+                  className="btn btn-md bg-slate-900 text-white hover:bg-blue-600 disabled:opacity-50"
                 >
                   {historyLoading ? (
                     <RefreshCw size={14} className="animate-spin" />
@@ -1789,7 +1787,7 @@ const Worklog = () => {
                 </button>
               </div>
 
-              <p className="text-[9px] text-slate-400 font-medium">
+              <p className="text-xs text-slate-400 font-medium">
                 Showing entries where time was actually logged on the selected date.
               </p>
             </div>
@@ -1808,12 +1806,12 @@ const Worklog = () => {
           ======================================== */}
       {selectedTab === 'feeds' && (
         <>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+          <div className="card mb-4 sm:mb-6">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
+                className="input bg-slate-50 cursor-pointer"
               >
                 <option value="all">All Projects</option>
                 {projects.map(project => (
@@ -1828,14 +1826,14 @@ const Worklog = () => {
                   placeholder="Search feed..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-slate-200 pl-9 pr-4 font-medium text-sm outline-none focus:border-blue-500 bg-slate-50"
+                  className="input pl-9 bg-slate-50"
                 />
               </div>
 
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
+                className="input bg-slate-50 cursor-pointer"
               >
                 <option value="all">All Status</option>
                 <option value="running">Running</option>
@@ -1845,7 +1843,7 @@ const Worklog = () => {
 
               <button
                 onClick={() => { setSelectedProject('all'); setSearchTerm(''); setStatusFilter('all'); handleManualRefresh(); }}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                className="btn btn-md border border-slate-200 text-slate-500 hover:bg-slate-50"
               >
                 <X size={12} />
                 Reset Filters
@@ -1854,22 +1852,22 @@ const Worklog = () => {
           </div>
 
           {loading ? (
-            <div className="flex justify-center py-20 text-slate-400 font-black">LOADING WORKLOGS...</div>
+            <div className="flex justify-center py-20 text-slate-400 font-bold">LOADING WORKLOGS...</div>
           ) : filteredLogs.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 font-bold">
               No feeds found.
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="table-scroll table-sticky-first overflow-x-auto">
+                <table className="w-full min-w-[600px]">
                   <thead>
                     <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Individual Time</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                      <th className="th">Feed</th>
+                      <th className="th">Project</th>
+                      <th className="th">Individual Time</th>
+                      <th className="th">Status</th>
+                      <th className="th text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1893,70 +1891,70 @@ const Worklog = () => {
 
                       return (
                         <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'}`}>
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 ${worklog.isRunning ? 'bg-emerald-100 animate-pulse' : 'bg-slate-100'}`}>
                                 <Hash size={12} className={worklog.isRunning ? 'text-emerald-600' : 'text-slate-400'} />
                               </div>
-                              <span className="text-sm font-bold text-slate-800">{feed.name}</span>
+                              <span className="text-sm font-bold text-slate-800 max-w-full break-words">{feed.name}</span>
                               {hasTodayLog && (
-                                <span className="text-[8px] font-black bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1">
-                                  <CheckCircle size={8} />
+                                <span className="badge rounded-full bg-blue-100 text-blue-600">
+                                  <CheckCircle size={12} />
                                   Logged
                                 </span>
                               )}
                               {worklog.stoppedBySystem && (
                                 <span
-                                  className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1"
+                                  className="badge rounded-full bg-slate-200 text-slate-600"
                                   title="This timer was automatically stopped by the system at 11:55 PM"
                                 >
-                                  <AlertTriangle size={8} />
+                                  <AlertTriangle size={12} />
                                   System
                                 </span>
                               )}
                               {isLongRunning && (
-                                <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase flex items-center gap-1 animate-pulse">
-                                  <Coffee size={8} />
+                                <span className="badge rounded-full bg-amber-100 text-amber-700 animate-pulse">
+                                  <Coffee size={12} />
                                   Long Run
                                 </span>
                               )}
                             </div>
                           </td>
 
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center gap-1.5">
-                              <Briefcase size={10} className="text-slate-400" />
+                              <Briefcase size={12} className="text-slate-400" />
                               <span className="text-xs font-medium text-slate-600">{feed.projectId?.name || 'Unknown'}</span>
                             </div>
                           </td>
 
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center gap-1.5">
                               <Clock3 size={12} className="text-blue-500" />
-                              <span className="text-sm font-black text-blue-700 font-mono">
+                              <span className="text-sm font-semibold text-blue-700 font-mono whitespace-nowrap">
                                 {formatTimeWithSeconds(feedTime)}
                               </span>
                               {worklog.isRunning && (
-                                <span className="text-[7px] font-black bg-emerald-100 text-emerald-600 px-1 py-0.5 rounded uppercase">
+                                <span className="badge bg-emerald-100 text-emerald-600">
                                   live
                                 </span>
                               )}
                             </div>
                           </td>
 
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusData.bg} ${statusData.text} ${statusData.border}`}>
+                          <td className="td">
+                            <span className={`badge border ${statusData.bg} ${statusData.text} ${statusData.border}`}>
                               {statusData.icon}
                               {statusData.label}
                             </span>
                           </td>
 
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => startTimer(feed._id)}
                                 disabled={worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:shadow-md'}`}
+                                className={`btn-icon ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white hover:shadow-md'}`}
                                 title="Start Timer"
                               >
                                 <Play size={12} />
@@ -1965,7 +1963,7 @@ const Worklog = () => {
                               <button
                                 onClick={() => pauseTimer(feed._id)}
                                 disabled={!worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
+                                className={`btn-icon ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
                                 title="Pause Timer"
                               >
                                 <Pause size={12} />
@@ -1973,7 +1971,7 @@ const Worklog = () => {
 
                               <button
                                 onClick={() => stopTimer(feed._id)}
-                                className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                                className="btn-icon bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white hover:shadow-md"
                                 title="Stop Timer"
                               >
                                 <Square size={12} />
@@ -1984,7 +1982,7 @@ const Worklog = () => {
                               {!hasTodayLog ? (
                                 <button
                                   onClick={() => openLogModal(feed, todayDescription, false)}
-                                  className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                                  className="btn-icon bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white hover:shadow-md"
                                   title="Log Today's Work"
                                 >
                                   <FileText size={12} />
@@ -1992,7 +1990,7 @@ const Worklog = () => {
                               ) : (
                                 <button
                                   onClick={() => openLogModal(feed, todayDescription, true)}
-                                  className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                                  className="btn-icon bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md"
                                   title="Edit Today's Log"
                                 >
                                   <Pencil size={12} />
@@ -2016,7 +2014,7 @@ const Worklog = () => {
           ======================================== */}
       {selectedTab === 'tickets' && (
         <>
-          <div className="bg-white border border-slate-200 rounded-xl p-4 mb-6 shadow-sm">
+          <div className="card mb-4 sm:mb-6">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
               <div className="relative">
                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -2025,14 +2023,14 @@ const Worklog = () => {
                   placeholder="Search tickets by title or number..."
                   value={ticketSearchTerm}
                   onChange={(e) => setTicketSearchTerm(e.target.value)}
-                  className="w-full h-10 rounded-lg border border-slate-200 pl-9 pr-4 font-medium text-sm outline-none focus:border-purple-500 bg-slate-50"
+                  className="input pl-9 bg-slate-50"
                 />
               </div>
 
               <select
                 value={ticketStatusFilter}
                 onChange={(e) => setTicketStatusFilter(e.target.value)}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm outline-none focus:border-purple-500 bg-slate-50 cursor-pointer"
+                className="input bg-slate-50 cursor-pointer"
               >
                 <option value="all">All Status</option>
                 <option value="running">Running</option>
@@ -2042,7 +2040,7 @@ const Worklog = () => {
 
               <button
                 onClick={() => { setTicketSearchTerm(''); setTicketStatusFilter('all'); handleManualRefresh(); }}
-                className="h-10 rounded-lg border border-slate-200 px-4 font-semibold text-sm text-slate-500 hover:bg-slate-50 transition-all flex items-center justify-center gap-2"
+                className="btn btn-md border border-slate-200 text-slate-500 hover:bg-slate-50"
               >
                 <X size={12} />
                 Reset Filters
@@ -2051,7 +2049,7 @@ const Worklog = () => {
           </div>
 
           {ticketLoading ? (
-            <div className="flex justify-center py-20 text-slate-400 font-black">LOADING TICKETS...</div>
+            <div className="flex justify-center py-20 text-slate-400 font-bold">LOADING TICKETS...</div>
           ) : filteredTicketLogs.length === 0 ? (
             <div className="bg-white border border-slate-200 rounded-xl p-10 text-center text-slate-400 font-bold">
               {ticketLogs.length === 0
@@ -2060,14 +2058,14 @@ const Worklog = () => {
             </div>
           ) : (
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="table-scroll table-sticky-first overflow-x-auto">
+                <table className="w-full min-w-[480px]">
                   <thead>
                     <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Ticket</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Time</th>
-                      <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                      <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                      <th className="th">Ticket</th>
+                      <th className="th">Time</th>
+                      <th className="th">Status</th>
+                      <th className="th text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -2090,9 +2088,9 @@ const Worklog = () => {
 
                       return (
                         <tr key={ticket._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all duration-200 group">
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center gap-2">
-                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all ${worklog.isRunning ? 'bg-purple-100 animate-pulse' : 'bg-slate-100'}`}>
+                              <div className={`w-7 h-7 rounded-lg flex items-center justify-center transition-all shrink-0 ${worklog.isRunning ? 'bg-purple-100 animate-pulse' : 'bg-slate-100'}`}>
                                 <Ticket size={12} className={worklog.isRunning ? 'text-purple-600' : 'text-slate-400'} />
                               </div>
                               <div className="min-w-0">
@@ -2102,22 +2100,22 @@ const Worklog = () => {
                                   </span>
                                   {worklog.stoppedBySystem && (
                                     <span
-                                      className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase inline-flex items-center gap-1"
+                                      className="badge rounded-full bg-slate-200 text-slate-600"
                                       title="This timer was automatically stopped by the system at 11:55 PM"
                                     >
-                                      <AlertTriangle size={8} />
+                                      <AlertTriangle size={12} />
                                       System
                                     </span>
                                   )}
                                   {isLongRunning && (
-                                    <span className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase animate-pulse inline-flex items-center gap-1">
-                                      <Coffee size={8} />
+                                    <span className="badge rounded-full bg-amber-100 text-amber-700 animate-pulse">
+                                      <Coffee size={12} />
                                       Long Run
                                     </span>
                                   )}
                                 </div>
                                 {hasDescription && (
-                                  <p className="text-[8px] text-slate-500 truncate max-w-[220px] mt-0.5">
+                                  <p className="text-xs text-slate-500 md:truncate md:max-w-[220px] mt-0.5">
                                     {worklog.description}
                                   </p>
                                 )}
@@ -2125,33 +2123,33 @@ const Worklog = () => {
                             </div>
                           </td>
 
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center gap-1.5">
                               <Clock3 size={12} className="text-purple-500" />
-                              <span className="text-sm font-black text-purple-700 font-mono">
+                              <span className="text-sm font-semibold text-purple-700 font-mono whitespace-nowrap">
                                 {formatTimeWithSeconds(ticketTime)}
                               </span>
                               {worklog.isRunning && (
-                                <span className="text-[7px] font-black bg-purple-100 text-purple-600 px-1 py-0.5 rounded uppercase">
+                                <span className="badge bg-purple-100 text-purple-600">
                                   live
                                 </span>
                               )}
                             </div>
                           </td>
 
-                          <td className="px-4 py-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-wider border ${statusData.bg} ${statusData.text} ${statusData.border}`}>
+                          <td className="td">
+                            <span className={`badge border ${statusData.bg} ${statusData.text} ${statusData.border}`}>
                               {statusData.icon}
                               {statusData.label}
                             </span>
                           </td>
 
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center justify-end gap-1">
                               <button
                                 onClick={() => startTicketTimer(ticket._id)}
                                 disabled={worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white hover:shadow-md'}`}
+                                className={`btn-icon ${worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white hover:shadow-md'}`}
                                 title="Start Timer"
                               >
                                 <Play size={12} />
@@ -2160,7 +2158,7 @@ const Worklog = () => {
                               <button
                                 onClick={() => pauseTicketTimer(ticket._id)}
                                 disabled={!worklog.isRunning}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
+                                className={`btn-icon ${!worklog.isRunning ? 'bg-slate-100 text-slate-300 cursor-not-allowed' : 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white hover:shadow-md'}`}
                                 title="Pause Timer"
                               >
                                 <Pause size={12} />
@@ -2168,7 +2166,7 @@ const Worklog = () => {
 
                               <button
                                 onClick={() => stopTicketTimer(ticket._id)}
-                                className="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all duration-200 hover:shadow-md"
+                                className="btn-icon bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white hover:shadow-md"
                                 title="Stop Timer"
                               >
                                 <Square size={12} />
@@ -2178,7 +2176,7 @@ const Worklog = () => {
 
                               <button
                                 onClick={() => openTicketLogModal(ticket, worklog, hasDescription)}
-                                className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 hover:shadow-md ${
+                                className={`btn-icon hover:shadow-md ${
                                   hasDescription
                                     ? 'bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white'
                                     : 'bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white'
@@ -2204,38 +2202,38 @@ const Worklog = () => {
           FEED DESCRIPTION MODAL
           ======================================== */}
       {showLogModal && (
-        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between">
+        <div className="modal-backdrop animate-in fade-in duration-200">
+          <div className="modal-panel max-w-2xl animate-in zoom-in-95 duration-200">
+            <div className="modal-header">
               <div>
-                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-blue-600 mb-1">Daily Work Entry</p>
-                <h2 className="text-xl font-black text-slate-900">
+                <p className="text-xs uppercase tracking-wide font-semibold text-blue-600 mb-1">Daily Work Entry</p>
+                <h2 className="section-title">
                   {isEditingLog ? "Edit Today's Work" : "Log Today's Work"}
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 font-medium">{selectedFeed?.name}</p>
               </div>
-              <button onClick={closeModal} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all">
+              <button onClick={closeModal} className="btn-icon bg-slate-100 hover:bg-slate-200">
                 <X size={14} />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="modal-body">
               {isEditingLog && selectedFeedDescription?.description && (
                 <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle size={12} className="text-amber-600" />
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Current Description</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Current Description</p>
                   </div>
                   <div className="text-xs whitespace-pre-wrap text-slate-700 max-h-32 overflow-y-auto bg-white p-3 rounded-lg">
                     {selectedFeedDescription.description}
                   </div>
-                  <p className="text-[8px] text-amber-600 mt-2 italic">
+                  <p className="text-xs text-amber-600 mt-2 italic">
                     This will be replaced with your new description below
                   </p>
                 </div>
               )}
 
-              <label className="text-[9px] uppercase tracking-[0.25em] font-black text-slate-500 block mb-2">
+              <label className="label block mb-1.5">
                 {isEditingLog ? 'New Description' : 'What did you work on today?'}
               </label>
 
@@ -2244,17 +2242,17 @@ const Worklog = () => {
                 value={workDescription}
                 onChange={(e) => setWorkDescription(e.target.value)}
                 placeholder="Describe frontend work, backend APIs, fixes, testing, deployment, meetings, integrations, etc..."
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 outline-none resize-none text-sm font-medium focus:border-blue-500 focus:bg-white transition-all"
+                className="input bg-slate-50 resize-none"
               />
 
               <div className="flex justify-end gap-3 mt-6">
-                <button onClick={closeModal} className="px-5 h-9 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-100 transition-all">
+                <button onClick={closeModal} className="btn btn-md border border-slate-200 text-slate-600 hover:bg-slate-100">
                   Cancel
                 </button>
                 <button
                   onClick={saveWorkDescription}
                   disabled={submittingLog}
-                  className="px-5 h-9 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+                  className="btn btn-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {submittingLog ? (
                     <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>
@@ -2272,29 +2270,29 @@ const Worklog = () => {
           TICKET DESCRIPTION MODAL
           ======================================== */}
       {showTicketLogModal && selectedTicket && (
-        <div className="fixed inset-0 z-[200] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
-          <div className="w-full max-w-2xl bg-white rounded-xl shadow-2xl border border-slate-200 overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-start justify-between">
+        <div className="modal-backdrop animate-in fade-in duration-200">
+          <div className="modal-panel max-w-2xl animate-in zoom-in-95 duration-200">
+            <div className="modal-header">
               <div>
-                <p className="text-[9px] uppercase tracking-[0.35em] font-black text-purple-600 mb-1">Ticket Work Entry</p>
-                <h2 className="text-xl font-black text-slate-900">
+                <p className="text-xs uppercase tracking-wide font-semibold text-purple-600 mb-1">Ticket Work Entry</p>
+                <h2 className="section-title">
                   {isEditingTicketLog ? "Edit Ticket Description" : "Add Ticket Description"}
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 font-medium">
                   #{selectedTicket.ticketNumber} - {selectedTicket.title}
                 </p>
               </div>
-              <button onClick={closeTicketModal} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-all">
+              <button onClick={closeTicketModal} className="btn-icon bg-slate-100 hover:bg-slate-200">
                 <X size={14} />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="modal-body">
               {isEditingTicketLog && selectedTicket.worklog?.description && (
                 <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <AlertCircle size={12} className="text-amber-600" />
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-700">Current Description</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Current Description</p>
                   </div>
                   <div className="text-xs whitespace-pre-wrap text-slate-700 max-h-32 overflow-y-auto bg-white p-3 rounded-lg">
                     {selectedTicket.worklog.description}
@@ -2302,7 +2300,7 @@ const Worklog = () => {
                 </div>
               )}
 
-              <label className="text-[9px] uppercase tracking-[0.25em] font-black text-slate-500 block mb-2">
+              <label className="label block mb-1.5">
                 {isEditingTicketLog ? 'Update Description' : 'What work did you do on this ticket?'}
               </label>
 
@@ -2311,17 +2309,17 @@ const Worklog = () => {
                 value={ticketDescription}
                 onChange={(e) => setTicketDescription(e.target.value)}
                 placeholder="Describe the work done on this ticket..."
-                className="w-full rounded-lg border border-slate-200 bg-slate-50 p-4 outline-none resize-none text-sm font-medium focus:border-purple-500 focus:bg-white transition-all"
+                className="input bg-slate-50 resize-none"
               />
 
               <div className="flex justify-end gap-3 mt-6">
-                <button onClick={closeTicketModal} className="px-5 h-9 rounded-lg border border-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-[0.2em] hover:bg-slate-100 transition-all">
+                <button onClick={closeTicketModal} className="btn btn-md border border-slate-200 text-slate-600 hover:bg-slate-100">
                   Cancel
                 </button>
                 <button
                   onClick={saveTicketDescription}
                   disabled={submittingTicketLog}
-                  className="px-5 h-9 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-[10px] font-black uppercase tracking-[0.2em] hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100 flex items-center gap-2"
+                  className="btn btn-md bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:scale-[1.02] transition-all disabled:opacity-50 disabled:hover:scale-100"
                 >
                   {submittingTicketLog ? (
                     <><div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />Saving...</>

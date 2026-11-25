@@ -185,11 +185,11 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-      <div className="bg-slate-900 border border-white/10 w-full max-w-2xl rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-6">
+    <div className="modal-backdrop bg-slate-950/80 backdrop-blur-md">
+      <div className="modal-panel dark-panel !overflow-y-auto block max-w-2xl p-4 sm:p-6 bg-slate-900 border border-white/10">
+        <div className="flex items-center justify-between mb-4 sm:mb-6">
           <div>
-            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+            <h3 className="section-title text-white flex items-center gap-2">
               <User size={20} className="text-blue-400" />
               Update Profile
             </h3>
@@ -197,7 +197,7 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-800 transition-colors text-slate-400 hover:text-white"
+            className="btn-icon hover:bg-slate-800 text-slate-400 hover:text-white"
           >
             <X size={20} />
           </button>
@@ -228,7 +228,7 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                 </div>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="absolute bottom-0 right-0 p-1.5 bg-blue-600 rounded-full hover:bg-blue-700 transition-all shadow-lg"
+                  className="btn-icon absolute bottom-0 right-0 bg-blue-600 hover:bg-blue-700 shadow-lg rounded-full"
                   title="Change profile picture"
                 >
                   <Camera size={14} className="text-white" />
@@ -249,27 +249,27 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   Remove photo
                 </button>
               )}
-              <p className="text-[10px] text-slate-500 mt-1">Click the camera icon to change</p>
+              <p className="text-xs text-slate-500 mt-1">Click the camera icon to change</p>
             </div>
 
             {/* Profile Fields - Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {/* Full Name */}
               <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   Full Name
                 </label>
                 <input
                   type="text"
                   value={profileData.name}
                   onChange={(e) => setProfileData(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all"
+                  className="input bg-slate-800"
                 />
               </div>
 
               {/* Phone Number */}
               <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   <Phone size={12} className="inline mr-1" />
                   Phone Number
                 </label>
@@ -277,14 +277,14 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   type="tel"
                   value={profileData.phoneNumber}
                   onChange={(e) => setProfileData(prev => ({ ...prev, phoneNumber: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all"
+                  className="input bg-slate-800"
                   placeholder="e.g., +91 98765 43210"
                 />
               </div>
 
               {/* Date of Joining */}
               <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   <CalendarIcon size={12} className="inline mr-1" />
                   Date of Joining
                 </label>
@@ -292,13 +292,13 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   type="date"
                   value={profileData.dateOfJoining}
                   onChange={(e) => setProfileData(prev => ({ ...prev, dateOfJoining: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all"
+                  className="input bg-slate-800"
                 />
               </div>
 
               {/* Date of Birth */}
               <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   <CalendarIcon size={12} className="inline mr-1" />
                   Date of Birth
                 </label>
@@ -306,13 +306,13 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   type="date"
                   value={profileData.dateOfBirth}
                   onChange={(e) => setProfileData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all"
+                  className="input bg-slate-800"
                 />
               </div>
 
               {/* Contact Number */}
               <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   <Phone size={12} className="inline mr-1" />
                   Contact Number
                 </label>
@@ -320,15 +320,15 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   type="tel"
                   value={profileData.contactNumber}
                   onChange={(e) => setProfileData(prev => ({ ...prev, contactNumber: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all"
+                  className="input bg-slate-800"
                   placeholder="Personal contact number"
                 />
-                <p className="text-[7px] text-slate-500 mt-0.5">Personal contact number</p>
+                <p className="text-xs text-slate-500 mt-0.5">Personal contact number</p>
               </div>
 
               {/* Emergency Contact */}
               <div>
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   <AlertCircle size={12} className="inline mr-1" />
                   Emergency Contact
                 </label>
@@ -336,15 +336,15 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   type="tel"
                   value={profileData.emergencyContact}
                   onChange={(e) => setProfileData(prev => ({ ...prev, emergencyContact: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all"
+                  className="input bg-slate-800"
                   placeholder="e.g., +91 98765 43210 (Name)"
                 />
-                <p className="text-[7px] text-slate-500 mt-0.5">Name and contact number of emergency contact person</p>
+                <p className="text-xs text-slate-500 mt-0.5">Name and contact number of emergency contact person</p>
               </div>
 
               {/* Address - Full width */}
               <div className="md:col-span-2">
-                <label className="text-[10px] font-bold uppercase text-slate-400 block mb-1">
+                <label className="label block mb-1.5">
                   <MapPin size={12} className="inline mr-1" />
                   Address
                 </label>
@@ -352,7 +352,7 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
                   rows={2}
                   value={profileData.address}
                   onChange={(e) => setProfileData(prev => ({ ...prev, address: e.target.value }))}
-                  className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl outline-none text-sm text-white focus:border-blue-500 transition-all resize-none"
+                  className="input bg-slate-800 resize-none"
                   placeholder="Enter your full address"
                 />
               </div>
@@ -362,14 +362,14 @@ const UpdateProfileModal = ({ isOpen, onClose, userId, currentImage, onProfileUp
             <div className="flex gap-3 pt-4 border-t border-slate-800">
               <button
                 onClick={onClose}
-                className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold text-sm hover:bg-slate-700 transition-all"
+                className="btn btn-md flex-1 bg-slate-800 text-slate-300 hover:bg-slate-700"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                className="btn btn-md flex-1 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {saving ? (
                   <><Loader2 size={16} className="animate-spin" /> Saving...</>

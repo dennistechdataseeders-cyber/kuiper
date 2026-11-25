@@ -5,7 +5,6 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Mail, Phone, Building2, Search, Star, ArrowLeft, Loader2, UserPlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import Pagination from '../components/Pagination';
 import AddContactModal from '../components/AddContactModal';
 import AddAccountModal from '../components/AddAccountModal';
@@ -39,7 +38,6 @@ const CONTACT_SYSTEM_FILTERS = [
 ];
 
 export default function Contacts() {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const accountId = params.get('accountId');
@@ -163,15 +161,15 @@ export default function Contacts() {
       getValue: (r) => `${r.firstName || ''} ${r.lastName || ''}`.trim(),
       render: (row) => (
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">
+          <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-semibold shrink-0">
             {row.firstName?.charAt(0)}{row.lastName?.charAt(0)}
           </div>
           <span className="font-bold text-slate-800 truncate">
             {row.firstName} {row.lastName}
           </span>
           {row.isPrimary && (
-            <span className="inline-flex items-center gap-1 text-[9px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full ml-1 shrink-0">
-              <Star size={8} fill="currentColor" /> Primary
+            <span className="badge rounded-full bg-amber-100 text-amber-700 ml-1 shrink-0">
+              <Star size={12} fill="currentColor" /> Primary
             </span>
           )}
         </div>
@@ -256,42 +254,42 @@ export default function Contacts() {
   const activeAccount = leads.find(l => l._id === accountId)?.companyName;
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+    <div className="page bg-slate-50">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 sm:mb-6">
         <div className="flex items-center gap-3">
           {accountId && (
-            <button onClick={() => navigate('/sales/contacts')} className="p-2 bg-white rounded-lg shadow-sm border hover:bg-slate-100 transition">
+            <button onClick={() => navigate('/sales/contacts')} className="btn-icon bg-white shadow-sm border hover:bg-slate-100">
               <ArrowLeft size={16} />
             </button>
           )}
           <div>
-            <h1 className="text-2xl font-black text-slate-800">
+            <h1 className="page-title">
               {accountId ? `Contacts: ${activeAccount ?? ''}` : 'All Contacts'}
             </h1>
             <p className="text-sm text-slate-500">Points of Contact across all Accounts</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
-          <div className="relative flex-1 sm:w-72">
+          <div className="relative flex-1 basis-48 lg:w-72">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search contacts..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 shadow-sm"
+              className="input pl-10"
             />
           </div>
           <button
             onClick={() => setShowAddContact(true)}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-blue-700 transition whitespace-nowrap"
+            className="btn btn-md bg-blue-600 text-white shadow-sm hover:bg-blue-700"
           >
             <UserPlus size={14} /> Add Contact
           </button>
           <button
             onClick={() => setShowAddAccount(true)}
-            className="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-bold shadow-sm hover:bg-slate-50 transition whitespace-nowrap"
+            className="btn btn-md bg-white border border-slate-200 text-slate-600 shadow-sm hover:bg-slate-50"
           >
             + Add Account
           </button>
@@ -316,7 +314,7 @@ export default function Contacts() {
         <ColumnToolbar ct={ct} className="flex-1" />
       </div>
       <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        <div className="table-scroll overflow-x-auto">
           <table className="w-full text-left min-w-[900px]">
             <ColumnHead ct={ct} />
             <tbody className="divide-y divide-slate-100">
@@ -330,7 +328,7 @@ export default function Contacts() {
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
-                <tr><td colSpan={colCount} className="text-center py-10 text-slate-400">No contacts found.</td></tr>
+                <tr><td colSpan={colCount} className="py-10"><p className="text-center text-sm text-slate-400">No contacts found.</p></td></tr>
               ) : (
                 pagedRows.map((row) => (
                   <tr
@@ -339,7 +337,7 @@ export default function Contacts() {
                     className={`hover:bg-slate-50 transition group ${row.pocId ? 'cursor-pointer' : ''} ${sel.isSelected(row._id) ? 'bg-blue-50/60' : ''}`}
                   >
                     {ct.visibleColumns.map((col) => (
-                      <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'px-6 py-4'} ${col.tdClass || ''}`)}>
+                      <td key={col.key} {...ct.cellProps(col, `${col.tdBase || 'td'} ${col.tdClass || ''}`)}>
                         {col.render(row)}
                       </td>
                     ))}

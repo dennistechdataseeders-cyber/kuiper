@@ -36,20 +36,20 @@ export const AccessBadge = ({ user }) => {
   if (status === 'blocked') {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[8px] font-black bg-red-100 text-red-700 px-2 py-0.5 rounded-full"
+        className="badge rounded-full bg-red-100 text-red-700"
         title={user.accessBlockReason ? `Reason: ${user.accessBlockReason}` : 'Login blocked'}
       >
-        <Ban size={8} /> Login blocked
+        <Ban size={12} /> Login blocked
       </span>
     );
   }
   if (status === 'scheduled') {
     return (
       <span
-        className="inline-flex items-center gap-1 text-[8px] font-black bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full"
+        className="badge rounded-full bg-amber-100 text-amber-700"
         title={user.accessBlockReason ? `Reason: ${user.accessBlockReason}` : 'Login will be blocked'}
       >
-        <CalendarClock size={8} /> Access until {lastAccessDay(user)}
+        <CalendarClock size={12} /> Access until {lastAccessDay(user)}
       </span>
     );
   }
@@ -83,21 +83,21 @@ const AccessBlockModal = ({ user, apiBase, authHeader, onClose, onDone }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-slate-100 px-6 py-4">
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal-panel max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
           <div>
-            <h3 className="text-base font-black text-slate-800">
+            <h3 className="section-title">
               {status === 'active' ? 'Block login' : 'Login access'}
             </h3>
-            <p className="text-xs text-slate-500">{user.name} · {user.email}</p>
+            <p className="text-xs text-slate-500 break-words">{user.name} · {user.email}</p>
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close">
+          <button onClick={onClose} className="btn-icon text-slate-400 hover:bg-slate-100" aria-label="Close">
             <X size={18} />
           </button>
         </div>
 
-        <div className="space-y-4 px-6 py-5">
+        <div className="modal-body space-y-4">
           {status !== 'active' && (
             <div className={`rounded-xl border p-3 text-xs ${status === 'blocked' ? 'border-red-200 bg-red-50 text-red-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
               {status === 'blocked'
@@ -112,7 +112,7 @@ const AccessBlockModal = ({ user, apiBase, authHeader, onClose, onDone }) => {
               <div className="space-y-2">
                 <label className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 ${mode === 'after' ? 'border-blue-300 bg-blue-50/50' : 'border-slate-200'}`}>
                   <input type="radio" className="mt-0.5" checked={mode === 'after'} onChange={() => setMode('after')} />
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="text-sm font-bold text-slate-800">After last working day</div>
                     <div className="text-xs text-slate-500">Works normally until the end of this day, then is signed out and blocked.</div>
                     {mode === 'after' && (
@@ -121,7 +121,7 @@ const AccessBlockModal = ({ user, apiBase, authHeader, onClose, onDone }) => {
                         value={lastWorkingDay}
                         min={todayIST()}
                         onChange={(e) => setLastWorkingDay(e.target.value)}
-                        className="mt-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                        className="input mt-2"
                       />
                     )}
                   </div>
@@ -136,25 +136,25 @@ const AccessBlockModal = ({ user, apiBase, authHeader, onClose, onDone }) => {
               </div>
 
               <div>
-                <label className="mb-1 block text-[10px] font-black uppercase tracking-wider text-slate-400">Reason (optional)</label>
+                <label className="label block mb-1.5">Reason (optional)</label>
                 <textarea
                   rows={2}
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="e.g. Resigned, last day 17 Nov"
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+                  className="input"
                 />
               </div>
             </>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 border-t border-slate-100 px-6 py-4">
+        <div className="modal-footer">
           {status !== 'active' && (
             <button
               disabled={saving}
               onClick={() => send({ action: 'unblock' })}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-xs font-black text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+              className="btn btn-md border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
             >
               <LockOpen size={14} /> {status === 'scheduled' ? 'Cancel block' : 'Restore access'}
             </button>
@@ -163,7 +163,7 @@ const AccessBlockModal = ({ user, apiBase, authHeader, onClose, onDone }) => {
             <button
               disabled={saving}
               onClick={() => send({ action: 'block', mode: 'now', reason: reason || user.accessBlockReason })}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700 disabled:opacity-50"
+              className="btn btn-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
             >
               <Ban size={14} /> Block now instead
             </button>
@@ -172,12 +172,12 @@ const AccessBlockModal = ({ user, apiBase, authHeader, onClose, onDone }) => {
             <button
               disabled={saving}
               onClick={submitBlock}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white hover:bg-red-700 disabled:opacity-50"
+              className="btn btn-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
             >
               <Ban size={14} /> {mode === 'now' ? 'Block now' : 'Schedule block'}
             </button>
           ) : (
-            <button onClick={onClose} className="rounded-xl px-4 py-2 text-xs font-black text-slate-500 hover:bg-slate-100">Close</button>
+            <button onClick={onClose} className="btn btn-md text-slate-500 hover:bg-slate-100">Close</button>
           )}
         </div>
       </div>

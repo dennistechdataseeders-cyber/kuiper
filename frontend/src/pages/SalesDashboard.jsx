@@ -23,7 +23,6 @@ import {
   RefreshCw, MapPin, Building2, SlidersHorizontal, Plus, Save, X, RotateCcw, Eye, Loader2,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import { WidgetFrame, ViewAll, MoreLink } from '../components/dashboard/DashboardParts';
 import AnalyticsBuilderModal from '../components/dashboard/AnalyticsBuilderModal';
 import AssignedToMePanel from '../components/AssignedToMePanel';
@@ -155,14 +154,14 @@ const Widget = ({ w, ctx, ed }) => {
               return (
                 <div key={d._id} onClick={() => navigate('/sales/deals')} className="p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-bold text-slate-800 truncate">{d.dealName}</p>
-                    <p className="text-xs font-black text-slate-700 whitespace-nowrap">{fmtAmount(d.amount)}</p>
+                    <p className="text-xs font-semibold text-slate-800 truncate">{d.dealName}</p>
+                    <p className="text-xs font-semibold text-slate-700 whitespace-nowrap">{fmtAmount(d.amount)}</p>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-1">
-                    <p className="text-[10px] text-slate-400 truncate">
+                    <p className="text-xs text-slate-400 truncate">
                       {d.organizationId?.companyName || d.leadId?.companyName || '—'} · {normalizeStage(d.stage)}
                     </p>
-                    <p className={`text-[10px] font-bold whitespace-nowrap ${late ? 'text-red-500' : 'text-slate-500'}`}>{fmtDate(d.closingDate)}</p>
+                    <p className={`text-xs font-semibold whitespace-nowrap ${late ? 'text-red-500' : 'text-slate-500'}`}>{fmtDate(d.closingDate)}</p>
                   </div>
                 </div>
               );
@@ -200,12 +199,12 @@ const Widget = ({ w, ctx, ed }) => {
               return (
                 <div key={t._id} onClick={() => navigate('/sales/activities/tasks')} className="p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-bold text-slate-800 truncate">{t.title || 'Untitled task'}</p>
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border ${priorityStyle[t.priority] || priorityStyle.Medium}`}>{t.priority || 'Medium'}</span>
+                    <p className="text-xs font-semibold text-slate-800 truncate">{t.title || 'Untitled task'}</p>
+                    <span className={`badge rounded-full border ${priorityStyle[t.priority] || priorityStyle.Medium}`}>{t.priority || 'Medium'}</span>
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-1">
-                    <p className="text-[10px] text-slate-400 truncate">{leadName(t)} · {t.status}</p>
-                    <p className={`text-[10px] font-bold whitespace-nowrap ${late ? 'text-red-500' : 'text-slate-500'}`}>
+                    <p className="text-xs text-slate-400 truncate">{leadName(t)} · {t.status}</p>
+                    <p className={`text-xs font-semibold whitespace-nowrap ${late ? 'text-red-500' : 'text-slate-500'}`}>
                       {t.dueAt ? `${late ? 'Overdue · ' : ''}${fmtDate(t.dueAt)}` : 'No due date'}
                     </p>
                   </div>
@@ -235,15 +234,15 @@ const Widget = ({ w, ctx, ed }) => {
                 <div key={mt._id} onClick={() => navigate('/sales/activities/meetings')}
                   className={`p-2.5 rounded-xl border cursor-pointer hover:bg-slate-50 ${isToday ? 'border-purple-200 bg-purple-50/40' : 'border-slate-100'}`}>
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-bold text-slate-800 truncate">{mt.title || 'Meeting'}</p>
-                    {isToday && <span className="text-[9px] font-black text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">Today</span>}
+                    <p className="text-xs font-semibold text-slate-800 truncate">{mt.title || 'Meeting'}</p>
+                    {isToday && <span className="badge rounded-full text-purple-600 bg-purple-100">Today</span>}
                   </div>
                   <div className="flex items-center justify-between gap-2 mt-1">
-                    <p className="text-[10px] text-slate-400 truncate flex items-center gap-1">
-                      <Building2 size={10} /> {leadName(mt)}
-                      {mt.location ? (<><MapPin size={10} className="ml-1" /> {mt.location}</>) : null}
+                    <p className="text-xs text-slate-400 truncate flex items-center gap-1">
+                      <Building2 size={12} /> {leadName(mt)}
+                      {mt.location ? (<><MapPin size={12} className="ml-1" /> {mt.location}</>) : null}
                     </p>
-                    <p className="text-[10px] font-bold text-slate-500 whitespace-nowrap">{fmtDate(mt.scheduledAt)} · {fmtTime(mt.scheduledAt)}</p>
+                    <p className="text-xs font-semibold text-slate-500 whitespace-nowrap">{fmtDate(mt.scheduledAt)} · {fmtTime(mt.scheduledAt)}</p>
                   </div>
                 </div>
               );
@@ -268,7 +267,7 @@ const Widget = ({ w, ctx, ed }) => {
     const count = stats.reduce((s, x) => s + x.count, 0);
     m = {
       title: 'My Pipeline Deals By Stage', icon: meta.icon, count,
-      action: <span className="text-[11px] font-black text-slate-700">{fmtAmount(total)}</span>, hint: 'open deals by closing date',
+      action: <span className="text-xs font-semibold text-slate-700">{fmtAmount(total)}</span>, hint: 'open deals by closing date',
       rows: stats.map((s) => ({ label: s.name, value: s.amount, color: s.color, extra: `${s.count} deal${s.count === 1 ? '' : 's'} · ${fmtAmount(s.amount)}` })),
       total, money: true, numberLabel: 'pipeline value', isEmpty: count === 0, emptyText: 'No open deals in your pipeline for this period',
     };
@@ -292,10 +291,10 @@ const Widget = ({ w, ctx, ed }) => {
               return (
                 <div key={l._id} onClick={() => navigate('/sales/leads')} className="p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="text-xs font-bold text-slate-800 truncate">{l.companyName}</p>
-                    <span className="text-[9px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full whitespace-nowrap">{l.leadStatus || 'Not Contacted'}</span>
+                    <p className="text-xs font-semibold text-slate-800 truncate">{l.companyName}</p>
+                    <span className="badge rounded-full text-blue-600 bg-blue-50 whitespace-nowrap">{l.leadStatus || 'Not Contacted'}</span>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1 truncate">
+                  <p className="text-xs text-slate-400 mt-1 truncate">
                     {c ? `${c.firstName || ''} ${c.lastName || ''}`.trim() : 'No contact'}
                     {l.leadSource ? ` · ${l.leadSource}` : ''}
                     {!isToday ? ` · ${fmtDate(l.createdAt)}` : ''}
@@ -333,12 +332,12 @@ const Widget = ({ w, ctx, ed }) => {
                 className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 cursor-pointer">
                 <span className={`p-1.5 rounded-lg flex-shrink-0 ${typeColor[a.type]}`}>{typeIcon[a.type]}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs font-bold text-slate-800 truncate">{a.title || a.type}</p>
-                  <p className="text-[10px] text-slate-400 truncate">{leadName(a)}</p>
+                  <p className="text-xs font-semibold text-slate-800 truncate">{a.title || a.type}</p>
+                  <p className="text-xs text-slate-400 truncate">{leadName(a)}</p>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <p className={`text-[10px] font-bold ${late ? 'text-red-500' : 'text-slate-500'}`}>{late ? 'Overdue · ' : ''}{fmtDate(when)}</p>
-                  {a.type !== 'task' && <p className="text-[10px] text-slate-400 flex items-center justify-end gap-1"><Clock size={9} /> {fmtTime(when)}</p>}
+                  <p className={`text-xs font-semibold ${late ? 'text-red-500' : 'text-slate-500'}`}>{late ? 'Overdue · ' : ''}{fmtDate(when)}</p>
+                  {a.type !== 'task' && <p className="text-xs text-slate-400 flex items-center justify-end gap-1"><Clock size={12} /> {fmtTime(when)}</p>}
                 </div>
               </div>
             );
@@ -377,7 +376,6 @@ const Widget = ({ w, ctx, ed }) => {
 // PAGE
 // ============================================
 const SalesDashboard = () => {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
 
   const token = localStorage.getItem('token');
@@ -561,20 +559,20 @@ const SalesDashboard = () => {
   const todayLabel = new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       <div className="max-w-[1600px] mx-auto">
         {/* HEADER */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-2xl font-black text-slate-800">{userName ? `Welcome, ${userName}` : 'Sales Dashboard'}</h1>
-            <p className="text-xs font-semibold text-slate-400 mt-0.5">{todayLabel}</p>
+            <h1 className="page-title">{userName ? `Welcome, ${userName}` : 'Sales Dashboard'}</h1>
+            <p className="text-sm text-slate-500 mt-1">{todayLabel}</p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => { load(); loadDefs(); }}
               disabled={loading}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50"
             >
               <RefreshCw size={13} className={loading ? 'animate-spin' : ''} /> Refresh
             </button>
@@ -583,32 +581,32 @@ const SalesDashboard = () => {
               <>
                 <button
                   onClick={() => openBuilder(null)}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-blue-200 text-xs font-bold text-blue-600 hover:bg-blue-50"
+                  className="btn btn-md bg-white border border-blue-200 text-blue-600 hover:bg-blue-50"
                 >
                   <Plus size={13} /> Add analytics
                 </button>
                 <button
                   onClick={startEditing}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg bg-blue-600 text-xs font-bold text-white hover:bg-blue-700"
+                  className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"
                 >
                   <SlidersHorizontal size={13} /> Customize dashboard
                 </button>
               </>
             ) : (
               <>
-                <button onClick={() => openBuilder(null)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-blue-200 text-xs font-bold text-blue-600 hover:bg-blue-50">
+                <button onClick={() => openBuilder(null)} className="btn btn-md bg-white border border-blue-200 text-blue-600 hover:bg-blue-50">
                   <Plus size={13} /> Add analytics
                 </button>
-                <button onClick={resetLayout} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-slate-200 text-xs font-bold text-slate-600 hover:bg-slate-50">
+                <button onClick={resetLayout} className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
                   <RotateCcw size={13} /> Reset
                 </button>
-                <button onClick={cancelEditing} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 hover:bg-slate-200">
+                <button onClick={cancelEditing} className="btn btn-md bg-slate-100 text-slate-600 hover:bg-slate-200">
                   <X size={13} /> Cancel
                 </button>
                 <button
                   onClick={saveLayout}
                   disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-60"
+                  className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
                 >
                   {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save dashboard
                 </button>
@@ -624,7 +622,7 @@ const SalesDashboard = () => {
               <b>Customizing.</b> Use the toolbar on each card to change how it is shown (list, data point, bar, pie),
               its size and default period. Drag cards or use the arrows to reorder. Click <b>Save dashboard</b> when done.
             </span>
-            {dirty && <span className="font-black text-amber-600">Unsaved changes</span>}
+            {dirty && <span className="font-bold text-amber-600">Unsaved changes</span>}
           </div>
         )}
 
@@ -633,12 +631,12 @@ const SalesDashboard = () => {
 
         {/* WIDGET GRID */}
         {visibleWidgets.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center">
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white py-16 text-center">
             <p className="text-sm font-bold text-slate-500">Your dashboard is empty.</p>
-            <button onClick={() => openBuilder(null)} className="mt-3 text-xs font-bold text-blue-600 hover:underline">Add analytics</button>
+            <button onClick={() => openBuilder(null)} className="mt-3 text-xs font-semibold text-blue-600 hover:underline">Add analytics</button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-6 gap-3 sm:gap-4">
             {visibleWidgets.map((w) => {
               const ed = editing
                 ? {
@@ -669,14 +667,14 @@ const SalesDashboard = () => {
 
         {/* HIDDEN BUILT-IN WIDGETS */}
         {editing && hiddenBuiltins.length > 0 && (
-          <div className="mt-6 rounded-xl border border-slate-200 bg-white p-4">
-            <p className="text-xs font-black text-slate-600 mb-2">Hidden widgets</p>
+          <div className="card mt-4 sm:mt-6">
+            <p className="text-xs font-semibold text-slate-600 mb-2">Hidden widgets</p>
             <div className="flex flex-wrap gap-2">
               {hiddenBuiltins.map((w) => (
                 <button
                   key={w.id}
                   onClick={() => patchWidget(w.id, { visible: true })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-[11px] font-bold text-slate-600 hover:bg-slate-50"
+                  className="btn btn-sm border border-slate-200 text-slate-600 hover:bg-slate-50"
                 >
                   <Eye size={12} /> {w.id === 'closing' ? 'Deals closing' : w.id === 'followups' ? 'Follow-ups' : w.id.charAt(0).toUpperCase() + w.id.slice(1)}
                 </button>

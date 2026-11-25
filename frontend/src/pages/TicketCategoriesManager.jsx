@@ -7,10 +7,10 @@ import toast from 'react-hot-toast';
 import {
   Plus, Trash2, Save, X, ChevronDown, ChevronRight, Layers, RotateCcw, Pencil
 } from 'lucide-react';
-import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
+import { Badge, Button, Modal, PageHeader } from '../components/ui';
 
-const ROLES = ['Developer', 'Team Lead', 'Project Manager', 'Sales', 'Sales Manager', 'HR', 'Finance', 'Admin', 'IT'];
+const ROLES = ['Developer', 'Team Lead', 'Project Manager', 'Project Coordinator', 'Sales', 'Sales Manager', 'HR', 'Finance', 'Admin', 'IT'];
 const CREATOR_ROLES = ['Sales', 'Sales Manager', 'Developer', 'Team Lead', 'Project Manager', 'HR', 'Finance', 'Admin', 'Client'];
 
 const blankCategory = () => ({
@@ -21,7 +21,7 @@ const blankSub = () => ({
   name: '', items: [], special: false, clientVisible: true, assignOverrides: [], isActive: true
 });
 
-const inputCls = 'w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100';
+const inputCls = 'input';
 
 // Edits "when created by [roles] -> assign to [role]" rows
 const OverrideEditor = ({ value, onChange }) => {
@@ -33,19 +33,19 @@ const OverrideEditor = ({ value, onChange }) => {
   return (
     <div className="space-y-2">
       {value.map((o, i) => (
-        <div key={i} className="p-2 rounded-lg border border-amber-200 bg-amber-50/60">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-[11px] font-semibold text-amber-800">Assign to</span>
-            <select value={o.assignRole} onChange={e => update(i, { assignRole: e.target.value })} className="px-2 py-1 text-xs border border-amber-200 rounded bg-white">
+        <div key={i} className="p-3 rounded-lg border border-amber-200 bg-amber-50/60">
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <span className="text-xs font-semibold text-amber-800">Assign to</span>
+            <select value={o.assignRole} onChange={e => update(i, { assignRole: e.target.value })} className="h-10 md:h-9 px-2 text-sm border border-amber-200 rounded-lg bg-white">
               {ROLES.map(r => <option key={r}>{r}</option>)}
             </select>
-            <span className="text-[11px] text-amber-800">when created by:</span>
-            <button type="button" onClick={() => onChange(value.filter((_, idx) => idx !== i))} className="ml-auto text-red-500 hover:text-red-700"><X size={14} /></button>
+            <span className="text-xs text-amber-800">when created by:</span>
+            <button type="button" onClick={() => onChange(value.filter((_, idx) => idx !== i))} aria-label="Remove assignee rule" className="btn-icon ml-auto text-red-500 hover:text-red-700 hover:bg-red-50"><X size={16} /></button>
           </div>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-2">
             {CREATOR_ROLES.map(r => (
               <button key={r} type="button" onClick={() => toggleRole(i, r)}
-                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${(o.creatorRoles || []).includes(r) ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-slate-200'}`}>
+                className={`px-3 py-1 rounded-full text-xs font-semibold border ${(o.creatorRoles || []).includes(r) ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-slate-500 border-slate-200'}`}>
                 {r}
               </button>
             ))}
@@ -53,8 +53,8 @@ const OverrideEditor = ({ value, onChange }) => {
         </div>
       ))}
       <button type="button" onClick={() => onChange([...value, { creatorRoles: [], assignRole: 'Project Manager' }])}
-        className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1">
-        <Plus size={12} /> Add assignee rule
+        className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1">
+        <Plus size={14} /> Add assignee rule
       </button>
     </div>
   );
@@ -74,24 +74,23 @@ const ItemsEditor = ({ items, onChange }) => {
     <div>
       <div className="flex flex-wrap gap-1.5 mb-2">
         {items.map((it, i) => (
-          <span key={i} className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-100 px-2 py-1 rounded-lg text-xs font-medium">
+          <span key={i} className="badge py-1 max-md:py-0 max-md:pr-0 bg-blue-50 text-blue-700 border border-blue-100">
             {it}
-            <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} className="hover:text-red-500"><X size={12} /></button>
+            <button type="button" onClick={() => onChange(items.filter((_, idx) => idx !== i))} aria-label={`Remove ${it}`} className="flex items-center justify-center hover:text-red-500"><X size={14} /></button>
           </span>
         ))}
-        {items.length === 0 && <span className="text-[11px] text-slate-400 italic">No specific issues yet</span>}
+        {items.length === 0 && <span className="meta italic">No specific issues yet</span>}
       </div>
       <div className="flex gap-2">
         <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
           placeholder="Add specific issue and press Enter" className={inputCls} />
-        <button type="button" onClick={add} className="px-3 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><Plus size={16} /></button>
+        <Button onClick={add} aria-label="Add specific issue" className="shrink-0 !px-3"><Plus size={16} /></Button>
       </div>
     </div>
   );
 };
 
 const TicketCategoriesManager = () => {
-  const { isCollapsed } = useSidebar();
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);      // category object being edited (copy)
@@ -174,78 +173,87 @@ const TicketCategoriesManager = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-8' : 'ml-64'}`}>
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><Layers className="text-blue-600" size={24} /> Ticket Categories</h1>
-          <p className="text-sm text-slate-500 mt-1">Edit the Category, Subcategory and Specific Issue options shown on the Create Ticket form.</p>
-        </div>
-        <div className="flex gap-2">
-          <button onClick={restoreDefaults} className="px-3 py-2 text-sm font-semibold border border-slate-200 bg-white rounded-lg hover:bg-slate-100 flex items-center gap-1.5">
-            <RotateCcw size={14} /> Restore defaults
-          </button>
-          <button onClick={() => startEdit(blankCategory())} className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-1.5">
-            <Plus size={16} /> New Category
-          </button>
-        </div>
-      </div>
+    <div className="page bg-slate-50">
+      <div className="stack">
+      <PageHeader
+        title={<span className="flex items-center gap-2"><Layers className="text-blue-600 shrink-0" size={24} /> Ticket Categories</span>}
+        subtitle="Edit the Category, Subcategory and Specific Issue options shown on the Create Ticket form."
+        actions={
+          <>
+            <Button variant="secondary" onClick={restoreDefaults} className="flex-1 lg:flex-none">
+              <RotateCcw size={16} /> Restore defaults
+            </Button>
+            <Button onClick={() => startEdit(blankCategory())} className="flex-1 lg:flex-none">
+              <Plus size={16} /> New Category
+            </Button>
+          </>
+        }
+      />
 
       {loading ? (
-        <div className="p-10 text-center text-slate-400">Loading...</div>
+        <div className="p-10 text-center text-sm text-slate-400">Loading...</div>
       ) : (
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 sm:gap-4">
           {categories.map(cat => (
-            <div key={cat._id} className={`bg-white rounded-xl border p-4 ${cat.isActive ? 'border-slate-200' : 'border-slate-200 opacity-60'}`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-bold text-slate-800">
+            <div key={cat._id} className={`card ${cat.isActive ? '' : 'opacity-60'}`}>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="section-title flex flex-wrap items-center gap-2 min-w-0">
                   <span className="text-xl">{cat.icon}</span> {cat.name}
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">assign → {cat.role || 'nobody'}</span>
-                  {cat.clientVisible && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">clients</span>}
-                  {!cat.isActive && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 text-red-600">hidden</span>}
+                  <Badge className="rounded-full bg-slate-100 text-slate-500">assign → {cat.role || 'nobody'}</Badge>
+                  {cat.clientVisible && <Badge className="rounded-full bg-emerald-100 text-emerald-700">clients</Badge>}
+                  {!cat.isActive && <Badge className="rounded-full bg-red-100 text-red-600">hidden</Badge>}
                 </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={() => toggleActive(cat)} className="px-2 py-1 text-[11px] font-semibold rounded border border-slate-200 hover:bg-slate-50">{cat.isActive ? 'Hide' : 'Show'}</button>
-                  <button onClick={() => startEdit(cat)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded"><Pencil size={15} /></button>
-                  <button onClick={() => remove(cat)} className="p-1.5 text-red-500 hover:bg-red-50 rounded"><Trash2 size={15} /></button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="secondary" size="sm" onClick={() => toggleActive(cat)}>{cat.isActive ? 'Hide' : 'Show'}</Button>
+                  <button onClick={() => startEdit(cat)} aria-label={`Edit ${cat.name}`} title="Edit" className="btn-icon text-blue-600 hover:bg-blue-50"><Pencil size={16} /></button>
+                  <button onClick={() => remove(cat)} aria-label={`Delete ${cat.name}`} title="Delete" className="btn-icon text-red-500 hover:bg-red-50"><Trash2 size={16} /></button>
                 </div>
               </div>
               <div className="mt-3 space-y-1.5">
                 {(cat.subcategories || []).map(s => (
-                  <div key={s._id || s.name} className="text-xs text-slate-600">
+                  <div key={s._id || s.name} className="text-sm text-slate-600 break-words">
                     <span className="font-semibold text-slate-700">{s.name}</span>
                     {s.special && <span className="ml-1 text-purple-600">(special)</span>}
                     {(s.assignOverrides || []).length > 0 && <span className="ml-1 text-amber-600">(assignee rule)</span>}
                     {s.items?.length > 0 && <span className="text-slate-400"> — {s.items.join(', ')}</span>}
                   </div>
                 ))}
-                {(cat.subcategories || []).length === 0 && <p className="text-xs text-slate-400 italic">No subcategories</p>}
+                {(cat.subcategories || []).length === 0 && <p className="text-sm text-slate-400 italic">No subcategories</p>}
               </div>
             </div>
           ))}
         </div>
       )}
 
+      </div>
+
       {/* ============ EDIT MODAL ============ */}
       {editing && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
-            <div className="px-6 py-4 border-b flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-800">{editing._id ? 'Edit Category' : 'New Category'}</h2>
-              <button onClick={() => setEditing(null)} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-5">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+        <Modal
+          size="xl"
+          title={editing._id ? 'Edit Category' : 'New Category'}
+          onClose={() => setEditing(null)}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button onClick={save} disabled={saving}>
+                <Save size={16} /> {saving ? 'Saving...' : 'Save'}
+              </Button>
+            </>
+          }
+        >
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-semibold text-slate-500">Category name *</label>
+                  <label className="label block mb-1.5">Category name *</label>
                   <input className={inputCls} value={editing.name} onChange={e => patch({ name: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500">Icon (emoji)</label>
+                  <label className="label block mb-1.5">Icon (emoji)</label>
                   <input className={inputCls} value={editing.icon} onChange={e => patch({ icon: e.target.value })} />
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500">Assign tickets to role</label>
+                  <label className="label block mb-1.5">Assign tickets to role</label>
                   <select className={inputCls} value={editing.role} onChange={e => patch({ role: e.target.value })}>
                     <option value="">(none)</option>
                     {ROLES.map(r => <option key={r}>{r}</option>)}
@@ -253,21 +261,21 @@ const TicketCategoriesManager = () => {
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-5 text-sm text-slate-700">
-                <label className="flex items-center gap-2"><input type="checkbox" checked={editing.clientVisible} onChange={e => patch({ clientVisible: e.target.checked })} /> Visible to clients</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={editing.isActive} onChange={e => patch({ isActive: e.target.checked })} /> Show on ticket form</label>
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-700">
+                <label className="flex items-center gap-2 max-md:min-h-10"><input type="checkbox" className="w-4 h-4 shrink-0" checked={editing.clientVisible} onChange={e => patch({ clientVisible: e.target.checked })} /> Visible to clients</label>
+                <label className="flex items-center gap-2 max-md:min-h-10"><input type="checkbox" className="w-4 h-4 shrink-0" checked={editing.isActive} onChange={e => patch({ isActive: e.target.checked })} /> Show on ticket form</label>
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-slate-500 mb-1">Category-level assignee rules <span className="font-normal">(e.g. Developers raise this to Team Leads)</span></p>
+                <p className="label mb-1.5">Category-level assignee rules <span className="font-normal">(e.g. Developers raise this to Team Leads)</span></p>
                 <OverrideEditor value={editing.assignOverrides || []} onChange={v => patch({ assignOverrides: v })} />
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-sm font-bold text-slate-700">Subcategories &amp; Specific Issues</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-semibold text-slate-700">Subcategories &amp; Specific Issues</h3>
                   <button type="button" onClick={() => { patch({ subcategories: [...editing.subcategories, blankSub()] }); setExpandedSub(p => ({ ...p, [editing.subcategories.length]: true })); }}
-                    className="text-xs font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-1"><Plus size={13} /> Add subcategory</button>
+                    className="btn btn-sm btn-ghost"><Plus size={16} /> Add subcategory</button>
                 </div>
 
                 <div className="space-y-2">
@@ -275,29 +283,29 @@ const TicketCategoriesManager = () => {
                     const open = !!expandedSub[i];
                     return (
                       <div key={s._id || i} className="border border-slate-200 rounded-xl">
-                        <div className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-t-xl">
-                          <button type="button" onClick={() => setExpandedSub(p => ({ ...p, [i]: !open }))} className="text-slate-500">
-                            {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                        <div className="flex items-center gap-1 sm:gap-2 px-2 py-1 bg-slate-50 rounded-t-xl">
+                          <button type="button" onClick={() => setExpandedSub(p => ({ ...p, [i]: !open }))} aria-label={open ? 'Collapse subcategory' : 'Expand subcategory'} aria-expanded={open} className="btn-icon text-slate-500 hover:bg-slate-100">
+                            {open ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                           </button>
-                          <input className="flex-1 bg-transparent font-semibold text-sm outline-none" placeholder="Subcategory name" value={s.name} onChange={e => patchSub(i, { name: e.target.value })} />
-                          <span className="text-[10px] text-slate-400">{s.items.length} issue(s)</span>
-                          <button type="button" onClick={() => patch({ subcategories: editing.subcategories.filter((_, idx) => idx !== i) })} className="text-red-500 hover:text-red-700"><Trash2 size={14} /></button>
+                          <input className="flex-1 min-w-0 h-10 bg-transparent font-semibold text-sm outline-none" placeholder="Subcategory name" value={s.name} onChange={e => patchSub(i, { name: e.target.value })} />
+                          <span className="meta whitespace-nowrap">{s.items.length} issue(s)</span>
+                          <button type="button" onClick={() => patch({ subcategories: editing.subcategories.filter((_, idx) => idx !== i) })} aria-label="Remove subcategory" className="btn-icon text-red-500 hover:text-red-700 hover:bg-red-50"><Trash2 size={16} /></button>
                         </div>
                         {open && (
-                          <div className="p-3 space-y-3">
+                          <div className="p-3 sm:p-4 space-y-4">
                             {!s.special && (
                               <div>
-                                <p className="text-xs font-semibold text-slate-500 mb-1">Specific Issue options</p>
+                                <p className="label mb-1.5">Specific Issue options</p>
                                 <ItemsEditor items={s.items} onChange={v => patchSub(i, { items: v })} />
                               </div>
                             )}
-                            <div className="flex flex-wrap gap-5 text-xs text-slate-700">
-                              <label className="flex items-center gap-2"><input type="checkbox" checked={s.special} onChange={e => patchSub(i, { special: e.target.checked })} /> Special (no specific issue, project/feed = General, pick from developer pool)</label>
-                              <label className="flex items-center gap-2"><input type="checkbox" checked={s.clientVisible} onChange={e => patchSub(i, { clientVisible: e.target.checked })} /> Visible to clients</label>
-                              <label className="flex items-center gap-2"><input type="checkbox" checked={s.isActive} onChange={e => patchSub(i, { isActive: e.target.checked })} /> Show on ticket form</label>
+                            <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-700">
+                              <label className="flex items-center gap-2 max-md:min-h-10"><input type="checkbox" className="w-4 h-4 shrink-0" checked={s.special} onChange={e => patchSub(i, { special: e.target.checked })} /> Special (no specific issue, project/feed = General, pick from developer pool)</label>
+                              <label className="flex items-center gap-2 max-md:min-h-10"><input type="checkbox" className="w-4 h-4 shrink-0" checked={s.clientVisible} onChange={e => patchSub(i, { clientVisible: e.target.checked })} /> Visible to clients</label>
+                              <label className="flex items-center gap-2 max-md:min-h-10"><input type="checkbox" className="w-4 h-4 shrink-0" checked={s.isActive} onChange={e => patchSub(i, { isActive: e.target.checked })} /> Show on ticket form</label>
                             </div>
                             <div>
-                              <p className="text-xs font-semibold text-slate-500 mb-1">Assignee rules for this subcategory</p>
+                              <p className="label mb-1.5">Assignee rules for this subcategory</p>
                               <OverrideEditor value={s.assignOverrides || []} onChange={v => patchSub(i, { assignOverrides: v })} />
                             </div>
                           </div>
@@ -305,19 +313,12 @@ const TicketCategoriesManager = () => {
                       </div>
                     );
                   })}
-                  {editing.subcategories.length === 0 && <p className="text-xs text-slate-400 italic">No subcategories yet</p>}
+                  {editing.subcategories.length === 0 && <p className="text-sm text-slate-400 italic">No subcategories yet</p>}
                 </div>
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t flex justify-end gap-2">
-              <button onClick={() => setEditing(null)} className="px-4 py-2 text-sm font-semibold border border-slate-200 rounded-lg hover:bg-slate-50">Cancel</button>
-              <button onClick={save} disabled={saving} className="px-4 py-2 text-sm font-semibold bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5">
-                <Save size={15} /> {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

@@ -25,9 +25,8 @@ import API_BASE_URL from '../config';
 const SKIP_TYPES = ['Auto-Number', 'Formula', 'File Upload', 'Image Upload'];
 const NUMERIC_TYPES = ['Number', 'Decimal', 'Currency', 'Percent', 'Long Integer'];
 
-const inputCls =
-  'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 disabled:bg-slate-100';
-const labelCls = 'text-xs font-bold text-slate-600 block mb-1';
+const inputCls = 'input';
+const labelCls = 'label block mb-1.5';
 
 // --------------------------------------------------------------------
 // Load the custom-field definitions for a module.
@@ -210,9 +209,9 @@ export default function CustomFieldsSection({
   return (
     <div className="pt-2 border-t border-slate-100">
       {title && (
-        <p className="text-xs font-black text-slate-500 uppercase tracking-wider mb-3">{title}</p>
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">{title}</p>
       )}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         {fields.map((f) => (
           <div
             key={f.fieldKey}

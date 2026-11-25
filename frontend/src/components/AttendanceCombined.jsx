@@ -8,7 +8,7 @@
 // ✅ Larger stat cards
 // ✅ Header row (legend + title + month + shift) spread full width
 // ✅ REDUCED: Table text to 90% of previous size, kept plain/black for contrast
-// ✅ REDUCED BOLDNESS: Table body content is lighter; table header stays font-black
+// ✅ REDUCED BOLDNESS: Table body content is lighter; table header stays font-bold
 //
 // ✅ 2026-09-11 — TIMEZONE + HALF-DAY FIX
 //   * All logic that reads a punch time (lateness, arrival, timeline position,
@@ -25,7 +25,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import {
   Calendar as CalendarIcon,
   Clock,
@@ -278,16 +277,16 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
   if (!session && !breakInfo) return null;
   return (
     <div
-      className="fixed z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
+      className="fixed max-md:left-4! max-md:right-4! z-50 bg-slate-900 text-white rounded-xl shadow-2xl p-3 min-w-[200px] pointer-events-none border border-white/10"
       style={{ left: position.x, top: position.y, transform: 'translateY(-100%)' }}
     >
       {session && (
         <>
           <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
             <div className="w-2 h-2 rounded-full bg-emerald-400"></div>
-            <span className="text-[11px] font-semibold">Session {session.sessionIndex + 1} of {session.totalSessions}</span>
+            <span className="text-xs font-semibold">Session {session.sessionIndex + 1} of {session.totalSessions}</span>
           </div>
-          <div className="space-y-1 text-[11px]">
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-400">In:</span>
               <span className="font-mono font-medium">{formatTimeDisplay(session.punchIn)}</span>
@@ -307,9 +306,9 @@ const HoverTooltip = ({ session, breakInfo, position }) => {
         <>
           <div className="flex items-center gap-2 mb-1.5 pb-1.5 border-b border-white/10">
             <div className="w-2 h-2 rounded-full bg-amber-400"></div>
-            <span className="text-[11px] font-semibold">Break {breakInfo.breakIndex + 1}</span>
+            <span className="text-xs font-semibold">Break {breakInfo.breakIndex + 1}</span>
           </div>
-          <div className="space-y-1 text-[11px]">
+          <div className="space-y-1 text-xs">
             <div className="flex justify-between">
               <span className="text-slate-400">Started:</span>
               <span className="font-mono font-medium">{formatTimeDisplay(breakInfo.start)}</span>
@@ -386,8 +385,8 @@ const DayTimelineBar = ({ day }) => {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-        <span className="text-[9px] font-semibold text-purple-700 whitespace-nowrap flex items-center gap-1">
-          <Gift size={9} className="text-purple-500" />
+        <span className="text-xs font-semibold text-purple-700 whitespace-nowrap flex items-center gap-1">
+          <Gift size={12} className="text-purple-500" />
           {holidayName || 'Holiday'}
         </span>
       </div>
@@ -461,7 +460,7 @@ const DayTimelineBar = ({ day }) => {
     })();
 
     return (
-      <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
+      <div className="pt-4 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
         <div className="relative h-1 rounded-full bg-slate-100">
           {/* The leave half (always drawn, full 50%) */}
           <div
@@ -482,7 +481,7 @@ const DayTimelineBar = ({ day }) => {
             return (
               <div
                 key={`work-${idx}`}
-                className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200"
+                className="absolute top-0 h-1 min-h-0 rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500 cursor-pointer max-md:before:absolute max-md:before:-inset-y-4 max-md:before:inset-x-0 max-md:before:content-[''] hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200"
                 style={{ left: `${segLeftPct}%`, width: `${segWidthPct}%` }}
                 onMouseEnter={(e) => handleSessionHover(e, session, idx, workSessions.length)}
               />
@@ -492,44 +491,44 @@ const DayTimelineBar = ({ day }) => {
           {/* In/out labels for the work half */}
           {workInTime && (
             <div
-              className="absolute -top-3 flex flex-col items-center z-10"
+              className="absolute -top-4 leading-none flex flex-col pointer-events-none items-center z-[1]"
               style={{
                 left: `${((clampToTrack(minutesOfDayIST(workInTime)) - trackStart) / TRACK_TOTAL_MIN) * 100}%`,
                 transform: 'translateX(-2px)'
               }}
             >
-              <span className="text-[7px] font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(workInTime)}</span>
+              <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(workInTime)}</span>
             </div>
           )}
           {workOutTime && (
             <div
-              className="absolute -top-3 flex flex-col items-center z-10"
+              className="absolute -top-4 leading-none flex flex-col pointer-events-none items-center z-[1]"
               style={{
                 left: `${((clampToTrack(minutesOfDayIST(workOutTime)) - trackStart) / TRACK_TOTAL_MIN) * 100}%`,
                 transform: 'translateX(-90%)'
               }}
             >
-              <span className="text-[7px] font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(workOutTime)}</span>
+              <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(workOutTime)}</span>
             </div>
           )}
         </div>
 
         <div className="flex items-center justify-between mt-1 gap-2">
-          <span className="text-[9px] font-semibold text-indigo-700 flex items-center gap-1 flex-shrink-0">
-            <CalendarIcon size={9} className="text-indigo-500" />
+          <span className="text-xs font-semibold text-indigo-700 flex items-center gap-1 flex-shrink-0">
+            <CalendarIcon size={12} className="text-indigo-500" />
             {halfDayLabel}
           </span>
           <span className="flex items-center gap-1.5 flex-shrink-0">
             {totalEffectiveHours > 0 && (
-              <span className="text-[8px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+              <span className="badge text-emerald-700 bg-emerald-50 border border-emerald-200">
                 Worked: {formatHours(totalEffectiveHours)}
               </span>
             )}
             {hasInProgress && (
-              <span className="text-[8px] font-semibold text-amber-600">In progress</span>
+              <span className="text-xs font-semibold text-amber-600">In progress</span>
             )}
             {totalLeaveHalfHours > 0 && (
-              <span className="text-[8px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+              <span className="badge text-indigo-700 bg-indigo-50 border border-indigo-200">
                 Leave hrs: {formatHours(totalLeaveHalfHours)}
               </span>
             )}
@@ -544,13 +543,13 @@ const DayTimelineBar = ({ day }) => {
   // Full day leave
   if (day.status === 'leave') {
     return (
-      <div className="pt-2 pb-0.5 relative">
+      <div className="pt-4 pb-0.5 relative">
         <div className="relative h-1 rounded-full bg-slate-100">
           <div className="absolute top-0 h-1 rounded-full bg-gradient-to-r from-indigo-400 to-indigo-500" style={{ left: '0%', width: '100%' }} />
         </div>
-        <div className="flex items-center justify-between mt-1">
-          <span className="text-[9px] font-semibold text-indigo-700 flex items-center gap-1">
-            <CalendarIcon size={9} className="text-indigo-500" />
+        <div className="flex flex-wrap items-center justify-between gap-x-2 mt-1">
+          <span className="text-xs font-semibold text-indigo-700 flex items-center gap-1">
+            <CalendarIcon size={12} className="text-indigo-500" />
             Full Day Leave
           </span>
         </div>
@@ -562,7 +561,7 @@ const DayTimelineBar = ({ day }) => {
     return (
       <div className="flex items-center gap-2 h-5">
         <div className="flex-1 h-1 rounded-full bg-slate-100" />
-        <span className="text-[8px] font-medium text-slate-400 whitespace-nowrap">No punch data</span>
+        <span className="text-xs font-medium text-slate-400 whitespace-nowrap">No punch data</span>
       </div>
     );
   }
@@ -591,7 +590,7 @@ const DayTimelineBar = ({ day }) => {
       elements.push(
         <div
           key={`sess-${idx}`}
-          className={`absolute top-0 h-1 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
+          className={`absolute top-0 h-1 min-h-0 rounded-full bg-gradient-to-r ${styles.bar} cursor-pointer max-md:before:absolute max-md:before:-inset-y-4 max-md:before:inset-x-0 max-md:before:content-[''] hover:ring-2 hover:ring-blue-400 hover:ring-offset-1 transition-all duration-200`}
           style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
           onMouseEnter={(e) => handleSessionHover(e, session, idx, totalSegments)}
         />
@@ -599,8 +598,8 @@ const DayTimelineBar = ({ day }) => {
 
       if (idx === 0) {
         elements.push(
-          <div key={`start-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
-            <span className="text-[7px] font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
+          <div key={`start-m-${idx}`} className="absolute -top-4 leading-none flex flex-col pointer-events-none items-center z-[1]" style={{ left: `${leftPct}%`, transform: 'translateX(-2px)' }}>
+            <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{formatTimeDisplay(session.punchInUTC)}</span>
           </div>
         );
       }
@@ -608,8 +607,8 @@ const DayTimelineBar = ({ day }) => {
       if (isLast) {
         const label = session.punchOutUTC ? formatTimeDisplay(session.punchOutUTC) : '';
         elements.push(
-          <div key={`end-m-${idx}`} className="absolute -top-3 flex flex-col items-center z-10" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
-            <span className={`text-[7px] font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-700'} whitespace-nowrap`}>{label}</span>
+          <div key={`end-m-${idx}`} className="absolute -top-4 leading-none flex flex-col pointer-events-none items-center z-[1]" style={{ left: `${leftPct + widthPct}%`, transform: 'translateX(-90%)' }}>
+            <span className={`text-xs font-semibold ${!session.punchOutUTC ? 'text-rose-500' : 'text-slate-700'} whitespace-nowrap`}>{label}</span>
           </div>
         );
       }
@@ -627,7 +626,7 @@ const DayTimelineBar = ({ day }) => {
           elements.push(
             <div
               key={`break-${idx}`}
-              className="absolute top-0 h-1 rounded-full bg-amber-200/60 cursor-pointer hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 transition-all duration-200"
+              className="absolute top-0 h-1 min-h-0 rounded-full bg-amber-200/60 cursor-pointer max-md:before:absolute max-md:before:-inset-y-4 max-md:before:inset-x-0 max-md:before:content-[''] hover:ring-2 hover:ring-amber-400 hover:ring-offset-1 transition-all duration-200"
               style={{ left: `${gLeft}%`, width: `${gWidth}%`, minWidth: '4px' }}
               onMouseEnter={(e) => breakGap && handleBreakHover(e, breakGap, idx)}
             />
@@ -640,19 +639,19 @@ const DayTimelineBar = ({ day }) => {
   };
 
   return (
-    <div className="pt-2 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
+    <div className="pt-4 pb-0.5 relative" onMouseLeave={handleBarMouseLeave}>
       <div className="relative h-1 rounded-full bg-slate-100">{renderSegments()}</div>
 
-      <div className="flex items-center justify-between mt-1">
-        <span className="text-[9px] font-semibold text-black">
+      <div className="flex flex-wrap items-center justify-between gap-x-2 mt-1">
+        <span className="text-xs font-semibold text-black">
           Effective: <span className="text-black">{formatHours(day.effectiveHours)}</span>
         </span>
         {day.grossHours > 0 && day.grossHours !== day.effectiveHours && (
-          <span className="text-[8px] font-medium text-black">Gross: {formatHours(day.grossHours)}</span>
+          <span className="text-xs font-medium text-black">Gross: {formatHours(day.grossHours)}</span>
         )}
         {day.breakMinutes > 0 && (
-          <span className="inline-flex items-center gap-1 text-[8px] font-medium text-black">
-            <Coffee size={9} className="text-amber-500" />
+          <span className="inline-flex items-center gap-1 text-xs font-medium text-black">
+            <Coffee size={12} className="text-amber-500" />
             {formatBreakMinutes(day.breakMinutes)}
           </span>
         )}
@@ -667,7 +666,6 @@ const DayTimelineBar = ({ day }) => {
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────
 const AttendanceCombined = ({ userId, token }) => {
-  const { isCollapsed } = useSidebar();
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
   const [loading, setLoading] = useState(true);
@@ -1063,13 +1061,13 @@ const AttendanceCombined = ({ userId, token }) => {
 
   if (attendanceData.length === 0) {
     return (
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-slate-50 flex items-center justify-center mx-auto mb-3">
+      <div className="card text-center">
+        <div className="w-14 h-14 rounded-xl bg-slate-50 flex items-center justify-center mx-auto mb-3 shrink-0">
           <CalendarIcon size={28} className="text-slate-300" />
         </div>
         <p className="text-sm font-semibold text-slate-500">No attendance data available</p>
         <p className="text-xs text-slate-400 mt-1">Try syncing your attendance data</p>
-        <button onClick={fetchAttendanceData} className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-semibold hover:bg-blue-700 transition-all shadow-sm">
+        <button onClick={fetchAttendanceData} className="btn btn-md mt-3 bg-blue-600 text-white hover:bg-blue-700 shadow-sm">
           <RefreshCw size={14} className="inline mr-1" />
           Refresh Data
         </button>
@@ -1081,27 +1079,27 @@ const AttendanceCombined = ({ userId, token }) => {
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-slate-200 bg-gradient-to-r from-slate-50/70 to-white">
-        <div className="flex items-center gap-2.5 flex-wrap w-full mb-3">
-          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+        <div className="max-sm:relative flex items-center gap-2.5 flex-wrap w-full mb-3">
+          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
             <BarChart3 size={18} className="text-blue-700" />
           </div>
-          <h3 className="text-sm font-bold text-slate-900">Attendance Timeline</h3>
+          <h3 className="section-title">Attendance Timeline</h3>
 
           <button
             onClick={() => {
               fetchAttendanceData();
               toast.success('Refreshing attendance data...');
             }}
-            className="p-1.5 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200 transition-all"
+            className="btn-icon bg-blue-100 text-blue-700 hover:bg-blue-200"
             title="Refresh attendance data"
           >
             <RefreshCw size={15} />
           </button>
 
-          <div className="relative">
+          <div className="sm:relative">
             <button
               onClick={(e) => { e.stopPropagation(); setShowMonthPicker(!showMonthPicker); }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-all text-xs font-bold text-slate-900 shadow-sm"
+              className="btn btn-sm bg-white border border-slate-300 hover:bg-slate-50 text-slate-900 shadow-sm"
             >
               <span>{monthNames[selectedMonth]} {selectedYear}</span>
               <ChevronDown size={14} className={`text-slate-600 transition-transform duration-200 ${showMonthPicker ? 'rotate-180' : ''}`} />
@@ -1110,17 +1108,17 @@ const AttendanceCombined = ({ userId, token }) => {
             {showMonthPicker && (
               <div className="absolute top-full left-0 mt-1.5 bg-white border border-slate-300 rounded-xl shadow-2xl z-50 p-3 min-w-[240px]">
                 <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-200">
-                  <button onClick={() => handleYearSelect(selectedYear - 1)} className="p-1 rounded-md hover:bg-slate-100 transition-all">
+                  <button onClick={() => handleYearSelect(selectedYear - 1)} className="btn-icon hover:bg-slate-100">
                     <ChevronLeft size={14} className="text-slate-700" />
                   </button>
                   <select
                     value={selectedYear}
                     onChange={(e) => handleYearSelect(Number(e.target.value))}
-                    className="flex-1 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs font-bold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="flex-1 min-w-0 px-2 py-1 bg-slate-50 border border-slate-300 rounded-md text-xs font-semibold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                   >
                     {yearOptions.map(year => <option key={year} value={year}>{year}</option>)}
                   </select>
-                  <button onClick={() => handleYearSelect(selectedYear + 1)} className="p-1 rounded-md hover:bg-slate-100 transition-all">
+                  <button onClick={() => handleYearSelect(selectedYear + 1)} className="btn-icon hover:bg-slate-100">
                     <ChevronRight size={14} className="text-slate-700" />
                   </button>
                 </div>
@@ -1130,7 +1128,7 @@ const AttendanceCombined = ({ userId, token }) => {
                     <button
                       key={month}
                       onClick={() => handleMonthSelect(index)}
-                      className={`px-2 py-1.5 rounded-md text-xs font-bold transition-all ${
+                      className={`btn btn-sm ${
                         selectedMonth === index
                           ? 'bg-blue-600 text-white shadow-sm'
                           : 'hover:bg-slate-100 text-slate-800'
@@ -1142,7 +1140,7 @@ const AttendanceCombined = ({ userId, token }) => {
                 </div>
 
                 <div className="mt-2 pt-2 border-t border-slate-200">
-                  <button onClick={goToCurrentMonth} className="w-full py-1.5 bg-blue-100 text-blue-700 rounded-md text-xs font-bold hover:bg-blue-200 transition-all">
+                  <button onClick={goToCurrentMonth} className="btn btn-sm w-full bg-blue-100 text-blue-700 hover:bg-blue-200">
                     Go to Current Month
                   </button>
                 </div>
@@ -1152,29 +1150,29 @@ const AttendanceCombined = ({ userId, token }) => {
 
           <div className="flex items-center gap-1.5 px-2.5 py-1 bg-indigo-100 rounded-lg border border-indigo-300">
             <User size={12} className="text-indigo-700" />
-            <span className="text-[10px] font-bold text-indigo-800">Shift: {getShiftDisplay()}</span>
+            <span className="text-xs font-semibold text-indigo-800">Shift: {getShiftDisplay()}</span>
           </div>
         </div>
 
-        <div className="flex items-center justify-between gap-4 w-full text-[10px] font-bold text-slate-700">
-          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span>On Time</span></span>
-          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div><span>Late</span></span>
-          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-amber-300"></div><span>Break</span></span>
-          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span>Holiday</span></span>
-          <span className="flex items-center gap-1.5 flex-1 justify-center"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div><span>Leave</span></span>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 w-full text-xs font-semibold text-slate-700">
+          <span className="flex items-center gap-1.5 sm:flex-1 justify-center whitespace-nowrap"><div className="w-2.5 h-2.5 rounded-full bg-emerald-500"></div><span>On Time</span></span>
+          <span className="flex items-center gap-1.5 sm:flex-1 justify-center whitespace-nowrap"><div className="w-2.5 h-2.5 rounded-full bg-amber-500"></div><span>Late</span></span>
+          <span className="flex items-center gap-1.5 sm:flex-1 justify-center whitespace-nowrap"><div className="w-2.5 h-2.5 rounded-full bg-amber-300"></div><span>Break</span></span>
+          <span className="flex items-center gap-1.5 sm:flex-1 justify-center whitespace-nowrap"><div className="w-2.5 h-2.5 rounded-full bg-purple-500"></div><span>Holiday</span></span>
+          <span className="flex items-center gap-1.5 sm:flex-1 justify-center whitespace-nowrap"><div className="w-2.5 h-2.5 rounded-full bg-indigo-500"></div><span>Leave</span></span>
         </div>
       </div>
 
       {/* Stats */}
       <div className="px-3 py-3 bg-slate-50/50 border-b border-slate-100">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-3 2xl:grid-cols-6 gap-2 w-full">
           <div className="flex items-center gap-2 bg-white rounded-xl px-2.5 py-2.5 shadow-sm border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center flex-shrink-0">
               <CalendarIcon size={14} className="text-slate-700" />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-bold text-slate-500 uppercase tracking-wider">Working</p>
-              <p className="text-base font-black text-slate-900 leading-tight">{stats.totalDays}</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Working</p>
+              <p className="text-base font-bold text-slate-900 leading-tight">{stats.totalDays}</p>
             </div>
           </div>
 
@@ -1183,8 +1181,8 @@ const AttendanceCombined = ({ userId, token }) => {
               <CheckCircle size={14} className="text-emerald-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-bold text-emerald-600 uppercase tracking-wider">On Time</p>
-              <p className="text-base font-black text-emerald-700 leading-tight">{stats.present}</p>
+              <p className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">On Time</p>
+              <p className="text-base font-bold text-emerald-700 leading-tight">{stats.present}</p>
             </div>
           </div>
 
@@ -1193,8 +1191,8 @@ const AttendanceCombined = ({ userId, token }) => {
               <XCircle size={14} className="text-rose-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-bold text-rose-600 uppercase tracking-wider">Absent</p>
-              <p className="text-base font-black text-rose-700 leading-tight">{stats.absent}</p>
+              <p className="text-xs font-semibold text-rose-600 uppercase tracking-wide">Absent</p>
+              <p className="text-base font-bold text-rose-700 leading-tight">{stats.absent}</p>
             </div>
           </div>
 
@@ -1203,8 +1201,8 @@ const AttendanceCombined = ({ userId, token }) => {
               <AlertCircle size={14} className="text-amber-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-bold text-amber-600 uppercase tracking-wider">Late</p>
-              <p className="text-base font-black text-amber-700 leading-tight">{stats.late}</p>
+              <p className="text-xs font-semibold text-amber-600 uppercase tracking-wide">Late</p>
+              <p className="text-base font-bold text-amber-700 leading-tight">{stats.late}</p>
             </div>
           </div>
 
@@ -1213,8 +1211,8 @@ const AttendanceCombined = ({ userId, token }) => {
               <Clock size={14} className="text-indigo-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-bold text-indigo-600 uppercase tracking-wider">Avg Eff</p>
-              <p className="text-xs font-black text-indigo-700 leading-tight">
+              <p className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">Avg Eff</p>
+              <p className="text-xs font-semibold text-indigo-700 leading-tight">
                 {(() => {
                   const h = Math.floor(stats.averageEffectiveHours || 0);
                   const m = Math.round(((stats.averageEffectiveHours || 0) - h) * 60);
@@ -1229,8 +1227,8 @@ const AttendanceCombined = ({ userId, token }) => {
               <BarChart3 size={14} className="text-slate-700" />
             </div>
             <div className="min-w-0">
-              <p className="text-[7px] font-bold text-slate-600 uppercase tracking-wider">Avg Gross</p>
-              <p className="text-xs font-black text-slate-800 leading-tight">
+              <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Avg Gross</p>
+              <p className="text-xs font-semibold text-slate-800 leading-tight">
                 {(() => {
                   const h = Math.floor(stats.averageGrossHours || 0);
                   const m = Math.round(((stats.averageGrossHours || 0) - h) * 60);
@@ -1243,12 +1241,12 @@ const AttendanceCombined = ({ userId, token }) => {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto p-3">
+      <div className="table-scroll table-sticky-first overflow-x-auto py-3 md:px-3">
         <table className="w-full min-w-[900px]">
           <thead>
             <tr className="bg-slate-100/80 border-b border-slate-200">
               {['Date', 'Day', 'Status', 'Timeline', 'Gross', 'Effective Hrs', 'Arrival'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-[10px] font-black uppercase text-slate-800 tracking-wider">{h}</th>
+                <th key={h} className="th text-slate-800">{h}</th>
               ))}
             </tr>
           </thead>
@@ -1286,41 +1284,41 @@ const AttendanceCombined = ({ userId, token }) => {
                     key={idx}
                     className={`transition-all ${today ? 'bg-blue-50/30' : ''} ${isHolidayDay ? 'bg-purple-50/20' : ''} ${isLeaveDay ? 'bg-indigo-50/20' : ''}`}
                   >
-                    <td className="px-3 py-2.5">
-                      <span className={`text-[13px] font-semibold ${today ? 'text-blue-700' : isHolidayDay ? 'text-purple-700' : isLeaveDay ? 'text-indigo-700' : 'text-black'}`}>
+                    <td className="td">
+                      <span className={`text-sm font-semibold ${today ? 'text-blue-700' : isHolidayDay ? 'text-purple-700' : isLeaveDay ? 'text-indigo-700' : 'text-black'}`}>
                         {formatDateDisplay(day.date)}
                       </span>
-                      {today && <span className="ml-1.5 text-[8px] font-semibold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Today</span>}
+                      {today && <span className="badge rounded-full ml-1.5 bg-blue-100 text-blue-700">Today</span>}
                       {isHolidayDay && (
-                        <span className="ml-1.5 text-[8px] font-semibold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full inline-flex items-center gap-0.5">
-                          <Gift size={8} />Holiday
+                        <span className="badge rounded-full ml-1.5 bg-purple-100 text-purple-700">
+                          <Gift size={12} />Holiday
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5"><span className="text-[13px] font-semibold text-black">{getDayShortName(day.date)}</span></td>
-                    <td className="px-3 py-2.5">
-                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold border ${styles.chip}`}>
+                    <td className="td"><span className="text-sm font-semibold text-black">{getDayShortName(day.date)}</span></td>
+                    <td className="td">
+                      <span className={`badge rounded-full border ${styles.chip}`}>
                         {getStatusIcon(displayStatus)}
                         {getStatusLabel(displayStatus)}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 min-w-[180px]">
+                    <td className="td min-w-[240px]">
                       {isHolidayDay ? (
                         <div className="flex items-center gap-2 h-5">
                           <div className="flex-1 h-1 rounded-full bg-gradient-to-r from-purple-300 to-purple-400" />
-                          <span className="text-[9px] font-semibold text-purple-700 whitespace-nowrap flex items-center gap-1">
-                            <Gift size={9} className="text-purple-500" />
+                          <span className="text-xs font-semibold text-purple-700 whitespace-nowrap flex items-center gap-1">
+                            <Gift size={12} className="text-purple-500" />
                             {holidayName || 'Holiday'}
                           </span>
                         </div>
                       ) : (isLeaveDay || hasIn) ? (
                         <DayTimelineBar day={day} />
                       ) : (
-                        <span className="text-[10px] text-slate-500 italic font-medium">—</span>
+                        <span className="text-xs text-slate-500 italic font-medium">—</span>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <span className="text-[13px] font-semibold text-black">
+                    <td className="td">
+                      <span className="text-sm font-semibold text-black">
                         {isWeekend || hideWorkData
                           ? '—'
                           : (day.grossHours > 0
@@ -1328,27 +1326,27 @@ const AttendanceCombined = ({ userId, token }) => {
                               : '0 hr 0 min')}
                       </span>
                     </td>
-                    <td className="px-3 py-2.5">
+                    <td className="td">
                       {isWeekend || hideWorkData ? (
-                        <span className="text-[13px] font-semibold text-slate-400">—</span>
+                        <span className="text-sm font-semibold text-slate-400">—</span>
                       ) : (
                         <div className="flex flex-col gap-0.5">
-                          <span className="inline-flex w-fit items-center gap-1 px-2 py-1 rounded-md text-[13px] font-semibold border bg-slate-50 text-black border-slate-200">
+                          <span className="badge w-fit border bg-slate-50 text-black border-slate-200">
                             {day.effectiveHours > 0
                               ? formatHours(day.effectiveHours, { unit: 'hrmin' })
                               : '0 hr 0 min'}
                           </span>
                           {day.breakMinutes > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[9px] font-medium text-orange-600">
-                              <Coffee size={8} />
+                            <span className="inline-flex items-center gap-0.5 text-xs font-medium text-orange-600">
+                              <Coffee size={12} />
                               −{formatBreakMinutes(day.breakMinutes)} break
                             </span>
                           )}
                         </div>
                       )}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`text-[13px] font-semibold ${isFullDayLeaveOnly ? 'text-indigo-700' : displayStatus === 'late' ? 'text-amber-700' : displayStatus === 'present' ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    <td className="td">
+                      <span className={`text-sm font-semibold ${isFullDayLeaveOnly ? 'text-indigo-700' : displayStatus === 'late' ? 'text-amber-700' : displayStatus === 'present' ? 'text-emerald-700' : 'text-slate-500'}`}>
                         {isHolidayDay ? '🎉' : (isWeekend || isFullDayLeaveOnly ? '—' : arrivalStatus)}
                       </span>
                     </td>
@@ -1363,7 +1361,7 @@ const AttendanceCombined = ({ userId, token }) => {
       {/* Pagination */}
       {monthDays.length > DAYS_PER_PAGE && (
         <div className="px-3 py-2 border-t border-slate-100 bg-slate-50/40 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <p className="text-[10px] font-medium text-slate-600">
+          <p className="text-xs font-medium text-slate-600">
             Showing <span className="font-semibold text-slate-800">{((currentPage - 1) * DAYS_PER_PAGE) + 1}</span>–
             <span className="font-semibold text-slate-800">{Math.min(currentPage * DAYS_PER_PAGE, monthDays.length)}</span> of{' '}
             <span className="font-semibold text-slate-800">{monthDays.length}</span> days
@@ -1371,7 +1369,7 @@ const AttendanceCombined = ({ userId, token }) => {
 
           <div className="flex items-center justify-center gap-1">
             <button type="button" onClick={() => goToPage(currentPage - 1)} disabled={currentPage === 1}
-              className="w-7 h-7 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Previous page">
+              className="btn-icon border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40" aria-label="Previous page">
               <ChevronLeft size={12} className="text-slate-600" />
             </button>
 
@@ -1380,14 +1378,14 @@ const AttendanceCombined = ({ userId, token }) => {
                 type="button"
                 key={page}
                 onClick={() => goToPage(page)}
-                className={`min-w-7 h-7 px-1.5 rounded-md text-[10px] font-semibold transition-all ${currentPage === page ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
+                className={`btn-icon text-xs font-semibold ${currentPage === page ? 'bg-blue-600 text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'}`}
               >
                 {page}
               </button>
             ))}
 
             <button type="button" onClick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages}
-              className="w-7 h-7 rounded-md border border-slate-200 bg-white flex items-center justify-center transition-all hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed" aria-label="Next page">
+              className="btn-icon border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40" aria-label="Next page">
               <ChevronRight size={12} className="text-slate-600" />
             </button>
           </div>

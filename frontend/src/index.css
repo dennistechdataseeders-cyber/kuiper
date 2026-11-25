@@ -2,6 +2,106 @@
 
 @import "tailwindcss";
 
+/* ============================================
+   DESIGN SCALE (use these instead of text-[..px])
+   Type:    .page-title  .section-title  .label  .meta  .badge   (body text = text-sm)
+   Layout:  .page  .page-flush  .stack  .card
+   Actions: .btn + .btn-md/.btn-sm + .btn-<variant>, .btn-icon
+   Forms:   .input   Tables: .th .td
+   Dialogs: .modal-backdrop .modal-panel .modal-header .modal-body .modal-footer
+   Smallest text anywhere: text-xs (12px).
+   ============================================ */
+@layer components {
+  /* --- Type --- */
+  .page-title { @apply text-xl sm:text-2xl font-bold tracking-tight text-gray-900 break-words; }
+  .section-title { @apply text-base sm:text-lg font-semibold text-gray-900; }
+  /* on a coloured card the heading keeps the card's text colour */
+  .text-white .section-title, .text-white .page-title { color: inherit; }
+  .label { @apply text-xs font-semibold text-gray-500; }
+  .meta { @apply text-xs text-gray-500; }
+  .badge { @apply inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-md text-xs font-semibold; overflow-wrap: break-word; }
+
+  /* --- Page roots: rendered inside .app-main, which already clears the sidebar --- */
+  .page { min-height: calc(100dvh - var(--topbar-h, 0px)); @apply px-3 py-3 sm:px-6 sm:py-6; }
+  .page-flush { min-height: calc(100dvh - var(--topbar-h, 0px)); }
+  .stack { @apply space-y-4 sm:space-y-6; }
+  .card { @apply bg-white rounded-xl border border-gray-200 shadow-sm p-4 sm:p-5; }
+
+  /* --- Buttons: 40px tall; btn-sm is 36px from md up --- */
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed; }
+  .btn-md { @apply h-10 px-4; }
+  .btn-sm { @apply h-10 md:h-9 px-3; }
+  .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50; }
+  .btn-secondary { @apply bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 disabled:opacity-50; }
+  .btn-ghost { @apply text-blue-600 hover:text-blue-800 hover:bg-blue-50 disabled:opacity-50; }
+  .btn-danger { @apply bg-red-600 text-white hover:bg-red-700 disabled:opacity-50; }
+  .btn-success { @apply bg-green-600 text-white hover:bg-green-700 disabled:opacity-50; }
+  .btn-warning { @apply bg-yellow-600 text-white hover:bg-yellow-700 disabled:opacity-50; }
+  .btn-icon { @apply inline-flex items-center justify-center shrink-0 text-sm font-medium w-10 h-10 md:w-8 md:h-8 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
+
+  /* --- Form controls and tables --- */
+  .input { @apply w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-lg outline-none transition-all focus:border-blue-400 focus:ring-2 focus:ring-blue-100 disabled:opacity-50 disabled:cursor-not-allowed placeholder:text-slate-400; }
+  textarea.input { @apply h-auto py-2; }
+  .th { @apply px-3 xl:px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap; }
+  .td { @apply px-3 xl:px-4 py-3 text-sm text-gray-700; }
+
+  /* --- Dialogs --- */
+  .modal-backdrop { @apply fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm; }
+  .modal-panel { @apply w-full flex flex-col bg-white rounded-2xl shadow-2xl overflow-hidden; max-height: calc(100dvh - 1.5rem); }
+  .modal-header { @apply shrink-0 flex items-start justify-between gap-3 px-4 py-3 sm:px-5 sm:py-4 border-b border-slate-100; }
+  .modal-header > div { @apply min-w-0; }
+  .modal-body { @apply flex-1 min-h-0 overflow-y-auto p-4 sm:p-5; }
+  .modal-footer { @apply shrink-0 flex flex-wrap justify-end gap-2 px-4 py-3 sm:px-5 border-t border-slate-100; }
+
+  /* --- Wide tables (see ui/ResponsiveTable) --- */
+  .table-scroll > table { min-width: var(--table-min-w, 640px); width: 100%; }
+  .table-sticky-first > table > * > tr > :first-child:not([colspan]) { @apply max-md:sticky max-md:left-0 max-md:z-10 max-md:bg-white max-md:max-w-[45vw] max-md:shadow-[1px_0_0_0_#e2e8f0]; }
+  .table-sticky-first > table > thead > tr > :first-child { @apply max-md:bg-slate-50; }
+
+  /* messages in an empty / loading row stay centred on screen while the table scrolls */
+  .table-scroll td[colspan]:only-child > * { @apply max-md:sticky max-md:left-3 max-md:max-w-[calc(100vw-3rem)]; }
+
+  /* --- App shell --- */
+  .app-shell { --sidebar-w: 0px; --topbar-h: 3.5rem; }
+  .app-topbar { @apply fixed top-0 inset-x-0 z-[45] flex items-center gap-3 px-2 bg-black border-b border-slate-800; height: var(--topbar-h); }
+  /* clip (not hidden) so position: sticky works inside pages; hidden is the fallback for old browsers */
+  .app-main { @apply flex-1 w-full min-w-0 max-w-full overflow-x-hidden; overflow-x: clip; padding-left: var(--sidebar-w); padding-top: var(--topbar-h); }
+  /* page-level fixed bars (record headers, save bars) start where the content starts */
+  .app-fixed-left { left: var(--sidebar-w); }
+  .app-fixed-top { top: var(--topbar-h); }
+  /* record / form header bar: stays under the top bar, grows when its content wraps */
+  .app-bar { @apply sticky z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm; top: var(--topbar-h, 0px); }
+  .app-bar-row { @apply flex flex-wrap items-center gap-2 sm:gap-4 px-3 py-3 sm:px-6; }
+
+  /* --- Controls on a dark panel --- */
+  .dark-panel .input { @apply bg-slate-900 border-slate-700 text-white; color-scheme: dark; }
+  .dark-panel .label { @apply text-slate-400; }
+
+  /* phones: a long unbroken word (feed name, URL, email) wraps instead of pushing out of its card */
+  .app-main { overflow-wrap: break-word; }
+  @media (max-width: 767.98px) {
+    .app-main { overflow-wrap: anywhere; }
+    .app-main table, .app-main .badge, .app-main .btn, .app-main .label { overflow-wrap: break-word; }
+  }
+
+  @media (min-width: 768px) {
+    .app-shell { --sidebar-w: 264px; --topbar-h: 0px; }
+    .app-shell[data-collapsed="true"] { --sidebar-w: 80px; }
+    /* animate the desktop collapse only, not the switch to mobile */
+    .app-main { transition: padding-left 300ms ease-in-out; }
+    .app-fixed-left { transition: left 300ms ease-in-out; }
+  }
+}
+
+@layer base {
+  /* Mobile touch targets. In the base layer on purpose: a utility such as min-h-0 can opt out. */
+  @media (max-width: 767.98px) {
+    button, [role="button"], a, select { min-height: 40px; }
+    .cursor-pointer:not(img, svg, tr, td, th, input, span) { min-height: 40px; }
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="hidden"]) { min-height: 40px; }
+  }
+}
+
 /* --- Existing Custom Animations --- */
 @keyframes cyber-glow {
   0%, 100% {
@@ -152,7 +252,7 @@ aside .relative {
 }
 
 /* Mobile responsive fix for notification dropdown */
-@media (max-width: 640px) {
+@media (max-width: 767.98px) {
   .notification-dropdown > div:last-child {
     position: fixed !important;
     top: 60px !important;
@@ -196,276 +296,38 @@ body.dropdown-open {
 }
 
 /* ============================================
-   FIX: SIDEBAR GAP
+   MOBILE (below 768px, same as Tailwind md)
    ============================================ */
-
-/* Ensure main content starts exactly after sidebar */
-main {
-  margin-left: 0 !important;
-  max-width: 100%;
-}
-
-/* Fix any residual gap on the left */
-.flex > main {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Ensure sidebar doesn't create extra space */
-aside + main {
-  margin-left: 0 !important;
-}
-
-/* Fix for the toggle button being positioned on top of sidebar */
-button.fixed.top-10 {
-  z-index: 60 !important;
-}
-
-/* Ensure the toggle button doesn't create a gap when hidden */
-button.fixed.top-10.hidden {
-  display: none !important;
-}
-
-/* ============================================
-   MOBILE RESPONSIVENESS FIXES
-   ============================================ */
-
-/* Ensure content doesn't overflow on mobile */
-@media (max-width: 768px) {
-  main {
-    padding-left: 0 !important;
-  }
-  
-  /* Fix for tables on mobile */
-  .overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
-  }
-  
-  /* Ensure buttons are touch-friendly on mobile */
-  button, 
-  [role="button"],
-  .cursor-pointer {
-    min-height: 40px;
-    min-width: 40px;
-  }
-}
-
-/* Ensure all interactive elements have proper touch targets */
-@media (max-width: 480px) {
-  button, 
-  .btn, 
-  [role="button"] {
-    min-height: 44px;
-    min-width: 44px;
-  }
-  
-  /* Prevent horizontal scroll on small screens */
-  body {
-    overflow-x: hidden;
-  }
-  
+@media (max-width: 767.98px) {
+  body,
   #root {
-    overflow-x: hidden;
+    overflow-x: clip;
   }
-}
 
-/* ============================================
-   MOBILE TABLE RESPONSIVENESS
-   ============================================ */
-
-/* Make tables scrollable with visible indicator */
-@media (max-width: 768px) {
   .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
     position: relative;
   }
-  
-  /* Add subtle scroll indicator */
-  .overflow-x-auto::after {
+
+  /* Hint under wide tables */
+  .overflow-x-auto:has(> table)::after {
     content: '← Scroll →';
     display: block;
+    position: sticky;
+    left: 0;
     text-align: center;
-    font-size: 8px;
+    font-size: 12px;
     color: #94a3b8;
     padding: 4px 0;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    background: linear-gradient(to right, transparent, #f1f5f9 20%, #f1f5f9 80%, transparent);
+    font-weight: 600;
   }
-  
-  /* Make progress bars more compact on mobile */
-  .w-16 {
-    width: 48px !important;
-  }
-  
-  /* Reduce padding in tables on mobile */
+
   table td,
   table th {
-    padding: 6px 8px !important;
+    padding: 8px 10px !important;
   }
-  
-  /* Make stage dots smaller on mobile */
-  .w-5.h-5 {
-    width: 14px !important;
-    height: 14px !important;
-  }
-  
-  /* Reduce gap between stage dots */
-  .w-4.h-0\.5 {
-    width: 6px !important;
-  }
-  
-  /* Make status badges smaller on mobile */
-  .px-2.py-0\.5 {
-    padding: 2px 4px !important;
-    font-size: 7px !important;
-  }
-}
 
-/* Fix table cells on mobile */
-@media (max-width: 640px) {
-  table {
-    font-size: 11px;
-  }
-  
-  table th,
-  table td {
-    padding: 6px 8px !important;
-    white-space: normal !important;
-    word-break: break-word !important;
-  }
-  
-  /* Make feed names more compact */
-  table td:first-child {
-    min-width: 80px;
-    max-width: 120px;
-  }
-  
-  /* Make stage indicators smaller */
-  table td .flex.items-center {
-    gap: 2px !important;
-  }
-  
-  table td .w-5.h-5 {
-    width: 14px !important;
-    height: 14px !important;
-  }
-  
-  table td .w-4.h-0\.5 {
-    width: 6px !important;
-  }
-  
-  /* Hide less important columns on very small screens */
-  table th:last-child,
-  table td:last-child {
-    display: none;
-  }
-  
-  /* Progress bar width on mobile */
-  .w-16 {
-    width: 40px !important;
-  }
-}
-
-/* Very small phones */
-@media (max-width: 400px) {
-  table {
-    font-size: 10px;
-  }
-  
-  table th,
-  table td {
-    padding: 4px 4px !important;
-  }
-  
-  /* Stack stage indicators vertically if needed */
-  table td .flex.items-center {
-    flex-wrap: wrap;
-    gap: 2px !important;
-  }
-  
-  /* Make stage circles even smaller */
-  table td .w-5.h-5 {
-    width: 12px !important;
-    height: 12px !important;
-  }
-  
-  table td .w-4.h-0\.5 {
-    width: 4px !important;
-  }
-  
-  /* Hide progress bar on very small screens, show only percentage */
-  table td .w-16 {
-    display: none !important;
-  }
-  
-  /* Make status text smaller */
-  table td .text-\[8px\] {
-    font-size: 6px !important;
-  }
-}
-
-/* ============================================
-   FEED STATUS PAGE SPECIFIC FIXES
-   ============================================ */
-
-/* Make stage steps more compact on mobile */
-@media (max-width: 768px) {
-  .stages-container {
-    gap: 2px !important;
-  }
-  
-  .stage-label {
-    font-size: 6px !important;
-  }
-  
-  /* Stats grid compact on mobile */
-  .grid-cols-6 {
-    grid-template-columns: repeat(3, 1fr) !important;
-    gap: 4px !important;
-  }
-  
-  /* Feed name + record count on same line */
-  .feed-name-row {
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 2px !important;
-  }
-  
-  .record-count-badge {
-    font-size: 7px !important;
-    padding: 1px 4px !important;
-  }
-}
-
-/* ============================================
-   IMPROVED TOUCH TARGETS FOR MOBILE
-   ============================================ */
-
-@media (max-width: 640px) {
-  /* All clickable elements should have good touch targets */
-  button,
-  a,
-  [role="button"],
-  select,
-  input[type="file"] {
-    min-height: 44px;
-  }
-  
-  /* Make dropdown selects easier to tap */
-  select {
-    padding: 8px 12px !important;
-    font-size: 14px !important;
-  }
-  
-  /* Make input fields easier to tap */
-  input,
-  textarea {
-    font-size: 14px !important;
-  }
-  
-  /* Prevent zoom on input focus (iOS) */
+  /* 16px inputs: iOS zooms the page when a smaller input gets focus */
   input,
   textarea,
   select {

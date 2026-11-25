@@ -38,11 +38,11 @@ import {
   GitBranch
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
 import { isProjectManagerOf } from '../utils/projectAccess';
+import useIsMobile from '../utils/useIsMobile';
 
 const weekDays = [
   'Monday',
@@ -58,20 +58,8 @@ const ProjectFeeds = () => {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
-  const { isCollapsed } = useSidebar();
   const location = useLocation();
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
-  const [isTablet, setIsTablet] = useState(window.innerWidth >= 768 && window.innerWidth < 1024);
-
-  // Handle resize for responsive detection
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768);
-      setIsTablet(window.innerWidth >= 768 && window.innerWidth < 1024);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  const isMobile = useIsMobile();
 
   // FILTERS
   const [feedTypeFilter, setFeedTypeFilter] = useState('ALL');
@@ -551,29 +539,29 @@ const filteredFeeds = useMemo(() => {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-3 sm:p-6 transition-all duration-300 ${isCollapsed ? 'ml-10 sm:ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       <div className="w-full max-w-full">
         {/* HEADER SECTION */}
         <div className="mb-4 sm:mb-6">
           <div className="flex flex-col space-y-3">
             <div>
-              <h1 className="text-xl sm:text-2xl md:text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+              <h1 className="page-title">
                 Feed Center
               </h1>
-              <p className="text-[10px] sm:text-xs font-medium text-slate-500 mt-0.5 sm:mt-1">
+              <p className="text-sm text-slate-500 mt-1">
                 Monitor and manage all active project feeds
               </p>
             </div>
 
             {/* FILTERS SECTION - Responsive grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white p-2 sm:p-3 rounded-xl shadow-sm border border-slate-200">
+            <div className="card !p-3 sm:!p-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
               {/* Project Select */}
               <div className="relative">
                 <Briefcase size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
                 <select
                   value={selectedProject}
                   onChange={(e) => setSelectedProject(e.target.value)}
-                  className="w-full pl-8 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
+                  className="input pl-8 bg-slate-50 cursor-pointer"
                 >
                   <option value="ALL">All Projects</option>
                   {projects.slice(0, 20).map(project => (
@@ -590,7 +578,7 @@ const filteredFeeds = useMemo(() => {
                 <select
                   value={feedTypeFilter}
                   onChange={(e) => setFeedTypeFilter(e.target.value)}
-                  className="w-full pl-8 pr-4 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-semibold text-xs text-slate-700 hover:border-slate-300 focus:border-blue-400 transition-colors cursor-pointer"
+                  className="input pl-8 bg-slate-50 cursor-pointer"
                 >
                   <option value="ALL">All Types</option>
                   <option value="Daily">Daily</option>
@@ -608,7 +596,7 @@ const filteredFeeds = useMemo(() => {
                   placeholder="Search feeds..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-8 pr-3 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none font-medium text-xs placeholder:text-slate-400 focus:border-blue-400 transition-colors"
+                  className="input pl-8 bg-slate-50"
                 />
               </div>
             </div>
@@ -617,21 +605,21 @@ const filteredFeeds = useMemo(() => {
 
         {/* Items Per Page Selector */}
         <div className="flex justify-end mb-3 sm:mb-4">
-          <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-1.5 shadow-sm">
-            <span className="text-[8px] sm:text-[10px] font-black text-slate-500 uppercase">Show:</span>
+          <div className="flex items-center gap-2 bg-white rounded-lg border border-slate-200 px-3 py-0.5 md:py-1.5 shadow-sm">
+            <span className="text-xs font-semibold text-slate-500 uppercase">Show:</span>
             <select
               value={itemsPerPage}
               onChange={(e) => {
                 setItemsPerPage(Number(e.target.value));
                 setCurrentPage(1);
               }}
-              className="text-xs sm:text-sm font-bold text-slate-700 bg-transparent outline-none cursor-pointer"
+              className="text-sm font-semibold text-slate-700 bg-transparent outline-none cursor-pointer"
             >
               <option value={25}>25</option>
               <option value={50}>50</option>
               <option value={100}>100</option>
             </select>
-            <span className="text-[8px] sm:text-[10px] font-black text-slate-500">per page</span>
+            <span className="text-xs font-semibold text-slate-500">per page</span>
           </div>
         </div>
 
@@ -652,20 +640,20 @@ const filteredFeeds = useMemo(() => {
                     <div key={feed._id} className="p-3 hover:bg-slate-50/60 transition-all">
                       {/* Feed Header */}
                       <div 
-                        className="flex items-start justify-between cursor-pointer"
+                        className="flex flex-col gap-2 cursor-pointer"
                         onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
                       >
-                        <div className="flex-1 min-w-0">
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center shadow-sm flex-shrink-0">
                               <Hash size={12} />
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1 flex-wrap">
-                                <p className="text-sm font-bold text-slate-800 truncate">{feed.name}</p>
+                                <p className="text-sm font-semibold text-slate-800 min-w-0 break-words">{feed.name}</p>
                                 {lastUpdated && (
-                                  <span className="text-[8px] text-slate-400 flex items-center gap-0.5" title={formatDate(lastUpdated)}>
-                                    <GitBranch size={10} className="text-blue-400" />
+                                  <span className="text-xs text-slate-400 flex items-center gap-0.5" title={formatDate(lastUpdated)}>
+                                    <GitBranch size={12} className="text-blue-400" />
                                     {getTimeAgo(lastUpdated)}
                                   </span>
                                 )}
@@ -673,16 +661,16 @@ const filteredFeeds = useMemo(() => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0 ml-2">
-                          <span className="inline-flex items-center gap-0.5 bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded-lg text-[8px] font-black uppercase">
-                            <Briefcase size={8} />
-                            <span className="max-w-[50px] truncate">{feed.projectCustomId}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="badge bg-slate-100 text-slate-700">
+                            <Briefcase size={12} />
+                            <span>{feed.projectCustomId}</span>
                           </span>
-                          <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[7px] font-black uppercase border ${getFeedTypeColor(feed.feedType)}`}>
+                          <span className={`badge border ${getFeedTypeColor(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
                             {feed.feedType}
                           </span>
-                          {isExpanded ? <ChevronUp size={14} className="text-slate-400" /> : <ChevronDown size={14} className="text-slate-400" />}
+                          {isExpanded ? <ChevronUp size={16} className="text-slate-400 ml-auto" /> : <ChevronDown size={16} className="text-slate-400 ml-auto" />}
                         </div>
                       </div>
 
@@ -693,7 +681,7 @@ const filteredFeeds = useMemo(() => {
                             value={feed.feedStatus || 'New'}
                             onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
                             disabled={updatingStatus[feed._id]}
-                            className={`w-full px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all ${getFeedStatusColor(feed.feedStatus)}`}
+                            className={`w-full px-2 py-1 rounded-md text-xs font-semibold uppercase border cursor-pointer transition-all ${getFeedStatusColor(feed.feedStatus)}`}
                           >
                             {feedStatuses.map(status => (
                               <option key={status} value={status}>{status}</option>
@@ -710,16 +698,16 @@ const filteredFeeds = useMemo(() => {
                       {/* Developers */}
                       <div className="mt-1.5 flex flex-wrap items-center gap-1">
                         {developerNames.slice(0, 3).map((devName, idx) => (
-                          <span key={idx} className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold">
-                            <Users size={8} />
+                          <span key={idx} className="badge bg-blue-50 text-blue-700">
+                            <Users size={12} />
                             {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
                           </span>
                         ))}
                         {developerNames.length > 3 && (
-                          <span className="text-[7px] font-bold text-blue-500">+{developerNames.length - 3}</span>
+                          <span className="text-xs font-semibold text-blue-500">+{developerNames.length - 3}</span>
                         )}
                         {developerNames.length === 0 && (
-                          <span className="text-[7px] font-bold text-slate-400 italic">Unassigned</span>
+                          <span className="text-xs font-semibold text-slate-400 italic">Unassigned</span>
                         )}
                       </div>
 
@@ -727,21 +715,21 @@ const filteredFeeds = useMemo(() => {
                       <div className="mt-2 flex items-center justify-end gap-1 border-t border-slate-100 pt-2">
                         <button
                           onClick={() => openFeedCommentModal(feed)}
-                          className="p-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all"
+                          className="btn-icon bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white"
                           title="Comments"
                         >
                           <MessageSquare size={14} />
                         </button>
                         <button
                           onClick={() => handleEditClick(feed)}
-                          className="p-1.5 rounded-lg bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                          className="btn-icon bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
                           title="Edit"
                         >
                           <Edit3 size={14} />
                         </button>
                         <button
                           onClick={() => openTicketModal(feed)}
-                          className="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white transition-all"
+                          className="btn-icon bg-amber-50 text-amber-600 hover:bg-amber-600 hover:text-white"
                           title="Generate Ticket"
                         >
                           <Ticket size={14} />
@@ -751,7 +739,7 @@ const filteredFeeds = useMemo(() => {
                             href={gitUrl} 
                             target="_blank" 
                             rel="noopener noreferrer"
-                            className="p-1.5 rounded-lg bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all"
+                            className="btn-icon bg-slate-50 text-slate-500 hover:bg-blue-50 hover:text-blue-600"
                             title="Git Repository"
                           >
                             <GitFork size={14} />
@@ -764,14 +752,14 @@ const filteredFeeds = useMemo(() => {
                         <div className="mt-2 pt-2 border-t border-slate-100 space-y-2">
                           {/* Platform */}
                           {feed.feedPlatform && (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[8px] font-bold text-slate-500">Platform:</span>
-                              <span className={`inline-flex items-center gap-0.5 px-2 py-0.5 rounded text-[7px] font-black ${getPlatformColor(feed.feedPlatform)}`}>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-xs font-semibold text-slate-500">Platform:</span>
+                              <span className={`badge ${getPlatformColor(feed.feedPlatform)}`}>
                                 {getPlatformIcon(feed.feedPlatform)}
                                 {feed.feedPlatform}
                               </span>
                               {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
-                                <a href={feed.webDomain} target="_blank" rel="noopener noreferrer" className="text-[7px] text-blue-600 hover:underline truncate max-w-[120px]">
+                                <a href={feed.webDomain} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline break-all">
                                   {feed.webDomain}
                                 </a>
                               )}
@@ -780,16 +768,16 @@ const filteredFeeds = useMemo(() => {
 
                           {/* Schedule */}
                           <div className="flex items-center gap-2">
-                            <span className="text-[8px] font-bold text-slate-500">Schedule:</span>
-                            <span className="text-[8px] font-medium text-slate-700">{getScheduleDisplay(feed)}</span>
+                            <span className="text-xs font-semibold text-slate-500">Schedule:</span>
+                            <span className="text-xs font-medium text-slate-700">{getScheduleDisplay(feed)}</span>
                           </div>
 
                           {/* Git Last Updated Info */}
                           {lastUpdated && (
                             <div className="flex items-center gap-2">
                               <GitBranch size={12} className="text-blue-500" />
-                              <span className="text-[8px] font-bold text-slate-500">Last Git Update:</span>
-                              <span className="text-[8px] text-slate-600">{formatDate(lastUpdated)}</span>
+                              <span className="text-xs font-semibold text-slate-500">Last Git Update:</span>
+                              <span className="text-xs text-slate-600">{formatDate(lastUpdated)}</span>
                             </div>
                           )}
 
@@ -814,24 +802,24 @@ const filteredFeeds = useMemo(() => {
                 <div className="p-8 text-center">
                   <Activity size={32} className="text-slate-300 mx-auto mb-2" />
                   <p className="text-sm font-bold uppercase text-slate-400">No feeds found</p>
-                  <p className="text-[10px] text-slate-300 mt-0.5">Try adjusting your filters</p>
+                  <p className="text-xs text-slate-300 mt-0.5">Try adjusting your filters</p>
                 </div>
               )}
             </div>
           ) : (
             // Desktop Table View - Only this is horizontally scrollable
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px]">
+            <div className="table-scroll table-sticky-first overflow-x-auto">
+              <table className="w-full min-w-[1000px]">
                 <thead>
                   <tr className="bg-gradient-to-r from-slate-50 to-slate-100 border-b border-slate-200">
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Feed Details</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Project</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Type</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Status</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Git Last Updated</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Developers</th>
-                    <th className="text-left px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Git Repository</th>
-                    <th className="text-right px-4 py-3 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">Actions</th>
+                    <th className="th">Feed Details</th>
+                    <th className="th">Project</th>
+                    <th className="th">Type</th>
+                    <th className="th">Status</th>
+                    <th className="th">Git Last Updated</th>
+                    <th className="th">Developers</th>
+                    <th className="th">Git Repository</th>
+                    <th className="th text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -853,38 +841,38 @@ const filteredFeeds = useMemo(() => {
                             } ${isExpanded ? 'bg-blue-50/40' : ''}`}
                             onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
                           >
-                            <td className="px-4 py-3">
+                            <td className="td">
                               <div className="flex items-center gap-2">
                                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-slate-800 to-slate-900 text-white flex items-center justify-center shadow-sm flex-shrink-0">
                                   <Hash size={12} />
                                 </div>
                                 <div>
-                                  <p className="text-xs font-bold text-slate-800 whitespace-nowrap">{feed.name}</p>
+                                  <p className="text-xs font-semibold text-slate-800 whitespace-nowrap">{feed.name}</p>
                                 </div>
                               </div>
                             </td>
 
-                            <td className="px-4 py-3">
-                              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-700 px-2 py-1 rounded-lg text-[8px] font-black uppercase whitespace-nowrap">
-                                <Briefcase size={8} />
+                            <td className="td">
+                              <span className="badge bg-slate-100 text-slate-700 whitespace-nowrap">
+                                <Briefcase size={12} />
                                 {feed.projectCustomId}
                               </span>
                             </td>
 
-                            <td className="px-4 py-3">
-                              <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase border whitespace-nowrap ${getFeedTypeColor(feed.feedType)}`}>
+                            <td className="td">
+                              <span className={`badge border whitespace-nowrap ${getFeedTypeColor(feed.feedType)}`}>
                                 {getFeedTypeIcon(feed.feedType)}
                                 {feed.feedType}
                               </span>
                             </td>
 
-                            <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                            <td className="td" onClick={(e) => e.stopPropagation()}>
                               <div className="relative min-w-[120px]">
                                 <select
                                   value={feed.feedStatus || 'New'}
                                   onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
                                   disabled={updatingStatus[feed._id]}
-                                  className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
+                                  className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
                                   style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 4px center', backgroundSize: '8px' }}
                                 >
                                   {feedStatuses.map(status => (
@@ -899,86 +887,86 @@ const filteredFeeds = useMemo(() => {
                               </div>
                             </td>
 
-                            <td className="px-4 py-3">
+                            <td className="td">
                               {lastUpdated ? (
                                 <div className="flex items-center gap-1.5">
                                   <GitBranch size={12} className="text-blue-500" />
-                                  <span className="text-[9px] font-medium text-slate-600" title={formatDate(lastUpdated)}>
+                                  <span className="text-xs font-medium text-slate-600" title={formatDate(lastUpdated)}>
                                     {getTimeAgo(lastUpdated)}
                                   </span>
                                 </div>
                               ) : (
-                                <span className="text-[8px] text-slate-400 italic whitespace-nowrap">Never</span>
+                                <span className="text-xs text-slate-400 italic whitespace-nowrap">Never</span>
                               )}
                             </td>
 
-                            <td className="px-4 py-3">
+                            <td className="td">
                               <div className="space-y-1">
                                 <div className="flex flex-wrap items-center gap-1">
                                   {displayDevelopers.map((devName, devIdx) => (
                                     <span
                                       key={devIdx}
-                                      className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-md text-[7px] font-bold whitespace-nowrap"
+                                      className="badge bg-blue-50 text-blue-700 whitespace-nowrap"
                                     >
-                                      <Users size={6} />
+                                      <Users size={12} />
                                       {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
                                     </span>
                                   ))}
                                 </div>
                                 {hasMoreDevelopers && (
-                                  <span className="text-[7px] font-bold text-blue-500 whitespace-nowrap">
+                                  <span className="text-xs font-semibold text-blue-500 whitespace-nowrap">
                                     +{developerNames.length - 2} more
                                   </span>
                                 )}
                                 {developerNames.length === 0 && (
-                                  <span className="text-[7px] font-bold text-slate-400 italic whitespace-nowrap">Unassigned</span>
+                                  <span className="text-xs font-semibold text-slate-400 italic whitespace-nowrap">Unassigned</span>
                                 )}
                               </div>
                             </td>
 
-                            <td className="px-4 py-3">
+                            <td className="td">
                               {gitUrl ? (
                                 <a 
                                   href={gitUrl} 
                                   target="_blank" 
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 text-[8px] text-blue-600 hover:underline whitespace-nowrap"
+                                  className="inline-flex items-center gap-1 text-xs text-blue-600 hover:underline whitespace-nowrap"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <GitFork size={10} />
+                                  <GitFork size={12} />
                                   {gitName || 'View Repo'}
                                 </a>
                               ) : (
-                                <span className="text-[8px] text-slate-400 italic whitespace-nowrap">No Git repo</span>
+                                <span className="text-xs text-slate-400 italic whitespace-nowrap">No Git repo</span>
                               )}
                             </td>
 
-                            <td className="px-4 py-3">
+                            <td className="td">
                               <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
                                 <button
                                   onClick={() => setExpandedFeedId(isExpanded ? null : feed._id)}
-                                  className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all flex-shrink-0"
+                                  className="btn-icon group bg-slate-50 border border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
                                   title={isExpanded ? "Collapse Details" : "Expand Details"}
                                 >
                                   {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                                 </button>
                                 <button
                                   onClick={() => openFeedCommentModal(feed)}
-                                  className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-purple-50 hover:text-purple-600 transition-all flex-shrink-0"
+                                  className="btn-icon group bg-slate-50 border border-slate-200 text-slate-500 hover:bg-purple-50 hover:text-purple-600 flex-shrink-0"
                                   title="View Comments"
                                 >
                                   <MessageSquare size={12} />
                                 </button>
                                 <button
                                   onClick={() => handleEditClick(feed)}
-                                  className="group w-7 h-7 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-blue-50 hover:text-blue-600 transition-all flex-shrink-0"
+                                  className="btn-icon group bg-slate-50 border border-slate-200 text-slate-500 hover:bg-blue-50 hover:text-blue-600 flex-shrink-0"
                                   title="Edit Feed"
                                 >
                                   <Edit3 size={12} />
                                 </button>
                                 <button
                                   onClick={() => openTicketModal(feed)}
-                                  className="group w-7 h-7 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-600 hover:bg-amber-600 hover:text-white transition-all flex-shrink-0"
+                                  className="btn-icon group bg-amber-50 border border-amber-200 text-amber-600 hover:bg-amber-600 hover:text-white flex-shrink-0"
                                   title="Generate Ticket"
                                 >
                                   <Ticket size={12} />
@@ -989,31 +977,31 @@ const filteredFeeds = useMemo(() => {
 
                           {isExpanded && (
                             <tr className="bg-blue-50/30">
-                              <td colSpan={8} className="px-6 py-4">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <td colSpan={8} className="td">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                                   <div className="bg-white rounded-lg p-3 shadow-sm border border-slate-200">
                                     <div className="flex items-center gap-2 mb-2">
                                       <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
                                         <Globe size={12} />
                                       </div>
-                                      <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Platform & URL</h4>
+                                      <h4 className="text-sm font-semibold text-slate-500 whitespace-nowrap">Platform & URL</h4>
                                     </div>
                                     {feed.feedPlatform ? (
                                       <div>
-                                        <p className="text-xs font-bold text-slate-700 mb-1 whitespace-nowrap">{feed.feedPlatform}</p>
+                                        <p className="text-xs font-semibold text-slate-700 mb-1 whitespace-nowrap">{feed.feedPlatform}</p>
                                         {(feed.feedPlatform === 'Web' || feed.feedPlatform === 'Both') && feed.webDomain && (
                                           <a 
                                             href={feed.webDomain} 
                                             target="_blank" 
                                             rel="noopener noreferrer"
-                                            className="text-[9px] text-blue-600 hover:underline break-all flex items-center gap-1"
+                                            className="text-xs text-blue-600 hover:underline break-all flex items-center gap-1"
                                           >
-                                            <ExternalLink size={10} />
+                                            <ExternalLink size={12} />
                                             {feed.webDomain}
                                           </a>
                                         )}
                                         {feed.feedPlatform === 'App' && (
-                                          <p className="text-[9px] text-slate-500 italic whitespace-nowrap">Mobile application platform</p>
+                                          <p className="text-xs text-slate-500 italic whitespace-nowrap">Mobile application platform</p>
                                         )}
                                       </div>
                                     ) : (
@@ -1026,17 +1014,17 @@ const filteredFeeds = useMemo(() => {
                                       <div className="w-6 h-6 rounded-lg bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
                                         <Calendar size={12} />
                                       </div>
-                                      <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Schedule</h4>
+                                      <h4 className="text-sm font-semibold text-slate-500 whitespace-nowrap">Schedule</h4>
                                     </div>
-                                    <p className="text-xs font-bold text-slate-700 whitespace-nowrap">{getScheduleDisplay(feed)}</p>
+                                    <p className="text-xs font-semibold text-slate-700 whitespace-nowrap">{getScheduleDisplay(feed)}</p>
                                     {feed.feedType === 'Weekly' && feed.weekDay && (
-                                      <p className="text-[8px] text-slate-500 mt-1 whitespace-nowrap">Every {feed.weekDay}</p>
+                                      <p className="text-xs text-slate-500 mt-1 whitespace-nowrap">Every {feed.weekDay}</p>
                                     )}
                                     {feed.feedType === 'Monthly' && feed.monthDay && (
-                                      <p className="text-[8px] text-slate-500 mt-1 whitespace-nowrap">Day {feed.monthDay} of each month</p>
+                                      <p className="text-xs text-slate-500 mt-1 whitespace-nowrap">Day {feed.monthDay} of each month</p>
                                     )}
                                     {feed.feedType === 'Once off' && (
-                                      <p className="text-[8px] text-slate-500 mt-1 whitespace-nowrap">One-time execution</p>
+                                      <p className="text-xs text-slate-500 mt-1 whitespace-nowrap">One-time execution</p>
                                     )}
                                   </div>
                                 </div>
@@ -1048,10 +1036,10 @@ const filteredFeeds = useMemo(() => {
                                       <div className="w-6 h-6 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
                                         <GitBranch size={12} />
                                       </div>
-                                      <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Git Last Updated</h4>
+                                      <h4 className="text-sm font-semibold text-slate-500 whitespace-nowrap">Git Last Updated</h4>
                                     </div>
                                     <p className="text-xs font-medium text-slate-700">{formatDate(lastUpdated)}</p>
-                                    <p className="text-[8px] text-slate-400 mt-0.5">{getTimeAgo(lastUpdated)}</p>
+                                    <p className="text-xs text-slate-400 mt-0.5">{getTimeAgo(lastUpdated)}</p>
                                   </div>
                                 )}
 
@@ -1060,7 +1048,7 @@ const filteredFeeds = useMemo(() => {
                                     <div className="w-6 h-6 rounded-lg bg-purple-100 text-purple-600 flex items-center justify-center flex-shrink-0">
                                       <MessageSquare size={12} />
                                     </div>
-                                    <h4 className="text-[9px] font-black uppercase text-slate-500 whitespace-nowrap">Feed Comments</h4>
+                                    <h4 className="text-sm font-semibold text-slate-500 whitespace-nowrap">Feed Comments</h4>
                                   </div>
                                   <CommentSection
                                     type="feed"
@@ -1082,11 +1070,11 @@ const filteredFeeds = useMemo(() => {
                     <tr>
                       <td colSpan={8} className="py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
-                          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3">
+                          <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center mb-3 shrink-0">
                             <Activity size={20} className="text-slate-300" />
                           </div>
-                          <p className="text-xs font-bold uppercase text-slate-400">No feeds found</p>
-                          <p className="text-[9px] text-slate-300 mt-0.5">Try adjusting your filters</p>
+                          <p className="text-xs font-semibold uppercase text-slate-400">No feeds found</p>
+                          <p className="text-xs text-slate-300 mt-0.5">Try adjusting your filters</p>
                         </div>
                       </td>
                     </tr>
@@ -1100,7 +1088,7 @@ const filteredFeeds = useMemo(() => {
         {/* PAGINATION */}
         {totalPages > 1 && (
           <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-0">
-            <div className="text-[8px] sm:text-[10px] font-bold text-slate-400">
+            <div className="text-xs font-semibold text-slate-400">
               Showing {indexOfFirstFeed + 1} to {Math.min(indexOfLastFeed, filteredFeeds.length)} of {filteredFeeds.length} feeds
             </div>
             
@@ -1108,9 +1096,9 @@ const filteredFeeds = useMemo(() => {
               <button
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(prev => prev - 1)}
-                className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
-                <ChevronLeft size={isMobile ? 14 : 16} />
+                <ChevronLeft size={16} />
               </button>
 
               <div className="flex gap-0.5 sm:gap-1 bg-white p-0.5 sm:p-1 rounded-lg border border-slate-200 shadow-sm">
@@ -1130,18 +1118,18 @@ const filteredFeeds = useMemo(() => {
                   }
                   
                   if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                    return <span key="ellipsis1" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-[10px] sm:text-xs">...</span>;
+                    return <span key="ellipsis1" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-xs shrink-0">...</span>;
                   }
                   
                   if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                    return <span key="ellipsis2" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-[10px] sm:text-xs">...</span>;
+                    return <span key="ellipsis2" className="w-5 sm:w-6 h-5 sm:h-6 flex items-center justify-center text-slate-400 text-xs shrink-0">...</span>;
                   }
                   
                   return (
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
-                      className={`w-6 sm:w-7 h-6 sm:h-7 rounded-md text-[9px] sm:text-[11px] font-black transition-all ${
+                      className={`btn-icon ${
                         currentPage === pageNum
                           ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white shadow-sm'
                           : 'text-slate-500 hover:bg-slate-100'
@@ -1156,9 +1144,9 @@ const filteredFeeds = useMemo(() => {
               <button
                 disabled={currentPage === totalPages}
                 onClick={() => setCurrentPage(prev => prev + 1)}
-                className="w-7 sm:w-8 h-7 sm:h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
-                <ChevronRight size={isMobile ? 14 : 16} />
+                <ChevronRight size={16} />
               </button>
             </div>
           </div>
@@ -1167,33 +1155,33 @@ const filteredFeeds = useMemo(() => {
         {/* MODALS - Same as before */}
         {/* EDIT MODAL */}
         {showEditModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md flex justify-center items-center z-[120] p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-6">
+          <div className="modal-backdrop">
+            <div className="modal-panel max-w-lg">
+              <div className="modal-header">
                 <div>
-                  <h2 className="text-xl font-black text-slate-800">Edit Feed</h2>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Update feed configuration</p>
+                  <h2 className="section-title">Edit Feed</h2>
+                  <p className="text-xs text-slate-400 mt-0.5">Update feed configuration</p>
                 </div>
-                <button onClick={closeModal} className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                <button onClick={closeModal} className="btn-icon bg-slate-100 text-slate-500 hover:bg-slate-200">
                   <X size={16} />
                 </button>
               </div>
 
-              <form onSubmit={handleUpdateFeed} className="space-y-4">
+              <form onSubmit={handleUpdateFeed} className="modal-body space-y-4">
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Name</label>
+                  <label className="label block mb-1.5">Feed Name</label>
                   <input
                     type="text"
                     required
                     placeholder="Enter feed name"
                     value={feedForm.name}
                     onChange={(e) => setFeedForm({ ...feedForm, name: e.target.value })}
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                    className="input bg-slate-50"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Type</label>
+                  <label className="label block mb-1.5">Feed Type</label>
                   <select
                     value={feedForm.feedType}
                     onChange={(e) =>
@@ -1204,7 +1192,7 @@ const filteredFeeds = useMemo(() => {
                         monthDay: e.target.value !== 'Monthly' ? '' : feedForm.monthDay
                       })
                     }
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                    className="input bg-slate-50 cursor-pointer"
                   >
                     <option value="Daily">Daily</option>
                     <option value="Weekly">Weekly</option>
@@ -1215,12 +1203,12 @@ const filteredFeeds = useMemo(() => {
 
                 {feedForm.feedType === 'Weekly' && (
                   <div>
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Select Day</label>
+                    <label className="label block mb-1.5">Select Day</label>
                     <select
                       required
                       value={feedForm.weekDay}
                       onChange={(e) => setFeedForm({ ...feedForm, weekDay: e.target.value })}
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                      className="input bg-slate-50 cursor-pointer"
                     >
                       <option value="">Choose a day</option>
                       {weekDays.map(day => (
@@ -1232,12 +1220,12 @@ const filteredFeeds = useMemo(() => {
 
                 {feedForm.feedType === 'Monthly' && (
                   <div>
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Day of Month (1-31)</label>
+                    <label className="label block mb-1.5">Day of Month (1-31)</label>
                     <select
                       required
                       value={feedForm.monthDay}
                       onChange={(e) => setFeedForm({ ...feedForm, monthDay: e.target.value })}
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                      className="input bg-slate-50 cursor-pointer"
                     >
                       <option value="">Select day</option>
                       {[...Array(31)].map((_, i) => (
@@ -1248,11 +1236,11 @@ const filteredFeeds = useMemo(() => {
                 )}
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Feed Status</label>
+                  <label className="label block mb-1.5">Feed Status</label>
                   <select
                     value={feedForm.feedStatus}
                     onChange={(e) => setFeedForm({ ...feedForm, feedStatus: e.target.value })}
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                    className="input bg-slate-50 cursor-pointer"
                   >
                     {feedStatuses.map(status => (
                       <option key={status} value={status}>{status}</option>
@@ -1261,7 +1249,7 @@ const filteredFeeds = useMemo(() => {
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Platform Type</label>
+                  <label className="label block mb-1.5">Platform Type</label>
                   <div className="flex gap-2">
                     {['Web', 'App', 'Both'].map((platform) => (
                       <button
@@ -1274,7 +1262,7 @@ const filteredFeeds = useMemo(() => {
                             webDomain: platform === 'App' ? '' : feedForm.webDomain
                           });
                         }}
-                        className={`flex-1 py-2 rounded-lg font-black text-[10px] uppercase tracking-wider transition-all ${
+                        className={`btn btn-md flex-1 ${
                           feedForm.feedPlatform === platform
                             ? 'bg-blue-600 text-white shadow-md'
                             : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
@@ -1288,20 +1276,20 @@ const filteredFeeds = useMemo(() => {
 
                 {(feedForm.feedPlatform === 'Web' || feedForm.feedPlatform === 'Both') && (
                   <div>
-                    <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Domain URL</label>
+                    <label className="label block mb-1.5">Domain URL</label>
                     <input
                       type="url"
                       placeholder="https://example.com"
                       value={feedForm.webDomain}
                       onChange={(e) => setFeedForm({ ...feedForm, webDomain: e.target.value })}
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                      className="input bg-slate-50"
                     />
                   </div>
                 )}
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-2 block flex items-center gap-1">
-                    <UserCheck size={10} />
+                  <label className="label mb-1.5 flex items-center gap-1">
+                    <UserCheck size={12} />
                     Assign Developers
                   </label>
                   <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
@@ -1325,7 +1313,7 @@ const filteredFeeds = useMemo(() => {
                           }}
                           className="w-3 h-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                         />
-                        <span className="text-[10px] font-bold text-slate-700 truncate">{dev.name}</span>
+                        <span className="text-xs font-semibold text-slate-700 truncate">{dev.name}</span>
                       </label>
                     ))}
                   </div>
@@ -1333,7 +1321,7 @@ const filteredFeeds = useMemo(() => {
 
                 <button
                   type="submit"
-                  className="w-full py-3 bg-gradient-to-r from-slate-800 to-slate-900 text-white font-black rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all uppercase text-[10px] tracking-wider shadow-md"
+                  className="btn btn-md w-full bg-gradient-to-r from-slate-800 to-slate-900 text-white hover:from-blue-600 hover:to-blue-700 shadow-md"
                 >
                   Save Changes
                 </button>
@@ -1344,26 +1332,27 @@ const filteredFeeds = useMemo(() => {
 
         {/* FEED COMMENT MODAL */}
         {showFeedCommentModal && selectedFeedForComments && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[140] p-4">
-            <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
+          <div className="modal-backdrop">
+            <div className="modal-panel max-w-2xl">
+              <div className="modal-header">
                 <div>
-                  <h2 className="text-2xl font-black text-[#1B2559]">Feed Comments</h2>
+                  <h2 className="section-title">Feed Comments</h2>
                   <p className="text-sm text-slate-500 mt-0.5">
                     {selectedFeedForComments.name}
-                    <span className="text-[9px] text-slate-400 ml-2">
+                    <span className="text-xs text-slate-400 ml-2">
                       {selectedFeedForComments.projectCustomId}
                     </span>
                   </p>
                 </div>
                 <button 
                   onClick={closeFeedCommentModal}
-                  className="text-slate-300 hover:text-slate-600 transition-colors"
+                  className="btn-icon text-slate-300 hover:text-slate-600"
                 >
                   <X size={28} />
                 </button>
               </div>
               
+              <div className="modal-body">
               <CommentSection
                 type="feed"
                 entityId={selectedFeedForComments._id}
@@ -1373,46 +1362,47 @@ const filteredFeeds = useMemo(() => {
                 canComment={true}
                 refreshTrigger={commentRefreshTrigger}
               />
+              </div>
             </div>
           </div>
         )}
 
         {/* GENERATE TICKET MODAL */}
         {showTicketModal && selectedTicketFeed && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[120] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
-              <div className="p-5 border-b border-slate-100">
+          <div className="modal-backdrop">
+            <div className="modal-panel max-w-lg">
+              <div className="modal-header !block">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h2 className="text-lg font-black text-slate-800">Generate Support Ticket</h2>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
+                    <h2 className="section-title">Generate Support Ticket</h2>
+                    <p className="text-xs text-slate-500 mt-0.5">
                       Feed: <span className="font-bold text-blue-600">{selectedTicketFeed.name}</span>
                     </p>
                   </div>
-                  <button onClick={closeTicketModal} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 hover:bg-slate-200 transition-colors">
+                  <button onClick={closeTicketModal} className="btn-icon bg-slate-100 text-slate-500 hover:bg-slate-200">
                     <X size={16} />
                   </button>
                 </div>
               </div>
 
-              <div className="p-5 space-y-4">
+              <div className="modal-body space-y-4">
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Ticket Title *</label>
+                  <label className="label block mb-1.5">Ticket Title *</label>
                   <input
                     type="text"
                     placeholder="Brief summary of the issue"
                     value={ticketForm.title}
                     onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors"
+                    className="input bg-slate-50"
                   />
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Priority</label>
+                  <label className="label block mb-1.5">Priority</label>
                   <select
                     value={ticketForm.priority}
                     onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-blue-400 transition-colors cursor-pointer"
+                    className="input bg-slate-50 cursor-pointer"
                   >
                     <option value="Low">Low</option>
                     <option value="Medium">Medium</option>
@@ -1422,25 +1412,25 @@ const filteredFeeds = useMemo(() => {
                 </div>
 
                 <div>
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">Description *</label>
+                  <label className="label block mb-1.5">Description *</label>
                   <textarea
                     placeholder="Detailed description of the issue..."
                     rows={3}
                     value={ticketForm.description}
                     onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-colors resize-none"
+                    className="input bg-slate-50 resize-none"
                   />
                 </div>
               </div>
 
-              <div className="p-5 border-t border-slate-100 flex gap-2">
-                <button onClick={closeTicketModal} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-black uppercase text-[10px] tracking-wider hover:bg-slate-200 transition-colors">
+              <div className="modal-footer [&>button]:flex-1">
+                <button onClick={closeTicketModal} className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200">
                   Cancel
                 </button>
                 <button
                   onClick={handleGenerateTicket}
                   disabled={generatingTicket}
-                  className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-amber-600 hover:to-amber-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                  className="btn btn-md flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-md disabled:opacity-50"
                 >
                   {generatingTicket ? (
                     <>
@@ -1461,38 +1451,38 @@ const filteredFeeds = useMemo(() => {
 
         {/* COMMENT VIEW MODAL */}
         {showCommentModal && selectedCommentFeed && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[130] flex items-center justify-center p-4">
-            <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl">
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center">
+          <div className="modal-backdrop">
+            <div className="modal-panel max-w-md">
+              <div className="modal-header">
                 <div className="flex items-center gap-1.5">
                   <CheckCircle size={16} className="text-emerald-600" />
-                  <h3 className="text-base font-black text-slate-800">Completion Comment</h3>
+                  <h3 className="section-title">Completion Comment</h3>
                 </div>
-                <button onClick={() => setShowCommentModal(false)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                <button onClick={() => setShowCommentModal(false)} className="btn-icon bg-slate-100 hover:bg-slate-200">
                   <X size={14} />
                 </button>
               </div>
-              <div className="p-4">
+              <div className="modal-body">
                 <div className="mb-3">
-                  <p className="text-[8px] font-black text-slate-400 uppercase">Feed</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase">Feed</p>
                   <p className="text-sm font-bold text-slate-800">{selectedCommentFeed.name}</p>
-                  <p className="text-[10px] text-slate-500">{selectedCommentFeed.projectCustomId}</p>
+                  <p className="text-xs text-slate-500">{selectedCommentFeed.projectCustomId}</p>
                 </div>
                 <div className="mb-3">
-                  <p className="text-[8px] font-black text-slate-400 uppercase">Comment</p>
+                  <p className="text-xs font-semibold text-slate-400 uppercase">Comment</p>
                   <div className="mt-1 p-2 bg-slate-50 rounded-lg border border-slate-100">
                     <p className="text-xs text-slate-700 leading-relaxed">"{selectedCommentFeed.description}"</p>
                   </div>
                 </div>
                 {selectedCommentFeed.completedAt && (
                   <div>
-                    <p className="text-[8px] font-black text-slate-400 uppercase">Completed At</p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">{new Date(selectedCommentFeed.completedAt).toLocaleString()}</p>
+                    <p className="text-xs font-semibold text-slate-400 uppercase">Completed At</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{new Date(selectedCommentFeed.completedAt).toLocaleString()}</p>
                   </div>
                 )}
               </div>
-              <div className="p-4 border-t border-slate-100">
-                <button onClick={() => setShowCommentModal(false)} className="w-full py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-emerald-600 hover:to-emerald-700 transition-all">
+              <div className="modal-footer">
+                <button onClick={() => setShowCommentModal(false)} className="btn btn-md w-full bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:from-emerald-600 hover:to-emerald-700">
                   Close
                 </button>
               </div>

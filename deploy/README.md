@@ -1,4 +1,9 @@
-# Deploying KUIPER (speed changes)
+# Deploying KUIPER (Standard MERN: PM2 + Nginx)
+
+This deployment architecture is a standard MERN stack with zero Docker dependencies:
+- **Backend**: Managed by PM2 in fork mode via `ecosystem.config.js`. Connects directly to MongoDB (`MONGO_URI`).
+- **Frontend**: Static production build served directly by Nginx with gzip/brotli precompression.
+- **Reverse Proxy**: Nginx handles SSL termination, static SPA routing, and API proxying using configs in `deploy/nginx/`.
 
 Files:
 

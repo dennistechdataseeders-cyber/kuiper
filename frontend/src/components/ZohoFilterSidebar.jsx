@@ -188,14 +188,13 @@ const Check = ({ checked, onChange, label, small }) => (
       type="checkbox"
       checked={checked}
       onChange={onChange}
-      className="mt-[3px] h-4 w-4 shrink-0 rounded-[3px] border-slate-400 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
+      className="mt-[3px] h-4 w-4 shrink-0 rounded-xl border-slate-400 text-blue-600 focus:ring-0 focus:ring-offset-0 cursor-pointer"
     />
-    <span className={`leading-snug text-slate-700 ${small ? 'text-[13px]' : 'text-sm'}`}>{label}</span>
+    <span className={`leading-snug text-slate-700 ${small ? 'text-sm' : 'text-sm'}`}>{label}</span>
   </label>
 );
 
-const inputCls =
-  'w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-[13px] text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100';
+const inputCls = 'input';
 
 // Zoho-style operator dropdown — the list is portalled so the sidebar's scroll area can't clip it
 function OpSelect({ ops, value, onChange }) {
@@ -218,7 +217,7 @@ function OpSelect({ ops, value, onChange }) {
         ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-[13px] text-slate-700 bg-white ${
+        className={`btn btn-sm border text-slate-700 bg-white ${
           open ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-300'
         }`}
       >
@@ -241,7 +240,7 @@ function OpSelect({ ops, value, onChange }) {
                   key={k}
                   type="button"
                   onClick={() => { onChange(k); setOpen(false); }}
-                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-[13px] hover:bg-blue-50 ${
+                  className={`w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-blue-50 ${
                     k === current[0] ? 'font-bold text-slate-900' : 'text-slate-700'
                   }`}
                 >
@@ -409,29 +408,29 @@ export default function ZohoFilterSidebar({
   const hasDraft = countActiveFilters(draft) > 0 || countActiveFilters(value) > 0;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-lg flex flex-col max-h-[calc(100vh-120px)] sticky top-4">
-      <div className="px-5 pt-5 pb-3">
-        <h3 className="text-[15px] font-semibold text-slate-800">Filter {title} by</h3>
+    <div className="bg-white border border-slate-200 rounded-lg flex flex-col max-h-[45dvh] lg:max-h-[calc(100vh-120px)] lg:sticky lg:top-4">
+      <div className="px-4 pt-4 pb-3">
+        <h3 className="section-title">Filter {title} by</h3>
       </div>
 
-      <div className="px-5 pb-3">
+      <div className="px-4 pb-3">
         <div className="relative">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
           <input
             value={term}
             onChange={(e) => setTerm(e.target.value)}
             placeholder="Search"
-            className="w-full pl-9 pr-8 py-2 rounded-md border border-slate-300 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-white"
+            className="input pl-9 pr-8"
           />
           {term && (
-            <button onClick={() => setTerm('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <button onClick={() => setTerm('')} className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1">
               <X size={14} />
             </button>
           )}
         </div>
       </div>
 
-      <div className="overflow-y-auto px-5 pb-3 flex-1">
+      <div className="overflow-y-auto px-4 pb-3 flex-1">
         {shownSystem.length > 0 && (
           <div className="mb-3">
             <button onClick={() => setSysOpen((v) => !v)} className="w-full flex items-center gap-2 py-2 text-left">
@@ -486,17 +485,17 @@ export default function ZohoFilterSidebar({
       </div>
 
       {/* footer — Apply Filter / Clear */}
-      <div className="px-5 py-3 border-t border-slate-200 space-y-2 bg-white rounded-b-lg">
+      <div className="px-4 py-3 border-t border-slate-200 space-y-2 bg-white rounded-b-lg">
         <button
           onClick={apply}
-          className="w-full py-2 rounded-md bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 transition shadow-sm"
+          className="btn btn-md w-full bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
         >
           Apply Filter
         </button>
         <button
           onClick={clear}
           disabled={!hasDraft}
-          className="w-full py-2 rounded-md border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 transition disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-md w-full border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
         >
           Clear
         </button>
@@ -513,13 +512,13 @@ export function FilterToggleButton({ open, onClick, count = 0 }) {
     <button
       onClick={onClick}
       title={open ? 'Hide filters' : 'Show filters'}
-      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold shadow-sm transition ${
+      className={`btn btn-md border shadow-sm ${
         open ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
       }`}
     >
       <Filter size={14} /> Filter
       {count > 0 && (
-        <span className="px-1.5 py-0.5 rounded-full bg-blue-600 text-white text-[10px] font-black leading-none">{count}</span>
+        <span className="badge rounded-full bg-blue-600 text-white leading-none">{count}</span>
       )}
     </button>
   );
@@ -530,9 +529,9 @@ export function FilterToggleButton({ open, onClick, count = 0 }) {
 // ------------------------------------------------------------------
 export function FilterLayout({ open, sidebar, children }) {
   return (
-    <div className="flex items-start gap-4">
-      {open && <aside className="w-[260px] shrink-0">{sidebar}</aside>}
-      <div className="flex-1 min-w-0">{children}</div>
+    <div className="flex flex-col lg:flex-row lg:items-start gap-3 sm:gap-4">
+      {open && <aside className="w-full lg:w-[260px] shrink-0">{sidebar}</aside>}
+      <div className="lg:flex-1 w-full min-w-0">{children}</div>
     </div>
   );
 }

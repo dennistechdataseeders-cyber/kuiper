@@ -29,7 +29,6 @@ import {
   TrendingUp
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 
 // Default date: yesterday (avoids showing today's still-in-progress data)
@@ -78,13 +77,13 @@ const mergeIntervals = (intervals) => {
 // ============================================
 const SystemBadge = ({ title }) => (
   <span
-    className="text-[8px] font-black bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full uppercase inline-flex items-center gap-1"
+    className="badge rounded-full bg-slate-200 text-slate-600"
     title={
       title ||
       'This timer was automatically stopped by the system at 11:55 PM'
     }
   >
-    <AlertTriangle size={8} />
+    <AlertTriangle size={12} />
     System
   </span>
 );
@@ -94,10 +93,10 @@ const SystemBadge = ({ title }) => (
 // ============================================
 const AutoStoppedBadge = () => (
   <span
-    className="text-[8px] font-black bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full uppercase inline-flex items-center gap-1"
+    className="badge rounded-full bg-amber-100 text-amber-700"
     title="This timer was abandoned and auto-stopped by the system. No work time was recorded."
   >
-    <AlertTriangle size={8} />
+    <AlertTriangle size={12} />
     Auto-stopped · 0 work
   </span>
 );
@@ -108,7 +107,7 @@ const AutoStoppedBadge = () => (
 const EmptyState = ({ text, icon: Icon = BarChart3 }) => (
   <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-10 text-center">
     <Icon size={36} className="text-slate-300 mx-auto mb-2" />
-    <p className="text-xs font-bold text-slate-500">{text}</p>
+    <p className="text-xs font-semibold text-slate-500">{text}</p>
   </div>
 );
 
@@ -250,29 +249,29 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
   const hasAnyActivity = perFeed.length > 0 || perTicket.length > 0;
 
   return (
-    <div className="bg-white border border-slate-200 rounded-2xl shadow-sm mb-5 overflow-hidden">
+    <div className="bg-white border border-slate-200 rounded-xl shadow-sm mb-5 overflow-hidden">
       {/* ============================================
           DEVELOPER HEADER
           ============================================ */}
       <div className="bg-gradient-to-r from-slate-900 to-slate-700 text-white px-5 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-[9px] font-black uppercase tracking-widest opacity-60">
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-60">
             Report For
           </p>
-          <h2 className="text-lg font-black mt-0.5 truncate">
+          <h2 className="section-title mt-0.5 break-words sm:truncate">
             {report.developer.name}
           </h2>
-          <p className="text-[11px] opacity-70 truncate">
+          <p className="text-xs opacity-70 break-words sm:truncate">
             {report.developer.email}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
           {report.developer.employeeCode && (
-            <span className="text-[9px] font-black uppercase tracking-wider bg-white/15 px-2.5 py-1 rounded-lg border border-white/10">
+            <span className="badge bg-white/15 border border-white/10">
               {report.developer.employeeCode}
             </span>
           )}
-          <span className="text-[9px] font-black uppercase tracking-wider bg-white/15 px-2.5 py-1 rounded-lg border border-white/10">
+          <span className="badge bg-white/15 border border-white/10">
             {new Date(selectedDate).toLocaleDateString('en-US', {
               weekday: 'short',
               day: 'numeric',
@@ -282,10 +281,10 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
           </span>
           {systemStoppedCount > 0 && (
             <span
-              className="text-[9px] font-black uppercase tracking-wider bg-amber-400/20 text-amber-100 px-2.5 py-1 rounded-lg border border-amber-300/30 inline-flex items-center gap-1"
+              className="badge bg-amber-400/20 text-amber-100 border border-amber-300/30"
               title={`${systemStoppedCount} timer(s) on this date were auto-stopped by the system`}
             >
-              <AlertTriangle size={10} />
+              <AlertTriangle size={12} />
               {systemStoppedCount} System Stop{systemStoppedCount === 1 ? '' : 's'}
             </span>
           )}
@@ -295,17 +294,17 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
       {/* ============================================
           STATS BAR
           ============================================ */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 p-4">
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center shrink-0">
               <Timer size={14} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 Actual Time
               </p>
-              <p className="text-sm font-black text-blue-700 font-mono">
+              <p className="text-sm font-semibold text-blue-700 font-mono">
                 {formatTimeWithSeconds(actualWorkingTime)}
               </p>
             </div>
@@ -314,14 +313,14 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center shrink-0">
               <AlertCircle size={14} className="text-amber-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 Overlap
               </p>
-              <p className="text-sm font-black text-amber-700 font-mono">
+              <p className="text-sm font-semibold text-amber-700 font-mono">
                 {formatTimeWithSeconds(overlapTime)}
               </p>
             </div>
@@ -330,14 +329,14 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
               <Rss size={14} className="text-emerald-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 Feeds
               </p>
-              <p className="text-sm font-black text-emerald-600">
+              <p className="text-sm font-semibold text-emerald-600">
                 {perFeed.length}
               </p>
             </div>
@@ -346,14 +345,14 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 
         <div className="bg-white rounded-xl border border-slate-200 p-3 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
               <TicketIcon size={14} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-[8px] font-black text-slate-400 uppercase tracking-wider">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                 Tickets
               </p>
-              <p className="text-sm font-black text-purple-600">
+              <p className="text-sm font-semibold text-purple-600">
                 {perTicket.length}
               </p>
             </div>
@@ -365,12 +364,12 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
         <div className="px-4 pb-4">
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start gap-2">
-              <Info size={14} className="text-blue-600 mt-0.5" />
+              <Info size={14} className="text-blue-600 mt-0.5 shrink-0" />
               <div>
-                <p className="text-[9px] font-black text-blue-700">
+                <p className="text-xs font-semibold text-blue-700">
                   Overlapping work detected
                 </p>
-                <p className="text-[8px] text-blue-600 mt-0.5">
+                <p className="text-xs text-blue-600 mt-0.5">
                   Time is counted only once in "Actual Time" (overlapping periods are merged)
                 </p>
               </div>
@@ -383,12 +382,12 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
         <div className="px-4 pb-4">
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
             <div className="flex items-start gap-2">
-              <AlertTriangle size={14} className="text-amber-600 mt-0.5" />
+              <AlertTriangle size={14} className="text-amber-600 mt-0.5 shrink-0" />
               <div>
-                <p className="text-[9px] font-black text-amber-700">
+                <p className="text-xs font-semibold text-amber-700">
                   {abandonedCount} abandoned timer{abandonedCount === 1 ? '' : 's'} on this date
                 </p>
-                <p className="text-[8px] text-amber-600 mt-0.5">
+                <p className="text-xs text-amber-600 mt-0.5">
                   These sessions were never stopped by the developer and were force-closed by the system.
                   They contribute <strong>0s</strong> to the total time. Any earlier paused sessions on the
                   same feed/ticket are still counted.
@@ -406,10 +405,10 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
         <div className="px-4 pb-5">
           <div className="bg-slate-50 border border-slate-200 rounded-xl p-6 text-center">
             <Clock size={28} className="text-slate-300 mx-auto mb-2" />
-            <p className="text-xs font-black text-slate-500">
+            <p className="text-xs font-semibold text-slate-500">
               No work logged on this date
             </p>
-            <p className="text-[10px] text-slate-400 mt-1">
+            <p className="text-xs text-slate-400 mt-1">
               This developer did not track any feed or ticket time.
             </p>
           </div>
@@ -421,10 +420,10 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
           ============================================ */}
       {hasAnyActivity && (
         <>
-          <div className="flex gap-2 px-4 border-b border-slate-200">
+          <div className="flex flex-wrap gap-x-2 px-4 border-b border-slate-200">
             <button
               onClick={() => { setActiveTab('feed'); setSearchTerm(''); }}
-              className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all ${
+              className={`px-3 sm:px-5 py-3 text-xs font-semibold uppercase tracking-wide border-b-2 transition-all ${
                 activeTab === 'feed'
                   ? 'border-emerald-600 text-emerald-600'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -436,7 +435,7 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
             </button>
             <button
               onClick={() => { setActiveTab('ticket'); setSearchTerm(''); }}
-              className={`px-5 py-3 text-xs font-black uppercase tracking-wider border-b-2 transition-all ${
+              className={`px-3 sm:px-5 py-3 text-xs font-semibold uppercase tracking-wide border-b-2 transition-all ${
                 activeTab === 'ticket'
                   ? 'border-purple-600 text-purple-600'
                   : 'border-transparent text-slate-400 hover:text-slate-600'
@@ -447,14 +446,14 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
               </div>
             </button>
 
-            <div className="ml-auto relative flex items-center">
+            <div className="relative flex items-center w-full sm:w-auto sm:ml-auto py-2">
               <Search size={14} className="absolute left-3 text-slate-400" />
               <input
                 type="text"
                 placeholder={activeTab === 'feed' ? 'Search feeds...' : 'Search tickets...'}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="h-9 pl-9 pr-3 rounded-lg border border-slate-200 text-sm outline-none focus:border-blue-400 bg-white w-56"
+                className="input pl-9 sm:w-56"
               />
             </div>
           </div>
@@ -482,7 +481,7 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                         onClick={() =>
                           setExpandedFeed(isExpanded ? null : feed.feedId)
                         }
-                        className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-all"
+                        className="p-4 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3 cursor-pointer hover:bg-slate-50 transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -494,31 +493,31 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-black text-slate-800 truncate">
+                              <p className="text-sm font-semibold text-slate-800 max-w-full break-words sm:truncate">
                                 {feed.feedName}
                               </p>
                               {isZeroTime && feed.hasAbandoned && <AutoStoppedBadge />}
                               {hasSystemStop && !isZeroTime && <SystemBadge />}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              <span className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
-                                <Briefcase size={9} />
+                              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                                <Briefcase size={12} />
                                 {feed.projectCustomId}
                               </span>
-                              <span className="text-[9px] font-bold text-slate-400">
+                              <span className="text-xs font-semibold text-slate-400">
                                 • {feed.daysWorked} day{feed.daysWorked === 1 ? '' : 's'}
                               </span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="flex items-center gap-4 flex-shrink-0 ml-auto">
                           <div className="text-right">
-                            <p className={`text-sm font-black font-mono ${
+                            <p className={`text-sm font-semibold font-mono ${
                               isZeroTime ? 'text-amber-700' : 'text-emerald-700'
                             }`}>
                               {feed.totalFormatted}
                             </p>
-                            <p className="text-[9px] font-bold text-slate-400">
+                            <p className="text-xs font-semibold text-slate-400">
                               {isZeroTime && feed.hasAbandoned
                                 ? 'no work recorded'
                                 : `${feed.totalHours} hrs`}
@@ -534,7 +533,7 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 
                       {isExpanded && (
                         <div className="border-t border-slate-100 bg-slate-50/60 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
                             Daily Breakdown
                           </p>
                           <div className="space-y-2">
@@ -559,14 +558,14 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                                   >
                                     <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                                       <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                          <Hash size={10} className="text-slate-400" />
+                                        <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                          <Hash size={12} className="text-slate-400" />
                                           {e.date}
                                         </span>
                                         {e.abandoned && <AutoStoppedBadge />}
                                         {e.stoppedBySystem && !e.abandoned && <SystemBadge />}
                                       </div>
-                                      <span className={`text-xs font-black font-mono ${
+                                      <span className={`text-xs font-semibold font-mono ${
                                         entryZero && e.abandoned
                                           ? 'text-amber-700'
                                           : 'text-emerald-700'
@@ -575,11 +574,11 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                                       </span>
                                     </div>
                                     {e.description ? (
-                                      <p className="text-[11px] text-slate-600 whitespace-pre-wrap bg-white p-2 rounded mt-1">
+                                      <p className="text-xs text-slate-600 whitespace-pre-wrap bg-white p-2 rounded mt-1">
                                         {e.description}
                                       </p>
                                     ) : (
-                                      <p className="text-[10px] italic text-slate-400 mt-1">
+                                      <p className="text-xs italic text-slate-400 mt-1">
                                         No description recorded
                                       </p>
                                     )}
@@ -619,7 +618,7 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                         onClick={() =>
                           setExpandedTicket(isExpanded ? null : ticket.ticketId)
                         }
-                        className="p-4 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-all"
+                        className="p-4 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 sm:gap-3 cursor-pointer hover:bg-slate-50 transition-all"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -631,36 +630,36 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                           </div>
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-black text-slate-800 truncate">
+                              <p className="text-sm font-semibold text-slate-800 max-w-full break-words sm:truncate">
                                 #{ticket.ticketNumber} — {ticket.ticketTitle}
                               </p>
                               {isZeroTime && ticket.hasAbandoned && <AutoStoppedBadge />}
                               {hasSystemStop && !isZeroTime && <SystemBadge />}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                              <span className="text-[9px] font-bold text-slate-500 flex items-center gap-1">
-                                <Briefcase size={9} />
+                              <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
+                                <Briefcase size={12} />
                                 {ticket.projectCustomId}
                               </span>
                               {ticket.status && (
-                                <span className="text-[8px] font-black uppercase bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                <span className="badge bg-slate-100 text-slate-600">
                                   {ticket.status}
                                 </span>
                               )}
-                              <span className="text-[9px] font-bold text-slate-400">
+                              <span className="text-xs font-semibold text-slate-400">
                                 • {ticket.daysWorked} day{ticket.daysWorked === 1 ? '' : 's'}
                               </span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-4 flex-shrink-0">
+                        <div className="flex items-center gap-4 flex-shrink-0 ml-auto">
                           <div className="text-right">
-                            <p className={`text-sm font-black font-mono ${
+                            <p className={`text-sm font-semibold font-mono ${
                               isZeroTime ? 'text-amber-700' : 'text-purple-700'
                             }`}>
                               {ticket.totalFormatted}
                             </p>
-                            <p className="text-[9px] font-bold text-slate-400">
+                            <p className="text-xs font-semibold text-slate-400">
                               {isZeroTime && ticket.hasAbandoned
                                 ? 'no work recorded'
                                 : `${ticket.totalHours} hrs`}
@@ -676,7 +675,7 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 
                       {isExpanded && (
                         <div className="border-t border-slate-100 bg-slate-50/60 p-4">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-500 mb-2">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 mb-2">
                             Daily Breakdown
                           </p>
                           <div className="space-y-2">
@@ -700,14 +699,14 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                                   >
                                     <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                                       <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                          <Hash size={10} className="text-slate-400" />
+                                        <span className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                                          <Hash size={12} className="text-slate-400" />
                                           {e.date}
                                         </span>
                                         {e.abandoned && <AutoStoppedBadge />}
                                         {e.stoppedBySystem && !e.abandoned && <SystemBadge />}
                                       </div>
-                                      <span className={`text-xs font-black font-mono ${
+                                      <span className={`text-xs font-semibold font-mono ${
                                         entryZero && e.abandoned
                                           ? 'text-amber-700'
                                           : 'text-purple-700'
@@ -716,11 +715,11 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
                                       </span>
                                     </div>
                                     {e.description ? (
-                                      <p className="text-[11px] text-slate-600 whitespace-pre-wrap bg-white p-2 rounded mt-1">
+                                      <p className="text-xs text-slate-600 whitespace-pre-wrap bg-white p-2 rounded mt-1">
                                         {e.description}
                                       </p>
                                     ) : (
-                                      <p className="text-[10px] italic text-slate-400 mt-1">
+                                      <p className="text-xs italic text-slate-400 mt-1">
                                         No description recorded
                                       </p>
                                     )}
@@ -746,7 +745,6 @@ const DeveloperReportBlock = ({ report, selectedDate }) => {
 // MAIN COMPONENT
 // ============================================
 const WorkReport = () => {
-  const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
   const authHeader = { headers: { Authorization: `Bearer ${token}` } };
 
@@ -937,24 +935,22 @@ const WorkReport = () => {
 
   return (
     <div
-      className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4 sm:p-6 transition-all duration-300 ${
-        isCollapsed ? 'ml-20' : 'ml-64'
-      }`}
+      className="page bg-gradient-to-br from-slate-50 to-slate-100"
     >
       {/* HEADER */}
       <div className="mb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+          <h1 className="page-title">
             Work Report
           </h1>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-600 mt-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-600 mt-1">
             Developer Activity & Time Tracking
           </p>
         </div>
         <button
           onClick={fetchReport}
           disabled={loading || !selectedDeveloper}
-          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm disabled:opacity-50"
+          className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm disabled:opacity-50"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           Refresh
@@ -962,17 +958,17 @@ const WorkReport = () => {
       </div>
 
       {/* FILTERS */}
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-4 mb-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="card mb-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
           <div>
-            <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
-              <Users size={11} /> Developer
+            <label className="label mb-1.5 flex items-center gap-1">
+              <Users size={12} /> Developer
             </label>
             <select
               value={selectedDeveloper}
               onChange={(e) => setSelectedDeveloper(e.target.value)}
               disabled={loadingDevs}
-              className="w-full h-10 rounded-lg border border-slate-200 px-3 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50 cursor-pointer"
+              className="input bg-slate-50 cursor-pointer"
             >
               <option value="">
                 {loadingDevs ? 'Loading...' : 'Select a developer'}
@@ -989,14 +985,14 @@ const WorkReport = () => {
           </div>
 
           <div>
-            <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 flex items-center gap-1">
-              <Calendar size={11} /> Date
+            <label className="label mb-1.5 flex items-center gap-1">
+              <Calendar size={12} /> Date
             </label>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full h-10 rounded-lg border border-slate-200 px-3 font-semibold text-sm outline-none focus:border-blue-500 bg-slate-50"
+              className="input bg-slate-50"
             />
           </div>
 
@@ -1004,14 +1000,14 @@ const WorkReport = () => {
             <button
               onClick={fetchReport}
               disabled={loading || !selectedDeveloper}
-              className="flex-1 h-10 rounded-lg bg-blue-600 text-white text-xs font-black uppercase tracking-wider hover:bg-blue-700 transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              className="btn btn-md flex-1 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
             >
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
               Generate
             </button>
             <button
               onClick={handleReset}
-              className="h-10 px-4 rounded-lg bg-slate-100 text-slate-600 text-xs font-black uppercase tracking-wider hover:bg-slate-200 transition-all"
+              className="btn btn-md bg-slate-100 text-slate-600 hover:bg-slate-200"
             >
               Reset
             </button>
@@ -1036,7 +1032,7 @@ const WorkReport = () => {
           <p className="text-sm font-bold text-slate-500">
             No developer activity on this date
           </p>
-          <p className="text-[10px] text-slate-400 mt-2">
+          <p className="text-xs text-slate-400 mt-2">
             Try picking a different date from the calendar above.
           </p>
         </div>
@@ -1059,20 +1055,20 @@ const WorkReport = () => {
           ============================================ */}
       {isAllMode && !loading && allReports.length > 0 && (
         <>
-          <div className="bg-gradient-to-br from-slate-900 to-slate-700 text-white rounded-2xl shadow-sm p-5 mb-5">
+          <div className="bg-gradient-to-br from-slate-900 to-slate-700 text-white rounded-xl shadow-sm p-5 mb-5">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
                 <Layers size={20} className="text-white" />
               </div>
               <div>
-                <p className="text-[9px] font-black uppercase tracking-widest opacity-60">
+                <p className="text-xs font-semibold uppercase tracking-wide opacity-60">
                   Combined Report
                 </p>
-                <h2 className="text-lg font-black">
+                <h2 className="section-title">
                   {allReports.length} Developer
                   {allReports.length === 1 ? '' : 's'} Active
                 </h2>
-                <p className="text-[11px] opacity-70">
+                <p className="text-xs opacity-70">
                   {new Date(selectedDate).toLocaleDateString('en-US', {
                     weekday: 'long',
                     day: 'numeric',
@@ -1083,39 +1079,39 @@ const WorkReport = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
               <div className="bg-white/10 border border-white/10 rounded-xl p-3">
-                <p className="text-[8px] font-black uppercase tracking-wider opacity-70">
+                <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
                   Total Time
                 </p>
-                <p className="text-lg font-black font-mono mt-0.5">
+                <p className="text-lg font-bold font-mono mt-0.5">
                   {formatTimeWithSeconds(combinedStats?.totalSeconds || 0)}
                 </p>
               </div>
 
               <div className="bg-white/10 border border-white/10 rounded-xl p-3">
-                <p className="text-[8px] font-black uppercase tracking-wider opacity-70">
+                <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
                   Feeds Worked
                 </p>
-                <p className="text-lg font-black mt-0.5">
+                <p className="text-lg font-bold mt-0.5">
                   {combinedStats?.feeds || 0}
                 </p>
               </div>
 
               <div className="bg-white/10 border border-white/10 rounded-xl p-3">
-                <p className="text-[8px] font-black uppercase tracking-wider opacity-70">
+                <p className="text-xs font-semibold uppercase tracking-wide opacity-70">
                   Tickets Worked
                 </p>
-                <p className="text-lg font-black mt-0.5">
+                <p className="text-lg font-bold mt-0.5">
                   {combinedStats?.tickets || 0}
                 </p>
               </div>
 
               <div className="bg-white/10 border border-white/10 rounded-xl p-3">
-                <p className="text-[8px] font-black uppercase tracking-wider opacity-70 flex items-center gap-1">
-                  <AlertTriangle size={9} /> System Stops
+                <p className="text-xs font-semibold uppercase tracking-wide opacity-70 flex items-center gap-1">
+                  <AlertTriangle size={12} /> System Stops
                 </p>
-                <p className="text-lg font-black mt-0.5">
+                <p className="text-lg font-bold mt-0.5">
                   {combinedStats?.sysStops || 0}
                 </p>
               </div>

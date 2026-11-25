@@ -44,39 +44,14 @@ const storage = multer.diskStorage({
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname).toLowerCase();
+    // Any file type is allowed, so keep only safe characters (the download route requires them too)
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/g, '').slice(0, 20);
     cb(null, 'ticket-' + uniqueSuffix + ext);
   }
 });
-// File filter - allow images AND documents
+// File filter - allow all file types
 const fileFilter = (req, file, cb) => {
-  // Image extensions
-  const allowedImageTypes = /jpeg|jpg|png|gif|webp|bmp|svg|ico/;
-  // Document extensions - ADDED MORE TYPES
-  const allowedDocTypes = /pdf|doc|docx|xls|xlsx|txt|csv|zip|rar|7z|tar|gz|bz2|ppt|pptx|odp|odt|ods|rtf|mp4|avi|mkv|mov|wmv|flv|webm|m4v|mpg|mpeg|mp3|wav|aac|ogg|flac|m4a|wma|json|xml|yaml|yml|ini|cfg|conf|js|jsx|ts|tsx|html|css|scss|sass|py|java|cpp|c|h|php|rb|go|rs|sh|bash|bat|ps1|cmd|exe/;
-  
-  const extname = allowedImageTypes.test(path.extname(file.originalname).toLowerCase()) ||
-                  allowedDocTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedImageTypes.test(file.mimetype) ||
-                   allowedDocTypes.test(file.mimetype) ||
-                   file.mimetype === 'application/octet-stream' ||
-                   file.mimetype === 'application/x-msdownload' ||
-                   file.mimetype === 'application/x-rar-compressed' ||
-                   file.mimetype === 'application/x-7z-compressed' ||
-                   file.mimetype === 'application/x-tar' ||
-                   file.mimetype === 'application/gzip';
-  
-  if (mimetype && extname) {
-    cb(null, true);
-  } else {
-    const ext = path.extname(file.originalname).toLowerCase();
-    const allowedExtensions = ['.py', '.exe', '.bat', '.sh', '.bash', '.cmd', '.ps1', '.rar', '.7z', '.tar', '.gz', '.bz2'];
-    if (allowedExtensions.includes(ext)) {
-      cb(null, true);
-    } else {
-      cb(new Error(`File type "${file.originalname}" is not supported. Please upload images, documents, archives, code files, or executables.`));
-    }
-  }
+  cb(null, true);
 };
 
 // 50MB max for all files (images are validated separately)
@@ -85,8 +60,27 @@ const upload = multer({
   limits: { 
     fileSize: 50 * 1024 * 1024 // 50MB max for all files
   },
-  fileFilter: fileFilter
+  fileFilter: fileFilter,
+  defParamCharset: 'utf8' // keep non-English original filenames readable
 });
+
+// Upload errors happen before the route handler runs: answer them as JSON, not Express's HTML 500
+const uploadSingleFile = (req, res, next) => {
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    console.error('❌ Ticket upload rejected:', err.message);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'File too large. Maximum size is 50MB.' });
+    }
+    if (err.code === 'ENOSPC') {
+      return res.status(500).json({ error: 'Server disk space full. Please contact support.' });
+    }
+    if (err.syscall) { // other disk errors: do not expose server paths
+      return res.status(500).json({ error: 'Failed to save file on the server.' });
+    }
+    return res.status(400).json({ error: err.message || 'Failed to upload file' });
+  });
+};
 
 // ============================================
 // HELPER FUNCTIONS
@@ -210,7 +204,7 @@ function getMimeType(filename) {
 // ============================================
 
 // Single file upload endpoint - WITH DETAILED LOGGING
-router.post('/upload-file', protect, upload.single('file'), async (req, res) => {
+router.post('/upload-file', protect, uploadSingleFile, async (req, res) => {
   try {
     console.log('========================================');
     console.log('📤 FILE UPLOAD REQUEST RECEIVED');
@@ -357,6 +351,7 @@ router.get('/download/:filename', protect, async (req, res) => {
     res.setHeader('Content-Length', stats.size);
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filename)}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');

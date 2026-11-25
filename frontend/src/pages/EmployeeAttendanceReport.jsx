@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import {
   Download,
   Calendar,
@@ -167,7 +166,6 @@ const COLOR = {
 // ============================================================
 
 const EmployeeAttendanceReport = () => {
-  const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
 
   const [loading, setLoading] = useState(false);
@@ -684,22 +682,22 @@ const EmployeeAttendanceReport = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+            <h1 className="page-title">
               Work Duration Report
             </h1>
-            <p className="text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               Generate and export a detailed monthly work report for employees
             </p>
           </div>
           <button
             onClick={exportToExcel}
             disabled={exporting || groupedAndSummarizedData.length === 0}
-            className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
+            className="btn btn-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm disabled:opacity-50"
           >
             {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
             {exporting ? 'Exporting...' : 'Export to Excel'}
@@ -708,17 +706,17 @@ const EmployeeAttendanceReport = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
           <div>
-            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+            <label className="label block mb-1.5">
               <Users size={14} className="inline mr-1" />
               Employee
             </label>
             <select
               value={selectedEmployee}
               onChange={(e) => setSelectedEmployee(e.target.value)}
-              className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400"
+              className="input bg-slate-50"
             >
               <option value="all">All Employees</option>
               {employees.map(emp => (
@@ -730,14 +728,14 @@ const EmployeeAttendanceReport = () => {
           </div>
 
           <div>
-            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+            <label className="label block mb-1.5">
               <Calendar size={14} className="inline mr-1" />
               Month
             </label>
             <select
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400"
+              className="input bg-slate-50"
             >
               {monthNames.map((name, index) => (
                 <option key={index + 1} value={index + 1}>{name}</option>
@@ -746,13 +744,13 @@ const EmployeeAttendanceReport = () => {
           </div>
 
           <div>
-            <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+            <label className="label block mb-1.5">
               Year
             </label>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm focus:border-blue-400"
+              className="input bg-slate-50"
             >
               {Array.from({ length: 5 }, (_, i) => {
                 const year = new Date().getFullYear() - i;
@@ -780,13 +778,13 @@ const EmployeeAttendanceReport = () => {
           </p>
           <button
             onClick={fetchReport}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all"
+            className="btn btn-md mt-4 bg-blue-600 text-white hover:bg-blue-700"
           >
             Refresh Data
           </button>
         </div>
       ) : (
-        <div className="space-y-8">
+        <div className="stack">
           {groupedAndSummarizedData.map(employee => {
             const s = employee.summary;
             return (
@@ -797,28 +795,28 @@ const EmployeeAttendanceReport = () => {
                 {/* Employee Header */}
                 <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                   <div className="text-center">
-                    <h2 className="text-sm font-black uppercase text-slate-700">
+                    <h2 className="section-title">
                       Techdataseeders
                     </h2>
-                    <p className="text-xs font-bold text-slate-600">Work Duration Report</p>
-                    <p className="text-[10px] text-slate-500">
+                    <p className="text-xs font-semibold text-slate-600">Work Duration Report</p>
+                    <p className="text-xs text-slate-500">
                       {`01-${monthNames[selectedMonth - 1].substring(0, 3)}-${selectedYear} To ${new Date(selectedYear, selectedMonth, 0).getDate()}-${monthNames[selectedMonth - 1].substring(0, 3)}-${selectedYear}`}
                     </p>
                   </div>
-                  <div className="flex justify-between items-center mt-3 text-[10px]">
+                  <div className="flex flex-wrap justify-between items-center gap-x-4 gap-y-1 mt-3 text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="font-black uppercase text-slate-400">Employee Code:</span>
+                      <span className="font-bold uppercase text-slate-400">Employee Code:</span>
                       <span className="font-bold text-slate-800">
                         {employee.employeeCode || 'N/A'}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-black uppercase text-slate-400">Employee Name:</span>
+                      <span className="font-bold uppercase text-slate-400">Employee Name:</span>
                       <span className="font-bold text-slate-800">{employee.employeeName}</span>
                     </div>
                   </div>
 
-                  <div className="text-center mt-3 text-[10px] font-bold text-slate-600">
+                  <div className="text-center mt-3 text-xs font-semibold text-slate-600">
                     Present Days / Working Days - {s.totalPresent} /{' '}
                     {getWorkingDays(selectedYear, selectedMonth, s.totalLeave)}
                   </div>
@@ -826,61 +824,61 @@ const EmployeeAttendanceReport = () => {
                   {/* ======================================================
                       ✅ NEW: Summary block (late + absent penalties)
                       ====================================================== */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 mt-3">
                     <div className="bg-white rounded-lg border border-sky-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-sky-500">Total Days</p>
-                      <p className="text-base font-black text-sky-700">{s.totalNoOfDays}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-500">Total Days</p>
+                      <p className="text-base font-bold text-sky-700">{s.totalNoOfDays}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-sky-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-sky-500">Working Days</p>
-                      <p className="text-base font-black text-sky-700">{s.totalWorkingDays}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-500">Working Days</p>
+                      <p className="text-base font-bold text-sky-700">{s.totalWorkingDays}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-emerald-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-emerald-500">Days Present</p>
-                      <p className="text-base font-black text-emerald-700">{s.totalPresent}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-emerald-500">Days Present</p>
+                      <p className="text-base font-bold text-emerald-700">{s.totalPresent}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-rose-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-rose-500">Absent Days</p>
-                      <p className="text-base font-black text-rose-700">{s.totalAbsent}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-500">Absent Days</p>
+                      <p className="text-base font-bold text-rose-700">{s.totalAbsent}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-red-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-red-400">Holidays</p>
-                      <p className="text-base font-black text-red-600">{s.totalHolidays}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-red-400">Holidays</p>
+                      <p className="text-base font-bold text-red-600">{s.totalHolidays}</p>
                     </div>
                     {s.totalUpcoming > 0 && (
                       <div className="bg-white rounded-lg border border-slate-200 p-2 text-center shadow-sm" title="Working days later this month — not counted as absent">
-                        <p className="text-[8px] font-black uppercase tracking-wider text-slate-400">Upcoming Days</p>
-                        <p className="text-base font-black text-slate-600">{s.totalUpcoming}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Upcoming Days</p>
+                        <p className="text-base font-bold text-slate-600">{s.totalUpcoming}</p>
                       </div>
                     )}
                     <div className="bg-white rounded-lg border border-indigo-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-indigo-500" title="Paid — not deducted from payable days">Paid Leave</p>
-                      <p className="text-base font-black text-indigo-700">{s.totalPaidLeave}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-indigo-500" title="Paid — not deducted from payable days">Paid Leave</p>
+                      <p className="text-base font-bold text-indigo-700">{s.totalPaidLeave}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-purple-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-purple-500">Unpaid Leave</p>
-                      <p className="text-base font-black text-purple-700">{s.totalUnpaidLeave}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-purple-500">Unpaid Leave</p>
+                      <p className="text-base font-bold text-purple-700">{s.totalUnpaidLeave}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-amber-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-amber-500">Total Late Comings</p>
-                      <p className="text-base font-black text-amber-700">{s.totalLateComing}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-amber-500">Total Late Comings</p>
+                      <p className="text-base font-bold text-amber-700">{s.totalLateComing}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-red-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-red-500" title={`${s.totalLateComing} late coming(s) this month`}>{LATE_PENALTY_LABEL}</p>
-                      <p className="text-base font-black text-red-700">-{s.latePenaltyDays}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-red-500" title={`${s.totalLateComing} late coming(s) this month`}>{LATE_PENALTY_LABEL}</p>
+                      <p className="text-base font-bold text-red-700">-{s.latePenaltyDays}</p>
                     </div>
                     <div className="bg-white rounded-lg border border-red-200 p-2 text-center shadow-sm">
-                      <p className="text-[8px] font-black uppercase tracking-wider text-red-500">{ABSENT_PENALTY_LABEL}</p>
-                      <p className="text-base font-black text-red-700">-{s.absentPenaltyDays}</p>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-red-500">{ABSENT_PENALTY_LABEL}</p>
+                      <p className="text-base font-bold text-red-700">-{s.absentPenaltyDays}</p>
                     </div>
-                    <div className={`bg-sky-50 rounded-lg border-2 border-sky-400 p-2 text-center shadow-sm ${s.totalUpcoming > 0 ? 'md:col-span-4' : 'md:col-span-1'}`}>
-                      <p className="text-[8px] font-black uppercase tracking-wider text-sky-600">Total Salary Payable Days</p>
-                      <p className="text-lg font-black text-sky-800">{s.totalSalaryPayableDays}</p>
+                    <div className={`bg-sky-50 rounded-lg border-2 border-sky-400 p-2 text-center shadow-sm ${s.totalUpcoming > 0 ? 'col-span-2 lg:col-span-4' : 'lg:col-span-1'}`}>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-sky-600">Total Salary Payable Days</p>
+                      <p className="text-lg font-bold text-sky-800">{s.totalSalaryPayableDays}</p>
                     </div>
                   </div>
 
                   {/* Reconciliation line */}
-                  <p className="text-center text-[9px] text-slate-500 mt-2 font-medium">
+                  <p className="text-center text-xs text-slate-500 mt-2 font-medium">
                     Formula: {s.totalNoOfDays} total days − {s.totalUnpaidLeave} unpaid leave − {s.latePenaltyDays} late penalty − {s.absentPenaltyDays} absent penalty = <b className="text-sky-700">{s.totalSalaryPayableDays}</b> payable days
                     {' '}· paid leave ({s.totalPaidLeave}) is not deducted
                     {s.totalUpcoming > 0 && <> · <span className="text-amber-600">month in progress: {s.totalUpcoming} upcoming working day(s) are counted as payable</span></>}
@@ -888,17 +886,17 @@ const EmployeeAttendanceReport = () => {
                 </div>
 
                 {/* Daily Breakdown Table */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-[10px]">
+                <div className="table-scroll table-sticky-first overflow-x-auto">
+                  <table className="w-full text-xs min-w-[720px]">
                     <thead className="bg-slate-50/80 border-b border-slate-200">
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
+                        <th className="th px-2 py-1.5 xl:px-2 sticky left-0 bg-slate-50 z-10">
                           Day
                         </th>
                         {employee.records.map((rec, index) => (
                           <th
                             key={`day-${index}`}
-                            className={`px-2 py-1.5 text-center font-black uppercase tracking-wider min-w-[50px] ${
+                            className={`th px-1 py-1.5 xl:px-1 text-center min-w-[50px] ${
                               rec.holiday ? 'bg-red-100 text-red-700' : 'text-slate-400'
                             }`}
                             title={rec.holiday ? rec.holidayName : undefined}
@@ -908,13 +906,13 @@ const EmployeeAttendanceReport = () => {
                         ))}
                       </tr>
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
+                        <th className="th px-2 py-1.5 xl:px-2 sticky left-0 bg-slate-50 z-10">
                           Date
                         </th>
                         {employee.records.map(rec => (
                           <th
                             key={`date-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-bold ${
+                            className={`th px-1 py-1.5 xl:px-1 text-center ${
                               rec.holiday ? 'bg-red-100 text-red-700' : 'text-slate-500'
                             }`}
                             title={rec.holiday ? rec.holidayName : undefined}
@@ -924,13 +922,13 @@ const EmployeeAttendanceReport = () => {
                         ))}
                       </tr>
                       <tr>
-                        <th className="px-2 py-1.5 text-left font-black uppercase text-slate-400 tracking-wider sticky left-0 bg-slate-50 z-10">
+                        <th className="th px-2 py-1.5 xl:px-2 sticky left-0 bg-slate-50 z-10">
                           
                         </th>
                         {employee.records.map(rec => (
                           <th
                             key={`weekday-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-bold italic ${
+                            className={`th px-1 py-1.5 xl:px-1 text-center italic ${
                               rec.holiday ? 'bg-red-100 text-red-700' : 'text-slate-400'
                             }`}
                             title={rec.holiday ? rec.holidayName : undefined}
@@ -943,13 +941,13 @@ const EmployeeAttendanceReport = () => {
                     <tbody className="divide-y divide-slate-100">
                       {/* In Time */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           In Time
                         </td>
                         {employee.records.map(rec => (
                           <td
                             key={`in-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-mono ${
+                            className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-mono ${
                               rec.holiday
                                 ? 'bg-red-100 text-red-800'
                                 : rec.isLate
@@ -971,13 +969,13 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Out Time */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Out Time
                         </td>
                         {employee.records.map(rec => (
                           <td
                             key={`out-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-mono ${getDayColumnClass(rec)} ${
+                            className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-mono ${getDayColumnClass(rec)} ${
                               rec.holiday ? '' : 'text-slate-700'
                             }`}
                           >
@@ -988,13 +986,13 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Late By */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Late By
                         </td>
                         {employee.records.map(rec => (
                           <td
                             key={`late-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-mono ${getDayColumnClass(rec)} ${
+                            className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-mono ${getDayColumnClass(rec)} ${
                               rec.holiday ? '' : 'text-amber-600'
                             }`}
                           >
@@ -1005,13 +1003,13 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Early By */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Early By
                         </td>
                         {employee.records.map(rec => (
                           <td
                             key={`early-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-mono ${getDayColumnClass(rec)} ${
+                            className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-mono ${getDayColumnClass(rec)} ${
                               rec.holiday ? '' : 'text-slate-400'
                             }`}
                           >
@@ -1022,13 +1020,13 @@ const EmployeeAttendanceReport = () => {
 
                       {/* T Duration */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           T Duration
                         </td>
                         {employee.records.map(rec => (
                           <td
                             key={`tdur-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-bold font-mono ${getDayColumnClass(rec)} ${
+                            className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-bold font-mono ${getDayColumnClass(rec)} ${
                               rec.holiday ? '' : 'text-slate-700'
                             }`}
                           >
@@ -1039,13 +1037,13 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Gross Duration */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Gross Duration
                         </td>
                         {employee.records.map(rec => (
                           <td
                             key={`gdur-${rec.date}`}
-                            className={`px-2 py-1.5 text-center font-bold font-mono ${getDayColumnClass(rec)} ${
+                            className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-bold font-mono ${getDayColumnClass(rec)} ${
                               rec.holiday ? '' : 'text-slate-700'
                             }`}
                           >
@@ -1056,7 +1054,7 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Breaks */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Breaks
                         </td>
                         {employee.records.map(rec => {
@@ -1064,13 +1062,13 @@ const EmployeeAttendanceReport = () => {
                           return (
                             <td
                               key={`brk-${rec.date}`}
-                              className={`px-2 py-1.5 text-center ${getDayColumnClass(rec)}`}
+                              className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center ${getDayColumnClass(rec)}`}
                             >
                               {rec.holiday ? (
                                 '—'
                               ) : (
                                 <span
-                                  className={`inline-flex items-center justify-center min-w-[24px] h-5 rounded-md text-[9px] font-black ${
+                                  className={`inline-flex items-center justify-center min-w-[24px] h-5 rounded-md text-xs font-semibold ${
                                     dailyBreaks === 0
                                       ? 'bg-slate-100 text-slate-400'
                                       : 'bg-indigo-100 text-indigo-700'
@@ -1086,7 +1084,7 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Break Duration */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Break Duration
                         </td>
                         {employee.records.map(rec => {
@@ -1096,7 +1094,7 @@ const EmployeeAttendanceReport = () => {
                           return (
                             <td
                               key={`bdur-${rec.date}`}
-                              className={`px-2 py-1.5 text-center font-bold font-mono ${getDayColumnClass(rec)} ${
+                              className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center font-bold font-mono ${getDayColumnClass(rec)} ${
                                 rec.holiday ? '' : 'text-slate-500'
                               }`}
                             >
@@ -1108,7 +1106,7 @@ const EmployeeAttendanceReport = () => {
 
                       {/* Status */}
                       <tr className="hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 font-bold text-slate-600 sticky left-0 bg-white z-10">
+                        <td className="td px-2 py-1.5 xl:px-2 text-xs font-bold whitespace-nowrap sticky left-0 bg-white z-10">
                           Status
                         </td>
                         {employee.records.map(rec => {
@@ -1116,10 +1114,10 @@ const EmployeeAttendanceReport = () => {
                           return (
                             <td
                               key={`status-${rec.date}`}
-                              className={`px-2 py-1.5 text-center ${getDayColumnClass(rec)}`}
+                              className={`td px-1 py-1.5 xl:px-1 text-xs whitespace-nowrap text-center ${getDayColumnClass(rec)}`}
                             >
                               <span
-                                className={`inline-flex items-center justify-center w-6 h-5 rounded-md text-[9px] font-black ${statusInfo.color}`}
+                                className={`inline-flex items-center justify-center w-6 h-5 rounded-md text-xs font-semibold ${statusInfo.color}`}
                                 title={rec.holiday ? rec.holidayName : undefined}
                               >
                                 {statusInfo.code}

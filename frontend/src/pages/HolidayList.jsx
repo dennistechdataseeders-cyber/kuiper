@@ -1,7 +1,6 @@
 // frontend/src/pages/HolidayList.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import {
     Calendar,
     Plus,
@@ -27,7 +26,6 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const HolidayList = () => {
-    const { isCollapsed } = useSidebar();
     const [holidays, setHolidays] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -252,7 +250,7 @@ const HolidayList = () => {
 
     if (loading) {
         return (
-            <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+            <div className="page bg-slate-50 flex items-center justify-center">
                 <div className="text-center">
                     <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
                     <p className="text-slate-500 font-medium">Loading holidays...</p>
@@ -262,18 +260,18 @@ const HolidayList = () => {
     }
 
     return (
-        <div className={`min-h-screen bg-slate-50 p-4 md:p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+        <div className="page bg-slate-50">
             {/* Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4 sm:mb-6">
                 <div>
-                    <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                    <h1 className="page-title">
                         Holiday List
                     </h1>
                     <p className="text-slate-500 text-sm mt-1">Manage public and optional holidays</p>
                 </div>
                 <button
                     onClick={openCreateModal}
-                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm"
+                    className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
                 >
                     <Plus size={18} />
                     Add Holiday
@@ -281,36 +279,36 @@ const HolidayList = () => {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-1 lg:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
+                <div className="card">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-blue-100 rounded-lg">
                             <CalendarDays size={16} className="text-blue-600" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Holidays</p>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Total Holidays</p>
                             <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <div className="card">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-purple-100 rounded-lg">
                             <Info size={16} className="text-purple-600" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Optional Holidays</p>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Optional Holidays</p>
                             <p className="text-2xl font-bold text-slate-800">{stats.optional}</p>
                         </div>
                     </div>
                 </div>
-                <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+                <div className="card">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-emerald-100 rounded-lg">
                             <Clock size={16} className="text-emerald-600" />
                         </div>
                         <div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Upcoming</p>
+                            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Upcoming</p>
                             <p className="text-2xl font-bold text-slate-800">{stats.upcoming}</p>
                         </div>
                     </div>
@@ -318,19 +316,19 @@ const HolidayList = () => {
             </div>
 
             {/* Year Navigation & Search */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-                <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-3">
+            <div className="card mb-4 sm:mb-6">
+                <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+                    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1">
                         <button
                             onClick={goToCurrentYear}
-                            className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-bold hover:bg-blue-100 transition-all"
+                            className="btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100"
                         >
                             Current Year
                         </button>
                         <div className="flex items-center gap-1">
                             <button
                                 onClick={() => navigateYear('prev')}
-                                className="p-1.5 rounded-lg hover:bg-slate-100 transition-all"
+                                className="btn-icon hover:bg-slate-100"
                             >
                                 <ChevronLeft size={18} className="text-slate-500" />
                             </button>
@@ -339,24 +337,24 @@ const HolidayList = () => {
                             </span>
                             <button
                                 onClick={() => navigateYear('next')}
-                                className="p-1.5 rounded-lg hover:bg-slate-100 transition-all"
+                                className="btn-icon hover:bg-slate-100"
                             >
                                 <ChevronRight size={18} className="text-slate-500" />
                             </button>
                         </div>
-                        <span className="text-xs text-slate-400 ml-2">
+                        <span className="text-xs text-slate-400 sm:ml-2">
                             {holidays.length} holidays
                         </span>
                     </div>
                     
-                    <div className="relative w-full md:w-64">
+                    <div className="relative w-full lg:w-64">
                         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                             type="text"
                             placeholder="Search holidays..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:border-blue-400 bg-slate-50"
+                            className="input pl-10 bg-slate-50"
                         />
                     </div>
                 </div>
@@ -374,16 +372,16 @@ const HolidayList = () => {
                     </div>
                 ) : (
                     <>
-                        <div className="overflow-x-auto">
+                        <div className="table-scroll overflow-x-auto">
                             <table className="w-full min-w-[600px]">
                                 <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
                                     <tr>
-                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">#</th>
-                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Date</th>
-                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Day</th>
-                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Holiday Name</th>
-                                        <th className="text-left px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Type</th>
-                                        <th className="text-right px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">Actions</th>
+                                        <th className="th">#</th>
+                                        <th className="th">Date</th>
+                                        <th className="th">Day</th>
+                                        <th className="th">Holiday Name</th>
+                                        <th className="th">Type</th>
+                                        <th className="th text-right">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-100">
@@ -396,26 +394,26 @@ const HolidayList = () => {
                                         
                                         return (
                                             <tr key={holiday._id} className={`hover:bg-slate-50/60 transition-all ${isTodayDate ? 'bg-blue-50/30' : ''}`}>
-                                                <td className="px-6 py-4">
-                                                    <span className="text-sm font-bold text-slate-400">{serialNumber}</span>
+                                                <td className="td">
+                                                    <span className="text-sm font-semibold text-slate-400">{serialNumber}</span>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="td">
                                                     <div className="flex items-center gap-2">
-                                                        <span className={`text-sm font-bold ${isTodayDate ? 'text-blue-600' : isPastDate ? 'text-slate-400' : 'text-slate-800'}`}>
+                                                        <span className={`text-sm font-bold whitespace-nowrap ${isTodayDate ? 'text-blue-600' : isPastDate ? 'text-slate-400' : 'text-slate-800'}`}>
                                                             {displayDate}
                                                         </span>
                                                         {isTodayDate && (
-                                                            <span className="text-[8px] font-bold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">Today</span>
+                                                            <span className="badge rounded-full bg-blue-100 text-blue-600">Today</span>
                                                         )}
                                                         {isPastDate && (
-                                                            <span className="text-[8px] font-bold bg-slate-100 text-slate-400 px-1.5 py-0.5 rounded-full">Past</span>
+                                                            <span className="badge rounded-full bg-slate-100 text-slate-400">Past</span>
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="td">
                                                     <span className="text-sm font-medium text-slate-600">{weekday}</span>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="td">
                                                     <div>
                                                         <p className="text-sm font-bold text-slate-800">{holiday.name}</p>
                                                         {holiday.description && (
@@ -423,16 +421,16 @@ const HolidayList = () => {
                                                         )}
                                                     </div>
                                                 </td>
-                                                <td className="px-6 py-4">
-                                                    <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-bold ${holiday.isOptional ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                <td className="td">
+                                                    <span className={`badge rounded-full ${holiday.isOptional ? 'bg-purple-100 text-purple-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                         {holiday.isOptional ? 'Optional' : 'Public'}
                                                     </span>
                                                 </td>
-                                                <td className="px-6 py-4">
+                                                <td className="td">
                                                     <div className="flex items-center justify-end gap-2">
                                                         <button
                                                             onClick={() => openEditModal(holiday)}
-                                                            className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all"
+                                                            className="btn-icon bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white"
                                                             title="Edit"
                                                         >
                                                             <Edit2 size={14} />
@@ -442,7 +440,7 @@ const HolidayList = () => {
                                                                 setDeletingHoliday(holiday);
                                                                 setShowDeleteModal(true);
                                                             }}
-                                                            className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-600 hover:text-white transition-all"
+                                                            className="btn-icon bg-red-50 text-red-600 hover:bg-red-600 hover:text-white"
                                                             title="Delete"
                                                         >
                                                             <Trash2 size={14} />
@@ -458,7 +456,7 @@ const HolidayList = () => {
                         
                         {/* Pagination */}
                         {totalPages > 1 && (
-                            <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
+                            <div className="px-4 py-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
                                 <span className="text-xs text-slate-500">
                                     Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredHolidays.length)} of {filteredHolidays.length} holidays
                                 </span>
@@ -466,17 +464,17 @@ const HolidayList = () => {
                                     <button
                                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                         disabled={currentPage === 1}
-                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                                        className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                                     >
                                         <ChevronLeft size={14} />
                                     </button>
-                                    <span className="text-xs font-bold text-slate-600 flex items-center px-2">
+                                    <span className="text-xs font-semibold text-slate-600 flex items-center px-2">
                                         {currentPage} / {totalPages}
                                     </span>
                                     <button
                                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                                         disabled={currentPage === totalPages}
-                                        className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                                        className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                                     >
                                         <ChevronRight size={14} />
                                     </button>
@@ -489,11 +487,11 @@ const HolidayList = () => {
 
             {/* Create/Edit Modal */}
             {showModal && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-2xl">
+                <div className="modal-backdrop">
+                    <div className="modal-panel max-w-md">
+                        <div className="modal-header">
                             <div>
-                                <h2 className="text-xl font-bold text-slate-800">
+                                <h2 className="section-title">
                                     {editingHoliday ? 'Edit Holiday' : 'Add Holiday'}
                                 </h2>
                                 <p className="text-xs text-slate-500 mt-0.5">
@@ -502,15 +500,15 @@ const HolidayList = () => {
                             </div>
                             <button
                                 onClick={() => setShowModal(false)}
-                                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                                className="btn-icon bg-slate-100 hover:bg-slate-200"
                             >
                                 <X size={16} />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+                        <form onSubmit={handleSubmit} className="modal-body space-y-4">
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                                <label className="label block mb-1.5">
                                     Date <span className="text-red-500">*</span>
                                 </label>
                                 <input
@@ -518,12 +516,12 @@ const HolidayList = () => {
                                     required
                                     value={formData.date}
                                     onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-400 transition-all"
+                                    className="input bg-slate-50"
                                 />
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                                <label className="label block mb-1.5">
                                     Holiday Name <span className="text-red-500">*</span>
                                 </label>
                                 <input
@@ -532,12 +530,12 @@ const HolidayList = () => {
                                     placeholder="e.g., Republic Day"
                                     value={formData.name}
                                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-400 transition-all"
+                                    className="input bg-slate-50"
                                 />
                             </div>
 
                             <div>
-                                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+                                <label className="label block mb-1.5">
                                     Description (Optional)
                                 </label>
                                 <textarea
@@ -545,7 +543,7 @@ const HolidayList = () => {
                                     placeholder="Additional details about this holiday..."
                                     value={formData.description}
                                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-400 transition-all resize-none"
+                                    className="input bg-slate-50 resize-none"
                                 />
                             </div>
 
@@ -565,7 +563,7 @@ const HolidayList = () => {
                             <button
                                 type="submit"
                                 disabled={submitting}
-                                className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                                className="btn btn-md w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg disabled:opacity-50"
                             >
                                 {submitting ? (
                                     <>
@@ -586,13 +584,13 @@ const HolidayList = () => {
 
             {/* Delete Confirmation Modal */}
             {showDeleteModal && deletingHoliday && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-                    <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6">
+                <div className="modal-backdrop">
+                    <div className="modal-panel !overflow-y-auto max-w-sm p-4 sm:p-5">
                         <div className="text-center">
-                            <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4">
+                            <div className="w-16 h-16 rounded-full bg-red-100 text-red-600 flex items-center justify-center mx-auto mb-4 shrink-0">
                                 <AlertCircle size={32} />
                             </div>
-                            <h2 className="text-xl font-bold text-slate-800">Delete Holiday?</h2>
+                            <h2 className="section-title">Delete Holiday?</h2>
                             <p className="text-sm text-slate-500 mt-2">
                                 Are you sure you want to delete "<strong>{deletingHoliday.name}</strong>" on {formatDateDisplay(deletingHoliday.date)}?
                             </p>
@@ -603,13 +601,13 @@ const HolidayList = () => {
                                         setShowDeleteModal(false);
                                         setDeletingHoliday(null);
                                     }}
-                                    className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-200 transition-all"
+                                    className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     onClick={handleDelete}
-                                    className="flex-1 py-2.5 bg-red-600 text-white rounded-xl font-bold text-sm hover:bg-red-700 transition-all"
+                                    className="btn btn-md flex-1 bg-red-600 text-white hover:bg-red-700"
                                 >
                                     Delete
                                 </button>

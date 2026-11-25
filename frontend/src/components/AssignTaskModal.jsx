@@ -72,35 +72,35 @@ const AssignTaskModal = ({ reps = [], defaultRepId = null, onClose, onAssigned }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose}>
+    <div className="modal-backdrop" onClick={onClose}>
       <form
         onSubmit={submit}
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-3xl bg-white shadow-2xl"
+        className="modal-panel max-w-xl"
       >
-        <div className="flex items-start justify-between p-6 pb-3">
+        <div className="modal-header">
           <div>
-            <h2 className="text-xl font-black text-slate-900">Assign a task</h2>
+            <h2 className="section-title">Assign a task</h2>
             <p className="text-xs text-slate-500 mt-0.5">
               The task appears on their dashboard and they get a notification straight away.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-2 rounded-xl hover:bg-slate-100 text-slate-400">
+          <button type="button" onClick={onClose} className="btn-icon hover:bg-slate-100 text-slate-400">
             <X size={18} />
           </button>
         </div>
 
-        <div className="px-6 pb-6 space-y-5">
+        <div className="modal-body pb-6 space-y-5">
           {/* ASSIGNEES */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              <label className="label block mb-1.5">
                 Assign to ({selected.length} selected)
               </label>
               <button
                 type="button"
                 onClick={() => setSelected(allSelected ? [] : reps.map((r) => String(r._id)))}
-                className="text-[11px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1"
               >
                 <Users size={12} /> {allSelected ? 'Clear all' : 'Select everyone'}
               </button>
@@ -110,7 +110,7 @@ const AssignTaskModal = ({ reps = [], defaultRepId = null, onClose, onAssigned }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search sales person…"
-                className="w-full mb-2 px-3 py-2 text-xs bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-100"
+                className="input mb-2 bg-slate-50"
               />
             )}
             <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
@@ -122,16 +122,16 @@ const AssignTaskModal = ({ reps = [], defaultRepId = null, onClose, onAssigned }
                     type="button"
                     key={id}
                     onClick={() => toggle(id)}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-xs font-bold transition ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-left text-xs font-semibold transition ${
                       on ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
                     <span
-                      className={`w-4 h-4 rounded-md flex items-center justify-center border ${
+                      className={`w-4 h-4 rounded-md flex items-center justify-center border shrink-0 ${
                         on ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300'
                       }`}
                     >
-                      {on && <Check size={11} />}
+                      {on && <Check size={12} />}
                     </span>
                     <span className="truncate">{r.name}</span>
                   </button>
@@ -145,40 +145,40 @@ const AssignTaskModal = ({ reps = [], defaultRepId = null, onClose, onAssigned }
 
           {/* TITLE */}
           <div>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Task</label>
+            <label className="label block mb-1.5">Task</label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               maxLength={140}
               placeholder="e.g. Follow up with Acme Corp on the proposal"
-              className="mt-1 w-full px-4 py-2.5 text-sm font-semibold bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-100"
+              className="input mt-1 bg-slate-50"
               autoFocus
             />
           </div>
 
           {/* DETAILS */}
           <div>
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Details (optional)</label>
+            <label className="label block mb-1.5">Details (optional)</label>
             <textarea
               value={content}
               onChange={(e) => setContent(e.target.value)}
               rows={3}
               placeholder="Context, links, what “done” looks like…"
-              className="mt-1 w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-100 resize-none"
+              className="input mt-1 bg-slate-50 resize-none"
             />
           </div>
 
           {/* PRIORITY + DUE */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Priority</label>
+              <label className="label block mb-1.5">Priority</label>
               <div className="mt-1 flex gap-2">
                 {PRIORITIES.map((p) => (
                   <button
                     type="button"
                     key={p.value}
                     onClick={() => setPriority(p.value)}
-                    className={`flex-1 px-3 py-2 rounded-xl border text-xs font-black transition ${
+                    className={`btn btn-md flex-1 border ${
                       priority === p.value ? p.on : p.cls
                     }`}
                   >
@@ -188,30 +188,30 @@ const AssignTaskModal = ({ reps = [], defaultRepId = null, onClose, onAssigned }
               </div>
             </div>
             <div>
-              <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Due date</label>
+              <label className="label block mb-1.5">Due date</label>
               <input
                 type="date"
                 min={today}
                 value={dueAt}
                 onChange={(e) => setDueAt(e.target.value)}
-                className="mt-1 w-full px-4 py-2 text-sm font-semibold bg-slate-50 border border-slate-100 rounded-xl outline-none focus:ring-2 focus:ring-blue-100"
+                className="input mt-1 bg-slate-50"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 px-6 py-4 border-t border-slate-100 bg-slate-50/60 rounded-b-3xl">
+        <div className="modal-footer">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100"
+            className="btn btn-md text-slate-600 hover:bg-slate-100"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-black hover:bg-blue-700 disabled:opacity-60"
+            className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
           >
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             Assign task

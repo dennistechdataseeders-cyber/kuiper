@@ -2,23 +2,22 @@
 const mongoose = require('mongoose');
 
 // Get the feed database URI from environment
-const FEED_DB_URI = process.env.FEED_STATUS_MONGO_URI || process.env.CLIENT_FEED_DB_URI;
+const FEED_DB_URI = process.env.FEED_STATUS_MONGO_URI || process.env.MONGO_URI;
 
-// Create a separate connection for feed data
+// Use separate connection ONLY when FEED_STATUS_MONGO_URI is set and different from MONGO_URI
 let feedConnection;
 
-if (FEED_DB_URI) {
-  feedConnection = mongoose.createConnection(FEED_DB_URI);
+if (process.env.FEED_STATUS_MONGO_URI && process.env.FEED_STATUS_MONGO_URI !== process.env.MONGO_URI) {
+  feedConnection = mongoose.createConnection(process.env.FEED_STATUS_MONGO_URI);
 
   feedConnection.on('connected', () => {
-    console.log('✅ Connected to Feed Database for dynamic models:', FEED_DB_URI);
+    console.log('✅ Connected to Feed Database for dynamic models (separate):', process.env.FEED_STATUS_MONGO_URI);
   });
 
   feedConnection.on('error', (err) => {
     console.error('❌ Feed Database connection error:', err);
   });
 } else {
-  console.warn('⚠️ FEED_STATUS_MONGO_URI not found, using main connection');
   feedConnection = mongoose;
 }
 

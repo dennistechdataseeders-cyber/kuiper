@@ -18,8 +18,7 @@ export const CONTACT_ROLES = [
   'Product Management',
 ];
 
-const inputCls =
-  'w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all disabled:bg-slate-100';
+const inputCls = 'input';
 const errCls = 'border-red-400 focus:border-red-500 focus:ring-red-100';
 
 const LOGGED_IN_USER_ID = localStorage.getItem('userId') || '';
@@ -135,26 +134,26 @@ export default function ConvertDealModal({ lead, onClose, onConverted }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[92vh] overflow-y-auto">
-        <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-slate-100">
+    <div className="modal-backdrop">
+      <div className="modal-panel max-w-xl">
+        <div className="modal-header">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
               <Handshake size={16} />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">Convert Lead</h3>
+            <h3 className="section-title">Convert Lead</h3>
           </div>
-          <button onClick={onClose} disabled={saving} className="text-slate-400 hover:text-slate-600 disabled:opacity-50">
+          <button onClick={onClose} disabled={saving} className="btn-icon text-slate-400 hover:text-slate-600 disabled:opacity-50">
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={submit} className="px-6 py-5 space-y-5">
+        <form onSubmit={submit} className="modal-body space-y-5">
           {/* ---------- ACCOUNT ---------- */}
           <div className="rounded-lg border border-slate-200 p-3 space-y-2">
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
               <input type="radio" checked={accountMode === 'new'} onChange={() => setAccountMode('new')} disabled={saving} />
-              Create New Account <span className="font-black text-slate-900">{lead.companyName}</span>
+              Create New Account <span className="font-bold text-slate-900">{lead.companyName}</span>
             </label>
             <label className="flex items-center gap-2 text-sm font-semibold text-slate-700 cursor-pointer">
               <input type="radio" checked={accountMode === 'existing'} onChange={() => setAccountMode('existing')} disabled={saving} />
@@ -179,16 +178,16 @@ export default function ConvertDealModal({ lead, onClose, onConverted }) {
           {/* ---------- CONTACT ---------- */}
           <div className="rounded-lg border border-slate-200 p-3">
             <p className="text-sm font-semibold text-slate-700">
-              Create New Contact <span className="font-black text-slate-900">{contactName}</span>
+              Create New Contact <span className="font-bold text-slate-900">{contactName}</span>
             </p>
-            <p className="text-[11px] text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-400 mt-0.5">
               Added to the Account's contacts (skipped if the same person already exists there).
             </p>
           </div>
 
           {/* ---------- DEAL ---------- */}
           <div>
-            <p className="text-sm font-black text-slate-800 mb-3">Create a new Deal for this Account</p>
+            <p className="text-sm font-semibold text-slate-800 mb-3">Create a new Deal for this Account</p>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Amount" error={errors.amount}>
                 <input type="number" min="0" value={form.amount} onChange={(e) => set('amount', e.target.value)}
@@ -256,11 +255,11 @@ export default function ConvertDealModal({ lead, onClose, onConverted }) {
 
           <div className="flex justify-end gap-2 pt-2">
             <button type="button" onClick={onClose} disabled={saving}
-              className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50">
+              className="btn btn-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50">
               Cancel
             </button>
             <button type="submit" disabled={saving || stagesLoading || stages.length === 0}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 disabled:opacity-70 shadow-lg shadow-emerald-200">
+              className="btn btn-md bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-70 shadow-lg shadow-emerald-200">
               {saving ? <><Loader2 size={14} className="animate-spin" /> Converting...</> : 'Convert'}
             </button>
           </div>
@@ -273,7 +272,7 @@ export default function ConvertDealModal({ lead, onClose, onConverted }) {
 function Field({ label, required, error, children }) {
   return (
     <div>
-      <label className="text-xs font-bold text-slate-600 block mb-1">
+      <label className="label block mb-1.5">
         {label}{required && <span className="text-red-500 ml-1">*</span>}
       </label>
       {children}

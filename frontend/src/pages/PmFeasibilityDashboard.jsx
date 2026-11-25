@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import {
   FileText,
   User,
@@ -44,7 +43,6 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const PmFeasibilityDashboard = () => {
-  const { isCollapsed } = useSidebar();
   const [feasibilityTasks, setFeasibilityTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -358,7 +356,7 @@ const PmFeasibilityDashboard = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Loading feasibility tasks...</p>
@@ -368,17 +366,17 @@ const PmFeasibilityDashboard = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <div className="p-3 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-xl">
                 <FileText size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="page-title">
                   My Feasibility Tasks
                 </h1>
                 <p className="text-slate-500 mt-1">Manage feasibility requests assigned to you</p>
@@ -394,7 +392,7 @@ const PmFeasibilityDashboard = () => {
           </div>
           <button
             onClick={fetchFeasibilityTasks}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+            className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
           >
             <RefreshCw size={16} />
             Refresh
@@ -403,20 +401,20 @@ const PmFeasibilityDashboard = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl p-4 text-white">
-          <p className="text-[8px] font-black uppercase opacity-80 tracking-wider">Total Tasks</p>
-          <p className="text-2xl font-black">{feasibilityTasks.length}</p>
+          <p className="text-xs font-semibold uppercase opacity-80 tracking-wide">Total Tasks</p>
+          <p className="text-2xl font-bold">{feasibilityTasks.length}</p>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white">
-          <p className="text-[8px] font-black uppercase opacity-80 tracking-wider">Pending</p>
-          <p className="text-2xl font-black">
+          <p className="text-xs font-semibold uppercase opacity-80 tracking-wide">Pending</p>
+          <p className="text-2xl font-bold">
             {feasibilityTasks.filter(t => t.status === 'Feasibility').length}
           </p>
         </div>
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white">
-          <p className="text-[8px] font-black uppercase opacity-80 tracking-wider">Completed</p>
-          <p className="text-2xl font-black">
+          <p className="text-xs font-semibold uppercase opacity-80 tracking-wide">Completed</p>
+          <p className="text-2xl font-bold">
             {feasibilityTasks.filter(t => t.status === 'Feasibility Completed').length}
           </p>
         </div>
@@ -424,8 +422,8 @@ const PmFeasibilityDashboard = () => {
 
       {/* Debug Info */}
       {feasibilityTasks.length === 0 && debugInfo && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl">
-          <h4 className="text-sm font-bold text-amber-700 mb-2">Debug Information:</h4>
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl mb-4 sm:mb-6">
+          <h4 className="text-sm font-semibold text-amber-700 mb-2">Debug Information:</h4>
           <div className="text-xs text-amber-600 space-y-1">
             <p>Total Leads in DB: {debugInfo.totalLeads}</p>
             <p>Feasibility Leads: {debugInfo.feasibilityLeads}</p>
@@ -436,8 +434,8 @@ const PmFeasibilityDashboard = () => {
       )}
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -445,7 +443,7 @@ const PmFeasibilityDashboard = () => {
               placeholder="Search by POC, organization, or Feasibility ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm"
+              className="input pl-10"
             />
           </div>
           <div className="relative min-w-[180px]">
@@ -453,7 +451,7 @@ const PmFeasibilityDashboard = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm font-medium"
+              className="input pl-10"
             >
               <option value="all">All Status</option>
               <option value="Feasibility">Pending</option>
@@ -472,22 +470,22 @@ const PmFeasibilityDashboard = () => {
             <p className="text-xs text-slate-400 mt-1">Tasks will appear here when assigned to you</p>
             <button
               onClick={fetchFeasibilityTasks}
-              className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all"
+              className="btn btn-md mt-4 bg-blue-600 text-white hover:bg-blue-700"
             >
               Refresh Tasks
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="table-scroll table-sticky-first overflow-x-auto">
+            <table className="w-full min-w-[900px]">
               <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
                 <tr>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feasibility ID</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">POC / Organization</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Task Details</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Date</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                  <th className="text-right px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                  <th className="th">Feasibility ID</th>
+                  <th className="th">POC / Organization</th>
+                  <th className="th">Task Details</th>
+                  <th className="th">Date</th>
+                  <th className="th">Status</th>
+                  <th className="th text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -499,12 +497,12 @@ const PmFeasibilityDashboard = () => {
                   return (
                     <React.Fragment key={task._id}>
                       <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition-all">
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded">
+                        <td className="td">
+                          <span className="badge text-blue-600 bg-blue-50">
                             {task.feasibilityId || 'N/A'}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div>
                             <p className="text-sm font-bold text-slate-800">{task.pocName}</p>
                             <p className="text-xs text-slate-500 flex items-center gap-1">
@@ -513,13 +511,13 @@ const PmFeasibilityDashboard = () => {
                             </p>
                             {task.pocEmail && (
                               <p className="text-xs text-slate-400 flex items-center gap-1">
-                                <Mail size={10} />
-                                {task.pocEmail}
+                                <Mail size={12} className="shrink-0" />
+                                <span className="break-all min-w-[140px]">{task.pocEmail}</span>
                               </p>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div>
                             <p className="text-xs text-slate-600 max-w-[200px] truncate">
                               {task.taskDetails || task.lastInteractionDesc || 'No details provided'}
@@ -530,7 +528,7 @@ const PmFeasibilityDashboard = () => {
                                 className="mt-1 flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors"
                               >
                                 <MessageSquare size={12} />
-                                <span className="text-[8px] font-bold">
+                                <span className="text-xs font-semibold">
                                   {comments.length} comment(s)
                                 </span>
                                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -538,7 +536,7 @@ const PmFeasibilityDashboard = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="text-xs text-slate-500">
                             <p>Created: {formatDate(task.createdAt)}</p>
                             {task.feasibilityDate && (
@@ -546,16 +544,16 @@ const PmFeasibilityDashboard = () => {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${getStatusColor(task.status)}`}>
+                        <td className="td">
+                          <span className={`badge ${getStatusColor(task.status)}`}>
                             {task.status === 'Feasibility' ? 'Pending' : 'Completed'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="td text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => fetchFeasibilityDetails(task._id)}
-                              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-1"
+                              className="btn btn-sm bg-indigo-600 text-white hover:bg-indigo-700"
                             >
                               <Eye size={12} />
                               View Details
@@ -563,7 +561,7 @@ const PmFeasibilityDashboard = () => {
                             {task.status === 'Feasibility' && (
                               <button
                                 onClick={() => openCommentModal(task)}
-                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-1"
+                                className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700"
                               >
                                 <Plus size={12} />
                                 Comment
@@ -576,11 +574,11 @@ const PmFeasibilityDashboard = () => {
                       {/* Expanded Comments Row */}
                       {isExpanded && hasExistingComments && (
                         <tr className="bg-emerald-50/30">
-                          <td colSpan={6} className="px-6 py-4">
-                            <div className="bg-white rounded-xl p-4 border border-emerald-200">
+                          <td colSpan={6} className="td">
+                            <div className="card border-emerald-200">
                               <div className="flex items-center gap-2 mb-3">
                                 <MessageSquare size={16} className="text-emerald-600" />
-                                <h4 className="text-xs font-black text-emerald-700 uppercase tracking-wider">
+                                <h4 className="text-sm font-semibold text-emerald-700">
                                   Comments ({comments.length})
                                 </h4>
                               </div>
@@ -592,14 +590,14 @@ const PmFeasibilityDashboard = () => {
                                       : 'bg-emerald-50 border-emerald-100'
                                   }`}>
                                     <div className="flex items-center gap-2 mb-1">
-                                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${
+                                      <span className={`badge rounded-full ${
                                         comment.type === 'PM' 
                                           ? 'bg-blue-600 text-white' 
                                           : 'bg-emerald-600 text-white'
                                       }`}>
                                         {comment.type}
                                       </span>
-                                      <p className="text-[8px] font-bold text-slate-500">
+                                      <p className="text-xs font-semibold text-slate-500">
                                         📝 {comment.timestamp}
                                       </p>
                                     </div>
@@ -631,14 +629,14 @@ const PmFeasibilityDashboard = () => {
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
               >
                 <ChevronLeft size={14} />
               </button>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
               >
                 <ChevronRight size={14} />
               </button>
@@ -651,11 +649,11 @@ const PmFeasibilityDashboard = () => {
           FEASIBILITY DETAILS MODAL
           ============================================ */}
       {showFeasibilityDetailsModal && selectedFeasibilityDetails && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <FileText size={20} className="text-indigo-600" />
                   Feasibility Details
                 </h2>
@@ -668,44 +666,45 @@ const PmFeasibilityDashboard = () => {
                   setShowFeasibilityDetailsModal(false);
                   setSelectedFeasibilityDetails(null);
                 }}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="btn-icon hover:bg-slate-100"
               >
                 <X size={20} />
               </button>
             </div>
 
+            <div className="modal-body">
             {loadingDetails ? (
               <div className="flex justify-center py-12">
                 <Loader2 size={32} className="text-indigo-600 animate-spin" />
               </div>
             ) : (
-              <div className="space-y-6">
+              <div className="stack">
              
 
                 {/* Feasibility Details Section */}
                 <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200">
-                  <h3 className="text-xs font-black text-indigo-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="label text-indigo-600 uppercase mb-3 flex items-center gap-2">
                     <Target size={14} />
                     Feasibility Details
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400">Feasibility ID</p>
+                      <p className="text-xs font-semibold text-slate-400">Feasibility ID</p>
                       <p className="text-sm font-bold text-indigo-700 font-mono">{selectedFeasibilityDetails.feasibilityId}</p>
                     </div>
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400">Status</p>
-                      <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${getStatusColor(selectedFeasibilityDetails.status)}`}>
+                      <p className="text-xs font-semibold text-slate-400">Status</p>
+                      <span className={`badge ${getStatusColor(selectedFeasibilityDetails.status)}`}>
                         {selectedFeasibilityDetails.status === 'Feasibility' ? 'Pending' : 'Completed'}
                       </span>
                     </div>
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400">Feasibility Date</p>
+                      <p className="text-xs font-semibold text-slate-400">Feasibility Date</p>
                       <p className="text-sm font-semibold text-slate-800">{formatDate(selectedFeasibilityDetails.feasibilityDate)}</p>
                     </div>
                     {selectedFeasibilityDetails.feasibilityCompletedAt && (
                       <div>
-                        <p className="text-[9px] font-bold text-slate-400">Completed At</p>
+                        <p className="text-xs font-semibold text-slate-400">Completed At</p>
                         <p className="text-sm font-semibold text-emerald-600">{formatDateTime(selectedFeasibilityDetails.feasibilityCompletedAt)}</p>
                       </div>
                     )}
@@ -714,13 +713,13 @@ const PmFeasibilityDashboard = () => {
 
                 {/* Task Details Section */}
                 <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                  <h3 className="text-xs font-black text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="label text-amber-600 uppercase mb-3 flex items-center gap-2">
                     <FileText size={14} />
                     Task Details
                   </h3>
                   <div className="space-y-3">
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400">Task Description</p>
+                      <p className="text-xs font-semibold text-slate-400">Task Description</p>
                       <div className="mt-1 p-3 bg-white rounded-lg border border-amber-100">
                         <p className="text-sm text-slate-700 whitespace-pre-wrap">
                           {selectedFeasibilityDetails.taskDetails || 'No task details provided'}
@@ -733,7 +732,7 @@ const PmFeasibilityDashboard = () => {
                 {/* Comments Section - Shows ALL comments with labels */}
                 {extractAllComments(selectedFeasibilityDetails.lastInteractionDesc).length > 0 && (
                   <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
-                    <h3 className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <h3 className="label text-emerald-700 uppercase mb-3 flex items-center gap-2">
                       <MessageSquare size={14} className="text-emerald-600" />
                       Comments ({extractAllComments(selectedFeasibilityDetails.lastInteractionDesc).length})
                     </h3>
@@ -745,14 +744,14 @@ const PmFeasibilityDashboard = () => {
                             : 'bg-emerald-50 border-emerald-100'
                         }`}>
                           <div className="flex items-center gap-2 mb-1">
-                            <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${
+                            <span className={`badge rounded-full ${
                               comment.type === 'PM' 
                                 ? 'bg-blue-600 text-white' 
                                 : 'bg-emerald-600 text-white'
                             }`}>
                               {comment.type}
                             </span>
-                            <p className="text-[8px] font-bold text-slate-500">
+                            <p className="text-xs font-semibold text-slate-500">
                               📝 {comment.timestamp}
                             </p>
                           </div>
@@ -768,7 +767,7 @@ const PmFeasibilityDashboard = () => {
                 {/* Last Interaction (if no comments, show this) */}
                 {extractAllComments(selectedFeasibilityDetails.lastInteractionDesc).length === 0 && selectedFeasibilityDetails.lastInteractionDesc && (
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <h3 className="label uppercase mb-3 flex items-center gap-2">
                       <FileText size={14} />
                       Last Interaction
                     </h3>
@@ -781,7 +780,7 @@ const PmFeasibilityDashboard = () => {
                 {/* Attachment Section */}
                 {selectedFeasibilityDetails.attachmentPath && (
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    <h3 className="label uppercase mb-3 flex items-center gap-2">
                       <Paperclip size={14} />
                       Attachment
                     </h3>
@@ -792,7 +791,7 @@ const PmFeasibilityDashboard = () => {
                           <p className="text-sm font-semibold text-slate-800">
                             {selectedFeasibilityDetails.attachmentFilename || 'Attachment'}
                           </p>
-                          <p className="text-[8px] text-slate-400">
+                          <p className="text-xs text-slate-400">
                             Uploaded on {formatDate(selectedFeasibilityDetails.updatedAt)}
                           </p>
                         </div>
@@ -802,7 +801,7 @@ const PmFeasibilityDashboard = () => {
                           selectedFeasibilityDetails.attachmentPath,
                           selectedFeasibilityDetails.attachmentFilename || 'attachment'
                         )}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-1"
+                        className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"
                       >
                         <Download size={12} />
                         Download
@@ -813,7 +812,7 @@ const PmFeasibilityDashboard = () => {
 
                 {/* Timestamps */}
                 <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                  <div className="flex flex-col sm:flex-row justify-between text-[8px] text-slate-400">
+                  <div className="flex flex-col sm:flex-row justify-between text-xs text-slate-400">
                     <span>Created: {formatDateTime(selectedFeasibilityDetails.createdAt)}</span>
                     <span>Last Updated: {formatDateTime(selectedFeasibilityDetails.updatedAt)}</span>
                   </div>
@@ -826,7 +825,7 @@ const PmFeasibilityDashboard = () => {
                       setShowFeasibilityDetailsModal(false);
                       setSelectedFeasibilityDetails(null);
                     }}
-                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                    className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                   >
                     Close
                   </button>
@@ -836,7 +835,7 @@ const PmFeasibilityDashboard = () => {
                         setShowFeasibilityDetailsModal(false);
                         openCommentModal(selectedFeasibilityDetails);
                       }}
-                      className="flex-1 py-3 bg-emerald-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-emerald-700 transition-all flex items-center justify-center gap-2"
+                      className="btn btn-md flex-1 bg-emerald-600 text-white hover:bg-emerald-700"
                     >
                       <Plus size={14} />
                       Comment
@@ -845,6 +844,7 @@ const PmFeasibilityDashboard = () => {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       )}
@@ -853,11 +853,11 @@ const PmFeasibilityDashboard = () => {
           ADD COMMENT MODAL - WITH FULL HISTORY
           ============================================ */}
       {showCommentModal && selectedFeasibilityDetails && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <MessageSquare size={20} className="text-emerald-600" />
                   Add Comment
                 </h2>
@@ -867,18 +867,19 @@ const PmFeasibilityDashboard = () => {
               </div>
               <button
                 onClick={closeCommentModal}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="btn-icon hover:bg-slate-100"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Comment History Section */}
+            <div className="modal-body">
             {commentHistory.length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-3">
                   <History size={14} className="text-emerald-600" />
-                  <h3 className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                  <h3 className="label text-emerald-700 uppercase">
                     Previous Comments ({commentHistory.length})
                   </h3>
                 </div>
@@ -890,14 +891,14 @@ const PmFeasibilityDashboard = () => {
                         : 'bg-emerald-50 border-emerald-100'
                     }`}>
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
+                        <span className={`badge rounded-full ${
                           comment.type === 'PM' 
                             ? 'bg-blue-600 text-white' 
                             : 'bg-emerald-600 text-white'
                         }`}>
                           {comment.type}
                         </span>
-                        <p className="text-[7px] font-bold text-slate-500">
+                        <p className="text-xs font-semibold text-slate-500">
                           {comment.timestamp}
                         </p>
                       </div>
@@ -912,18 +913,18 @@ const PmFeasibilityDashboard = () => {
 
             <form onSubmit={handleCommentSubmit} className="space-y-5">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   New Comment <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   required
                   rows={4}
                   placeholder="Enter your feasibility findings, technical assessment, recommendations, or any observations..."
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl resize-none font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  className="input bg-slate-50 resize-none"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                 />
-                <p className="text-[8px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   This comment will be visible to the Sales team
                 </p>
               </div>
@@ -932,14 +933,14 @@ const PmFeasibilityDashboard = () => {
                 <button
                   type="button"
                   onClick={closeCommentModal}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingComment || !commentText.trim()}
-                  className={`flex-[2] py-3 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                  className={`btn btn-md flex-[2] text-white ${
                     isSubmittingComment || !commentText.trim()
                       ? 'bg-slate-300 cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200'
@@ -953,6 +954,7 @@ const PmFeasibilityDashboard = () => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}

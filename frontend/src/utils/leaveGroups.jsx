@@ -59,12 +59,12 @@ export function LeaveBreakdown({ leave, className = '' }) {
   if (!leave?.isGroup) return null;
   return (
     <div className={className}>
-      <p className="text-[10px] font-bold text-slate-400 uppercase mb-1.5">Breakdown ({leave.totalDays} day{leave.totalDays === 1 ? '' : 's'})</p>
+      <p className="text-xs font-semibold text-slate-400 uppercase mb-1.5">Breakdown ({leave.totalDays} day{leave.totalDays === 1 ? '' : 's'})</p>
       <div className="flex flex-wrap gap-1.5">
         {leave.pieces.map((p) => (
           <span
             key={p._id}
-            className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${
+            className={`badge border ${
               p.leaveType === 'Paid Leave' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'
             }`}
           >

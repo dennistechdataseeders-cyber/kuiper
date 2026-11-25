@@ -3,7 +3,6 @@ import useDashboardFilter, { idOf } from '../utils/useDashboardFilter';
 import DashboardFilterBanner from '../components/DashboardFilterBanner';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import toast from 'react-hot-toast';
 import {
   Plus,
@@ -180,7 +179,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
 
   return (
     <div
-      className={`group bg-white rounded-[2rem] border transition-all duration-300 overflow-hidden ${
+      className={`group bg-white rounded-xl border transition-all duration-300 overflow-hidden ${
         isExpanded
           ? 'border-blue-200 shadow-xl shadow-blue-50 ring-1 ring-blue-50'
           : 'border-slate-100 shadow-sm hover:border-blue-200'
@@ -188,11 +187,11 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
     >
       <div
         onClick={() => setIsExpanded(!isExpanded)}
-        className="p-4 sm:p-5 flex items-center justify-between cursor-pointer"
+        className="p-4 sm:p-5 flex flex-wrap items-center justify-between gap-2 cursor-pointer"
       >
-        <div className="flex items-center gap-3 sm:gap-5">
+        <div className="flex items-center gap-3 sm:gap-5 min-w-0 flex-1 basis-60">
           <div
-            className={`p-3 sm:p-4 rounded-2xl transition-all duration-300 ${
+            className={`p-3 sm:p-4 rounded-xl shrink-0 transition-all duration-300 ${
               isExpanded ? 'scale-110 shadow-lg' : ''
             } ${getStatusStyles(lead.status).split(' ')[0]}`}
           >
@@ -204,37 +203,37 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
 
           <div>
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <span className="text-[8px] font-black text-slate-900 uppercase tracking-widest">
+              <span className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
                 {formatId(lead.leadNumber)}
               </span>
 
-              <h3 className="font-black text-slate-800 text-base sm:text-lg group-hover:text-blue-600 transition-colors">
+              <h3 className="section-title group-hover:text-blue-600 transition-colors">
                 {lead.pocName}
               </h3>
 
               <span
-                className={`text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-lg border ${getStatusStyles(
+                className={`badge border ${getStatusStyles(
                   lead.status
                 )}`}
               >
                 {lead.status || 'New'}
               </span>
 
-              <span className="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-lg bg-blue-600 text-white">
+              <span className="badge bg-blue-600 text-white">
                 {lead.leadType}
               </span>
             </div>
 
-            <div className="flex items-center gap-3 text-[10px] font-bold text-slate-500">
-              <span className="flex items-center gap-1">
-                <Mail size={10} className="text-slate-400" />
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-semibold text-slate-500">
+              <span className="flex items-center gap-1 min-w-0 break-all">
+                <Mail size={12} className="text-slate-400 shrink-0" />
                 {lead.pocEmail}
               </span>
 
               {lead.status === 'Follow-up Scheduled' &&
                 lead.followUpDate && (
-                  <span className="flex items-center gap-1 text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-md">
-                    <Clock size={10} />
+                  <span className="badge text-orange-600 bg-orange-50">
+                    <Clock size={12} />
                     {new Date(
                       lead.followUpDate
                     ).toLocaleDateString()}
@@ -244,13 +243,13 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
-          <div className="hidden sm:block text-right">
-            <p className="text-[8px] font-black text-slate-400 uppercase flex items-center gap-1 justify-end mb-0.5">
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0 ml-auto">
+          <div className="text-right">
+            <p className="text-xs font-semibold text-slate-400 uppercase flex items-center gap-1 justify-end mb-0.5">
               Created On
             </p>
 
-            <p className="text-[10px] font-bold text-slate-500">
+            <p className="text-xs font-semibold text-slate-500">
               {new Date(lead.createdAt).toLocaleDateString()}
             </p>
           </div>
@@ -270,14 +269,14 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
       <div
         className={`transition-all duration-500 ease-in-out bg-slate-50/50 border-t border-slate-50 overflow-hidden ${
           isExpanded
-            ? 'max-h-[700px] opacity-100'
+            ? 'max-h-[2000px] opacity-100'
             : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="p-6 sm:p-8 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="p-4 sm:p-5 grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
           {/* LEFT */}
           <div>
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
+            <h4 className="text-sm font-semibold text-slate-400 mb-3">
               Pipeline Status
             </h4>
 
@@ -318,7 +317,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                   />
 
                   <span
-                    className={`text-[11px] font-bold ${
+                    className={`text-xs font-semibold ${
                       step.done
                         ? 'text-slate-700'
                         : 'text-slate-300'
@@ -332,21 +331,21 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
 
             {/* QUICK ACTION BUTTONS - HORIZONTAL */}
             {!isClosed && (
-              <div className="mt-4 flex flex-row gap-1.5">
+              <div className="mt-4 flex flex-wrap gap-2">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onQuickAction(lead._id, 'Follow-up Scheduled');
                   }}
                   disabled={hasFeasibilityDate}
-                  className={`flex-1 text-[8px] font-black uppercase tracking-wider py-2 rounded-xl transition-all active:scale-95 ${
+                  className={`btn flex-col !gap-0 px-3 py-2 flex-1 ${
                     hasFeasibilityDate
                       ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       : 'bg-orange-500 hover:bg-orange-600 text-white shadow-sm shadow-orange-100'
                   }`}
                 >
                   <span className="block">Take Action</span>
-                  <span className="text-[6px] font-bold opacity-80">Set Follow-up</span>
+                  <span className="text-xs font-semibold opacity-80">Set Follow-up</span>
                 </button>
 
                 <button
@@ -355,14 +354,14 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                     onFeasibilityClick(lead);
                   }}
                   disabled={hasFeasibilityDate}
-                  className={`flex-1 text-[8px] font-black uppercase tracking-wider py-2 rounded-xl transition-all active:scale-95 ${
+                  className={`btn flex-col !gap-0 px-3 py-2 flex-1 ${
                     hasFeasibilityDate
                       ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                       : 'bg-purple-600 hover:bg-purple-700 text-white shadow-sm shadow-purple-100'
                   }`}
                 >
                   <span className="block">Feasibility</span>
-                  <span className="text-[6px] font-bold opacity-80">Send Request</span>
+                  <span className="text-xs font-semibold opacity-80">Send Request</span>
                 </button>
 
                 <button
@@ -370,10 +369,10 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                     e.stopPropagation();
                     onCloseLead(lead);
                   }}
-                  className="flex-1 text-[8px] font-black uppercase tracking-wider py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white shadow-sm shadow-red-100 active:scale-95 transition-all"
+                  className="btn flex-col !gap-0 px-3 py-2 flex-1 bg-red-600 hover:bg-red-700 text-white shadow-sm shadow-red-100"
                 >
                   <span className="block">Close Lead</span>
-                  <span className="text-[6px] font-bold opacity-80">Won or Lost</span>
+                  <span className="text-xs font-semibold opacity-80">Won or Lost</span>
                 </button>
               </div>
             )}
@@ -381,7 +380,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
             {/* CLOSED STATUS DISPLAY */}
             {isClosed && (
               <div className="mt-4 space-y-2">
-                <div className={`w-full text-center text-[9px] font-black uppercase tracking-wider py-2 rounded-xl ${
+                <div className={`w-full text-center text-xs font-semibold uppercase tracking-wide py-2 rounded-xl ${
                   lead.status === 'Production Ready'
                     ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
                     : 'bg-red-100 text-red-700 border border-red-300'
@@ -390,19 +389,19 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                 </div>
                 
                 {lead.status === 'Production Ready' && projectId && (
-                  <div className="w-full text-center text-[8px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 rounded-xl px-3 break-words">
+                  <div className="w-full text-center text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 py-1.5 rounded-xl px-3 break-words">
                     📁 {projectId}
                   </div>
                 )}
                 
                 {lead.status === 'Production Ready' && pmName && (
-                  <div className="w-full text-center text-[8px] font-bold text-blue-700 bg-blue-50 border border-blue-200 py-1.5 rounded-xl px-3">
+                  <div className="w-full text-center text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 py-1.5 rounded-xl px-3">
                     👤 PM: {pmName}
                   </div>
                 )}
                 
                 {lead.status === 'Closed' && lossReason && (
-                  <div className="w-full text-center text-[8px] font-bold text-red-700 bg-red-50 border border-red-200 py-1.5 rounded-xl px-3 break-words">
+                  <div className="w-full text-center text-xs font-semibold text-red-700 bg-red-50 border border-red-200 py-1.5 rounded-xl px-3 break-words">
                     💬 Reason: {lossReason}
                   </div>
                 )}
@@ -411,19 +410,19 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
           </div>
 
           {/* CENTER */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-between">
+          <div className="card flex flex-col justify-between">
             <div>
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+              <h4 className="text-sm font-semibold text-slate-400 mb-2">
                 Important Dates
               </h4>
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase">
+                  <span className="text-xs font-semibold text-slate-400 uppercase">
                     Feasibility Date
                   </span>
 
-                  <p className="text-[11px] font-black text-purple-600">
+                  <p className="text-xs font-semibold text-purple-600">
                     {lead.feasibilityDate
                       ? new Date(
                           lead.feasibilityDate
@@ -433,11 +432,11 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                 </div>
 
                 <div className="flex items-center justify-between">
-                  <span className="text-[9px] font-bold text-slate-400 uppercase">
+                  <span className="text-xs font-semibold text-slate-400 uppercase">
                     Follow-up Date
                   </span>
 
-                  <p className="text-[11px] font-black text-orange-600">
+                  <p className="text-xs font-semibold text-orange-600">
                     {lead.followUpDate
                       ? new Date(
                           lead.followUpDate
@@ -449,26 +448,26 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
             </div>
 
             <div className="mt-3 pt-3 border-t border-slate-50">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
+              <h4 className="text-sm font-semibold text-slate-400 mb-0.5">
                 Organization Ref
               </h4>
 
-              <p className="text-[11px] font-bold text-slate-600 truncate">
+              <p className="text-xs font-semibold text-slate-600 truncate">
                 {lead.organizationId?.companyName || 'N/A'}
               </p>
             </div>
           </div>
 
           {/* RIGHT - PROJECT INFO */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
+          <div className="card flex flex-col">
+            <h4 className="text-sm font-semibold text-slate-400 mb-2">
               Lead Classification
             </h4>
 
             <div className="space-y-2 flex-1">
               <div className="flex items-center gap-2">
                 <Globe size={12} className="text-slate-400" />
-                <p className="text-[11px] font-bold text-slate-600">
+                <p className="text-xs font-semibold text-slate-600">
                   {lead.leadType}
                 </p>
               </div>
@@ -476,7 +475,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
               {lead.referredBy && (
                 <div className="flex items-center gap-2">
                   <UserPlus size={12} className="text-blue-500" />
-                  <p className="text-[11px] font-bold text-blue-600">
+                  <p className="text-xs font-semibold text-blue-600">
                     Ref: {lead.referredBy}
                   </p>
                 </div>
@@ -486,7 +485,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                 <div className="mt-2 pt-2 border-t border-slate-100">
                   <div className="flex items-start gap-2">
                     <Briefcase size={12} className="text-emerald-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-[10px] font-bold text-emerald-700 break-words">
+                    <p className="text-xs font-semibold text-emerald-700 break-words">
                       {projectId}
                     </p>
                   </div>
@@ -496,7 +495,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
               {lead.status === 'Production Ready' && pmName && (
                 <div className="flex items-start gap-2">
                   <User size={12} className="text-blue-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-[10px] font-bold text-blue-700 break-words">
+                  <p className="text-xs font-semibold text-blue-700 break-words">
                     PM: {pmName}
                   </p>
                 </div>
@@ -506,7 +505,7 @@ const LeadCard = ({ lead, onQuickAction, onFeasibilityClick, onCloseLead, projec
                 <div className="mt-2 pt-2 border-t border-slate-100">
                   <div className="flex items-start gap-2">
                     <AlertCircle size={12} className="text-red-500 mt-0.5 flex-shrink-0" />
-                    <p className="text-[9px] font-medium text-red-600 break-words">
+                    <p className="text-xs font-medium text-red-600 break-words">
                       {lossReason}
                     </p>
                   </div>
@@ -586,7 +585,6 @@ const LeadGeneration = () => {
     referredBy: ''
   });
   
-  const { isCollapsed } = useSidebar();
 
   const [showFeasibilityModal, setShowFeasibilityModal] = useState(false);
   const [selectedLeadForFeasibility, setSelectedLeadForFeasibility] = useState(null);
@@ -620,9 +618,10 @@ const LeadGeneration = () => {
       const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const pms = res.data.filter(u => isPMRole(u.role));
-      setProjectManagersList(pms);
-      setProjectManagers(pms);
+      // Pickers list Project Managers only; lead cards also look up the name of a
+      // Project Coordinator saved as PM on older leads.
+      setProjectManagersList(res.data.filter(u => u.role === 'Project Manager'));
+      setProjectManagers(res.data.filter(u => isPMRole(u.role)));
     } catch (err) {
       console.error("Error fetching PMs:", err);
     } finally {
@@ -1101,24 +1100,22 @@ const handleProductionSubmit = async (e) => {
 
   return (
     <div
-      className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
-        isCollapsed ? 'ml-20' : 'ml-64'
-      }`}
+      className="page bg-slate-50"
     >
       {/* HEADER */}
-      <div className="max-w-6xl mx-auto flex justify-between items-center mb-8">
+      <div className="max-w-6xl mx-auto flex flex-wrap justify-between items-center gap-3 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+          <h1 className="page-title">
             Lead Generation
           </h1>
-          <p className="text-slate-500 font-medium">
+          <p className="text-sm text-slate-500 mt-1">
             Manage your active opportunities
           </p>
         </div>
 
         <button
           onClick={() => setIsModalOpen(true)}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-2xl font-bold flex items-center gap-2 shadow-lg shadow-blue-900/20 transition-all active:scale-95"
+          className="btn btn-md bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20"
         >
           <Plus size={20} strokeWidth={3} />
           New Lead
@@ -1132,7 +1129,7 @@ const handleProductionSubmit = async (e) => {
       )}
 
       {/* SEARCH */}
-      <div className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row gap-4 items-center">
+      <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-3 lg:items-center mb-4 sm:mb-6">
         <div className="relative w-full md:w-96">
           <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
             <Search size={18} />
@@ -1140,14 +1137,14 @@ const handleProductionSubmit = async (e) => {
           <input
             type="text"
             placeholder="Search name or Lead ID..."
-            className="w-full pl-12 pr-10 py-3 bg-white border border-slate-100 rounded-2xl font-bold text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/10 outline-none transition-all"
+            className="input pl-12 pr-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
+              className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500 right-0 md:right-1"
             >
               <X size={16} />
             </button>
@@ -1155,10 +1152,10 @@ const handleProductionSubmit = async (e) => {
         </div>
 
         {/* Filter Dropdown - Fixed positioning */}
-        <div className="relative z-50">
+        <div className="relative z-30">
           <button
             onClick={() => setIsFilterDropdownOpen(!isFilterDropdownOpen)}
-            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-100 rounded-2xl text-xs font-black uppercase tracking-widest text-slate-700 hover:border-blue-200 hover:text-blue-600 transition-all shadow-sm min-w-[160px] justify-between"
+            className="btn btn-md !justify-between w-full lg:w-auto lg:min-w-[200px] bg-white border border-slate-200 text-slate-700 hover:border-blue-200 hover:text-blue-600 shadow-sm"
           >
             <span className="flex items-center gap-2">
               <Filter size={14} />
@@ -1171,7 +1168,7 @@ const handleProductionSubmit = async (e) => {
           </button>
           
           {isFilterDropdownOpen && (
-            <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl border border-slate-200 shadow-xl z-[100] overflow-hidden">
+            <div className="absolute top-full left-0 mt-2 w-full lg:w-56 bg-white rounded-xl border border-slate-200 shadow-xl z-[100] overflow-hidden">
               {statuses.map((status, index) => (
                 <button
                   key={status}
@@ -1180,7 +1177,7 @@ const handleProductionSubmit = async (e) => {
                     setIsFilterDropdownOpen(false);
                     setCurrentPage(1);
                   }}
-                  className={`w-full text-left px-4 py-3 text-xs font-black uppercase tracking-widest transition-all hover:bg-slate-50 flex items-center justify-between ${
+                  className={`w-full text-left px-4 py-3 text-sm font-medium transition-all hover:bg-slate-50 flex items-center justify-between ${
                     filterStatus === status
                       ? 'bg-slate-100 text-slate-900'
                       : 'text-slate-600'
@@ -1205,9 +1202,9 @@ const handleProductionSubmit = async (e) => {
             <p className="text-slate-400 font-bold">Loading leads...</p>
           </div>
         ) : currentLeads.length === 0 ? (
-          <div className="bg-white rounded-[3rem] p-20 border border-slate-100 text-center shadow-sm">
-            <Target size={40} className="mx-auto text-slate-200 mb-6" />
-            <h3 className="text-xl font-black text-slate-800 mb-2">
+          <div className="bg-white rounded-xl p-20 border border-slate-100 text-center shadow-sm">
+            <Target size={40} className="mx-auto text-slate-200 mb-4 sm:mb-6" />
+            <h3 className="section-title mb-2">
               No leads found
             </h3>
             <p className="text-slate-400 font-medium">
@@ -1215,8 +1212,8 @@ const handleProductionSubmit = async (e) => {
             </p>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 gap-6">
+          <div className="stack">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
               {currentLeads.map((lead) => (
                 <LeadCard
                   key={lead._id}
@@ -1230,24 +1227,24 @@ const handleProductionSubmit = async (e) => {
             </div>
 
             {totalPages > 1 && (
-              <div className="flex items-center justify-between bg-white p-4 rounded-[2rem] border border-slate-100 shadow-sm mt-10">
-                <div className="text-xs font-bold text-slate-400 ml-4">
+              <div className="card flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-slate-500">
                   Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredLeads.length)} of {filteredLeads.length} Leads
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     disabled={currentPage === 1}
                     onClick={() => setCurrentPage((p) => p - 1)}
-                    className="p-3 rounded-xl border border-slate-100 text-slate-400 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    className="btn-icon border border-slate-100 text-slate-400 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronLeft size={20} />
                   </button>
-                  <div className="flex items-center gap-1">
+                  <div className="flex flex-wrap items-center gap-1">
                     {[...Array(totalPages)].map((_, i) => (
                       <button
                         key={i + 1}
                         onClick={() => setCurrentPage(i + 1)}
-                        className={`w-10 h-10 rounded-xl text-xs font-black transition-all ${
+                        className={`btn-icon ${
                           currentPage === i + 1
                             ? 'bg-blue-600 text-white shadow-lg shadow-blue-200'
                             : 'bg-white text-slate-400 hover:bg-slate-50 border border-transparent'
@@ -1260,7 +1257,7 @@ const handleProductionSubmit = async (e) => {
                   <button
                     disabled={currentPage === totalPages}
                     onClick={() => setCurrentPage((p) => p + 1)}
-                    className="p-3 rounded-xl border border-slate-100 text-slate-400 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                    className="btn-icon border border-slate-100 text-slate-400 hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <ChevronRight size={20} />
                   </button>
@@ -1273,17 +1270,18 @@ const handleProductionSubmit = async (e) => {
 
       {/* CREATE LEAD MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4">
-          <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl p-10 relative animate-in fade-in zoom-in duration-300 max-h-[95vh] overflow-y-auto border border-slate-100">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg relative">
             <button
               onClick={() => setIsModalOpen(false)}
-              className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 p-2 hover:bg-slate-50 rounded-full"
+              className="btn-icon absolute top-2 right-2 z-10 bg-white text-slate-300 hover:text-slate-600"
             >
               <X size={24} />
             </button>
 
-            <div className="mb-8">
-              <h2 className="text-2xl font-black text-slate-800 mb-1">
+            <div className="modal-body">
+            <div className="mb-4 sm:mb-6">
+              <h2 className="section-title mb-1">
                 Create New Lead
               </h2>
               <p className="text-slate-400 text-sm font-medium">
@@ -1292,23 +1290,23 @@ const handleProductionSubmit = async (e) => {
             </div>
 
             {isAlreadyConverted && (
-              <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-amber-700">
+              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-center gap-3 text-amber-700 mb-4 sm:mb-6">
                 <AlertCircle size={20} />
-                <p className="text-xs font-bold uppercase tracking-tight">
+                <p className="text-xs font-semibold uppercase tracking-tight">
                   Lead already generated for this prospect.
                 </p>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="stack">
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
+                  <label className="label block mb-1.5">
                     Lead Source
                   </label>
                   <select
                     disabled={isAlreadyConverted}
-                    className={`w-full p-4 rounded-2xl border-2 transition-all outline-none font-bold ${
+                    className={`input ${
                       isAlreadyConverted
                         ? 'bg-slate-100 border-transparent text-slate-400'
                         : 'bg-slate-50 border-transparent focus:border-blue-500 focus:bg-white text-slate-700'
@@ -1327,7 +1325,7 @@ const handleProductionSubmit = async (e) => {
 
                 {formData.leadType === 'Reference' && (
                   <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-blue-600 ml-2">
+                    <label className="label block mb-1.5 text-blue-600">
                       Ref By:
                     </label>
                     <div className="relative">
@@ -1336,7 +1334,7 @@ const handleProductionSubmit = async (e) => {
                         required
                         disabled={isAlreadyConverted}
                         placeholder="Who referred this lead?"
-                        className="w-full p-4 pl-12 bg-blue-50/50 rounded-2xl border-2 border-blue-100 focus:border-blue-500 focus:bg-white transition-all outline-none font-bold text-slate-700"
+                        className="input pl-12"
                         value={formData.referredBy}
                         onChange={(e) => setFormData({ ...formData, referredBy: e.target.value })}
                       />
@@ -1345,7 +1343,7 @@ const handleProductionSubmit = async (e) => {
                 )}
 
                 <div className="space-y-2" ref={orgDropdownRef}>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2 flex items-center gap-2">
+                  <label className="label mb-1.5 flex items-center gap-2">
                     <Building2 size={14} />
                     Select Organization *
                   </label>
@@ -1356,7 +1354,7 @@ const handleProductionSubmit = async (e) => {
                       required
                       disabled={isAlreadyConverted}
                       placeholder="Search for an organization..."
-                      className={`w-full p-4 pl-12 pr-24 rounded-2xl border-2 transition-all outline-none font-bold ${
+                      className={`input pl-12 ${
                         isAlreadyConverted
                           ? 'bg-slate-100 border-transparent text-slate-400 cursor-not-allowed'
                           : formData.organizationId
@@ -1381,7 +1379,7 @@ const handleProductionSubmit = async (e) => {
                         <button
                           type="button"
                           onClick={handleClearOrg}
-                          className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+                          className="btn-icon hover:bg-slate-200"
                           title="Clear selection"
                         >
                           <X size={14} className="text-slate-400 hover:text-slate-600" />
@@ -1390,7 +1388,7 @@ const handleProductionSubmit = async (e) => {
                       <button
                         type="button"
                         onClick={() => setIsOrgDropdownOpen(!isOrgDropdownOpen)}
-                        className="p-1.5 rounded-lg hover:bg-slate-200 transition-colors"
+                        className="btn-icon hover:bg-slate-200"
                       >
                         <ChevronDown 
                           size={16} 
@@ -1406,12 +1404,12 @@ const handleProductionSubmit = async (e) => {
                   </div>
 
                   {isOrgDropdownOpen && !isAlreadyConverted && (
-                    <div className="absolute z-50 w-full max-w-[calc(100%-2rem)] bg-white rounded-2xl border border-slate-200 shadow-xl max-h-60 overflow-y-auto mt-1 animate-in slide-in-from-top-2 duration-200">
+                    <div className="absolute z-50 w-full max-w-[calc(100%-2rem)] bg-white rounded-xl border border-slate-200 shadow-xl max-h-60 overflow-y-auto mt-1 animate-in slide-in-from-top-2 duration-200">
                       {filteredOrgs.length === 0 ? (
                         <div className="p-6 text-center">
                           <Building2 size={24} className="mx-auto text-slate-300 mb-2" />
                           <p className="text-sm font-bold text-slate-500">No organizations found</p>
-                          <p className="text-[10px] text-slate-400 mt-1">Try a different search term</p>
+                          <p className="text-xs text-slate-400 mt-1">Try a different search term</p>
                         </div>
                       ) : (
                         filteredOrgs.map((org) => (
@@ -1427,14 +1425,14 @@ const handleProductionSubmit = async (e) => {
                                 {org.companyName || org.name || 'Unnamed Organization'}
                               </p>
                               {org.website && (
-                                <p className="text-[10px] text-slate-400 flex items-center gap-1">
-                                  <Globe size={10} />
+                                <p className="text-xs text-slate-400 flex items-center gap-1">
+                                  <Globe size={12} />
                                   {org.website}
                                 </p>
                               )}
                               {org.pocName && (
-                                <p className="text-[9px] text-slate-500 flex items-center gap-1 mt-0.5">
-                                  <Users size={8} />
+                                <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                                  <Users size={12} />
                                   Contact: {org.pocName}
                                 </p>
                               )}
@@ -1450,8 +1448,8 @@ const handleProductionSubmit = async (e) => {
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100 space-y-4">
-                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center flex items-center justify-center gap-2">
+              <div className="bg-slate-50 p-6 rounded-xl border border-slate-100 space-y-4">
+                <h4 className="text-sm font-semibold text-slate-400 text-center flex items-center justify-center gap-2">
                   <Users size={14} />
                   Point of Contact Selection
                 </h4>
@@ -1459,13 +1457,13 @@ const handleProductionSubmit = async (e) => {
                 {availablePOCs.length > 0 ? (
                   <>
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-2">
+                      <label className="label block mb-1.5">
                         Select POC
                       </label>
                       <select
                         required
                         disabled={isAlreadyConverted}
-                        className="w-full p-4 rounded-2xl border-2 transition-all outline-none font-bold bg-white border-transparent focus:border-blue-500 text-slate-700"
+                        className="input"
                         value={selectedPOCIndex || ''}
                         onChange={(e) => {
                           const selectedPoc = availablePOCs.find(p => p.id === e.target.value);
@@ -1482,13 +1480,13 @@ const handleProductionSubmit = async (e) => {
                     </div>
 
                     {formData.pocName && (
-                      <div className="bg-white p-4 rounded-xl border border-slate-200 space-y-3 animate-in fade-in duration-300">
+                      <div className="card space-y-3 animate-in fade-in duration-300">
                         <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+                          <span className="text-xs font-semibold text-blue-600 uppercase tracking-wide">
                             Selected Contact Details
                           </span>
                           {selectedOrgDetails && (
-                            <span className="text-[8px] font-bold text-slate-400">
+                            <span className="text-xs font-semibold text-slate-400">
                               {selectedOrgDetails.companyName}
                             </span>
                           )}
@@ -1497,7 +1495,7 @@ const handleProductionSubmit = async (e) => {
                           <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                             <Target size={14} className="text-blue-500" />
                             <div className="flex-1">
-                              <p className="text-[9px] font-bold text-slate-400">Name</p>
+                              <p className="text-xs font-semibold text-slate-400">Name</p>
                               <p className="text-sm font-bold text-slate-700">{formData.pocName}</p>
                             </div>
                           </div>
@@ -1505,7 +1503,7 @@ const handleProductionSubmit = async (e) => {
                             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                               <Mail size={14} className="text-emerald-500" />
                               <div className="flex-1">
-                                <p className="text-[9px] font-bold text-slate-400">Email</p>
+                                <p className="text-xs font-semibold text-slate-400">Email</p>
                                 <p className="text-sm font-bold text-slate-700">{formData.pocEmail}</p>
                               </div>
                             </div>
@@ -1514,7 +1512,7 @@ const handleProductionSubmit = async (e) => {
                             <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                               <Phone size={14} className="text-purple-500" />
                               <div className="flex-1">
-                                <p className="text-[9px] font-bold text-slate-400">Phone</p>
+                                <p className="text-xs font-semibold text-slate-400">Phone</p>
                                 <p className="text-sm font-bold text-slate-700">{formData.pocPhone}</p>
                               </div>
                             </div>
@@ -1527,7 +1525,7 @@ const handleProductionSubmit = async (e) => {
                   <div className="text-center py-6 text-slate-400">
                     <Users size={24} className="mx-auto mb-2 text-slate-300" />
                     <p className="text-xs font-medium">No POCs found for this organization.</p>
-                    <p className="text-[10px] mt-1">Please add POCs to the organization first.</p>
+                    <p className="text-xs mt-1">Please add POCs to the organization first.</p>
                   </div>
                 ) : (
                   <div className="text-center py-6 text-slate-400">
@@ -1539,7 +1537,7 @@ const handleProductionSubmit = async (e) => {
 
               <button
                 disabled={isAlreadyConverted || !formData.pocName || !formData.organizationId}
-                className={`w-full p-5 rounded-2xl font-black uppercase tracking-widest transition-all shadow-xl active:scale-95 ${
+                className={`btn btn-md w-full shadow-lg ${
                   isAlreadyConverted || !formData.pocName || !formData.organizationId
                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
@@ -1554,82 +1552,84 @@ const handleProductionSubmit = async (e) => {
                   : "Generate Lead Now"}
               </button>
             </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* FEASIBILITY MODAL */}
       {showFeasibilityModal && selectedLeadForFeasibility && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 overflow-hidden">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg relative">
             {showSuccess && (
               <div className="absolute inset-0 bg-white/95 z-50 flex flex-col items-center justify-center animate-in fade-in">
-                <div className="p-6 bg-green-100 text-green-600 rounded-full mb-6">
+                <div className="p-6 bg-green-100 text-green-600 rounded-full mb-4 sm:mb-6">
                   <CheckCircle size={60} />
                 </div>
-                <h2 className="text-2xl font-black text-slate-900 uppercase">Feasibility Sent</h2>
+                <h2 className="section-title">Feasibility Sent</h2>
                 <p className="text-slate-500 text-sm mt-2">Feasibility request has been submitted successfully.</p>
               </div>
             )}
             
-            <button onClick={closeFeasibilityModal} className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors">
+            <button onClick={closeFeasibilityModal} className="btn-icon absolute top-2 right-2 z-10 bg-white text-slate-300 hover:text-slate-900">
               <X size={24}/>
             </button>
             
-            <h2 className="text-3xl font-black text-slate-900 mb-2">Feasibility Request</h2>
-            <p className="text-slate-400 mb-6 font-medium italic">
+            <div className="modal-body">
+            <h2 className="section-title mb-1 pr-10">Feasibility Request</h2>
+            <p className="text-slate-400 font-medium italic mb-4 sm:mb-6">
               Client: <span className="text-purple-600 font-bold">{selectedLeadForFeasibility?.pocName}</span>
             </p>
             
             <form onSubmit={handleFeasibilitySubmit} className="space-y-5">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                  <label className="label block mb-1.5">
                     Feasibility ID
                   </label>
                   <input 
                     type="text" 
                     readOnly 
-                    className="w-full p-4 bg-purple-50 border border-purple-100 rounded-2xl font-black text-purple-700 outline-none" 
+                    className="input" 
                     value={feasibilityData.feasibilityId} 
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                  <label className="label block mb-1.5">
                     Feasibility Date
                   </label>
                   <input 
                     type="date" 
                     readOnly 
-                    className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl font-bold text-slate-500 cursor-not-allowed" 
+                    className="w-full p-4 bg-slate-100 border border-slate-200 rounded-xl font-bold text-slate-500 cursor-not-allowed" 
                     value={feasibilityData.feasibilityDate} 
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                  <label className="label block mb-1.5">
                     Next Follow-up Date
                   </label>
                   <input 
                     type="date" 
                     required 
-                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors" 
+                    className="input bg-slate-50" 
                     value={feasibilityData.nextFollowUpDate || ''} 
                     min={new Date().toISOString().split('T')[0]} 
                     onChange={(e) => setFeasibilityData({...feasibilityData, nextFollowUpDate: e.target.value})} 
                   />
-                  <p className="text-[8px] text-slate-400 mt-1 italic">* This task will reappear on this date</p>
+                  <p className="text-xs text-slate-400 mt-1 italic">* This task will reappear on this date</p>
                 </div>
                 
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block flex items-center gap-2">
+                  <label className="label mb-1.5 flex items-center gap-2">
                     <Briefcase size={14} className="text-purple-600" />
                     Assign Project Manager
                   </label>
                   <select
-                    className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-700 outline-none focus:border-purple-400 transition-colors cursor-pointer"
+                    className="input bg-slate-50 cursor-pointer"
                     value={feasibilityPM}
                     onChange={(e) => setFeasibilityPM(e.target.value)}
                   >
@@ -1644,25 +1644,25 @@ const handleProductionSubmit = async (e) => {
                       ))
                     )}
                   </select>
-                  <p className="text-[8px] text-slate-400 mt-1">The feasibility task will be assigned to this PM</p>
+                  <p className="text-xs text-slate-400 mt-1">The feasibility task will be assigned to this PM</p>
                 </div>
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                <label className="label block mb-1.5">
                   Task Details
                 </label>
                 <textarea 
                   required 
                   placeholder="Requirement details..." 
-                  className="w-full p-4 bg-slate-50 border border-slate-100 rounded-2xl font-medium outline-none h-20 md:h-24 resize-none focus:border-purple-400 transition-colors" 
+                  className="input bg-slate-50 resize-none" 
                   value={feasibilityData.taskDetails} 
                   onChange={(e) => setFeasibilityData({...feasibilityData, taskDetails: e.target.value})} 
                 />
               </div>
 
               <div>
-                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                <label className="label block mb-1.5">
                   Attachment (PDF, Word, Excel, Images, ZIP)
                 </label>
                 <div className="relative group">
@@ -1672,13 +1672,13 @@ const handleProductionSubmit = async (e) => {
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
                     onChange={(e) => setFeasibilityData({...feasibilityData, attachment: e.target.files[0]})} 
                   />
-                  <div className="w-full p-4 border-2 border-dashed border-slate-200 rounded-3xl flex flex-col items-center justify-center gap-2 group-hover:border-purple-400 transition-colors bg-slate-50">
+                  <div className="w-full p-4 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center gap-2 group-hover:border-purple-400 transition-colors bg-slate-50">
                     <Upload size={24} className="text-slate-400" />
-                    <span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">
+                    <span className="text-xs font-semibold text-slate-500 truncate w-full px-4 text-center">
                       {feasibilityData.attachment ? feasibilityData.attachment.name : "Click to upload files (Max 20MB)"}
                     </span>
                     {feasibilityData.attachment && (
-                      <span className="text-[8px] text-green-600">
+                      <span className="text-xs text-green-600">
                         {(feasibilityData.attachment.size / 1024 / 1024).toFixed(2)} MB
                       </span>
                     )}
@@ -1690,14 +1690,14 @@ const handleProductionSubmit = async (e) => {
                 <button 
                   type="button" 
                   onClick={closeFeasibilityModal} 
-                  className="flex-1 py-4 bg-slate-100 text-slate-500 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-500 hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button 
                   type="submit" 
                   disabled={isUploading || !feasibilityPM} 
-                  className={`flex-[2] py-4 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all ${
+                  className={`btn btn-md flex-[2] ${
                     isUploading || !feasibilityPM
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                       : 'bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200'
@@ -1713,14 +1713,15 @@ const handleProductionSubmit = async (e) => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
 
       {/* CLOSE LEAD MODAL WITH ATTACHMENT UPLOAD - EMPTY FORM */}
       {showCloseModal && selectedLeadForClose && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 max-h-[95vh] overflow-y-auto">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md relative">
             <button 
               onClick={() => {
                 setShowCloseModal(false);
@@ -1729,16 +1730,17 @@ const handleProductionSubmit = async (e) => {
                 setClosingData({ reason: 'won', description: '' });
                 setProductionAttachment(null);
               }} 
-              className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors"
+              className="btn-icon absolute top-2 right-2 z-10 bg-white text-slate-300 hover:text-slate-900"
             >
               <X size={24}/>
             </button>
             
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 border-2 border-emerald-200">
+            <div className="modal-body">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 border-2 border-emerald-200 shrink-0">
                 <FolderKanban size={32} />
               </div>
-              <h2 className="text-2xl font-black text-slate-900">
+              <h2 className="section-title">
                 {showProductionForm ? 'Production Ready Setup' : 'Close Lead'}
               </h2>
               <p className="text-slate-500 text-sm mt-1">
@@ -1749,14 +1751,14 @@ const handleProductionSubmit = async (e) => {
             {!showProductionForm ? (
               <form onSubmit={handleCloseLeadSubmit} className="space-y-5">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Select Outcome *
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button 
                       type="button"
                       onClick={() => setClosingData({...closingData, reason: 'won'})} 
-                      className={`py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                      className={`btn btn-md border-2 ${
                         closingData.reason === 'won' 
                           ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-md shadow-emerald-100' 
                           : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:border-slate-300'
@@ -1769,7 +1771,7 @@ const handleProductionSubmit = async (e) => {
                     <button 
                       type="button"
                       onClick={() => setClosingData({...closingData, reason: 'lost'})} 
-                      className={`py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                      className={`btn btn-md border-2 ${
                         closingData.reason === 'lost' 
                           ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-md shadow-rose-100' 
                           : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:border-slate-300'
@@ -1782,7 +1784,7 @@ const handleProductionSubmit = async (e) => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     {closingData.reason === 'won' ? 'Success Notes' : 'Reason for Loss'} {closingData.reason === 'lost' && '*'}
                   </label>
                   <textarea 
@@ -1792,12 +1794,12 @@ const handleProductionSubmit = async (e) => {
                         : "Please explain why this lead was lost..."
                     }
                     required={closingData.reason === 'lost'}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
+                    className="input bg-slate-50 resize-none" 
                     value={closingData.description} 
                     onChange={(e) => setClosingData({...closingData, description: e.target.value})} 
                   />
                   {closingData.reason === 'lost' && (
-                    <p className="text-[9px] text-rose-500 ml-1 flex items-center gap-1">
+                    <p className="text-xs text-rose-500 ml-1 flex items-center gap-1">
                       <AlertCircle size={12} />
                       Please provide a reason for losing this lead
                     </p>
@@ -1812,14 +1814,14 @@ const handleProductionSubmit = async (e) => {
                       setSelectedLeadForClose(null);
                       setClosingData({ reason: 'won', description: '' });
                     }}
-                    className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                    className="btn btn-md flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
                     disabled={!closingData.reason || (closingData.reason === 'lost' && !closingData.description.trim())}
-                    className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
+                    className={`btn btn-md flex-[2] text-white shadow-lg ${
                       closingData.reason === 'won' 
                         ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' 
                         : closingData.reason === 'lost'
@@ -1844,19 +1846,19 @@ const handleProductionSubmit = async (e) => {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle size={16} className="text-emerald-600" />
-                    <span className="text-xs font-bold text-emerald-700">Setup Production Project</span>
+                    <span className="text-xs font-semibold text-emerald-700">Setup Production Project</span>
                   </div>
-                  <p className="text-[9px] text-emerald-600 mt-1">Fill in the details to launch this project</p>
+                  <p className="text-xs text-emerald-600 mt-1">Fill in the details to launch this project</p>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Project Name *
                   </label>
                   <input
                     type="text"
                     required
-                    className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm"
+                    className="input bg-slate-50"
                     value={productionForm.name}
                     onChange={(e) => setProductionForm({...productionForm, name: e.target.value})}
                     placeholder="Enter project name"
@@ -1865,7 +1867,7 @@ const handleProductionSubmit = async (e) => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    <label className="label block mb-1.5">
                       Industry *
                     </label>
                     <CreatableSelect 
@@ -1878,7 +1880,7 @@ const handleProductionSubmit = async (e) => {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    <label className="label block mb-1.5">
                       Country *
                     </label>
                     <CreatableSelect 
@@ -1893,30 +1895,30 @@ const handleProductionSubmit = async (e) => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block flex items-center gap-2">
+                  <label className="label mb-1.5 flex items-center gap-2">
                     <Briefcase size={14} className="text-emerald-600" />
                     Assign Project Manager *
                   </label>
                   <select
                     required
-                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm text-slate-700 cursor-pointer"
+                    className="input bg-slate-50 cursor-pointer"
                     value={productionForm.projectManager}
                     onChange={(e) => setProductionForm({...productionForm, projectManager: e.target.value})}
                   >
                     <option value="">Select Project Manager...</option>
-                    {projectManagers.map(pm => (
+                    {projectManagersList.map(pm => (
                       <option key={pm._id} value={pm._id}>{pm.name}</option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Description (Optional)
                   </label>
                   <textarea
                     rows={2}
-                    className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-medium text-sm resize-none"
+                    className="input bg-slate-50 resize-none"
                     value={productionForm.description}
                     onChange={(e) => setProductionForm({...productionForm, description: e.target.value})}
                     placeholder="Brief project description..."
@@ -1925,7 +1927,7 @@ const handleProductionSubmit = async (e) => {
 
                 {/* Attachment Upload */}
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Attachment (Optional - PDF, Word, Excel, Images, ZIP)
                   </label>
                   <div className="relative group">
@@ -1935,15 +1937,15 @@ const handleProductionSubmit = async (e) => {
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
                       onChange={(e) => setProductionAttachment(e.target.files[0])} 
                     />
-                    <div className={`w-full p-3 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-1 transition-colors ${
+                    <div className={`w-full p-3 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1 transition-colors ${
                       productionAttachment ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-purple-400 bg-slate-50'
                     }`}>
                       <Upload size={20} className={productionAttachment ? 'text-emerald-500' : 'text-slate-400'} />
-                      <span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">
+                      <span className="text-xs font-semibold text-slate-500 truncate w-full px-4 text-center">
                         {productionAttachment ? productionAttachment.name : "Click to upload files (Max 20MB)"}
                       </span>
                       {productionAttachment && (
-                        <span className="text-[8px] text-green-600">
+                        <span className="text-xs text-green-600">
                           {(productionAttachment.size / 1024 / 1024).toFixed(2)} MB
                         </span>
                       )}
@@ -1954,7 +1956,7 @@ const handleProductionSubmit = async (e) => {
                 <button
                   type="submit"
                   disabled={isClosing || !productionForm.projectManager || !productionForm.name.trim()}
-                  className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
+                  className={`btn btn-md w-full shadow-lg ${
                     isClosing || !productionForm.projectManager || !productionForm.name.trim()
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                       : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200'
@@ -1968,6 +1970,7 @@ const handleProductionSubmit = async (e) => {
                 </button>
               </form>
             )}
+            </div>
           </div>
         </div>
       )}

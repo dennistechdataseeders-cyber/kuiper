@@ -359,7 +359,11 @@ app.use('/uploads', (req, res, next) => {
     res.setHeader('Content-Type', contentType);
     
     const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
-    if (!imageExtensions.includes(ext)) {
+    // Ticket uploads accept any file type: never let the browser guess the type, and never open
+    // an SVG (it can contain scripts) as a page. <img> previews still work.
+    const isTicketUpload = path.basename(path.dirname(filePath)) === 'tickets';
+    if (isTicketUpload) res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (!imageExtensions.includes(ext) || (isTicketUpload && ext === '.svg')) {
       res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath)}"`);
     }
     
@@ -420,6 +424,7 @@ app.use('/api/teamlead', protect, teamLeadRoutes);
 app.use('/api/admin', protect, ticketAssignmentRoutes);
 app.use('/api/notifications', protect, notificationRoutes);
 app.use('/api/client', protect, clientRoutes);
+app.use('/api/feeds', require('./routes/feedProgressRoutes')); // live feed progress for the PM / Developer dashboards
 app.use('/api/knowledge', protect, knowledgeBaseRoutes);
 app.use('/api/hr', hrRoutes);
 app.use('/api/employee', employeeRoutes);
@@ -449,6 +454,22 @@ if (leaveBucketRoutes) {
 }
 
 /* =========================================================
+   HEALTH PROBE ENDPOINT
+========================================================= */
+
+app.get('/health', (req, res) => {
+  const isConnected = mongoose.connection.readyState === 1;
+  const isSeparate = Boolean(
+    process.env.FEED_STATUS_MONGO_URI && 
+    process.env.FEED_STATUS_MONGO_URI !== process.env.MONGO_URI
+  );
+  res.status(isConnected ? 200 : 503).json({
+    db: isConnected ? 'up' : 'down',
+    feedSource: isSeparate ? 'separate' : 'direct'
+  });
+});
+
+/* =========================================================
    ROOT PIN TEST DIRECTIVE
 ========================================================= */
 
@@ -474,7 +495,16 @@ app.use((req, res) => {
 
 mongoose.connect(MONGO_URI)
   .then(() => {
-    console.log('✅ MongoDB Cluster Connected Successfully');
+    const dbName = mongoose.connection.name || 'kuiper';
+    console.log(`✅ Connected to main MongoDB: ${dbName}`);
+
+    const feedUri = process.env.FEED_STATUS_MONGO_URI;
+    if (feedUri && feedUri !== MONGO_URI) {
+      const masked = feedUri.replace(/\/\/([^:]+):([^@]+)@/, '//[REDACTED]@');
+      console.log(`✅ Feed data source: separate connection (${masked})`);
+    } else {
+      console.log('✅ Feed data source: direct MongoDB (main connection)');
+    }
     
     server.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 API System running in production mode listening on port ${PORT}`);

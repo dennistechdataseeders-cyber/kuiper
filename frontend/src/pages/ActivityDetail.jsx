@@ -12,7 +12,6 @@ import {
   Building2, Mail, Phone, Globe, UserCircle2, Clock, AlertTriangle, ExternalLink, StickyNote,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import { useCustomFields } from '../components/CustomFieldsSection';
 import {
   Cell, cellInput, InlineSelect, InlineCustom, FieldGroup, useUnsavedChanges, FloatingSaveBar,
@@ -95,7 +94,6 @@ function toForm(a) {
 export default function ActivityDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { isCollapsed } = useSidebar();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
   const canEdit = EDIT_ROLES.includes(role());
@@ -268,7 +266,7 @@ export default function ActivityDetail() {
   };
 
   // ---------- render ----------
-  const shell = `min-h-screen bg-slate-50 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`;
+  const shell = 'page-flush bg-slate-50';
   if (loading) {
     return (
       <div className={`${shell} flex items-center justify-center`}>
@@ -318,43 +316,43 @@ export default function ActivityDetail() {
   return (
     <div className={shell}>
       {/* ---------- Header ---------- */}
-      <div className={`fixed top-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 ${isCollapsed ? 'left-20' : 'left-64'}`}>
-        <div className="px-6 pt-3 pb-2.5 flex items-center gap-4">
-          <button onClick={goBack} title={`Back to ${meta.back}`} className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition shrink-0">
+      <div className="app-bar max-md:static">
+        <div className="app-bar-row !pb-2">
+          <button onClick={goBack} title={`Back to ${meta.back}`} className="btn-icon bg-slate-100 hover:bg-slate-200 shrink-0">
             <ArrowLeft size={16} />
           </button>
           <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
             <Icon size={18} />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
-              <h1 className="text-xl font-black text-slate-900 truncate">{item.title || `Untitled ${meta.label.toLowerCase()}`}</h1>
-              <span className={`shrink-0 px-2 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wide ${statusCls(item.status)}`}>{item.status}</span>
-              <span className={`shrink-0 px-2 py-0.5 rounded-full border text-[10px] font-black uppercase tracking-wide ${priorityCls(item.priority)}`}>{item.priority || 'Medium'}</span>
+          <div className="min-w-0 flex-1 basis-48">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+              <h1 className="page-title md:truncate">{item.title || `Untitled ${meta.label.toLowerCase()}`}</h1>
+              <span className={`badge rounded-full shrink-0 border ${statusCls(item.status)}`}>{item.status}</span>
+              <span className={`badge rounded-full shrink-0 border ${priorityCls(item.priority)}`}>{item.priority || 'Medium'}</span>
               {overdue && (
-                <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 border border-red-100 text-red-700 text-[10px] font-black uppercase tracking-wide">
-                  <AlertTriangle size={10} /> Overdue
+                <span className="badge rounded-full shrink-0 bg-red-50 border border-red-100 text-red-700">
+                  <AlertTriangle size={12} /> Overdue
                 </span>
               )}
             </div>
-            <p className="text-xs font-semibold text-slate-500 truncate">
+            <p className="text-xs font-semibold text-slate-500 md:truncate">
               {meta.label}{leadName ? <> · {leadName}</> : null}
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             {canEdit && !closed && (
-              <button onClick={markCompleted} className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 shadow-sm transition">
+              <button onClick={markCompleted} className="btn btn-md bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm">
                 <CheckCircle2 size={14} /> Mark Completed
               </button>
             )}
             {canDelete && (
-              <button onClick={remove} title="Delete" className="w-9 h-9 rounded-lg border border-slate-200 bg-white text-slate-500 flex items-center justify-center hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition">
+              <button onClick={remove} title="Delete" className="btn-icon border border-slate-200 bg-white text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50">
                 <Trash2 size={15} />
               </button>
             )}
           </div>
         </div>
-        <div className="px-6 pb-2.5 pl-[112px] flex items-center gap-x-4 gap-y-1 flex-wrap">
+        <div className="px-3 sm:px-6 pb-3 md:pl-[112px] flex items-center gap-x-4 gap-y-1 flex-wrap">
           {quick.map(({ icon: QIcon, text: t, warn }) => (
             <span key={t} className={`flex items-center gap-1.5 text-xs font-semibold ${warn ? 'text-red-600' : 'text-slate-600'}`}>
               <QIcon size={13} className={warn ? 'text-red-500' : 'text-slate-400'} /> {t}
@@ -364,12 +362,12 @@ export default function ActivityDetail() {
       </div>
 
       {/* ---------- Body ---------- */}
-      <div className="px-6 pt-[112px] pb-24 grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-24 grid grid-cols-1 xl:grid-cols-12 items-start gap-3 sm:gap-4">
         <div className="xl:col-span-7">
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-            <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-100">
-              <h2 className="text-sm font-black text-slate-800">{meta.label} Details</h2>
-              <span className="text-[11px] font-semibold text-slate-400">{canEdit ? 'Click any field to edit' : 'Read only'}</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-slate-100">
+              <h2 className="section-title">{meta.label} Details</h2>
+              <span className="text-xs font-semibold text-slate-400">{canEdit ? 'Click any field to edit' : 'Read only'}</span>
             </div>
 
             <FieldGroup
@@ -461,7 +459,7 @@ export default function ActivityDetail() {
             </FieldGroup>
           </div>
 
-          <p className="text-[11px] text-slate-400 mt-3 px-1">
+          <p className="text-xs text-slate-400 mt-3 px-1">
             Created by {item.createdBy?.name || 'Unknown'} · {fmtDateTime(item.createdAt)}
             {item.assignedBy?.name ? ` · Assigned by ${item.assignedBy.name} on ${fmtDateTime(item.assignedAt)}` : ''}
             {' · '}Last modified {fmtDateTime(item.updatedAt)}
@@ -471,20 +469,20 @@ export default function ActivityDetail() {
         {/* ---------- Right: related lead + its other activities ---------- */}
         <div className="xl:col-span-5 xl:sticky xl:top-[112px] space-y-5">
           <div className="bg-white border border-slate-200 rounded-xl shadow-sm">
-            <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100">
-              <h2 className="text-sm font-black text-slate-800">Related Lead</h2>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 py-3 border-b border-slate-100">
+              <h2 className="section-title">Related Lead</h2>
               {lead && (
                 <button
                   onClick={() => navigate(`/sales/leads?open=${lead._id}`)}
-                  className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline"
+                  className="flex items-center gap-1 text-xs font-semibold text-blue-600 hover:underline"
                 >
-                  Open lead <ExternalLink size={11} />
+                  Open lead <ExternalLink size={12} />
                 </button>
               )}
             </div>
             {lead ? (
               <div className="px-5 py-4 flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-sm font-black shrink-0">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 text-white flex items-center justify-center text-sm font-semibold shrink-0">
                   {(leadName || '?').charAt(0).toUpperCase()}
                 </div>
                 <div className="min-w-0 space-y-1">
@@ -506,8 +504,8 @@ export default function ActivityDetail() {
                     </a>
                   )}
                   <div className="flex items-center gap-2 pt-1">
-                    {lead.leadStatus && <span className="px-2 py-0.5 rounded-full bg-blue-50 border border-blue-100 text-blue-700 text-[10px] font-black uppercase">{lead.leadStatus}</span>}
-                    {lead.leadOwner?.name && <span className="text-[11px] text-slate-500">Owner: {lead.leadOwner.name}</span>}
+                    {lead.leadStatus && <span className="badge rounded-full bg-blue-50 border border-blue-100 text-blue-700">{lead.leadStatus}</span>}
+                    {lead.leadOwner?.name && <span className="text-xs text-slate-500">Owner: {lead.leadOwner.name}</span>}
                   </div>
                 </div>
               </div>
@@ -519,8 +517,8 @@ export default function ActivityDetail() {
           {lead && (
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col xl:max-h-[calc(100vh-340px)]">
               <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
-                <h2 className="text-sm font-black text-slate-800">Other activity on this lead</h2>
-                <span className="px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 text-[9px] font-black">{related.length}</span>
+                <h2 className="section-title">Other activity on this lead</h2>
+                <span className="badge rounded-full bg-slate-100 text-slate-500">{related.length}</span>
               </div>
               <div className="p-3 overflow-y-auto space-y-2">
                 {related.length === 0 ? (
@@ -540,8 +538,8 @@ export default function ActivityDetail() {
                     >
                       <div className="w-7 h-7 rounded-md bg-white border border-slate-200 text-slate-500 flex items-center justify-center shrink-0"><RIcon size={13} /></div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-xs font-bold text-slate-800 truncate">{r.type === 'note' ? r.content : r.title || 'Untitled'}</p>
-                        <p className="text-[10px] font-semibold text-slate-400 mt-0.5">
+                        <p className="text-xs font-semibold text-slate-800 truncate">{r.type === 'note' ? r.content : r.title || 'Untitled'}</p>
+                        <p className="text-xs font-semibold text-slate-400 mt-0.5">
                           {r.type === 'note' ? 'Note' : META[r.type]?.label} · {r.type === 'task' ? `Due ${fmtDate(rWhen)}` : fmtDateTime(rWhen)}
                           {r.type !== 'note' && r.status ? ` · ${r.status}` : ''}
                         </p>
@@ -561,7 +559,6 @@ export default function ActivityDetail() {
         saving={saving}
         onSave={save}
         onDiscard={discard}
-        isCollapsed={isCollapsed}
       />
     </div>
   );

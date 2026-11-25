@@ -7,7 +7,7 @@ const DashboardFilterBanner = ({ filter, label, className = '' }) => {
   if (!filter?.active) return null;
   return (
     <div
-      className={`inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700 ${className}`}
+      className={`inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 ${className}`}
     >
       <Filter size={12} />
       <span>
@@ -17,7 +17,7 @@ const DashboardFilterBanner = ({ filter, label, className = '' }) => {
       <button
         onClick={filter.clear}
         title="Clear filter"
-        className="ml-1 rounded-full p-0.5 hover:bg-blue-100"
+        className="btn-icon ml-1 hover:bg-blue-100 rounded-full"
       >
         <X size={12} />
       </button>

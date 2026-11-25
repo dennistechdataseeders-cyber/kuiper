@@ -267,52 +267,52 @@ const EmployeeLeave = ({ userId, token }) => {
 
       {/* Leave Balance Cards - NEW BUCKET SYSTEM */}
       <div>
-        <h3 className="text-base font-bold text-slate-900 mb-3">Leave Balances</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <h3 className="section-title mb-3">Leave Balances</h3>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Paid Leave Card */}
           <div className={`bg-white rounded-xl border-2 p-4 shadow-sm hover:shadow-md transition-shadow ${probationStatus?.isProbationary ? 'opacity-60 border-slate-300' : 'border-blue-300'}`}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Paid Leave</p>
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Paid Leave</p>
               {probationStatus?.isProbationary && (
-                <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
+                <span className="badge rounded-full bg-slate-100 text-slate-600">
                   Locked 🔒
                 </span>
               )}
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <p className={`text-3xl font-black ${probationStatus?.isProbationary ? 'text-slate-400' : 'text-slate-900'}`}>
+              <p className={`text-3xl font-bold ${probationStatus?.isProbationary ? 'text-slate-400' : 'text-slate-900'}`}>
                 {leaveBalance?.balances?.['Paid Leave'] || 0}
               </p>
             </div>
-            <p className="text-[10px] font-medium text-slate-500 mt-1">Accrued 1.5 days/month</p>
+            <p className="text-xs font-medium text-slate-500 mt-1">Accrued 1.5 days/month</p>
           </div>
 
           {/* Unpaid Leave Card */}
           <div className={`bg-white rounded-xl border-2 p-4 shadow-sm hover:shadow-md transition-shadow ${probationStatus?.isProbationary ? 'border-amber-400 ring-2 ring-amber-100' : 'border-slate-300'}`}>
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Unpaid Leave</p>
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Unpaid Leave</p>
               {probationStatus?.isProbationary && (
-                <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                <span className="badge rounded-full bg-amber-100 text-amber-800">
                   Available
                 </span>
               )}
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <p className="text-3xl font-black text-slate-900">∞</p>
+              <p className="text-3xl font-bold text-slate-900">∞</p>
             </div>
-            <p className="text-[10px] font-medium text-slate-500 mt-1">No limit</p>
+            <p className="text-xs font-medium text-slate-500 mt-1">No limit</p>
             {probationStatus?.isProbationary && (
-              <p className="text-[9px] font-semibold text-amber-700 mt-1">✓ Only leave available during probation</p>
+              <p className="text-xs font-semibold text-amber-700 mt-1">✓ Only leave available during probation</p>
             )}
           </div>
 
           {/* Monthly Usage Card */}
           <div className="bg-white rounded-xl border-2 border-slate-300 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">This Month</p>
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">This Month</p>
             </div>
             <div className="flex items-end gap-2 mt-2">
-              <p className="text-3xl font-black text-amber-700">
+              <p className="text-3xl font-bold text-amber-700">
                 {leaveStats.monthlyUsed || 0}
               </p>
               <p className="text-base font-semibold text-slate-500 mb-0.5">/ {leaveStats.monthlyLimit}</p>
@@ -327,22 +327,22 @@ const EmployeeLeave = ({ userId, token }) => {
                 style={{ width: `${Math.min((leaveStats.monthlyUsed / leaveStats.monthlyLimit) * 100, 100)}%` }}
               />
             </div>
-            <p className="text-[10px] font-medium text-slate-500 mt-1.5">
+            <p className="text-xs font-medium text-slate-500 mt-1.5">
               {leaveStats.monthlyRemaining} days remaining
             </p>
           </div>
 
           {/* Financial Year Card */}
           <div className="bg-white rounded-xl border-2 border-slate-300 p-4 shadow-sm">
-            <div className="flex items-center justify-between">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Financial Year</p>
+            <div className="flex flex-wrap items-center justify-between gap-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Financial Year</p>
             </div>
             <div className="mt-2">
               <p className="text-sm font-bold text-slate-900">
                 {leaveBalance?.financialYear?.start || 'N/A'} - {leaveBalance?.financialYear?.end || 'N/A'}
               </p>
-              <p className="text-[10px] font-medium text-slate-500 mt-1">April–March</p>
-              <p className="text-[10px] font-semibold text-slate-700 mt-1">
+              <p className="text-xs font-medium text-slate-500 mt-1">April–March</p>
+              <p className="text-xs font-semibold text-slate-700 mt-1">
                 Used: {leaveStats.usedLeaves || 0} days
               </p>
             </div>
@@ -361,14 +361,14 @@ const EmployeeLeave = ({ userId, token }) => {
       </div>
 
       {/* Leave History Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
-        <div className="flex flex-col md:flex-row gap-3">
+      <div className="card">
+        <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg outline-none text-sm font-medium text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 bg-slate-50"
+              className="input pl-9 bg-slate-50"
             >
               <option value="all">All Status</option>
               <option value="pending">Pending</option>
@@ -376,7 +376,7 @@ const EmployeeLeave = ({ userId, token }) => {
               <option value="rejected">Rejected</option>
             </select>
           </div>
-          <div className="flex items-center gap-3 text-sm font-semibold text-slate-700">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold text-slate-700">
             <span>Total: {leaveHistory.length}</span>
             <span className="w-px h-4 bg-slate-300" />
             <span className="text-emerald-700">✓ {leaveStats.approvedLeaves}</span>
@@ -387,7 +387,7 @@ const EmployeeLeave = ({ userId, token }) => {
           </div>
           <button
             onClick={() => setShowLeaveModal(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-sm flex-shrink-0"
+            className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm flex-shrink-0"
           >
             <Plus size={16} />
             Apply Leave
@@ -399,14 +399,14 @@ const EmployeeLeave = ({ userId, token }) => {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         {paginatedHistory.length === 0 ? (
           <div className="p-12 text-center">
-            <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+            <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
               <FileText size={28} className="text-slate-400" />
             </div>
             <p className="text-sm font-bold text-slate-700">No leave applications yet</p>
             <p className="text-xs text-slate-500 mt-1">Apply for leave to get started</p>
             <button
               onClick={() => setShowLeaveModal(true)}
-              className="mt-4 px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-all"
+              className="btn btn-md mt-4 bg-blue-600 text-white hover:bg-blue-700"
             >
               Apply for Leave
             </button>
@@ -415,17 +415,17 @@ const EmployeeLeave = ({ userId, token }) => {
           <div className="divide-y divide-slate-100">
             {paginatedHistory.map((leave) => (
               <div key={leave._id} className="p-4 hover:bg-slate-50/70 transition-all">
-                <div className="flex items-center justify-between gap-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${getLeaveTypeColor(leave.leaveType)}`}>
+                      <span className={`badge rounded-full border ${getLeaveTypeColor(leave.leaveType)}`}>
                         {leave.leaveType}
                       </span>
-                      <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${getStatusColor(leave.status)}`}>
+                      <span className={`badge rounded-full border ${getStatusColor(leave.status)}`}>
                         {leave.status.toUpperCase()}
                       </span>
                       {leave.isHalfDay && (
-                        <span className="text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-1 rounded-full">
+                        <span className="badge rounded-full bg-amber-100 text-amber-800 border border-amber-300">
                           {leave.halfDayType === 'first' ? 'First Half' : 'Second Half'}
                         </span>
                       )}
@@ -433,7 +433,7 @@ const EmployeeLeave = ({ userId, token }) => {
                     <p className="text-sm font-medium text-slate-800 mt-1.5">
                       {formatDate(leave.startDate)} {leave.isHalfDay ? `(${leave.halfDayType === 'first' ? 'First Half' : 'Second Half'})` : `- ${formatDate(leave.endDate)}`}
                       {leave.isGroup && leave.groupSummary && (
-                        <span className="ml-2 text-xs font-bold text-slate-500">
+                        <span className="ml-2 text-xs font-semibold text-slate-500">
                           · {leave.groupSummary.totalDays} day(s)
                           {leave.groupSummary.paidDays ? ` · ${leave.groupSummary.paidDays} paid` : ''}
                           {leave.groupSummary.unpaidDays ? ` · ${leave.groupSummary.unpaidDays} unpaid` : ''}
@@ -443,7 +443,7 @@ const EmployeeLeave = ({ userId, token }) => {
                     {leave.isGroup && leave.pieces.length > 1 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {leave.pieces.map((p) => (
-                          <span key={p._id} className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${p.leaveType === 'Paid Leave' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
+                          <span key={p._id} className={`badge border ${p.leaveType === 'Paid Leave' ? 'bg-blue-50 border-blue-100 text-blue-700' : 'bg-indigo-50 border-indigo-100 text-indigo-700'}`}>
                             {new Date(p.startDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}
                             {!p.isHalfDay && new Date(p.endDate).getTime() !== new Date(p.startDate).getTime() ? `–${new Date(p.endDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}` : ''}
                             {p.isHalfDay ? (p.halfDayType === 'first' ? ' ½ (1st)' : ' ½ (2nd)') : ''}
@@ -452,19 +452,19 @@ const EmployeeLeave = ({ userId, token }) => {
                         ))}
                       </div>
                     )}
-                    <p className="text-xs text-slate-600 mt-1 line-clamp-1">{leave.reason}</p>
+                    <p className="text-xs text-slate-600 mt-1 md:line-clamp-1">{leave.reason}</p>
                     {leave.status === 'rejected' && leave.rejectionReason && (
                       <p className="text-xs font-medium text-rose-600 mt-1">
                         Rejected: {leave.rejectionReason}
                       </p>
                     )}
                   </div>
-                  <div className="text-right flex-shrink-0">
+                  <div className="sm:text-right sm:shrink-0">
                     <p className="text-xs font-medium text-slate-500">
                       {formatDate(leave.appliedAt)}
                     </p>
                     {leave.status === 'approved' && leave.approvedBy && (
-                      <p className="text-xs font-bold text-emerald-700 mt-0.5">
+                      <p className="text-xs font-semibold text-emerald-700 mt-0.5">
                         ✓ {leave.approvedBy?.name || 'HR'}
                       </p>
                     )}
@@ -477,7 +477,7 @@ const EmployeeLeave = ({ userId, token }) => {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="p-4 border-t border-slate-200 flex justify-between items-center bg-slate-50/50">
+          <div className="p-4 border-t border-slate-200 flex flex-wrap justify-between items-center gap-2 bg-slate-50/50">
             <span className="text-xs font-semibold text-slate-700">
               Page {currentPage} of {totalPages}
             </span>
@@ -485,14 +485,14 @@ const EmployeeLeave = ({ userId, token }) => {
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="btn-icon border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40"
               >
                 <ChevronLeft size={15} />
               </button>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="p-2 rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                className="btn-icon border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 disabled:opacity-40"
               >
                 <ChevronRight size={15} />
               </button>

@@ -7,7 +7,8 @@ import {
   Image, File, Paperclip, FileText,
   FileArchive, FileSpreadsheet,
   FileVideo, FileAudio,
-  Download, Eye, LinkIcon
+  Download, Eye, LinkIcon,
+  FileCode
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
@@ -513,7 +514,7 @@ const CommentSection = ({
           return (
             <div 
               key={idx} 
-              className="flex items-center gap-3 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group"
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 p-2 bg-white rounded-lg border border-slate-200 hover:border-blue-300 transition-all group"
             >
               <div 
                 className="flex-shrink-0 w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden cursor-pointer"
@@ -534,23 +535,23 @@ const CommentSection = ({
                 )}
               </div>
               
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-32 sm:min-w-0">
                 <p className="text-xs font-semibold text-slate-700 truncate" title={displayName}>
                   {displayName}
                 </p>
-                <div className="flex items-center gap-2 text-[9px] text-slate-400">
+                <div className="flex items-center gap-2 text-xs text-slate-400">
                   {file.size && <span>{formatFileSize(file.size)}</span>}
                   {file.size && <span>•</span>}
                   <span>{getFileTypeLabel(file)}</span>
                 </div>
               </div>
               
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 ml-auto">
                 {isImage && (
                   <button
                     onClick={(e) => handleFileDownload(file, e)}
                     disabled={isDownloading}
-                    className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all disabled:opacity-50"
+                    className="btn-icon hover:bg-slate-100 text-slate-400 hover:text-blue-600 disabled:opacity-50"
                     title="View image"
                   >
                     {isDownloading ? (
@@ -563,7 +564,7 @@ const CommentSection = ({
                 <button
                   onClick={(e) => handleFileDownload(file, e)}
                   disabled={isDownloading}
-                  className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all disabled:opacity-50"
+                  className="btn-icon hover:bg-slate-100 text-slate-400 hover:text-blue-600 disabled:opacity-50"
                   title="Download file"
                 >
                   {isDownloading ? (
@@ -610,8 +611,8 @@ const CommentSection = ({
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1.5">
-                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs ${
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
+                      <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0 ${
                         isOwn ? 'bg-blue-600' : 'bg-slate-400'
                       }`}>
                         {getInitials(commenterName)}
@@ -619,12 +620,12 @@ const CommentSection = ({
                       <span className="font-bold text-sm text-slate-800">
                         {commenterName}
                       </span>
-                      <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                        <Clock size={10} />
+                      <span className="text-xs text-slate-400 flex items-center gap-1">
+                        <Clock size={12} />
                         {formatTime(comment.createdAt)}
                       </span>
                       {isOwn && (
-                        <span className="text-[8px] font-bold text-blue-600 bg-blue-100 px-1.5 py-0.5 rounded-full">
+                        <span className="badge rounded-full text-blue-600 bg-blue-100">
                           You
                         </span>
                       )}
@@ -644,7 +645,7 @@ const CommentSection = ({
                     <button
                       onClick={() => handleDelete(comment._id)}
                       disabled={deleting === comment._id}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all flex-shrink-0 disabled:opacity-50"
+                      className="btn-icon text-slate-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0 disabled:opacity-50"
                       title="Delete comment"
                     >
                       {deleting === comment._id ? (
@@ -668,8 +669,8 @@ const CommentSection = ({
           {filePreviews.length > 0 && (
             <div className="flex flex-wrap gap-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
               {filePreviews.map((preview, idx) => (
-                <div key={preview.id || idx} className="relative group">
-                  <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
+                <div key={preview.id || idx} className="flex items-center bg-white rounded-lg border border-slate-200 shadow-sm max-w-full min-w-0">
+                  <div className="flex items-center gap-2 p-2 min-w-0">
                     <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
                       {preview.file.type?.startsWith('image/') || isImageFile(preview.name) ? (
                         <img 
@@ -682,16 +683,16 @@ const CommentSection = ({
                       )}
                     </div>
                     <div className="min-w-0 max-w-[120px]">
-                      <p className="text-[10px] font-semibold text-slate-700 truncate">{preview.name}</p>
-                      <p className="text-[8px] text-slate-400">{formatFileSize(preview.size)}</p>
+                      <p className="text-xs font-semibold text-slate-700 truncate">{preview.name}</p>
+                      <p className="text-xs text-slate-400">{formatFileSize(preview.size)}</p>
                     </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeFile(idx)}
-                    className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md opacity-0 group-hover:opacity-100"
+                    className="btn-icon text-red-500 hover:bg-red-50 hover:text-red-600"
                   >
-                    <X size={10} />
+                    <X size={12} />
                   </button>
                 </div>
               ))}
@@ -705,7 +706,7 @@ const CommentSection = ({
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 placeholder="Write a comment... (attachments supported)"
-                className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-blue-400 transition-all resize-none min-h-[48px] max-h-[100px]"
+                className="input bg-slate-50 resize-none min-h-[48px]"
                 rows={1}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && !e.shiftKey) {
@@ -728,7 +729,7 @@ const CommentSection = ({
                 type="button"
                 onClick={() => fileInputRef.current.click()}
                 disabled={uploadingFiles}
-                className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-50"
+                className="btn-icon bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                 title="Attach files (images up to 5MB, documents up to 50MB)"
               >
                 <Paperclip size={18} />
@@ -737,7 +738,7 @@ const CommentSection = ({
               <button
                 type="submit"
                 disabled={submitting || uploadingFiles}
-                className="p-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm"
+                className="btn-icon bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 shadow-sm"
               >
                 {submitting ? (
                   <Loader2 size={18} className="animate-spin" />
@@ -748,7 +749,7 @@ const CommentSection = ({
             </div>
           </div>
           
-          <div className="flex justify-between text-[10px] text-slate-400 px-1">
+          <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-slate-400 px-1">
             <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
             <span>
               <button 

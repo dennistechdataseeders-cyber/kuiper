@@ -5,13 +5,11 @@ import toast from 'react-hot-toast';
 import { Plus, X, Save, Loader2, Building2, UserPlus, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import CustomFieldsSection, { useCustomFields, validateCustomFields, buildCustomFieldsPayload } from '../components/CustomFieldsSection';
 
 const LOGGED_IN_USER_ID = localStorage.getItem('userId') || '';
 
 export default function CreateAccount() {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
@@ -116,44 +114,44 @@ export default function CreateAccount() {
   };
 
   return (
-    <div className={`min-h-screen bg-slate-50 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
-      <div className={`fixed top-0 right-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm transition-all duration-300 ${isCollapsed ? 'left-20' : 'left-64'}`}>
-        <div className="px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/sales/accounts')} className="w-9 h-9 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition">
+    <div className="page-flush bg-slate-50">
+      <div className="app-bar">
+        <div className="app-bar-row justify-between">
+          <div className="flex items-center gap-3 min-w-0">
+            <button onClick={() => navigate('/sales/accounts')} className="btn-icon bg-slate-100 hover:bg-slate-200">
               <ArrowLeft size={16} />
             </button>
             <div>
-              <h1 className="text-2xl font-black text-slate-900">Create Account</h1>
+              <h1 className="page-title">Create Account</h1>
               <p className="text-xs font-semibold text-slate-400 mt-0.5">Add a new company and its Points of Contact.</p>
             </div>
           </div>
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-70 disabled:cursor-not-allowed shadow-lg shadow-blue-200 transition">
+          <button onClick={handleSave} disabled={saving} className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-70 shadow-lg shadow-blue-200">
             {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {saving ? 'Saving...' : 'Save Account'}
           </button>
         </div>
       </div>
 
-      <div className="px-6 pt-[88px] pb-12 max-w-5xl mx-auto">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
-          <div className="flex items-center gap-2 mb-6 border-b border-slate-100 pb-4">
+      <div className="px-3 sm:px-6 pt-4 sm:pt-6 pb-12 max-w-5xl mx-auto">
+        <div className="card mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 border-b border-slate-100 pb-4 mb-4 sm:mb-6">
             <Building2 className="text-blue-600" size={20} />
-            <h2 className="text-lg font-black text-slate-800">Account Information</h2>
+            <h2 className="section-title">Account Information</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">Company Name *</label>
-              <input name="companyName" value={account.companyName} onChange={handleAccountChange} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none" placeholder="e.g. Acme Corp" />
+              <label className="label block mb-1.5">Company Name *</label>
+              <input name="companyName" value={account.companyName} onChange={handleAccountChange} className="input" placeholder="e.g. Acme Corp" />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">Website</label>
-              <input name="website" value={account.website} onChange={handleAccountChange} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none" placeholder="https://acme.com" />
+              <label className="label block mb-1.5">Website</label>
+              <input name="website" value={account.website} onChange={handleAccountChange} className="input" placeholder="https://acme.com" />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">Industry</label>
-              <select name="industry" value={account.industry} onChange={handleAccountChange} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none">
+              <label className="label block mb-1.5">Industry</label>
+              <select name="industry" value={account.industry} onChange={handleAccountChange} className="input">
                 <option value="">Select Industry</option>
                 <option value="ECOM">E-Commerce</option>
                 <option value="IT">IT / Software</option>
@@ -162,16 +160,16 @@ export default function CreateAccount() {
               </select>
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">No. of Employees</label>
-              <input type="number" name="noOfEmployees" value={account.noOfEmployees} onChange={handleAccountChange} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none" placeholder="e.g. 50" />
+              <label className="label block mb-1.5">No. of Employees</label>
+              <input type="number" name="noOfEmployees" value={account.noOfEmployees} onChange={handleAccountChange} className="input" placeholder="e.g. 50" />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">City</label>
-              <input name="city" value={account.city} onChange={handleAccountChange} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none" />
+              <label className="label block mb-1.5">City</label>
+              <input name="city" value={account.city} onChange={handleAccountChange} className="input" />
             </div>
             <div>
-              <label className="text-xs font-bold text-slate-600 block mb-1">Country</label>
-              <input name="countryRegion" value={account.countryRegion} onChange={handleAccountChange} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none" />
+              <label className="label block mb-1.5">Country</label>
+              <input name="countryRegion" value={account.countryRegion} onChange={handleAccountChange} className="input" />
             </div>
           </div>
 
@@ -185,45 +183,45 @@ export default function CreateAccount() {
           </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6">
-          <div className="flex items-center justify-between mb-6 border-b border-slate-100 pb-4">
+        <div className="card mb-4 sm:mb-6">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-4 mb-4 sm:mb-6">
             <div className="flex items-center gap-2">
               <UserPlus className="text-blue-600" size={20} />
-              <h2 className="text-lg font-black text-slate-800">Points of Contact</h2>
+              <h2 className="section-title">Points of Contact</h2>
             </div>
-            <button onClick={addContact} className="flex items-center gap-1 text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg hover:bg-blue-100 transition">
+            <button onClick={addContact} className="btn btn-sm text-blue-600 bg-blue-50 hover:bg-blue-100">
               <Plus size={14} /> Add POC
             </button>
           </div>
 
-          <div className="space-y-6">
+          <div className="stack">
             {contacts.map((contact, index) => (
               <div key={index} className="relative bg-slate-50 p-4 rounded-xl border border-slate-200">
                 {contacts.length > 1 && (
-                  <button onClick={() => removeContact(index)} className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500">
+                  <button onClick={() => removeContact(index)} className="btn-icon absolute top-2 right-2 text-slate-400 hover:text-red-500">
                     <X size={16} />
                   </button>
                 )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">First Name *</label>
-                    <input value={contact.firstName} onChange={(e) => handleContactChange(index, 'firstName', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none bg-white" />
+                    <label className="label block mb-1.5">First Name *</label>
+                    <input value={contact.firstName} onChange={(e) => handleContactChange(index, 'firstName', e.target.value)} className="input" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">Last Name *</label>
-                    <input value={contact.lastName} onChange={(e) => handleContactChange(index, 'lastName', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none bg-white" />
+                    <label className="label block mb-1.5">Last Name *</label>
+                    <input value={contact.lastName} onChange={(e) => handleContactChange(index, 'lastName', e.target.value)} className="input" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">Email</label>
-                    <input type="email" value={contact.email} onChange={(e) => handleContactChange(index, 'email', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none bg-white" />
+                    <label className="label block mb-1.5">Email</label>
+                    <input type="email" value={contact.email} onChange={(e) => handleContactChange(index, 'email', e.target.value)} className="input" />
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-600 block mb-1">Phone</label>
-                    <input value={contact.phone} onChange={(e) => handleContactChange(index, 'phone', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none bg-white" />
+                    <label className="label block mb-1.5">Phone</label>
+                    <input value={contact.phone} onChange={(e) => handleContactChange(index, 'phone', e.target.value)} className="input" />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="text-xs font-bold text-slate-600 block mb-1">Job Title</label>
-                    <input value={contact.title} onChange={(e) => handleContactChange(index, 'title', e.target.value)} className="w-full px-3 py-2 border rounded-lg text-sm focus:border-blue-500 outline-none bg-white" placeholder="e.g. CEO, Manager" />
+                    <label className="label block mb-1.5">Job Title</label>
+                    <input value={contact.title} onChange={(e) => handleContactChange(index, 'title', e.target.value)} className="input" placeholder="e.g. CEO, Manager" />
                   </div>
                 </div>
                 <div className="mt-4">

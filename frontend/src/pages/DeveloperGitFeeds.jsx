@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import { 
   FolderGit2, 
   ExternalLink, 
@@ -21,7 +20,6 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 
 const DeveloperGitFeeds = () => {
-  const { isCollapsed } = useSidebar();
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -102,7 +100,7 @@ const DeveloperGitFeeds = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-slate-500 font-medium">Loading feed repository paths...</p>
@@ -115,26 +113,26 @@ const DeveloperGitFeeds = () => {
   const feedsWithoutGit = feeds.filter(f => !f.hasGitRepo);
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
       
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-3 bg-gray-900 rounded-xl">
                 <GitFork size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">My Git Feeds</h1>
-                <p className="text-gray-500 mt-1">Repository paths for your assigned feeds</p>
+                <h1 className="page-title">My Git Feeds</h1>
+                <p className="text-sm text-gray-500 mt-1">Repository paths for your assigned feeds</p>
               </div>
             </div>
           </div>
           
           <button
             onClick={fetchDeveloperFeeds}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50 transition-all shadow-sm"
+            className="btn btn-md bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm"
           >
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -143,34 +141,34 @@ const DeveloperGitFeeds = () => {
       </div>
 
       {/* Stats Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <div className="grid grid-cols-1 md:grid-cols-2 mb-4 sm:mb-6 gap-3 sm:gap-4">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <FolderGit2 size={16} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Total Assigned Feeds</p>
-              <p className="text-2xl font-black text-slate-800">{feeds.length}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase">Total Assigned Feeds</p>
+              <p className="text-2xl font-bold text-slate-800">{feeds.length}</p>
             </div>
           </div>
         </div>
         
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-green-100 rounded-lg">
               <CheckCircle size={16} className="text-green-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">With Git Repository</p>
-              <p className="text-2xl font-black text-green-600">{feedsWithGit.length}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase">With Git Repository</p>
+              <p className="text-2xl font-bold text-green-600">{feedsWithGit.length}</p>
             </div>
           </div>
         </div>
       </div>
 
       {/* Search */}
-      <div className="bg-white rounded-xl border border-slate-200 p-4 mb-6 shadow-sm">
+      <div className="card mb-4 sm:mb-6">
         <div className="relative">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
           <input
@@ -178,12 +176,12 @@ const DeveloperGitFeeds = () => {
             placeholder="Search feeds by name or project..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm"
+            className="input pl-10"
           />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
             >
               <X size={16} />
             </button>
@@ -193,23 +191,23 @@ const DeveloperGitFeeds = () => {
 
       {/* Feeds Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
+        <div className="table-scroll table-sticky-first overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <th className="th">
                   Feed Name
                 </th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <th className="th">
                   Project
                 </th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <th className="th">
                   Type
                 </th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <th className="th">
                   Git Path
                 </th>
-                <th className="text-right px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                <th className="th text-right">
                   Actions
                 </th>
               </tr>
@@ -231,26 +229,26 @@ const DeveloperGitFeeds = () => {
                   
                   return (
                     <tr key={feed._id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all">
-                      <td className="px-6 py-4">
+                      <td className="td">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${hasGit ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0 ${hasGit ? 'bg-gradient-to-br from-blue-500 to-blue-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
                             <FolderGit2 size={16} />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <p className="text-sm font-bold text-slate-800">{feed.name}</p>
                           </div>
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4">
+                      <td className="td">
                         <div>
                           <p className="text-sm font-semibold text-slate-700">{feed.projectCustomId || 'N/A'}</p>
-                          <p className="text-[9px] text-slate-400">{feed.projectName}</p>
+                          <p className="text-xs text-slate-400">{feed.projectName}</p>
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4">
-                        <span className={`inline-flex px-2.5 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-wider border ${
+                      <td className="td">
+                        <span className={`badge border ${
                           feed.feedType === 'Daily' ? 'bg-emerald-100 text-emerald-700 border-emerald-200' :
                           feed.feedType === 'Weekly' ? 'bg-amber-100 text-amber-700 border-amber-200' :
                           'bg-purple-100 text-purple-700 border-purple-200'
@@ -259,10 +257,10 @@ const DeveloperGitFeeds = () => {
                         </span>
                       </td>
                       
-                      <td className="px-6 py-4">
+                      <td className="td">
                         {hasGit ? (
                           <div className="flex items-center gap-2">
-                            <code className="text-[10px] font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">
+                            <code className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">
                               {feed.gitPath.feedPath}/src
                             </code>
                             <button
@@ -270,7 +268,7 @@ const DeveloperGitFeeds = () => {
                                 const fullPath = `${feed.gitPath.rootPath}/src`;
                                 copyToClipboard(fullPath, `path-${feed._id}`);
                               }}
-                              className="p-1.5 rounded-lg hover:bg-slate-100 transition-colors flex-shrink-0"
+                              className="btn-icon hover:bg-slate-100 flex-shrink-0"
                               title="Copy full path"
                             >
                               {copiedPath === `path-${feed._id}` ? (
@@ -288,14 +286,14 @@ const DeveloperGitFeeds = () => {
                         )}
                       </td>
                       
-                      <td className="px-6 py-4 text-right">
+                      <td className="td text-right">
                         <div className="flex items-center justify-end gap-2">
                           {hasGit && (
                             <>
                               <button
                                 onClick={() => fetchDeployScript(feed)}
                                 disabled={generatingScript[feed._id]}
-                                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-all text-xs font-medium disabled:opacity-50"
+                                className="btn btn-sm bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50"
                               >
                                 {generatingScript[feed._id] ? (
                                   <RefreshCw size={14} className="animate-spin" />
@@ -328,24 +326,24 @@ const DeveloperGitFeeds = () => {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
-            <p className="text-[10px] font-black text-slate-400">
+            <p className="text-xs font-semibold text-slate-400">
               Showing {paginatedFeeds.length} of {filteredFeeds.length} feeds
             </p>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-2 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-40 hover:bg-slate-50 transition-all"
+                className="btn-icon border border-slate-200 text-slate-500 disabled:opacity-40 hover:bg-slate-50"
               >
                 <ChevronLeft size={14} />
               </button>
-              <span className="text-[10px] font-black text-slate-600">
+              <span className="text-xs font-semibold text-slate-600">
                 Page {currentPage} of {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="p-2 rounded-lg border border-slate-200 text-slate-500 disabled:opacity-40 hover:bg-slate-50 transition-all"
+                className="btn-icon border border-slate-200 text-slate-500 disabled:opacity-40 hover:bg-slate-50"
               >
                 <ChevronRight size={14} />
               </button>
@@ -356,11 +354,11 @@ const DeveloperGitFeeds = () => {
 
       {/* Script Modal - Simplified */}
       {showScriptModal && currentScript && currentFeedInfo && (
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
-            <div className="flex items-center justify-between p-6 border-b border-slate-700">
+        <div className="modal-backdrop">
+          <div className="modal-panel !bg-slate-900 max-w-2xl">
+            <div className="modal-header !border-slate-700">
               <div>
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <h2 className="section-title text-white flex items-center gap-2">
                   <Terminal size={20} />
                   Deployment Script
                 </h2>
@@ -370,16 +368,16 @@ const DeveloperGitFeeds = () => {
               </div>
               <button
                 onClick={() => setShowScriptModal(false)}
-                className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+                className="btn-icon hover:bg-slate-800"
               >
                 <X size={20} className="text-slate-400" />
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="modal-body">
               {/* Simplified Instructions */}
-              <div className="mb-6 bg-blue-900/30 border border-blue-800 rounded-lg p-4">
-                <h3 className="text-sm font-semibold text-blue-400 mb-2 flex items-center gap-2">
+              <div className="bg-blue-900/30 border border-blue-800 rounded-lg p-4 mb-4 sm:mb-6">
+                <h3 className="section-title text-blue-400 mb-2 flex items-center gap-2">
                   <CheckCircle size={16} />
                   How to use:
                 </h3>
@@ -391,11 +389,11 @@ const DeveloperGitFeeds = () => {
               </div>
               
               {/* Script Content */}
-              <div className="relative">
-                <div className="absolute top-2 right-2 z-10">
+              <div>
+                <div className="flex justify-end mb-2">
                   <button
                     onClick={() => copyToClipboard(currentScript, 'full-script')}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded-lg text-xs font-medium text-slate-300 transition-all flex items-center gap-2"
+                    className="btn btn-sm bg-slate-800 hover:bg-slate-700 text-slate-300"
                   >
                     {copiedPath === 'full-script' ? (
                       <><CheckCircle size={14} className="text-green-500" /> Copied!</>
@@ -412,10 +410,10 @@ const DeveloperGitFeeds = () => {
               </div>
             </div>
             
-            <div className="p-6 border-t border-slate-700 flex justify-end">
+            <div className="modal-footer !border-slate-700">
               <button
                 onClick={() => setShowScriptModal(false)}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-all"
+                className="btn btn-md bg-blue-600 hover:bg-blue-700 text-white"
               >
                 Close
               </button>

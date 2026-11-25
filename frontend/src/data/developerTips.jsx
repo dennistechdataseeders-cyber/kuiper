@@ -70,7 +70,7 @@ const developerTips = [
   "Purge all obsolete script logs, unused columns, and dead commented-out blocks of code. Speak with raw, direct execution.",
   "Enunciate your query logic clearly inside your database comments and write code with the steady pace of an expert.",
   "Listen to database engine telemetry like an investigator. Your query performance metrics will tell you exactly how to fix the lag.",
-  "Keep your development environment completely unshakeable. Predictable local Docker instances breed predictable production code.",
+  "Keep your development environment completely unshakeable. Predictable local environments breed predictable production code.",
   "Design your MongoDB collections and SQL tables like a multi-million dollar data warehouse, even if you are just building a simple MVP.",
   "A semantic, well-named indexing strategy is beautiful to a systems engineer. Use keys intentionally to forge extreme performance.",
 

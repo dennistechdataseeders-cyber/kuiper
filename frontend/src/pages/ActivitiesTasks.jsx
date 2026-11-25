@@ -7,7 +7,6 @@ import {
   Search, Loader2, Plus, MoreHorizontal, Pencil, Trash2, Lock, X,
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import { getActivityLeadName } from '../utils/useAlphaPagination';
 import useDashboardFilter, { idOf, ownerOf, isTodayLocal } from '../utils/useDashboardFilter';
 import DashboardFilterBanner from '../components/DashboardFilterBanner';
@@ -40,7 +39,6 @@ const TASK_SYSTEM_FILTERS = (myId) => [
 ];
 
 export default function ActivitiesTasks() {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
   const authHeader = useMemo(() => ({ headers: { Authorization: `Bearer ${token}` } }), [token]);
@@ -241,24 +239,24 @@ export default function ActivitiesTasks() {
   // RENDER
   // ============================================
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* ---------- Header ---------- */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-5 gap-4">
+      <div className="flex flex-col lg:flex-row lg:justify-between lg:items-center gap-3 mb-4 sm:mb-6">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">Tasks</h1>
+          <h1 className="page-title">Tasks</h1>
           <p className="text-sm text-slate-500">
             {filtered.length} task{filtered.length === 1 ? '' : 's'} · drag a card to change its stage
           </p>
         </div>
-        <div className="flex items-center gap-3 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
           <FilterToggleButton open={showFilters} onClick={() => setShowFilters(v => !v)} count={countActiveFilters(filters)} />
-          <div className="relative flex-1 sm:w-72">
+          <div className="relative flex-1 basis-48 lg:w-72">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder="Search tasks..."
-              className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm outline-none focus:border-blue-500 shadow-sm bg-white"
+              className="input pl-10"
             />
           </div>
         </div>
@@ -286,14 +284,14 @@ export default function ActivitiesTasks() {
       {loading ? (
         <div className="flex justify-center py-24"><Loader2 className="animate-spin text-blue-600" size={28} /></div>
       ) : (
-        <div className="flex gap-4 overflow-x-auto pb-4 items-start">
+        <div className="flex gap-3 sm:gap-4 overflow-x-auto pb-4 items-start">
           {columns.map(({ stage, list, overdue }) => (
             <div
               key={stage._id}
               onDragOver={(e) => { e.preventDefault(); if (overStage !== stage.name) setOverStage(stage.name); }}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setOverStage(null); }}
               onDrop={(e) => onDrop(e, stage.name)}
-              className="w-[320px] shrink-0"
+              className="w-[85vw] max-w-[320px] shrink-0"
             >
               {/* column header */}
               <div className="bg-cyan-50 border-t-4 border-teal-300 rounded-t-lg px-4 py-3">
@@ -308,12 +306,12 @@ export default function ActivitiesTasks() {
                       if (e.key === 'Enter') e.currentTarget.blur();
                       if (e.key === 'Escape') { cancelRename.current = true; setRenamingId(null); }
                     }}
-                    className="w-full px-2 py-1 rounded-md border border-blue-400 text-sm font-bold text-slate-800 outline-none ring-2 ring-blue-100 bg-white"
+                    className="input"
                   />
                 ) : (
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-slate-800 truncate">{stage.name}</span>
-                    <span className="px-2 py-0.5 rounded-full bg-teal-200/70 text-teal-800 text-[11px] font-black">
+                    <span className="badge rounded-full bg-teal-200/70 text-teal-800">
                       {list.length}
                     </span>
                     {stage.locked && (
@@ -324,7 +322,7 @@ export default function ActivitiesTasks() {
                       <div className="relative ml-auto">
                         <button
                           onClick={() => setMenuFor(menuFor === stage._id ? null : stage._id)}
-                          className="p-1 rounded-md text-slate-500 hover:bg-white/70 transition"
+                          className="btn-icon text-slate-500 hover:bg-white/70"
                           title="Stage options"
                         >
                           <MoreHorizontal size={16} />
@@ -352,14 +350,14 @@ export default function ActivitiesTasks() {
                     )}
                   </div>
                 )}
-                <p className={`text-sm font-black mt-1 ${overdue > 0 ? 'text-red-500' : 'text-slate-800'}`}>
+                <p className={`text-sm font-semibold mt-1 ${overdue > 0 ? 'text-red-500' : 'text-slate-800'}`}>
                   {overdue} overdue
                 </p>
               </div>
 
               {/* cards */}
               <div
-                className={`rounded-b-lg p-2 space-y-2 min-h-[140px] max-h-[calc(100vh-290px)] overflow-y-auto transition-colors ${
+                className={`rounded-b-lg p-2 space-y-2 min-h-[140px] max-h-[70dvh] md:max-h-[calc(100vh-290px)] overflow-y-auto transition-colors ${
                   overStage === stage.name ? 'bg-blue-100/70 ring-2 ring-blue-300' : 'bg-slate-200/50'
                 }`}
               >
@@ -379,20 +377,20 @@ export default function ActivitiesTasks() {
                       }`}
                     >
                       <p className="text-sm font-bold text-slate-900 truncate">{t.title}</p>
-                      <div className="mt-1 space-y-0.5 text-[13px] text-slate-600">
+                      <div className="mt-1 space-y-0.5 text-sm text-slate-600">
                         <p className="truncate">{stage.name}</p>
                         <p className="truncate">{leadName}</p>
                         {company && company !== leadName && <p className="truncate">{company}</p>}
                         <p className="font-semibold text-slate-700">{t.priority || 'Medium'} priority</p>
                         {t.assignedTo && (
-                          <p className="text-[12px] font-semibold text-blue-600 truncate">
+                          <p className="text-xs font-semibold text-blue-600 truncate">
                             {String(t.assignedTo._id) === String(myId)
                               ? `Assigned by ${t.assignedBy?.name || 'your manager'}`
                               : `Assigned to ${t.assignedTo.name}`}
                           </p>
                         )}
                       </div>
-                      <p className={`text-[13px] mt-1 ${late ? 'text-red-500 font-semibold' : 'text-slate-500'}`}>
+                      <p className={`text-sm mt-1 ${late ? 'text-red-500 font-semibold' : 'text-slate-500'}`}>
                         {fmtDate(t.dueAt)}
                       </p>
                     </div>
@@ -407,7 +405,7 @@ export default function ActivitiesTasks() {
 
           {/* ---------- Add stage ---------- */}
           {canEdit && (
-            <div className="w-[320px] shrink-0">
+            <div className="w-[85vw] max-w-[320px] shrink-0">
               {adding ? (
                 <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm space-y-2">
                   <input
@@ -420,21 +418,21 @@ export default function ActivitiesTasks() {
                       if (e.key === 'Escape') { setAdding(false); setNewName(''); }
                     }}
                     placeholder="Stage name"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="input"
                     disabled={busy}
                   />
                   <div className="flex justify-end gap-2">
                     <button
                       onClick={() => { setAdding(false); setNewName(''); }}
                       disabled={busy}
-                      className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 disabled:opacity-50"
+                      className="btn btn-sm border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                     >
                       Cancel
                     </button>
                     <button
                       onClick={addStage}
                       disabled={busy || !newName.trim()}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 disabled:opacity-60"
+                      className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
                     >
                       {busy ? 'Adding...' : 'Add'}
                     </button>
@@ -443,7 +441,7 @@ export default function ActivitiesTasks() {
               ) : (
                 <button
                   onClick={() => setAdding(true)}
-                  className="w-full flex items-center justify-center gap-2 py-6 rounded-lg border-2 border-dashed border-slate-300 text-sm font-bold text-slate-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 transition"
+                  className="btn btn-md w-full border-2 border-dashed border-slate-300 text-slate-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50"
                 >
                   <Plus size={16} /> Add Stage
                 </button>
@@ -456,15 +454,15 @@ export default function ActivitiesTasks() {
 
       {/* ---------- Remove-stage dialog ---------- */}
       {deleting && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-            <div className="flex justify-between items-center px-6 pt-5 pb-3 border-b border-slate-100">
-              <h3 className="text-lg font-bold text-slate-800">Remove “{deleting.name}”?</h3>
-              <button onClick={() => setDeleting(null)} disabled={busy} className="text-slate-400 hover:text-slate-600 disabled:opacity-50">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
+              <h3 className="section-title">Remove “{deleting.name}”?</h3>
+              <button onClick={() => setDeleting(null)} disabled={busy} className="btn-icon text-slate-400 hover:text-slate-600 disabled:opacity-50">
                 <X size={18} />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-4">
+            <div className="modal-body space-y-4">
               {deleting.taskCount > 0 ? (
                 <>
                   <p className="text-sm text-slate-600">
@@ -474,7 +472,7 @@ export default function ActivitiesTasks() {
                   <select
                     value={moveTo}
                     onChange={(e) => setMoveTo(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    className="input"
                     disabled={busy}
                   >
                     {stages.filter((s) => s._id !== deleting._id).map((s) => (
@@ -489,14 +487,14 @@ export default function ActivitiesTasks() {
                 <button
                   onClick={() => setDeleting(null)}
                   disabled={busy}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+                  className="btn btn-md border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmDelete}
                   disabled={busy || (deleting.taskCount > 0 && !moveTo)}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-red-600 text-white text-sm font-bold hover:bg-red-700 disabled:opacity-60"
+                  className="btn btn-md bg-red-600 text-white hover:bg-red-700 disabled:opacity-60"
                 >
                   {busy ? <><Loader2 size={14} className="animate-spin" /> Removing...</> : 'Remove stage'}
                 </button>

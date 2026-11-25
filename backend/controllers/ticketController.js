@@ -1,7 +1,7 @@
 // backend/controllers/ticketController.js - COMPLETE UPDATED FILE
 
 const mongoose = require('mongoose');
-const { pmProjectFilter, tlProjectFilter, PROJECT_ACCESS_FIELDS } = require('../utils/projectAccess');
+const { pmProjectFilter, tlProjectFilter, isProjectPM, isProjectTL, PROJECT_ACCESS_FIELDS } = require('../utils/projectAccess');
 const { PM_ROLES, isPMRole } = require('../utils/roles');
 const Ticket = require('../models/Ticket');
 const Project = require('../models/Project');
@@ -10,6 +10,7 @@ const User = require('../models/User');
 const Organization = require('../models/Organization');
 const TicketCategory = require('../models/TicketCategory');
 const { resolveAssignRole } = require('../utils/ticketCategoryUtils');
+const { canActOnTicket, canReassignTicket } = require('../utils/ticketPermissions');
 const sendEmail = require('../services/zohoMailer');
 const {
   getTicketCreatedTemplate,
@@ -1713,6 +1714,13 @@ exports.getTicketStats = async (req, res) => {
 // GET SINGLE TICKET
 // ============================================
 
+// Is this user a PM / coordinator / team lead of the ticket's project?
+async function managesTicketProject(user, ticket) {
+  if (!ticket.projectId || user.role === 'Client') return false;
+  const project = await Project.findById(ticket.projectId._id || ticket.projectId).select(PROJECT_ACCESS_FIELDS).lean();
+  return isProjectPM(project, user._id) || isProjectTL(project, user._id);
+}
+
 exports.getTicketById = async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.id)
@@ -1737,8 +1745,8 @@ exports.getTicketById = async (req, res) => {
         return res.status(403).json({ error: 'Not authorized to view this ticket' });
       }
     }
-    
-    res.json(ticket);
+
+    res.json({ ...ticket.toJSON(), viewerManagesProject: await managesTicketProject(req.user, ticket) });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to fetch ticket' });
@@ -1758,16 +1766,9 @@ exports.updateStatus = async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
 
-    const canUpdate = 
-      req.user.role === 'Admin' ||
-      req.user.role === 'Super Admin' ||
-      isPMRole(req.user.role) ||
-      req.user.role === 'Team Lead' ||
-      ticket.createdBy.toString() === req.user.id ||
-      ticket.assignedTo?.toString() === req.user.id; // any assignee (Developer, Sales, etc.)
-
-    if (!canUpdate) {
-      return res.status(403).json({ error: 'Not authorized to update this ticket' });
+    // Start / Resolve / Close: only the assignee (plus the Admin override)
+    if (!canActOnTicket(req.user, ticket)) {
+      return res.status(403).json({ error: 'Only the assigned person can update this ticket' });
     }
 
     const oldStatus = ticket.status;
@@ -1861,6 +1862,10 @@ exports.assignTicket = async (req, res) => {
       return res.status(404).json({ error: 'Ticket not found' });
     }
     
+    if (!canReassignTicket(req.user, ticket, await managesTicketProject(req.user, ticket))) {
+      return res.status(403).json({ error: 'Only the assignee, the creator or an Admin can reassign this ticket' });
+    }
+
     const oldAssigneeId = ticket.assignedTo;
     let oldAssignee = null;
     if (oldAssigneeId) {

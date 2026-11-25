@@ -78,6 +78,34 @@ const LogoVideo = () => {
 import io from 'socket.io-client';
 import { isPMRole } from '../utils/roles';
 import usePolling from '../utils/usePolling';
+import useIsMobile from '../utils/useIsMobile';
+
+// ============================================
+// SIDEBAR STYLES - every state in one place (contrast on the black sidebar)
+// ============================================
+const SB = {
+  // one row: same height, padding and text size for every item, sub-item and group heading
+  row: 'relative w-full h-10 flex items-center gap-2.5 px-3 rounded-lg text-sm transition-colors group outline-none focus-visible:ring-2 focus-visible:ring-inset',
+  item: 'text-slate-100 font-medium hover:bg-white/15 hover:text-white focus-visible:ring-blue-400',       // 19:1
+  subItem: 'text-slate-200 font-medium hover:bg-white/15 hover:text-white focus-visible:ring-blue-400',    // 17:1
+  active: 'bg-blue-600 text-white font-semibold focus-visible:ring-white',                                 // 5.3:1
+  activeBar: 'absolute left-0 inset-y-2 w-1 rounded-r-full bg-white',
+  icon: 'shrink-0 text-slate-300 group-hover:text-white',                                                  // 14:1
+  iconActive: 'shrink-0 text-white',
+  label: 'flex-1 min-w-0 truncate text-left',
+  // group headings
+  group: 'text-slate-300 hover:bg-white/15 hover:text-white focus-visible:ring-blue-400',                  // 14:1
+  groupActive: 'bg-blue-500/15 text-blue-300 hover:bg-blue-500/25 focus-visible:ring-blue-400',            // 10:1
+  groupLabel: 'flex-1 min-w-0 truncate text-left text-xs font-semibold uppercase tracking-wider',
+  groupIcon: 'shrink-0',
+  subList: 'mt-1 ml-5 pl-2 border-l border-white/20 space-y-1',
+  badge: 'shrink-0 bg-red-600 text-white ring-1 ring-white/70 text-xs leading-none font-semibold px-1.5 py-1 rounded-full min-w-5 text-center tabular-nums', // 4.8:1
+  iconButton: 'shrink-0 flex items-center justify-center rounded-lg text-slate-200 hover:text-white hover:bg-white/15 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400',
+  // account menu
+  menuItem: 'w-full min-h-10 flex items-center gap-2.5 px-2.5 rounded-lg transition-colors text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-400',
+  menuItemNormal: 'text-slate-100 hover:bg-white/15 hover:text-white',
+  menuItemLogout: 'text-red-300 hover:text-red-200 hover:bg-red-500/10',
+};
 
 // ============================================
 // ONE ICON PER PAGE
@@ -534,13 +562,13 @@ const Sidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { isCollapsed, toggleSidebar } = useSidebar();
+  const { isCollapsed, toggleSidebar, isMobileOpen, closeMobile } = useSidebar();
 
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [ticketCount, setTicketCount] = useState(0);
   const [announcementCount, setAnnouncementCount] = useState(0);
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const isMobile = useIsMobile();
 
   // PROFILE IMAGE
   const [profileImage, setProfileImage] = useState(null);
@@ -605,16 +633,22 @@ const Sidebar = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // HANDLE RESIZE
+  // MOBILE DRAWER: close on every route change and when the window grows to desktop size
   useEffect(() => {
-    const handleResize = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile && !isCollapsed) toggleSidebar();
+    closeMobile();
+  }, [location.pathname, isMobile, closeMobile]);
+
+  // MOBILE DRAWER: Escape closes it; the page behind does not scroll while it is open
+  useEffect(() => {
+    if (!isMobileOpen) return undefined;
+    const onKeyDown = (e) => { if (e.key === 'Escape') closeMobile(); };
+    document.addEventListener('keydown', onKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.body.style.overflow = '';
     };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, [isCollapsed, toggleSidebar]);
+  }, [isMobileOpen, closeMobile]);
 
   // FETCH PROFILE IMAGE
   useEffect(() => {
@@ -817,27 +851,28 @@ const Sidebar = () => {
   };
 
   const getSidebarClasses = () => {
-    const base = 'fixed top-0 left-0 h-screen bg-black text-slate-400 border-r border-slate-800 shadow-2xl transition-[width,transform,opacity] duration-300 ease-in-out z-50';
+    const base = 'fixed top-0 left-0 h-dvh flex flex-col bg-black text-slate-200 border-r border-white/20 shadow-2xl transition-[width,transform,opacity,visibility] duration-300 ease-in-out';
     if (isMobile) {
-      return `${base} ${isCollapsed ? '-translate-x-full opacity-0 pointer-events-none' : 'translate-x-0 opacity-100 w-64'}`;
+      // off-canvas drawer; "invisible" also takes its links out of the tab order while closed
+      return `${base} z-[70] w-[264px] max-w-[85vw] ${isMobileOpen ? 'translate-x-0 opacity-100' : '-translate-x-full opacity-0 invisible pointer-events-none'}`;
     }
-    return `${base} ${isCollapsed ? 'w-[80px]' : 'w-[264px]'}`;
+    return `${base} z-50 w-[var(--sidebar-w)]`;
   };
 
   return (
     <>
       {/* Mobile backdrop */}
-      {isMobile && !isCollapsed && (
+      {isMobile && isMobileOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
-          onClick={toggleSidebar}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[65]"
+          onClick={closeMobile}
         />
       )}
 
       <aside className={getSidebarClasses()}>
        {/* HEADER — logo, then one row: notifications + collapse button (right) */}
         <div
-          className={`border-b border-slate-800 transition-all duration-300 ${
+          className={`shrink-0 border-b border-white/20 transition-all duration-300 ${
             isMobile ? 'px-3 pt-3 pb-3' : isCollapsed ? 'px-2 pt-5 pb-3' : 'px-4 pt-4 pb-3'
           }`}
         >
@@ -856,44 +891,34 @@ const Sidebar = () => {
                 onClick={toggleSidebar}
                 aria-label="Expand sidebar"
                 title="Expand sidebar"
-                className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-slate-800 transition-colors"
+                className={`w-8 h-8 ${SB.iconButton}`}
               >
                 <PanelLeftOpen size={16} />
               </button>
             </div>
           ) : (
             <div className="mt-3 flex items-center gap-2">
-              <div className="flex-1 min-w-0 flex items-center justify-between pl-3 pr-1.5 py-1 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/10">
-                <span className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] truncate">
+              <div className="flex-1 min-w-0 flex items-center justify-between pl-3 pr-1.5 py-1 rounded-xl bg-gradient-to-br from-white/10 to-white/[0.02] backdrop-blur-xl border border-white/20">
+                <span className="text-xs font-semibold text-slate-200 uppercase tracking-wide truncate">
                   Notifications
                 </span>
                 <NotificationBell />
               </div>
-              {!isMobile && (
-                <button
-                  type="button"
-                  onClick={toggleSidebar}
-                  aria-label="Collapse sidebar"
-                  title="Collapse sidebar"
-                  className="w-9 h-9 shrink-0 flex items-center justify-center rounded-xl text-slate-400 hover:text-white bg-white/5 hover:bg-slate-800 border border-white/10 transition-colors"
-                >
-                  <PanelLeftClose size={16} />
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={isMobile ? closeMobile : toggleSidebar}
+                aria-label={isMobile ? 'Close menu' : 'Collapse sidebar'}
+                title={isMobile ? 'Close menu' : 'Collapse sidebar'}
+                className={`w-10 h-10 md:w-9 md:h-9 bg-white/5 border border-white/20 ${SB.iconButton}`}
+              >
+                {isMobile ? <X size={18} /> : <PanelLeftClose size={16} />}
+              </button>
             </div>
           )}
         </div>
 
         {/* NAVIGATION (GROUPED) */}
-        <nav
-          className={`p-2 space-y-1 overflow-y-auto overflow-x-visible no-scrollbar ${
-            isCollapsed && !isMobile
-              ? 'h-[calc(100vh-160px)]'
-              : isMobile
-              ? 'h-[calc(100vh-320px)]'
-              : 'h-[calc(100vh-316px)]'
-          }`}
-        >
+        <nav className="flex-1 min-h-0 p-2 space-y-1 overflow-y-auto overflow-x-visible no-scrollbar">
           {menuGroups.map((group) => {
             // A "Home" pseudo-group has null icon — render items flat
             if (!group.icon) {
@@ -903,17 +928,14 @@ const Sidebar = () => {
                   <NavLink
                     key={item.path}
                     to={item.path}
-                    className={`relative flex items-center gap-2 p-2 rounded-xl transition-all duration-200 group ${
-                      active
-                        ? 'bg-gradient-to-r from-blue-600 to-blue-500 text-white shadow-lg shadow-blue-900/40'
-                        : 'hover:bg-slate-800/70 hover:text-slate-200 text-slate-400'
-                    } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
+                    className={`${SB.row} ${active ? SB.active : SB.item} ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
                     title={isCollapsed && !isMobile ? item.label : ''}
-                    onClick={() => isMobile && toggleSidebar()}
+                    onClick={closeMobile}
                   >
-                    <span className="flex-shrink-0">{item.icon}</span>
+                    {active && <span className={SB.activeBar} />}
+                    <span className={active ? SB.iconActive : SB.icon}>{item.icon}</span>
                     {(!isCollapsed || isMobile) && (
-                      <span className="text-[12px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                      <span className={SB.label}>
                         {item.label}
                       </span>
                     )}
@@ -926,7 +948,7 @@ const Sidebar = () => {
             const anyActive = group.items.some((i) => isRouteActive(i.path));
 
             return (
-              <div key={group.key} className="pb-1">
+              <div key={group.key}>
                 {/* Group header (clickable) */}
                 <button
                   onClick={() => {
@@ -938,22 +960,22 @@ const Sidebar = () => {
                     }
                     toggleGroup(group.key);
                   }}
-                  className={`w-full flex items-center gap-2 p-2 rounded-xl transition-all duration-200 group ${
-                    anyActive
-                      ? 'text-blue-300 bg-slate-800/60'
-                      : 'hover:bg-slate-800/70 hover:text-slate-200 text-slate-400'
+                  className={`${SB.row} ${
+                    // collapsed: the active page itself is hidden, so its group icon shows the active state
+                    anyActive ? (isCollapsed && !isMobile ? SB.active : SB.groupActive) : SB.group
                   } ${isCollapsed && !isMobile ? 'justify-center' : ''}`}
                   title={isCollapsed && !isMobile ? group.label : ''}
                 >
-                  <span className="flex-shrink-0">{group.icon}</span>
+                  {isCollapsed && !isMobile && anyActive && <span className={SB.activeBar} />}
+                  <span className={SB.groupIcon}>{group.icon}</span>
                   {(!isCollapsed || isMobile) && (
                     <>
-                      <span className="text-[10px] font-black uppercase tracking-[0.18em] whitespace-nowrap flex-1 text-left text-slate-500 group-hover:text-slate-300">
+                      <span className={SB.groupLabel}>
                         {group.label}
                       </span>
                       <ChevronDown
-                        size={12}
-                        className={`transition-transform duration-200 flex-shrink-0 text-slate-500 ${
+                        size={16}
+                        className={`transition-transform duration-200 flex-shrink-0 ${
                           isOpen ? 'rotate-0' : '-rotate-90'
                         }`}
                       />
@@ -963,7 +985,7 @@ const Sidebar = () => {
 
                 {/* Group items */}
                 {isOpen && (!isCollapsed || isMobile) && (
-                  <div className="mt-1 ml-3 pl-3 border-l border-slate-800 space-y-0.5 animate-in slide-in-from-top-1 duration-200">
+                  <div className={`${SB.subList} animate-in slide-in-from-top-1 duration-200`}>
                     {group.items.map((item) => {
                       const active = isRouteActive(item.path);
                       const showBadge = shouldShowBadge(item.label);
@@ -973,31 +995,27 @@ const Sidebar = () => {
                         <NavLink
                           key={item.path}
                           to={item.path}
-                          className={`relative flex items-center gap-2 px-2.5 py-1.5 rounded-lg transition-all duration-200 ${
-                            active
-                              ? 'bg-blue-600/90 text-white shadow-md shadow-blue-900/30'
-                              : 'hover:bg-slate-800/70 text-slate-400 hover:text-slate-100'
-                          }`}
+                          className={`${SB.row} ${active ? SB.active : SB.subItem}`}
                           onClick={() => {
-                            if (isMobile) toggleSidebar();
+                            closeMobile();
                             if (item.label === 'Announcements') setAnnouncementCount(0);
                           }}
                         >
                           {/* Left accent bar for active sub-item */}
                           {active && (
-                            <span className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-r-full bg-blue-400" />
+                            <span className={SB.activeBar} />
                           )}
-                          <span className="flex-shrink-0">{item.icon}</span>
-                          <span className="text-[11.5px] font-semibold tracking-tight whitespace-nowrap flex-1">
+                          <span className={active ? SB.iconActive : SB.icon}>{item.icon}</span>
+                          <span className={SB.label}>
                             {item.label}
                           </span>
                           {showBadge && (
-                            <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center tabular-nums">
+                            <span className={SB.badge}>
                               {ticketCount > 99 ? '99+' : ticketCount}
                             </span>
                           )}
                           {showAnnBadge && (
-                            <span className="bg-red-500 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-full min-w-[16px] text-center animate-pulse tabular-nums">
+                            <span className={SB.badge}>
                               {announcementCount > 99 ? '99+' : announcementCount}
                             </span>
                           )}
@@ -1007,19 +1025,13 @@ const Sidebar = () => {
                   </div>
                 )}
 
-                {/* Collapsed-mode active dot */}
-                {isCollapsed && !isMobile && anyActive && (
-                  <div className="flex justify-center mt-0.5">
-                    <div className="w-1 h-1 rounded-full bg-blue-400" />
-                  </div>
-                )}
               </div>
             );
           })}
         </nav>
 
         {/* ACCOUNT */}
-        <div className={`absolute bottom-0 left-0 right-0 p-2 border-t border-slate-800 ${
+        <div className={`relative shrink-0 p-2 border-t border-white/20 ${
           isCollapsed && !isMobile ? 'px-2' : ''
         }`} ref={menuRef}>
           {/* VIDEO LOGO */}
@@ -1043,7 +1055,7 @@ const Sidebar = () => {
 
           {/* USER MENU */}
           {showUserMenu && (
-            <div className={`absolute bottom-full left-3 mb-3 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl p-2 min-w-[180px] animate-in slide-in-from-bottom-4 duration-200 z-[60] ${
+            <div className={`absolute bottom-full left-3 mb-3 bg-slate-900 border border-white/20 rounded-xl shadow-2xl p-2 min-w-[180px] max-h-[60dvh] overflow-y-auto animate-in slide-in-from-bottom-4 duration-200 z-[60] ${
               isCollapsed && !isMobile ? 'left-1/2 -translate-x-1/2' : ''
             }`}>
               <button
@@ -1051,9 +1063,9 @@ const Sidebar = () => {
                   setShowProfileModal(true);
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className={`${SB.menuItem} ${SB.menuItemNormal}`}
               >
-                <UserPen size={13} className="text-emerald-400" />
+                <UserPen size={16} className="shrink-0 text-emerald-300" />
                 <span>Edit Details</span>
               </button>
 
@@ -1062,17 +1074,17 @@ const Sidebar = () => {
                   setShowImageUploadModal(true);
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className={`${SB.menuItem} ${SB.menuItemNormal}`}
               >
-                <Camera size={13} className="text-blue-400" />
+                <Camera size={16} className="shrink-0 text-blue-300" />
                 <span>Update Profile Picture</span>
               </button>
 
               <button
                 onClick={handleDownloadGuide}
-                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className={`${SB.menuItem} ${SB.menuItemNormal}`}
               >
-                <FileText size={13} className="text-blue-400" />
+                <FileText size={16} className="shrink-0 text-blue-300" />
                 <span>User Guide</span>
               </button>
 
@@ -1081,9 +1093,9 @@ const Sidebar = () => {
                   navigate('/profile');
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className={`${SB.menuItem} ${SB.menuItemNormal}`}
               >
-                <Settings size={13} className="text-purple-400" />
+                <Settings size={16} className="shrink-0 text-purple-300" />
                 <span>Change Password</span>
               </button>
 
@@ -1092,22 +1104,22 @@ const Sidebar = () => {
                   navigate('/notifications');
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 p-1.5 text-slate-300 hover:bg-white/5 rounded-xl transition-all text-xs font-bold"
+                className={`${SB.menuItem} ${SB.menuItemNormal}`}
               >
-                <Bell size={13} className="text-blue-400" />
+                <Bell size={16} className="shrink-0 text-blue-300" />
                 <span>Notification Settings</span>
               </button>
 
-              <div className="h-px bg-white/5 my-1 mx-1" />
+              <div className="h-px bg-white/20 my-1 mx-1" />
 
               <button
                 onClick={() => {
                   setShowLogoutModal(true);
                   setShowUserMenu(false);
                 }}
-                className="w-full flex items-center gap-2 p-1.5 text-red-400 hover:bg-red-500/10 rounded-xl transition-all text-xs font-bold"
+                className={`${SB.menuItem} ${SB.menuItemLogout}`}
               >
-                <LogOut size={13} />
+                <LogOut size={16} className="shrink-0" />
                 <span>Logout</span>
               </button>
             </div>
@@ -1117,7 +1129,7 @@ const Sidebar = () => {
           <button
             onClick={() => setShowUserMenu(!showUserMenu)}
             title="Account: edit details, profile picture, password, logout"
-            className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all border ${
+            className={`flex items-center gap-3 w-full p-3 rounded-xl transition-all border outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${
               showUserMenu
                 ? 'bg-slate-800 border-blue-400/60 ring-2 ring-blue-500/30 shadow-[0_0_18px_rgba(59,130,246,0.35)]'
                 : 'bg-slate-800/60 border-blue-500/30 ring-1 ring-blue-500/15 shadow-[0_0_12px_rgba(59,130,246,0.18)] hover:bg-slate-800 hover:border-blue-400/60 hover:shadow-[0_0_18px_rgba(59,130,246,0.35)]'
@@ -1142,7 +1154,7 @@ const Sidebar = () => {
             {(!isCollapsed || isMobile) && (
               <div className="flex-1 min-w-0 text-left">
                 <p className="text-sm font-bold text-white truncate">{userName}</p>
-                <p className={`text-[10px] font-semibold uppercase tracking-wider ${getRoleStyles(userRole).split(' ')[2] || 'text-slate-400'}`}>
+                <p className={`text-xs font-semibold uppercase tracking-wide truncate ${getRoleStyles(userRole).split(' ')[2] || 'text-slate-200'}`}>
                   {getRoleDisplayName(userRole)}
                 </p>
               </div>
@@ -1152,7 +1164,7 @@ const Sidebar = () => {
               <ChevronUp
                 size={14}
                 className={`transition-transform duration-300 flex-shrink-0 ${
-                  showUserMenu ? 'rotate-0 text-blue-400' : 'rotate-180 text-slate-500'
+                  showUserMenu ? 'rotate-0 text-blue-300' : 'rotate-180 text-slate-200'
                 }`}
               />
             )}
@@ -1160,36 +1172,22 @@ const Sidebar = () => {
         </div>
       </aside>
 
-      {/* TOGGLE BUTTON - MOBILE (unchanged) */}
-      {isMobile && (
-        <button
-          onClick={toggleSidebar}
-          className={`fixed top-1 left-1 bg-blue-600 text-white rounded-lg p-2.5 border border-slate-700 hover:bg-blue-500 transition-all duration-300 z-[60] shadow-lg ${
-            !isCollapsed ? 'hidden' : ''
-          }`}
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      )}
-
       {/* PROFILE IMAGE UPLOAD MODAL */}
       {showImageUploadModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-white/10 w-full max-w-md rounded-2xl p-6 shadow-2xl relative">
+        <div className="modal-backdrop bg-slate-950/80 backdrop-blur-md">
+          <div className="modal-panel block !overflow-y-auto max-w-md p-4 sm:p-6 bg-slate-900 border border-white/10 relative">
             <button
               onClick={() => {
                 setShowImageUploadModal(false);
                 setSelectedFile(null);
                 setImagePreview(null);
               }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+              className="btn-icon absolute top-3 right-3 text-slate-400 hover:text-white"
             >
               <X size={20} />
             </button>
 
-            <h3 className="text-lg font-bold text-white mb-4">Profile Picture</h3>
+            <h3 className="section-title text-white mb-4">Profile Picture</h3>
 
             {imagePreview ? (
               <div className="flex flex-col items-center gap-4">
@@ -1203,14 +1201,14 @@ const Sidebar = () => {
                       setImagePreview(null);
                       fileInputRef.current.click();
                     }}
-                    className="flex-1 py-2 bg-slate-800 text-white rounded-xl font-bold text-xs hover:bg-slate-700"
+                    className="btn btn-md flex-1 bg-slate-800 text-white hover:bg-slate-700"
                   >
                     Change Photo
                   </button>
                   <button
                     onClick={uploadProfileImage}
                     disabled={uploadingImage}
-                    className="flex-1 py-2 bg-blue-600 text-white rounded-xl font-bold text-xs hover:bg-blue-700 disabled:opacity-50"
+                    className="btn btn-md flex-1 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                   >
                     {uploadingImage ? 'Uploading...' : 'Upload'}
                   </button>
@@ -1229,14 +1227,14 @@ const Sidebar = () => {
                 )}
                 <button
                   onClick={() => fileInputRef.current.click()}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700"
+                  className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"
                 >
                   Choose Image
                 </button>
                 {profileImage && (
                   <button
                     onClick={removeProfileImage}
-                    className="px-6 py-2 bg-red-600/20 text-red-400 rounded-xl font-bold text-sm hover:bg-red-600/30"
+                    className="btn btn-md bg-red-600/20 text-red-400 hover:bg-red-600/30"
                   >
                     Remove Photo
                   </button>
@@ -1262,26 +1260,26 @@ const Sidebar = () => {
 
       {/* LOGOUT MODAL */}
       {showLogoutModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-white/10 w-full max-w-sm rounded-[2.5rem] p-6 shadow-2xl relative overflow-hidden">
+        <div className="modal-backdrop bg-slate-950/80 backdrop-blur-md">
+          <div className="modal-panel block max-w-sm p-4 sm:p-6 bg-slate-900 border border-white/10 relative">
             <div className="flex flex-col items-center text-center relative z-10">
-              <div className="p-3 bg-red-500/10 rounded-2xl mb-4 border border-red-500/20">
+              <div className="p-3 bg-red-500/10 rounded-xl mb-4 border border-red-500/20">
                 <AlertTriangle size={28} className="text-red-500" />
               </div>
-              <h2 className="text-xl font-black text-white mb-2 tracking-tight">Confirm Logout</h2>
-              <p className="text-slate-400 text-xs font-medium mb-6 leading-relaxed px-3">
+              <h2 className="section-title text-white mb-2">Confirm Logout</h2>
+              <p className="text-slate-400 text-sm mb-6 leading-relaxed px-3">
                 Are you sure you want to exit? You will need to authenticate again.
               </p>
               <div className="flex w-full gap-2">
                 <button
                   onClick={() => setShowLogoutModal(false)}
-                  className="flex-1 py-2.5 bg-slate-800 text-slate-300 rounded-xl font-bold text-[10px] uppercase tracking-widest border border-white/5"
+                  className="btn btn-md flex-1 bg-slate-800 text-slate-300 border border-white/5"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleLogout}
-                  className="flex-1 py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white rounded-xl font-bold text-[10px] uppercase tracking-widest shadow-lg shadow-red-900/20 active:scale-95"
+                  className="btn btn-md flex-1 bg-gradient-to-r from-red-600 to-red-500 text-white shadow-lg shadow-red-900/20 active:scale-95"
                 >
                   Logout
                 </button>

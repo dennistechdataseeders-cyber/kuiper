@@ -9,6 +9,7 @@ const Project = require('../models/Project');
 const Feed = require('../models/Feed'); // Added for Developer role check
 const FeedStatus = require('../models/FeedStatus');
 const feedStatusService = require('../services/feedStatusService');
+const { createStatusMatcher } = require('../utils/feedStatusMatch');
 
 // ============================================
 // GET /api/client/projects
@@ -135,17 +136,20 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     
     // ✅ Query FeedStatus table in client_feed_dashboard DB
-    const feedStatuses = await FeedStatus.find({ 
-      project: project.projectCustomId, 
-      date: today 
-    });
+    // (same project matching rule as the live progress dashboards)
+    const matcher = await createStatusMatcher([project]);
+    const ofThisProject = async (records) => (await matcher.assign(records)).map((m) => m.record);
+    const feedStatuses = await ofThisProject(await FeedStatus.find({
+      project: { $in: matcher.projectValues },
+      date: today
+    }));
 
     // If no feed statuses found, try without date filter
     let allFeeds = feedStatuses;
     if (allFeeds.length === 0) {
-      const allStatuses = await FeedStatus.find({ 
-        project: project.name
-      }).sort({ date: -1 });
+      const allStatuses = await ofThisProject(await FeedStatus.find({
+        project: { $in: matcher.projectValues }
+      }).sort({ date: -1 }));
       
       // Get the most recent status for each feed
       const feedMap = new Map();

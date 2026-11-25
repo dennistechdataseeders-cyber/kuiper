@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import {
   Activity,
   Users,
@@ -34,14 +33,14 @@ import {
   Download,
   Trash2,
   Ticket,
-  AlertTriangle
+  AlertTriangle,
+  FileText, FileArchive, FileAudio, FileVideo, FileCode
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { isPMRole } from '../utils/roles';
 
 const TeamLeadFeeds = () => {
-  const { isCollapsed } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -603,10 +602,10 @@ const TeamLeadFeeds = () => {
                 )}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] font-semibold text-slate-700 truncate" title={displayName}>
+                <p className="text-xs font-semibold text-slate-700 truncate" title={displayName}>
                   {displayName}
                 </p>
-                <p className="text-[8px] text-slate-400 flex items-center gap-1">
+                <p className="text-xs text-slate-400 flex items-center gap-1">
                   {file.size && <span>{formatFileSize(file.size)}</span>}
                   {file.size && <span>•</span>}
                   <span>{getFileTypeLabel(file)}</span>
@@ -614,7 +613,7 @@ const TeamLeadFeeds = () => {
               </div>
               <button
                 onClick={() => window.open(fileUrl, '_blank')}
-                className="p-1 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-blue-600 transition-all"
+                className="btn-icon hover:bg-slate-100 text-slate-400 hover:text-blue-600"
                 title={isImage ? "View image" : "Download file"}
               >
                 {isImage ? <Eye size={12} /> : <Download size={12} />}
@@ -722,10 +721,10 @@ const TeamLeadFeeds = () => {
 
   const getFeedTypeIcon = (type) => {
     switch(type) {
-      case 'Daily': return <Clock size={10} />;
-      case 'Weekly': return <Calendar size={10} />;
-      case 'Monthly': return <Calendar size={10} />;
-      default: return <Activity size={10} />;
+      case 'Daily': return <Clock size={12} />;
+      case 'Weekly': return <Calendar size={12} />;
+      case 'Monthly': return <Calendar size={12} />;
+      default: return <Activity size={12} />;
     }
   };
 
@@ -745,7 +744,7 @@ const TeamLeadFeeds = () => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Loading feeds...</p>
@@ -755,26 +754,26 @@ const TeamLeadFeeds = () => {
   }
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
 
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 sm:gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
               <div className="p-3 bg-gradient-to-br from-indigo-600 to-purple-600 rounded-xl">
                 <Activity size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-black text-slate-900">Feed Management</h1>
-                <p className="text-slate-500 mt-1">View and assign developers to feeds in your projects</p>
+                <h1 className="page-title">Feed Management</h1>
+                <p className="text-sm text-slate-500 mt-1">View and assign developers to feeds in your projects</p>
               </div>
             </div>
           </div>
 
           {location.state?.selectedProjectName && selectedProject !== 'ALL' && (
             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
-              <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+              <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">
                 Filtered: {location.state.selectedProjectName}
               </span>
               <button
@@ -782,7 +781,7 @@ const TeamLeadFeeds = () => {
                   setSelectedProject('ALL');
                   window.history.replaceState({}, document.title);
                 }}
-                className="text-indigo-400 hover:text-indigo-600 transition-colors"
+                className="btn-icon text-indigo-400 hover:text-indigo-600"
               >
                 <X size={14} />
               </button>
@@ -792,39 +791,39 @@ const TeamLeadFeeds = () => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-100 rounded-lg">
               <Activity size={16} className="text-blue-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Total Feeds</p>
-              <p className="text-2xl font-black text-slate-800">{feeds.length}</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase">Total Feeds</p>
+              <p className="text-2xl font-bold text-slate-800">{feeds.length}</p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-purple-100 rounded-lg">
               <Users size={16} className="text-purple-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Assigned Developers</p>
-              <p className="text-2xl font-black text-slate-800">
+              <p className="text-xs font-semibold text-slate-400 uppercase">Assigned Developers</p>
+              <p className="text-2xl font-bold text-slate-800">
                 {feeds.reduce((sum, feed) => sum + (feed.assignedDevelopers?.length || 0), 0)}
               </p>
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+        <div className="card">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-emerald-100 rounded-lg">
               <CheckCircle size={16} className="text-emerald-600" />
             </div>
             <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase">Unassigned Feeds</p>
-              <p className="text-2xl font-black text-slate-800">
+              <p className="text-xs font-semibold text-slate-400 uppercase">Unassigned Feeds</p>
+              <p className="text-2xl font-bold text-slate-800">
                 {feeds.filter(f => !f.assignedDevelopers || f.assignedDevelopers.length === 0).length}
               </p>
             </div>
@@ -833,8 +832,8 @@ const TeamLeadFeeds = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -842,12 +841,12 @@ const TeamLeadFeeds = () => {
               placeholder="Search feeds by name or project..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm"
+              className="input pl-10"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
               >
                 <X size={16} />
               </button>
@@ -859,7 +858,7 @@ const TeamLeadFeeds = () => {
             <select
               value={selectedProject}
               onChange={(e) => setSelectedProject(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm font-medium text-slate-700 cursor-pointer appearance-none"
+              className="input pl-10 cursor-pointer appearance-none"
             >
               <option value="ALL">All Projects</option>
               {projects.map(project => (
@@ -875,17 +874,17 @@ const TeamLeadFeeds = () => {
 
       {/* Feeds Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="table-scroll table-sticky-first overflow-x-auto">
           <table className="w-full min-w-[1100px]">
             <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
               <tr>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feed</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Project</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Type</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Assigned Developer</th>
-                <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Comments</th>
-                <th className="text-right px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                <th className="th">Feed</th>
+                <th className="th">Project</th>
+                <th className="th">Type</th>
+                <th className="th">Status</th>
+                <th className="th">Assigned Developer</th>
+                <th className="th">Comments</th>
+                <th className="th text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -910,19 +909,19 @@ const TeamLeadFeeds = () => {
                   return (
                     <React.Fragment key={feed._id}>
                       <tr className="border-b border-slate-100 hover:bg-slate-50/60 transition-all">
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm ${
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0 ${
                               assignedDev
                                 ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
                                 : 'bg-slate-200 text-slate-500'
                             }`}>
                               <Activity size={16} />
                             </div>
-                            <div>
+                            <div className="min-w-0">
                               <p className="text-sm font-bold text-slate-800">{feed.name}</p>
                               <div className="flex items-center gap-2 mt-1">
-                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
+                                <span className={`badge border ${getFeedTypeStyle(feed.feedType)}`}>
                                   {getFeedTypeIcon(feed.feedType)}
                                   {feed.feedType}
                                 </span>
@@ -931,28 +930,28 @@ const TeamLeadFeeds = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="flex items-center gap-1.5">
                             <Briefcase size={12} className="text-slate-400" />
                             <span className="text-xs font-semibold text-slate-600">{feed.projectCustomId}</span>
                           </div>
                         </td>
 
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[8px] font-black uppercase tracking-wider border ${getFeedTypeStyle(feed.feedType)}`}>
+                        <td className="td">
+                          <span className={`badge border ${getFeedTypeStyle(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
                             {feed.feedType}
                           </span>
                         </td>
 
                         {/* 🆕 STATUS COLUMN */}
-                        <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
+                        <td className="td" onClick={(e) => e.stopPropagation()}>
                           <div className="relative min-w-[120px]">
                             <select
                               value={feed.feedStatus || 'New'}
                               onChange={(e) => updateFeedStatus(feed._id, e.target.value)}
                               disabled={updatingFeedStatus[feed._id]}
-                              className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-[8px] font-black uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
+                              className={`inline-flex w-full items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold uppercase border cursor-pointer transition-all appearance-none pr-6 ${getFeedStatusColor(feed.feedStatus)}`}
                               style={{
                                 backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
                                 backgroundRepeat: 'no-repeat',
@@ -972,10 +971,10 @@ const TeamLeadFeeds = () => {
                           </div>
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="td">
                           {assignedDev ? (
                             <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-[9px] font-bold">
+                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-semibold shrink-0">
                                 {assignedDevName.charAt(0).toUpperCase()}
                               </div>
                               <span className="text-sm font-semibold text-slate-700">{assignedDevName}</span>
@@ -988,21 +987,21 @@ const TeamLeadFeeds = () => {
                           )}
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <button
                             onClick={() => openCommentModal(feed)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-wider"
+                            className="btn btn-sm bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white"
                           >
                             <MessageSquare size={14} />
                             Comments
                           </button>
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => openTicketModal(feed)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 text-white hover:bg-amber-600 transition-all text-[9px] font-black uppercase tracking-wider shadow-sm"
+                              className="btn btn-sm bg-amber-500 text-white hover:bg-amber-600 shadow-sm"
                               title="Raise Ticket"
                             >
                               <Ticket size={14} />
@@ -1010,14 +1009,14 @@ const TeamLeadFeeds = () => {
                             </button>
                             <button
                               onClick={() => openAssignModal(feed)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all text-[9px] font-black uppercase tracking-wider"
+                              className="btn btn-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
                             >
                               <UserPlus size={12} />
                               {assignedDev ? 'Reassign' : 'Assign'}
                             </button>
                             <button
                               onClick={() => setExpandedFeed(isExpanded ? null : feed._id)}
-                              className="w-8 h-8 rounded-lg bg-slate-50 border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-all"
+                              className="btn-icon bg-slate-50 border border-slate-200 text-slate-500 hover:bg-slate-100"
                             >
                               {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                             </button>
@@ -1028,10 +1027,10 @@ const TeamLeadFeeds = () => {
                       {/* Expanded Row */}
                       {isExpanded && (
                         <tr className="bg-slate-50/50">
-                          <td colSpan={7} className="px-6 py-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              <div className="bg-white rounded-lg p-4 border border-slate-200">
-                                <h4 className="text-[10px] font-black uppercase text-slate-500 mb-3 flex items-center gap-2">
+                          <td colSpan={7} className="td">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                              <div className="card">
+                                <h4 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">
                                   <Hash size={12} />
                                   Feed Details
                                 </h4>
@@ -1071,15 +1070,15 @@ const TeamLeadFeeds = () => {
                                 </div>
                               </div>
 
-                              <div className="bg-white rounded-lg p-4 border border-slate-200">
-                                <h4 className="text-[10px] font-black uppercase text-slate-500 mb-3 flex items-center gap-2">
+                              <div className="card">
+                                <h4 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">
                                   <User size={12} />
                                   Assigned Developer
                                 </h4>
                                 {assignedDev ? (
                                   <div className="space-y-3">
                                     <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold">
+                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
                                         {assignedDevName.charAt(0).toUpperCase()}
                                       </div>
                                       <div>
@@ -1126,7 +1125,7 @@ const TeamLeadFeeds = () => {
           <button
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(p => p - 1)}
-            className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 transition-all"
+            className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
           >
             <ChevronLeft size={14} />
           </button>
@@ -1151,7 +1150,7 @@ const TeamLeadFeeds = () => {
                 <button
                   key={pageNum}
                   onClick={() => setCurrentPage(pageNum)}
-                  className={`w-6 h-6 rounded-md text-[10px] font-black transition-all ${
+                  className={`btn-icon ${
                     currentPage === pageNum
                       ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white shadow-sm'
                       : 'text-slate-500 hover:bg-slate-100'
@@ -1166,7 +1165,7 @@ const TeamLeadFeeds = () => {
           <button
             disabled={currentPage === totalPages}
             onClick={() => setCurrentPage(p => p + 1)}
-            className="w-8 h-8 rounded-lg bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40 transition-all"
+            className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
           >
             <ChevronRight size={14} />
           </button>
@@ -1175,28 +1174,28 @@ const TeamLeadFeeds = () => {
 
       {/* RAISE TICKET MODAL */}
       {showTicketModal && selectedTicketFeed && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[220] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl">
-            <div className="p-5 border-b border-slate-100">
+        <div className="modal-backdrop z-[220]">
+          <div className="modal-panel max-w-lg">
+            <div className="modal-header !block">
               <div className="flex justify-between items-center">
                 <div>
-                  <h2 className="text-lg font-black text-slate-800">Raise Ticket</h2>
-                  <p className="text-[10px] text-slate-500 mt-0.5">
+                  <h2 className="section-title">Raise Ticket</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
                     Feed: <span className="font-bold text-amber-600">{selectedTicketFeed.name}</span>
                   </p>
-                  <p className="text-[9px] text-slate-400">
+                  <p className="text-xs text-slate-400">
                     Project: {selectedTicketFeed.projectCustomId}
                   </p>
                 </div>
-                <button onClick={closeTicketModal} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+                <button onClick={closeTicketModal} className="btn-icon bg-slate-100 hover:bg-slate-200">
                   <X size={16} />
                 </button>
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="modal-body space-y-4">
               <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                <label className="label block mb-1.5">
                   Ticket Title *
                 </label>
                 <input
@@ -1204,18 +1203,18 @@ const TeamLeadFeeds = () => {
                   placeholder="Brief summary of the issue"
                   value={ticketForm.title}
                   onChange={(e) => setTicketForm({ ...ticketForm, title: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-amber-400 transition-colors"
+                  className="input bg-slate-50"
                 />
               </div>
 
               <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                <label className="label block mb-1.5">
                   Priority
                 </label>
                 <select
                   value={ticketForm.priority}
                   onChange={(e) => setTicketForm({ ...ticketForm, priority: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-semibold text-sm text-slate-700 focus:border-amber-400 transition-colors cursor-pointer"
+                  className="input bg-slate-50 cursor-pointer"
                 >
                   <option value="Low">Low</option>
                   <option value="Medium">Medium</option>
@@ -1225,7 +1224,7 @@ const TeamLeadFeeds = () => {
               </div>
 
               <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-1 block">
+                <label className="label block mb-1.5">
                   Description *
                 </label>
                 <textarea
@@ -1233,14 +1232,14 @@ const TeamLeadFeeds = () => {
                   rows={4}
                   value={ticketForm.description}
                   onChange={(e) => setTicketForm({ ...ticketForm, description: e.target.value })}
-                  className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-amber-400 transition-colors resize-none"
+                  className="input bg-slate-50 resize-none"
                 />
               </div>
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <AlertTriangle size={14} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                  <p className="text-[10px] text-amber-700">
+                  <p className="text-xs text-amber-700">
                     This ticket will be created with <strong>Production</strong> category and
                     assigned to the developer assigned to this feed (if any).
                   </p>
@@ -1248,14 +1247,14 @@ const TeamLeadFeeds = () => {
               </div>
             </div>
 
-            <div className="p-5 border-t border-slate-100 flex gap-2">
-              <button onClick={closeTicketModal} className="flex-1 py-2 rounded-lg bg-slate-100 text-slate-600 font-black uppercase text-[10px] tracking-wider hover:bg-slate-200 transition-colors">
+            <div className="modal-footer [&>button]:flex-1">
+              <button onClick={closeTicketModal} className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200">
                 Cancel
               </button>
               <button
                 onClick={handleGenerateTicket}
                 disabled={generatingTicket}
-                className="flex-1 py-2 rounded-lg bg-gradient-to-r from-amber-500 to-amber-600 text-white font-black uppercase text-[10px] tracking-wider hover:from-amber-600 hover:to-amber-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+                className="btn btn-md flex-1 bg-gradient-to-r from-amber-500 to-amber-600 text-white hover:from-amber-600 hover:to-amber-700 shadow-md disabled:opacity-50"
               >
                 {generatingTicket ? (
                   <>
@@ -1276,26 +1275,26 @@ const TeamLeadFeeds = () => {
 
       {/* ASSIGN MODAL */}
       {showAssignModal && selectedFeed && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg animate-in fade-in zoom-in duration-200">
+            <div className="modal-header">
               <div>
-                <h2 className="text-lg font-black text-slate-800">Assign Developer</h2>
+                <h2 className="section-title">Assign Developer</h2>
                 <p className="text-xs text-slate-500">
                   Feed: <span className="font-bold text-indigo-600">{selectedFeed.name}</span>
                 </p>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-xs text-slate-400">
                   Project: {selectedFeed.projectCustomId}
                 </p>
               </div>
-              <button onClick={() => setShowAssignModal(false)} className="w-7 h-7 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
+              <button onClick={() => setShowAssignModal(false)} className="btn-icon bg-slate-100 hover:bg-slate-200">
                 <X size={16} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="modal-body space-y-4">
               <div>
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-500 mb-2 block">
+                <label className="label block mb-1.5">
                   Select Developer {selectedDeveloper ? `(Current: ${developers.find(d => d._id === selectedDeveloper)?.name || 'None'})` : ''}
                 </label>
                 <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2">
@@ -1315,7 +1314,7 @@ const TeamLeadFeeds = () => {
                     />
                     <div className="flex-1">
                       <p className="text-sm font-bold text-slate-800">Unassigned</p>
-                      <p className="text-[10px] text-slate-500">Remove current assignment</p>
+                      <p className="text-xs text-slate-500">Remove current assignment</p>
                     </div>
                   </div>
 
@@ -1338,17 +1337,17 @@ const TeamLeadFeeds = () => {
                           onChange={() => setSelectedDeveloper(dev._id)}
                           className="w-4 h-4 rounded-full border-slate-300 text-indigo-600 focus:ring-indigo-500"
                         />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
                             <p className="text-sm font-bold text-slate-800">{dev.name}</p>
                             {dev.githubLinked && dev.githubUsername && (
-                              <span className="text-[8px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                                <GitFork size={8} />
+                              <span className="badge rounded-full text-green-600 bg-green-50">
+                                <GitFork size={12} />
                                 GitHub
                               </span>
                             )}
                           </div>
-                          <p className="text-[10px] text-slate-500">{dev.email}</p>
+                          <p className="text-xs text-slate-500 break-words">{dev.email}</p>
                         </div>
                       </div>
                     ))
@@ -1359,7 +1358,7 @@ const TeamLeadFeeds = () => {
               <button
                 onClick={handleAssignDeveloper}
                 disabled={assigning}
-                className="w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-black rounded-xl hover:from-indigo-700 hover:to-purple-700 transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="btn btn-md w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md disabled:opacity-50"
               >
                 {assigning ? (
                   <>
@@ -1374,7 +1373,7 @@ const TeamLeadFeeds = () => {
                 )}
               </button>
 
-              <p className="text-[8px] text-slate-400 text-center">
+              <p className="text-xs text-slate-400 text-center">
                 Only one developer can be assigned per feed. Select a developer or choose "Unassigned" to remove.
               </p>
             </div>
@@ -1384,27 +1383,27 @@ const TeamLeadFeeds = () => {
 
       {/* FEED COMMENT MODAL */}
       {showCommentModal && selectedFeedForComments && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xl flex justify-center items-center z-[210] p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10 rounded-t-2xl">
+        <div className="modal-backdrop z-[210]">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <MessageSquare size={20} className="text-purple-600" />
                   Feed Comments
                 </h2>
-                <p className="text-sm text-slate-500 truncate max-w-[300px]">
+                <p className="text-sm text-slate-500 truncate sm:max-w-[300px]">
                   {selectedFeedForComments.name} • {selectedFeedForComments.projectCustomId}
                 </p>
               </div>
               <button
                 onClick={closeCommentModal}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
 
-            <div className="p-6">
+            <div className="modal-body">
               {/* Comments List */}
               <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 mb-4">
                 {loadingComments ? (
@@ -1431,24 +1430,24 @@ const TeamLeadFeeds = () => {
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs ${isOwn ? 'bg-purple-600' : 'bg-slate-400'}`}>
+                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1.5">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-white font-semibold text-xs shrink-0 ${isOwn ? 'bg-purple-600' : 'bg-slate-400'}`}>
                                 {getInitials(commenterName)}
                               </div>
                               <span className="font-bold text-sm text-slate-800">
                                 {commenterName}
                               </span>
-                              <span className="text-[10px] text-slate-400 flex items-center gap-1">
-                                <Clock size={10} />
+                              <span className="text-xs text-slate-400 flex items-center gap-1">
+                                <Clock size={12} />
                                 {formatTime(comment.createdAt)}
                               </span>
                               {isOwn && (
-                                <span className="text-[8px] font-bold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded-full">
+                                <span className="badge rounded-full text-purple-600 bg-purple-100">
                                   You
                                 </span>
                               )}
                               {comment.userId?.role && !isOwn && (
-                                <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
+                                <span className={`badge rounded-full ${
                                   isPMRole(comment.userId.role)
                                     ? 'bg-purple-100 text-purple-700'
                                     : comment.userId.role === 'Developer'
@@ -1475,7 +1474,7 @@ const TeamLeadFeeds = () => {
                             <button
                               onClick={() => handleDeleteComment(comment._id)}
                               disabled={deletingComment === comment._id}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all flex-shrink-0 disabled:opacity-50"
+                              className="btn-icon text-slate-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0 disabled:opacity-50"
                               title="Delete comment"
                             >
                               {deletingComment === comment._id ? (
@@ -1511,16 +1510,16 @@ const TeamLeadFeeds = () => {
                             )}
                           </div>
                           <div className="min-w-0 max-w-[120px]">
-                            <p className="text-[10px] font-semibold text-slate-700 truncate">{preview.name}</p>
-                            <p className="text-[8px] text-slate-400">{formatFileSize(preview.size)}</p>
+                            <p className="text-xs font-semibold text-slate-700 truncate">{preview.name}</p>
+                            <p className="text-xs text-slate-400">{formatFileSize(preview.size)}</p>
                           </div>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeFile(idx)}
-                          className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md opacity-0 group-hover:opacity-100"
+                          className="btn-icon absolute -top-1 -right-1 bg-red-500 text-white hover:bg-red-600 shadow-md md:opacity-0 md:group-hover:opacity-100 rounded-full"
                         >
-                          <X size={10} />
+                          <X size={12} />
                         </button>
                       </div>
                     ))}
@@ -1533,7 +1532,7 @@ const TeamLeadFeeds = () => {
                       value={newComment}
                       onChange={(e) => setNewComment(e.target.value)}
                       placeholder="Write a comment... (attachments supported)"
-                      className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-medium text-sm text-slate-700 focus:border-purple-400 transition-all resize-none min-h-[48px] max-h-[100px]"
+                      className="input bg-slate-50 resize-none min-h-[48px]"
                       rows={1}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
@@ -1558,7 +1557,7 @@ const TeamLeadFeeds = () => {
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={uploadingFiles}
-                      className="p-2.5 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition-all disabled:opacity-50"
+                      className="btn-icon bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-50"
                       title="Attach files (images up to 5MB, documents up to 50MB)"
                     >
                       <Paperclip size={18} />
@@ -1567,7 +1566,7 @@ const TeamLeadFeeds = () => {
                     <button
                       type="submit"
                       disabled={submittingComment || uploadingFiles}
-                      className="p-2.5 rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-sm"
+                      className="btn-icon bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 shadow-sm"
                     >
                       {submittingComment ? (
                         <Loader2 size={18} className="animate-spin" />
@@ -1578,7 +1577,7 @@ const TeamLeadFeeds = () => {
                   </div>
                 </form>
 
-                <div className="flex justify-between text-[10px] text-slate-400 px-1 mt-2">
+                <div className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs text-slate-400 px-1 mt-2">
                   <span>Press <strong>Enter</strong> to send, <strong>Shift + Enter</strong> for new line</span>
                   <span>
                     <button

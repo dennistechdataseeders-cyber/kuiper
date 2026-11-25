@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import {
   FileText,
   User,
@@ -94,7 +93,6 @@ const customSelectStyles = {
 };
 
 const FeasibilityDashboard = () => {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const [feasibilityTasks, setFeasibilityTasks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -160,7 +158,7 @@ const FeasibilityDashboard = () => {
       const res = await axios.get(`${API_BASE_URL}/api/admin/users`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const pms = res.data.filter(u => isPMRole(u.role));
+      const pms = res.data.filter(u => u.role === 'Project Manager');
       setProjectManagersList(pms);
       setProjectManagers(pms);
     } catch (err) {
@@ -681,7 +679,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
 
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 size={48} className="text-purple-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Loading feasibility tasks...</p>
@@ -691,27 +689,27 @@ const handleCreateFeasibilitySubmit = async (e) => {
   }
 
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <div className="flex items-center gap-3">
               <div className="p-3 bg-gradient-to-br from-purple-600 to-indigo-600 rounded-xl">
                 <FileText size={24} className="text-white" />
               </div>
               <div>
-                <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                <h1 className="page-title">
                   Feasibility Dashboard
                 </h1>
-                <p className="text-slate-500 mt-1">Manage feasibility requests</p>
+                <p className="text-sm text-slate-500 mt-1">Manage feasibility requests</p>
               </div>
             </div>
           </div>
           <div className="flex gap-2">
             <button
               onClick={openCreateFeasibilityModal}
-              className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-xl hover:bg-purple-700 transition-all shadow-sm"
+              className="btn btn-md bg-purple-600 text-white hover:bg-purple-700 shadow-sm"
             >
               <Plus size={16} />
               New Feasibility
@@ -722,28 +720,28 @@ const handleCreateFeasibilitySubmit = async (e) => {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 mb-4 sm:mb-6 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl p-4 text-white">
-          <p className="text-[8px] font-black uppercase opacity-80 tracking-wider">Total Tasks</p>
-          <p className="text-2xl font-black">{feasibilityTasks.length}</p>
+          <p className="text-xs font-semibold uppercase opacity-80 tracking-wide">Total Tasks</p>
+          <p className="text-2xl font-bold">{feasibilityTasks.length}</p>
         </div>
         <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-xl p-4 text-white">
-          <p className="text-[8px] font-black uppercase opacity-80 tracking-wider">Pending</p>
-          <p className="text-2xl font-black">
+          <p className="text-xs font-semibold uppercase opacity-80 tracking-wide">Pending</p>
+          <p className="text-2xl font-bold">
             {feasibilityTasks.filter(t => t.status === 'Feasibility').length}
           </p>
         </div>
         <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl p-4 text-white">
-          <p className="text-[8px] font-black uppercase opacity-80 tracking-wider">Completed</p>
-          <p className="text-2xl font-black">
+          <p className="text-xs font-semibold uppercase opacity-80 tracking-wide">Completed</p>
+          <p className="text-2xl font-bold">
             {feasibilityTasks.filter(t => t.status === 'Feasibility Completed').length}
           </p>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 mb-6">
-        <div className="flex flex-col md:flex-row gap-4">
+      <div className="card mb-4 sm:mb-6">
+        <div className="flex flex-col lg:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -751,7 +749,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
               placeholder="Search by POC, organization, or Feasibility ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm"
+              className="input pl-10"
             />
           </div>
           <div className="relative min-w-[180px]">
@@ -759,7 +757,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none focus:border-blue-400 text-sm font-medium"
+              className="input pl-10"
             >
               <option value="all">All Status</option>
               <option value="Feasibility">Pending</option>
@@ -778,16 +776,16 @@ const handleCreateFeasibilitySubmit = async (e) => {
             <p className="text-xs text-slate-400 mt-1">Tasks will appear here when assigned</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="table-scroll table-sticky-first overflow-x-auto">
+            <table className="w-full min-w-[900px]">
               <thead className="bg-gradient-to-r from-slate-50 to-white border-b border-slate-200">
                 <tr>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Feasibility ID</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">POC / Organization</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Task Details</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Date</th>
-                  <th className="text-left px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Status</th>
-                  <th className="text-right px-6 py-4 text-[10px] font-black uppercase tracking-wider text-slate-500">Actions</th>
+                  <th className="th">Feasibility ID</th>
+                  <th className="th">POC / Organization</th>
+                  <th className="th">Task Details</th>
+                  <th className="th">Date</th>
+                  <th className="th">Status</th>
+                  <th className="th text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -799,12 +797,12 @@ const handleCreateFeasibilitySubmit = async (e) => {
                   return (
                     <React.Fragment key={task._id}>
                       <tr className="border-b border-slate-100 hover:bg-slate-50/50 transition-all">
-                        <td className="px-6 py-4">
-                          <span className="text-xs font-mono font-bold text-purple-600 bg-purple-50 px-2 py-1 rounded">
+                        <td className="td">
+                          <span className="badge text-purple-600 bg-purple-50">
                             {task.feasibilityId || 'N/A'}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div>
                             <p className="text-sm font-bold text-slate-800">{task.pocName}</p>
                             <p className="text-xs text-slate-500 flex items-center gap-1">
@@ -813,13 +811,13 @@ const handleCreateFeasibilitySubmit = async (e) => {
                             </p>
                             {task.pocEmail && (
                               <p className="text-xs text-slate-400 flex items-center gap-1">
-                                <Mail size={10} />
-                                {task.pocEmail}
+                                <Mail size={12} className="shrink-0" />
+                                <span className="break-all min-w-[140px]">{task.pocEmail}</span>
                               </p>
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div>
                             <p className="text-xs text-slate-600 max-w-[200px] truncate">
                               {task.taskDetails || task.lastInteractionDesc || 'No details provided'}
@@ -830,7 +828,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                                 className="mt-1 flex items-center gap-1 text-emerald-600 hover:text-emerald-700 transition-colors"
                               >
                                 <MessageSquare size={12} />
-                                <span className="text-[8px] font-bold">
+                                <span className="text-xs font-semibold">
                                   {comments.length} comment(s)
                                 </span>
                                 {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
@@ -838,7 +836,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="td">
                           <div className="text-xs text-slate-500">
                             <p>Created: {formatDate(task.createdAt)}</p>
                             {task.feasibilityDate && (
@@ -846,16 +844,16 @@ const handleCreateFeasibilitySubmit = async (e) => {
                             )}
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${getStatusColor(task.status)}`}>
+                        <td className="td">
+                          <span className={`badge ${getStatusColor(task.status)}`}>
                             {task.status === 'Feasibility' ? 'Pending' : 'Completed'}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-right">
+                        <td className="td text-right">
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() => viewFeasibilityDetails(task)}
-                              className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold hover:bg-indigo-700 transition-all flex items-center gap-1"
+                              className="btn btn-sm bg-indigo-600 text-white hover:bg-indigo-700"
                             >
                               <Eye size={12} />
                               Details
@@ -865,14 +863,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                               <>
                                 <button
                                   onClick={() => openCommentModal(task)}
-                                  className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-all flex items-center gap-1"
+                                  className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700"
                                 >
                                   <Plus size={12} />
                                   Comment
                                 </button>
                                 <button
                                   onClick={() => openCloseLeadModal(task)}
-                                  className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold hover:bg-red-700 transition-all flex items-center gap-1"
+                                  className="btn btn-sm bg-red-600 text-white hover:bg-red-700"
                                 >
                                   <Ban size={12} />
                                   Close
@@ -886,11 +884,11 @@ const handleCreateFeasibilitySubmit = async (e) => {
                       {/* Expanded Comments Row */}
                       {isExpanded && hasExistingComments && (
                         <tr className="bg-emerald-50/30">
-                          <td colSpan={6} className="px-6 py-4">
-                            <div className="bg-white rounded-xl p-4 border border-emerald-200">
+                          <td colSpan={6} className="td">
+                            <div className="card border-emerald-200">
                               <div className="flex items-center gap-2 mb-3">
                                 <MessageSquare size={16} className="text-emerald-600" />
-                                <h4 className="text-xs font-black text-emerald-700 uppercase tracking-wider">
+                                <h4 className="text-sm font-semibold text-emerald-700">
                                   Comments ({comments.length})
                                 </h4>
                               </div>
@@ -902,14 +900,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                                       : 'bg-emerald-50 border-emerald-100'
                                   }`}>
                                     <div className="flex items-center gap-2 mb-1">
-                                      <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${
+                                      <span className={`badge rounded-full ${
                                         comment.type === 'PM' 
                                           ? 'bg-blue-600 text-white' 
                                           : 'bg-emerald-600 text-white'
                                       }`}>
                                         {comment.type}
                                       </span>
-                                      <p className="text-[8px] font-bold text-slate-500">
+                                      <p className="text-xs font-semibold text-slate-500">
                                         📝 {comment.timestamp}
                                       </p>
                                     </div>
@@ -941,14 +939,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
               >
                 <ChevronLeft size={14} />
               </button>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
               >
                 <ChevronRight size={14} />
               </button>
@@ -961,76 +959,76 @@ const handleCreateFeasibilitySubmit = async (e) => {
           CREATE FEASIBILITY MODAL - SIMPLIFIED
           ============================================ */}
       {showCreateFeasibilityModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   New Feasibility Request
                 </h2>
                 <p className="text-sm text-slate-500">Create a new feasibility task and assign to PM</p>
               </div>
               <button
                 onClick={() => setShowCreateFeasibilityModal(false)}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="btn-icon hover:bg-slate-100"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleCreateFeasibilitySubmit} className="space-y-5">
+            <form onSubmit={handleCreateFeasibilitySubmit} className="modal-body space-y-5">
               {/* Task Details */}
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   Task Details <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   required
                   rows={4}
                   placeholder="Describe the feasibility requirements..."
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium text-sm resize-none focus:border-purple-400 transition-colors"
+                  className="input bg-slate-50 resize-none"
                   value={createFeasibilityData.taskDetails}
                   onChange={(e) => setCreateFeasibilityData({...createFeasibilityData, taskDetails: e.target.value})}
                 />
               </div>
 
               {/* Dates */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1">
+                  <label className="label block mb-1.5">
                     Feasibility Date <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="date"
                     required
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium text-sm focus:border-purple-400 transition-colors"
+                    className="input bg-slate-50"
                     value={createFeasibilityData.feasibilityDate}
                     onChange={(e) => setCreateFeasibilityData({...createFeasibilityData, feasibilityDate: e.target.value})}
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1">
+                  <label className="label block mb-1.5">
                     Next Follow-up Date
                   </label>
                   <input
                     type="date"
-                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium text-sm focus:border-purple-400 transition-colors"
+                    className="input bg-slate-50"
                     value={createFeasibilityData.nextFollowUpDate}
                     onChange={(e) => setCreateFeasibilityData({...createFeasibilityData, nextFollowUpDate: e.target.value})}
                   />
-                  <p className="text-[8px] text-slate-400 mt-1 italic">Task will reappear on this date</p>
+                  <p className="text-xs text-slate-400 mt-1 italic">Task will reappear on this date</p>
                 </div>
               </div>
 
               {/* Project Manager Assignment */}
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1 flex items-center gap-2">
+                <label className="label mb-1.5 flex items-center gap-2">
                   <Briefcase size={14} className="text-purple-600" />
                   Assign Project Manager <span className="text-red-500">*</span>
                 </label>
                 <select
                   required
-                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-bold text-sm text-slate-700 focus:border-purple-400 transition-colors cursor-pointer"
+                  className="input bg-slate-50 cursor-pointer"
                   value={createFeasibilityData.projectManagerId}
                   onChange={(e) => setCreateFeasibilityData({...createFeasibilityData, projectManagerId: e.target.value})}
                 >
@@ -1045,12 +1043,12 @@ const handleCreateFeasibilitySubmit = async (e) => {
                     ))
                   )}
                 </select>
-                <p className="text-[8px] text-slate-400 mt-1">The feasibility task will be assigned to this PM</p>
+                <p className="text-xs text-slate-400 mt-1">The feasibility task will be assigned to this PM</p>
               </div>
 
               {/* Attachment Upload */}
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   Attachment (PDF, Word, Excel, Images, ZIP, etc.)
                 </label>
                 <div className="relative group">
@@ -1080,17 +1078,17 @@ const handleCreateFeasibilitySubmit = async (e) => {
                       : 'border-slate-200 hover:border-purple-400 bg-slate-50'
                   }`}>
                     <Upload size={24} className={createFeasibilityData.attachment ? 'text-emerald-500' : 'text-slate-400'} />
-                    <span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">
+                    <span className="text-xs font-semibold text-slate-500 truncate w-full px-4 text-center">
                       {createFeasibilityData.attachment 
                         ? createFeasibilityData.attachmentName || createFeasibilityData.attachment.name 
                         : "Click to upload files (Max 50MB)"}
                     </span>
                     {createFeasibilityData.attachment && (
-                      <span className="text-[8px] text-emerald-600">
+                      <span className="text-xs text-emerald-600">
                         {(createFeasibilityData.attachment.size / 1024 / 1024).toFixed(2)} MB
                       </span>
                     )}
-                    <span className="text-[7px] text-slate-400">
+                    <span className="text-xs text-slate-400">
                       Supported: PDF, Word, Excel, Images, JSON, ZIP, Code files, and more
                     </span>
                   </div>
@@ -1103,7 +1101,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                       const fileInput = document.querySelector('input[type="file"]');
                       if (fileInput) fileInput.value = '';
                     }}
-                    className="mt-1 text-[8px] font-bold text-red-500 hover:text-red-700 transition-colors"
+                    className="mt-1 text-xs font-semibold text-red-500 hover:text-red-700 transition-colors"
                   >
                     Remove file
                   </button>
@@ -1114,14 +1112,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 <button
                   type="button"
                   onClick={() => setShowCreateFeasibilityModal(false)}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isCreatingFeasibility}
-                  className={`flex-[2] py-3 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                  className={`btn btn-md flex-[2] text-white ${
                     isCreatingFeasibility
                       ? 'bg-slate-300 cursor-not-allowed'
                       : 'bg-purple-600 hover:bg-purple-700 shadow-lg shadow-purple-200'
@@ -1143,11 +1141,11 @@ const handleCreateFeasibilitySubmit = async (e) => {
           FEASIBILITY DETAILS MODAL (Sales View)
           ============================================ */}
       {showFeasibilityDetailsModal && selectedFeasibilityDetails && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <FileText size={20} className="text-indigo-600" />
                   Feasibility Details
                 </h2>
@@ -1160,39 +1158,39 @@ const handleCreateFeasibilitySubmit = async (e) => {
                   setShowFeasibilityDetailsModal(false);
                   setSelectedFeasibilityDetails(null);
                 }}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="btn-icon hover:bg-slate-100"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="modal-body stack">
              
 
               {/* Feasibility Details Section */}
               <div className="bg-indigo-50 rounded-xl p-4 border border-indigo-200">
-                <h3 className="text-xs font-black text-indigo-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="label text-indigo-600 uppercase mb-3 flex items-center gap-2">
                   <Target size={14} />
                   Feasibility Details
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400">Feasibility ID</p>
+                    <p className="text-xs font-semibold text-slate-400">Feasibility ID</p>
                     <p className="text-sm font-bold text-indigo-700 font-mono">{selectedFeasibilityDetails.feasibilityId}</p>
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400">Status</p>
-                    <span className={`inline-flex px-2 py-1 rounded-lg text-[10px] font-bold uppercase ${getStatusColor(selectedFeasibilityDetails.status)}`}>
+                    <p className="text-xs font-semibold text-slate-400">Status</p>
+                    <span className={`badge ${getStatusColor(selectedFeasibilityDetails.status)}`}>
                       {selectedFeasibilityDetails.status === 'Feasibility' ? 'Pending' : 'Completed'}
                     </span>
                   </div>
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400">Feasibility Date</p>
+                    <p className="text-xs font-semibold text-slate-400">Feasibility Date</p>
                     <p className="text-sm font-semibold text-slate-800">{formatDate(selectedFeasibilityDetails.feasibilityDate)}</p>
                   </div>
                   {selectedFeasibilityDetails.feasibilityCompletedAt && (
                     <div>
-                      <p className="text-[9px] font-bold text-slate-400">Completed At</p>
+                      <p className="text-xs font-semibold text-slate-400">Completed At</p>
                       <p className="text-sm font-semibold text-emerald-600">{formatDateTime(selectedFeasibilityDetails.feasibilityCompletedAt)}</p>
                     </div>
                   )}
@@ -1201,13 +1199,13 @@ const handleCreateFeasibilitySubmit = async (e) => {
 
               {/* Task Details Section */}
               <div className="bg-amber-50 rounded-xl p-4 border border-amber-200">
-                <h3 className="text-xs font-black text-amber-600 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <h3 className="label text-amber-600 uppercase mb-3 flex items-center gap-2">
                   <FileText size={14} />
                   Task Details
                 </h3>
                 <div className="space-y-3">
                   <div>
-                    <p className="text-[9px] font-bold text-slate-400">Task Description</p>
+                    <p className="text-xs font-semibold text-slate-400">Task Description</p>
                     <div className="mt-1 p-3 bg-white rounded-lg border border-amber-100">
                       <p className="text-sm text-slate-700 whitespace-pre-wrap">
                         {selectedFeasibilityDetails.taskDetails || 'No task details provided'}
@@ -1220,7 +1218,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
               {/* Comments Section */}
               {extractPMComments(selectedFeasibilityDetails.lastInteractionDesc).length > 0 && (
                 <div className="bg-emerald-50 rounded-xl p-4 border border-emerald-200">
-                  <h3 className="text-xs font-black text-emerald-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="label text-emerald-700 uppercase mb-3 flex items-center gap-2">
                     <MessageSquare size={14} className="text-emerald-600" />
                     Comments ({extractPMComments(selectedFeasibilityDetails.lastInteractionDesc).length})
                   </h3>
@@ -1232,14 +1230,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                           : 'bg-emerald-50 border-emerald-100'
                       }`}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-[8px] font-bold px-2 py-0.5 rounded-full ${
+                          <span className={`badge rounded-full ${
                             comment.type === 'PM' 
                               ? 'bg-blue-600 text-white' 
                               : 'bg-emerald-600 text-white'
                           }`}>
                             {comment.type}
                           </span>
-                          <p className="text-[8px] font-bold text-slate-500">
+                          <p className="text-xs font-semibold text-slate-500">
                             📝 {comment.timestamp}
                           </p>
                         </div>
@@ -1255,7 +1253,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
               {/* Last Interaction */}
               {extractPMComments(selectedFeasibilityDetails.lastInteractionDesc).length === 0 && selectedFeasibilityDetails.lastInteractionDesc && (
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="label uppercase mb-3 flex items-center gap-2">
                     <FileText size={14} />
                     Last Interaction
                   </h3>
@@ -1268,7 +1266,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
               {/* Attachment Section */}
               {selectedFeasibilityDetails.attachmentPath && (
                 <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h3 className="label uppercase mb-3 flex items-center gap-2">
                     <Paperclip size={14} />
                     Attachment
                   </h3>
@@ -1279,7 +1277,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                         <p className="text-sm font-semibold text-slate-800">
                           {selectedFeasibilityDetails.attachmentFilename || 'Attachment'}
                         </p>
-                        <p className="text-[8px] text-slate-400">
+                        <p className="text-xs text-slate-400">
                           Uploaded on {formatDate(selectedFeasibilityDetails.updatedAt)}
                         </p>
                       </div>
@@ -1289,7 +1287,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                         selectedFeasibilityDetails.attachmentPath,
                         selectedFeasibilityDetails.attachmentFilename || 'attachment'
                       )}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-1"
+                      className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"
                     >
                       <Download size={12} />
                       Download
@@ -1300,7 +1298,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
 
               {/* Timestamps */}
               <div className="bg-slate-50 rounded-xl p-3 border border-slate-200">
-                <div className="flex flex-col sm:flex-row justify-between text-[8px] text-slate-400">
+                <div className="flex flex-col sm:flex-row justify-between text-xs text-slate-400">
                   <span>Created: {formatDateTime(selectedFeasibilityDetails.createdAt)}</span>
                   <span>Last Updated: {formatDateTime(selectedFeasibilityDetails.updatedAt)}</span>
                 </div>
@@ -1313,13 +1311,13 @@ const handleCreateFeasibilitySubmit = async (e) => {
                     setShowFeasibilityDetailsModal(false);
                     setSelectedFeasibilityDetails(null);
                   }}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Close
                 </button>
                 <button
                   onClick={() => navigate('/sales/lead_generation')}
-                  className="flex-1 py-3 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-blue-700 transition-all flex items-center justify-center gap-2"
+                  className="btn btn-md flex-1 bg-blue-600 text-white hover:bg-blue-700"
                 >
                   <ExternalLink size={14} />
                   View in Lead Gen
@@ -1334,11 +1332,11 @@ const handleCreateFeasibilitySubmit = async (e) => {
           ADD COMMENT MODAL (Sales)
           ============================================ */}
       {showCommentModal && selectedFeasibilityDetails && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-6">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg">
+            <div className="modal-header">
               <div>
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <MessageSquare size={20} className="text-emerald-600" />
                   Add Comment
                 </h2>
@@ -1348,18 +1346,19 @@ const handleCreateFeasibilitySubmit = async (e) => {
               </div>
               <button
                 onClick={closeCommentModal}
-                className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
+                className="btn-icon hover:bg-slate-100"
               >
                 <X size={20} />
               </button>
             </div>
 
             {/* Comment History Section */}
+            <div className="modal-body">
             {commentHistory.length > 0 && (
               <div className="mb-4">
                 <div className="flex items-center gap-2 mb-3">
                   <History size={14} className="text-emerald-600" />
-                  <h3 className="text-[10px] font-black text-emerald-700 uppercase tracking-wider">
+                  <h3 className="label text-emerald-700 uppercase">
                     Previous Comments ({commentHistory.length})
                   </h3>
                 </div>
@@ -1371,14 +1370,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                         : 'bg-emerald-50 border-emerald-100'
                     }`}>
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`text-[7px] font-bold px-1.5 py-0.5 rounded-full ${
+                        <span className={`badge rounded-full ${
                           comment.type === 'PM' 
                             ? 'bg-blue-600 text-white' 
                             : 'bg-emerald-600 text-white'
                         }`}>
                           {comment.type}
                         </span>
-                        <p className="text-[7px] font-bold text-slate-500">
+                        <p className="text-xs font-semibold text-slate-500">
                           {comment.timestamp}
                         </p>
                       </div>
@@ -1393,18 +1392,18 @@ const handleCreateFeasibilitySubmit = async (e) => {
 
             <form onSubmit={handleCommentSubmit} className="space-y-5">
               <div>
-                <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block mb-1">
+                <label className="label block mb-1.5">
                   New Comment <span className="text-red-500">*</span>
                 </label>
                 <textarea
                   required
                   rows={4}
                   placeholder="Enter your comments, feedback, or observations..."
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl resize-none font-medium outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
+                  className="input bg-slate-50 resize-none"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
                 />
-                <p className="text-[8px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   This comment will be visible to the PM and other Sales team members
                 </p>
               </div>
@@ -1413,14 +1412,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 <button
                   type="button"
                   onClick={closeCommentModal}
-                  className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Close
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingComment || !commentText.trim()}
-                  className={`flex-[2] py-3 text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                  className={`btn btn-md flex-[2] text-white ${
                     isSubmittingComment || !commentText.trim()
                       ? 'bg-slate-300 cursor-not-allowed'
                       : 'bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-200'
@@ -1434,6 +1433,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 </button>
               </div>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -1442,8 +1442,8 @@ const handleCreateFeasibilitySubmit = async (e) => {
           CLOSE LEAD MODAL (kept for Sales to close leads)
           ============================================ */}
       {showCloseModal && selectedLeadForClose && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center p-2 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl relative animate-in zoom-in duration-300 max-h-[95vh] overflow-y-auto">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md relative">
             <button 
               onClick={() => {
                 setShowCloseModal(false);
@@ -1452,16 +1452,17 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 setClosingData({ reason: 'won', description: '' });
                 setProductionAttachment(null);
               }} 
-              className="absolute top-6 right-6 text-slate-300 hover:text-slate-900 transition-colors"
+              className="btn-icon absolute top-2 right-2 z-10 bg-white text-slate-500 hover:text-slate-900"
             >
               <X size={24}/>
             </button>
             
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 border-2 border-emerald-200">
+            <div className="modal-body">
+            <div className="text-center mb-4 sm:mb-6">
+              <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto mb-4 border-2 border-emerald-200 shrink-0">
                 <FolderKanban size={32} />
               </div>
-              <h2 className="text-2xl font-black text-slate-900">
+              <h2 className="section-title">
                 {showProductionForm ? 'Production Ready Setup' : 'Close Lead'}
               </h2>
               <p className="text-slate-500 text-sm mt-1">
@@ -1472,14 +1473,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
             {!showProductionForm ? (
               <form onSubmit={handleCloseLeadSubmit} className="space-y-5">
                 <div className="space-y-3">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Select Outcome *
                   </label>
                   <div className="grid grid-cols-2 gap-3">
                     <button 
                       type="button"
                       onClick={() => setClosingData({...closingData, reason: 'won'})} 
-                      className={`py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                      className={`btn btn-md border-2 ${
                         closingData.reason === 'won' 
                           ? 'bg-emerald-50 border-emerald-500 text-emerald-700 shadow-md shadow-emerald-100' 
                           : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:border-slate-300'
@@ -1492,7 +1493,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                     <button 
                       type="button"
                       onClick={() => setClosingData({...closingData, reason: 'lost'})} 
-                      className={`py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider border-2 transition-all duration-200 flex items-center justify-center gap-2 ${
+                      className={`btn btn-md border-2 ${
                         closingData.reason === 'lost' 
                           ? 'bg-rose-50 border-rose-500 text-rose-700 shadow-md shadow-rose-100' 
                           : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100 hover:border-slate-300'
@@ -1505,7 +1506,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     {closingData.reason === 'won' ? 'Success Notes' : 'Reason for Loss'} {closingData.reason === 'lost' && '*'}
                   </label>
                   <textarea 
@@ -1515,12 +1516,12 @@ const handleCreateFeasibilitySubmit = async (e) => {
                         : "Please explain why this lead was lost..."
                     }
                     required={closingData.reason === 'lost'}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-2xl h-24 resize-none font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" 
+                    className="input bg-slate-50 resize-none" 
                     value={closingData.description} 
                     onChange={(e) => setClosingData({...closingData, description: e.target.value})} 
                   />
                   {closingData.reason === 'lost' && (
-                    <p className="text-[9px] text-rose-500 ml-1 flex items-center gap-1">
+                    <p className="text-xs text-rose-500 ml-1 flex items-center gap-1">
                       <AlertCircle size={12} />
                       Please provide a reason for losing this lead
                     </p>
@@ -1535,14 +1536,14 @@ const handleCreateFeasibilitySubmit = async (e) => {
                       setSelectedLeadForClose(null);
                       setClosingData({ reason: 'won', description: '' });
                     }}
-                    className="flex-1 py-4 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-2xl font-black text-xs uppercase tracking-widest transition-all"
+                    className="btn btn-md flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600"
                   >
                     Cancel
                   </button>
                   <button 
                     type="submit"
                     disabled={!closingData.reason || (closingData.reason === 'lost' && !closingData.description.trim())}
-                    className={`flex-[2] py-4 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
+                    className={`btn btn-md flex-[2] text-white shadow-lg ${
                       closingData.reason === 'won' 
                         ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200' 
                         : closingData.reason === 'lost'
@@ -1566,19 +1567,19 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 mb-2">
                   <div className="flex items-center gap-2">
                     <CheckCircle size={16} className="text-emerald-600" />
-                    <span className="text-xs font-bold text-emerald-700">Setup Production Project</span>
+                    <span className="text-xs font-semibold text-emerald-700">Setup Production Project</span>
                   </div>
-                  <p className="text-[9px] text-emerald-600 mt-1">Fill in the details to launch this project</p>
+                  <p className="text-xs text-emerald-600 mt-1">Fill in the details to launch this project</p>
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Project Name *
                   </label>
                   <input
                     type="text"
                     required
-                    className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-bold text-sm"
+                    className="input bg-slate-50"
                     value={productionForm.name}
                     onChange={(e) => setProductionForm({...productionForm, name: e.target.value})}
                     placeholder="Enter project name"
@@ -1587,7 +1588,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    <label className="label block mb-1.5">
                       Industry *
                     </label>
                     <CreatableSelect 
@@ -1600,7 +1601,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                     />
                   </div>
                   <div>
-                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                    <label className="label block mb-1.5">
                       Country *
                     </label>
                     <CreatableSelect 
@@ -1615,13 +1616,13 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block flex items-center gap-2">
+                  <label className="label mb-1.5 flex items-center gap-2">
                     <Briefcase size={14} className="text-emerald-600" />
                     Assign Project Manager *
                   </label>
                   <select
                     required
-                    className="w-full p-3 bg-slate-50 border border-slate-100 rounded-2xl outline-none font-bold text-sm text-slate-700 cursor-pointer"
+                    className="input bg-slate-50 cursor-pointer"
                     value={productionForm.projectManager}
                     onChange={(e) => setProductionForm({...productionForm, projectManager: e.target.value})}
                   >
@@ -1633,12 +1634,12 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Description
                   </label>
                   <textarea
                     rows={2}
-                    className="w-full p-3 bg-slate-50 rounded-2xl border border-slate-100 outline-none font-medium text-sm resize-none"
+                    className="input bg-slate-50 resize-none"
                     value={productionForm.description}
                     onChange={(e) => setProductionForm({...productionForm, description: e.target.value})}
                     placeholder="Brief project description..."
@@ -1647,7 +1648,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
 
                 {/* Attachment Upload */}
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1 block">
+                  <label className="label block mb-1.5">
                     Attachment (Optional - PDF, Word, Excel, Images, ZIP)
                   </label>
                   <div className="relative group">
@@ -1657,15 +1658,15 @@ const handleCreateFeasibilitySubmit = async (e) => {
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" 
                       onChange={(e) => setProductionAttachment(e.target.files[0])} 
                     />
-                    <div className={`w-full p-3 border-2 border-dashed rounded-2xl flex flex-col items-center justify-center gap-1 transition-colors ${
+                    <div className={`w-full p-3 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-1 transition-colors ${
                       productionAttachment ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-purple-400 bg-slate-50'
                     }`}>
                       <Upload size={20} className={productionAttachment ? 'text-emerald-500' : 'text-slate-400'} />
-                      <span className="text-xs font-bold text-slate-500 truncate w-full px-4 text-center">
+                      <span className="text-xs font-semibold text-slate-500 truncate w-full px-4 text-center">
                         {productionAttachment ? productionAttachment.name : "Click to upload files (Max 20MB)"}
                       </span>
                       {productionAttachment && (
-                        <span className="text-[8px] text-green-600">
+                        <span className="text-xs text-green-600">
                           {(productionAttachment.size / 1024 / 1024).toFixed(2)} MB
                         </span>
                       )}
@@ -1676,7 +1677,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 <button
                   type="submit"
                   disabled={isClosing || !productionForm.projectManager || !productionForm.name.trim()}
-                  className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2 ${
+                  className={`btn btn-md w-full shadow-lg ${
                     isClosing || !productionForm.projectManager || !productionForm.name.trim()
                       ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
                       : 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200'
@@ -1690,6 +1691,7 @@ const handleCreateFeasibilitySubmit = async (e) => {
                 </button>
               </form>
             )}
+            </div>
           </div>
         </div>
       )}

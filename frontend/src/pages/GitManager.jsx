@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
-import { useSidebar } from '../context/SidebarContext';
 import { 
   FolderGit2, FileCode, FolderOpen, GitBranch, 
   ExternalLink, RefreshCw, ChevronRight, Home,
@@ -35,7 +34,6 @@ const GitManager = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   
-  const { isCollapsed } = useSidebar();
   const userRole = localStorage.getItem('role');
   const isManagerOrAdmin = isPMRole(userRole) || userRole === 'Admin';
 
@@ -268,23 +266,23 @@ const GitManager = () => {
   }, [searchTerm]);
 
   return (
-    <div className={`min-h-screen bg-gray-70 p-6 transition-all duration-300 ${isCollapsed ? 'ml-5' : 'ml-64'}`}>
+    <div className="page bg-gray-70">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="mb-8">
+        <div className="mb-4 sm:mb-6">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-gray-900 rounded-xl">
               <GitFork size={24} className="text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Git Repository Manager</h1>
-              <p className="text-gray-500 mt-1">Manage your project repositories and invite developers</p>
+              <h1 className="page-title">Git Repository Manager</h1>
+              <p className="text-sm text-gray-500 mt-1">Manage your project repositories and invite developers</p>
             </div>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <div className="relative max-w-md">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
@@ -292,12 +290,12 @@ const GitManager = () => {
               placeholder="Search by project ID (e.g., 0016) or name..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+              className="input pl-10"
             />
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                className="btn-icon absolute top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 right-0 md:right-1"
               >
                 <X size={16} />
               </button>
@@ -310,7 +308,7 @@ const GitManager = () => {
 
         {/* Info Banner for Developers */}
         {!isManagerOrAdmin && selectedProject && (
-          <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 sm:mb-6">
             <div className="flex items-start gap-3">
               <Info size={18} className="text-blue-600 mt-0.5 flex-shrink-0" />
               <div className="text-sm text-blue-800">
@@ -328,9 +326,9 @@ const GitManager = () => {
         )}
 
         {/* Project Selection */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+        <div className="card mb-4 sm:mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
+            <h2 className="section-title flex items-center gap-2">
               <GitBranch size={16} />
               Select Project
               {searchTerm && (
@@ -343,7 +341,7 @@ const GitManager = () => {
               {isManagerOrAdmin && selectedProject && (
                 <button
                   onClick={openDirectInviteModal}
-                  className="text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700 flex items-center gap-1"
+                  className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700"
                 >
                   <GitFork size={12} />
                   Quick Invite
@@ -375,7 +373,7 @@ const GitManager = () => {
             </div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
                 {paginatedProjects.map(project => (
                   <div
                     key={project._id}
@@ -421,7 +419,7 @@ const GitManager = () => {
                     <button
                       onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
                       disabled={currentPage === 1}
-                      className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      className="btn-icon border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
                     >
                       <ChevronLeft size={16} />
                     </button>
@@ -443,18 +441,18 @@ const GitManager = () => {
                         }
                         
                         if (pageNum === 1 && i > 0 && currentPage > 3 && totalPages > 5) {
-                          return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-gray-400 text-xs">...</span>;
+                          return <span key="ellipsis1" className="w-6 h-6 flex items-center justify-center text-gray-400 text-xs shrink-0">...</span>;
                         }
                         
                         if (pageNum === totalPages && i < 4 && currentPage < totalPages - 2 && totalPages > 5) {
-                          return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-gray-400 text-xs">...</span>;
+                          return <span key="ellipsis2" className="w-6 h-6 flex items-center justify-center text-gray-400 text-xs shrink-0">...</span>;
                         }
                         
                         return (
                           <button
                             key={pageNum}
                             onClick={() => setCurrentPage(pageNum)}
-                            className={`w-6 h-6 rounded-md text-xs font-bold transition-all ${
+                            className={`btn-icon ${
                               currentPage === pageNum
                                 ? 'bg-blue-600 text-white shadow-sm'
                                 : 'text-gray-500 hover:bg-gray-100'
@@ -469,7 +467,7 @@ const GitManager = () => {
                     <button
                       onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
                       disabled={currentPage === totalPages}
-                      className="w-8 h-8 rounded-lg border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      className="btn-icon border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-40"
                     >
                       <ChevronRight size={16} />
                     </button>
@@ -487,7 +485,7 @@ const GitManager = () => {
         {/* Repository Browser */}
         {selectedProject && selectedProject.gitRepoUrl && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
+            <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div className="flex items-center gap-2">
                   <FolderGit2 size={18} className="text-gray-600" />
@@ -502,11 +500,11 @@ const GitManager = () => {
                   )}
                 </div>
                 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {isManagerOrAdmin && inviteLink && (
                     <button
                       onClick={copyInviteLink}
-                      className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-70 transition-colors flex items-center gap-1"
+                      className="btn btn-sm border border-gray-300 hover:bg-gray-70"
                     >
                       {copiedInviteLink ? <CheckCircle size={14} className="text-green-600" /> : <LinkIcon size={14} />}
                       {copiedInviteLink ? 'Copied!' : 'Copy Invite Link'}
@@ -516,7 +514,7 @@ const GitManager = () => {
                   {currentPath && (
                     <button
                       onClick={navigateUp}
-                      className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1"
+                      className="btn btn-sm text-gray-600 hover:bg-gray-100"
                     >
                       <Home size={14} />
                       Up
@@ -524,7 +522,7 @@ const GitManager = () => {
                   )}
                   <button
                     onClick={() => fetchRepoContents(selectedProject._id, currentPath)}
-                    className="px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex items-center gap-1"
+                    className="btn btn-sm text-gray-600 hover:bg-gray-100"
                   >
                     <RefreshCw size={14} />
                     Refresh
@@ -533,7 +531,7 @@ const GitManager = () => {
                     href={selectedProject.gitRepoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="px-3 py-1.5 text-sm bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors flex items-center gap-1"
+                    className="btn btn-sm bg-gray-900 text-white hover:bg-gray-800"
                   >
                     <ExternalLink size={14} />
                     Open on GitHub
@@ -556,7 +554,7 @@ const GitManager = () => {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                   {repoContents.map((item, index) => (
                     <div
                       key={index}
@@ -565,11 +563,11 @@ const GitManager = () => {
                         item.type === 'folder' ? 'hover:border-yellow-200' : 'hover:border-blue-200'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
                         {getIcon(item.type, item.name)}
-                        <span className="text-sm text-gray-700 font-medium">{item.name}</span>
+                        <span className="text-sm text-gray-700 font-medium min-w-0 break-all">{item.name}</span>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 shrink-0">
                         {item.type === 'folder' && (
                           <span className="text-xs text-gray-400 flex items-center gap-1">
                             <Clock size={12} />
@@ -586,9 +584,9 @@ const GitManager = () => {
               )}
             </div>
 
-            <div className="px-6 py-3 bg-blue-50 border-t border-blue-100 text-xs text-blue-700">
-              <div className="flex items-center gap-2">
-                <Rocket size={14} />
+            <div className="px-4 sm:px-6 py-3 bg-blue-50 border-t border-blue-100 text-xs text-blue-700">
+              <div className="flex items-start gap-2">
+                <Rocket size={14} className="shrink-0" />
                 <span>
                   When you invite a developer by email, GitHub will send them an invitation link.
                   The invitation email comes from <strong>noreply@github.com</strong>. 
@@ -602,22 +600,22 @@ const GitManager = () => {
 
       {/* Direct Invite Modal */}
       {showDirectInviteModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
+              <h3 className="section-title flex items-center gap-2">
                 <GitFork size={20} />
                 Quick Invite Developer
               </h3>
               <button
                 onClick={() => setShowDirectInviteModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="btn-icon text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="modal-body space-y-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <Info size={16} className="text-blue-600 mt-0.5 flex-shrink-0" />
@@ -632,7 +630,7 @@ const GitManager = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label block mb-1.5">
                   Developer Email
                 </label>
                 <input
@@ -645,7 +643,7 @@ const GitManager = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="label block mb-1.5">
                   Permission Level
                 </label>
                 <select
@@ -662,7 +660,7 @@ const GitManager = () => {
               <button
                 onClick={sendDirectInvite}
                 disabled={sendingDirectInvite}
-                className="w-full py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                className="btn btn-md w-full bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
               >
                 {sendingDirectInvite ? (
                   <>
@@ -683,21 +681,22 @@ const GitManager = () => {
 
       {/* Collaborators Modal */}
       {showCollaboratorsModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl max-w-md w-full p-6 shadow-xl">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
+              <h3 className="section-title flex items-center gap-2">
                 <Users size={20} />
                 Repository Collaborators
               </h3>
               <button
                 onClick={() => setShowCollaboratorsModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className="btn-icon text-gray-400 hover:text-gray-600"
               >
                 <X size={20} />
               </button>
             </div>
 
+            <div className="modal-body">
             {loadingCollaborators ? (
               <div className="flex justify-center py-8">
                 <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -726,10 +725,11 @@ const GitManager = () => {
 
             <button
               onClick={() => setShowCollaboratorsModal(false)}
-              className="mt-4 w-full py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+              className="btn btn-md mt-4 w-full bg-gray-100 text-gray-700 hover:bg-gray-200"
             >
               Close
             </button>
+            </div>
           </div>
         </div>
       )}

@@ -10,10 +10,10 @@ import {
   UploadCloud, File, FileSpreadsheet, FileArchive, FileVideo, 
   FileAudio, FileCode, X, Image, Download, Eye, UserPlus, Search
 } from 'lucide-react';
-import { useSidebar } from '../context/SidebarContext';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { isPMRole } from '../utils/roles';
+import { Badge, Button, PageHeader } from '../components/ui';
 
 import { isProjectManagerOf } from '../utils/projectAccess';
 // ============================================
@@ -39,20 +39,6 @@ const buildCategoryMap = (list, forClient) => {
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_FILE_SIZE = 50 * 1024 * 1024;
 
-const ALLOWED_EXTENSIONS = [
-  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico',
-  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.txt', '.csv', '.tsv', '.rtf', '.odt', '.ods',
-  '.zip', '.rar', '.7z', '.tar', '.gz', '.bz2',
-  '.ppt', '.pptx', '.odp',
-  '.mp4', '.avi', '.mkv', '.mov', '.wmv', '.flv', '.webm', '.m4v', '.mpg', '.mpeg',
-  '.mp3', '.wav', '.aac', '.ogg', '.flac', '.m4a', '.wma',
-  '.json', '.xml', '.yaml', '.yml', '.ini', '.cfg', '.conf',
-  '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.scss', '.sass',
-  '.py', '.java', '.cpp', '.c', '.h', '.php', '.rb', '.go', '.rs',
-  '.sh', '.bash', '.bat', '.ps1', '.cmd',
-  '.exe'
-];
-
 const getFileExtension = (filename) => {
   if (!filename) return '';
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -62,11 +48,6 @@ const getFileExtension = (filename) => {
 const isImageFile = (filename) => {
   const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg', '.ico'];
   return imageExtensions.includes(getFileExtension(filename));
-};
-
-const isAllowedFile = (file) => {
-  const ext = getFileExtension(file.name);
-  return ALLOWED_EXTENSIONS.includes(ext);
 };
 
 const getFileIcon = (file) => {
@@ -114,7 +95,6 @@ const CreateTicket = () => {
   const [isSubcategoryOpen, setIsSubcategoryOpen] = useState(false);
   const [categoriesData, setCategoriesData] = useState([]);
   const [loadingCategories, setLoadingCategories] = useState(true);
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const userRole = localStorage.getItem('role');
   const currentUserId = localStorage.getItem('userId');
@@ -275,11 +255,6 @@ const CreateTicket = () => {
   };
 
   const validateFile = (file) => {
-    if (!isAllowedFile(file)) {
-      toast.error(`File type "${file.name}" is not supported.`);
-      return false;
-    }
-    
     const isImage = isImageFile(file.name);
     const maxSize = isImage ? MAX_IMAGE_SIZE : MAX_FILE_SIZE;
     
@@ -406,8 +381,7 @@ const CreateTicket = () => {
         }
       } catch (error) {
         console.error(`File upload failed for ${file.name}:`, error.message);
-        // Don't show toast for each file, just log it
-        // The user will see the final result in the success/error message
+        toast.error(`Failed to upload ${file.name}: ${error.response?.data?.error || error.message}`);
       }
     }
 
@@ -772,49 +746,43 @@ const CreateTicket = () => {
   };
 
   return (
-    <div className={`min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-6 transition-all duration-300 ${isCollapsed ? 'ml-8' : 'ml-64'}`}>
-      <div className="w-full">
-        <div className="mb-8">
+    <div className="page bg-gradient-to-br from-slate-50 to-slate-100">
+      <div className="stack w-full">
+        <div>
           <button
             onClick={() => navigate('/tickets')}
-            className="inline-flex items-center gap-2 text-slate-500 hover:text-slate-700 transition-colors group mb-4"
+            className="mb-2 sm:mb-3 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-700 transition-colors group"
           >
             <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-            <span className="text-sm font-medium">Back to Tickets</span>
+            Back to Tickets
           </button>
-          
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-800 to-slate-600 bg-clip-text text-transparent">
-                {isClient ? 'Create New Ticket' : 'Create Ticket'}
-              </h1>
-              <p className="text-slate-500 mt-1">
-                {isClient  
-                  ? 'Submit a support request for your project' 
-                  : 'Submit an internal ticket for team members only'}
-              </p>
-            </div>
-          </div>
+
+          <PageHeader
+            title={isClient ? 'Create New Ticket' : 'Create Ticket'}
+            subtitle={isClient
+              ? 'Submit a support request for your project'
+              : 'Submit an internal ticket for team members only'}
+          />
         </div>
 
-        <div className="bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden">
+        <div className="card !p-0 overflow-hidden">
           <form onSubmit={handleSubmit}>
-            <div className="px-8 py-6 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
+            <div className="px-4 sm:px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-blue-50 rounded-xl">
+                <div className="p-2 bg-blue-50 rounded-lg shrink-0">
                   <FileText size={20} className="text-blue-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-slate-800">Ticket Details</h2>
-                  <p className="text-xs text-slate-500">Fill in the information below to create a new ticket</p>
+                  <h2 className="section-title">Ticket Details</h2>
+                  <p className="meta">Fill in the information below to create a new ticket</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-8 space-y-8">
+            <div className="p-4 sm:p-6 stack">
               {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-start gap-3">
-                  <div className="p-2 bg-purple-200 rounded-lg">
+                  <div className="p-2 bg-purple-200 rounded-lg shrink-0">
                     <Info size={16} className="text-purple-700" />
                   </div>
                   <div>
@@ -830,9 +798,9 @@ const CreateTicket = () => {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  <label className="label block mb-1.5">
                     Title <span className="text-red-500">*</span>
                   </label>
                   <div className="relative">
@@ -841,14 +809,14 @@ const CreateTicket = () => {
                       required
                       value={formData.title}
                       onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-800 placeholder:text-slate-400"
+                      className="input bg-slate-50"
                       placeholder="Enter a brief summary..."
                     />
                   </div>
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                  <label className="label block mb-1.5">
                     Priority <span className="text-red-500">*</span>
                   </label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -857,7 +825,7 @@ const CreateTicket = () => {
                         key={option.value}
                         type="button"
                         onClick={() => setFormData({ ...formData, priority: option.value })}
-                        className={`px-3 py-2.5 rounded-xl border-2 font-medium text-xs transition-all ${
+                        className={`btn btn-md !px-2 border-2 ${
                           formData.priority === option.value
                             ? `${option.color} border-current shadow-md`
                             : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50'
@@ -871,7 +839,7 @@ const CreateTicket = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-semibold text-slate-700 mb-1.5">
+                <label className="label block mb-1.5">
                   Description <span className="text-red-500">*</span>
                 </label>
                 <textarea
@@ -879,22 +847,22 @@ const CreateTicket = () => {
                   rows={4}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-800 placeholder:text-slate-400 resize-none"
+                  className="input bg-slate-50 resize-none"
                   placeholder="Provide a detailed description of the issue..."
                 />
               </div>
 
-              <div className="bg-slate-50/80 rounded-xl p-6 border-2 border-slate-200/50">
-                <div className="flex items-center gap-2 mb-4">
+              <div className="bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   <Layers size={18} className="text-blue-600" />
-                  <label className="text-sm font-semibold text-slate-700">
+                  <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-slate-700">
                     Category & Subcategory <span className="text-red-500">*</span>
                   </label>
                 </div>
                 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                    <label className="label block mb-1.5">
                       Category
                     </label>
                     <select
@@ -913,7 +881,7 @@ const CreateTicket = () => {
                         });
                         setIsSubcategoryOpen(true);
                       }}
-                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
+                      className="input cursor-pointer"
                     >
                       <option value="">{loadingCategories ? 'Loading categories...' : 'Select Category'}</option>
                       {Object.keys(availableCategories).map(cat => (
@@ -925,7 +893,7 @@ const CreateTicket = () => {
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                    <label className="label block mb-1.5">
                       Subcategory
                     </label>
                     <select
@@ -941,7 +909,7 @@ const CreateTicket = () => {
                         });
                       }}
                       disabled={!formData.category}
-                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="input cursor-pointer"
                     >
                       <option value="">Select Subcategory</option>
                       {getSubcategories().map(sub => (
@@ -952,7 +920,7 @@ const CreateTicket = () => {
 
                   {!isSpecialSubcategory && hasSubItems() && (
                     <div>
-                      <label className="block text-xs font-medium text-slate-500 mb-1.5">
+                      <label className="label block mb-1.5">
                         Specific Issue
                       </label>
                       <select
@@ -966,7 +934,7 @@ const CreateTicket = () => {
                           });
                         }}
                         disabled={!formData.subcategory}
-                        className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="input cursor-pointer"
                       >
                         <option value="">Select Issue Type</option>
                         {getSubItems().map(item => (
@@ -977,7 +945,7 @@ const CreateTicket = () => {
                   )}
                   
                   {isSpecialSubcategory && (
-                    <div className="flex items-center justify-center bg-purple-50 border-2 border-purple-200 rounded-xl p-3">
+                    <div className="flex items-center justify-center bg-purple-50 border border-purple-200 rounded-lg p-2">
                       <span className="text-xs font-medium text-purple-700">
                         {`No specific issue needed - assign ${poolNoun}`}
                       </span>
@@ -987,27 +955,27 @@ const CreateTicket = () => {
 
                 {formData.category && formData.subcategory && (
                   <div className="mt-4 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-                    <div className="flex items-center gap-3 text-sm flex-wrap">
+                    <div className="flex items-center gap-2 text-sm flex-wrap">
                       <span className="font-medium text-slate-600">Selected:</span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-700 font-medium">
+                      <Badge className="bg-white border border-slate-200 text-slate-700">
                         {availableCategories[formData.category]?.icon} {formData.category}
-                      </span>
+                      </Badge>
                       <span className="text-slate-400">→</span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-white rounded-lg border border-slate-200 text-slate-700 font-medium">
+                      <Badge className="bg-white border border-slate-200 text-slate-700">
                         {formData.subcategory}
-                      </span>
+                      </Badge>
                       {formData.subItem && !isSpecialSubcategory && (
                         <>
                           <span className="text-slate-400">→</span>
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-blue-100 rounded-lg border border-blue-200 text-blue-700 font-medium">
+                          <Badge className="bg-blue-100 border border-blue-200 text-blue-700">
                             {formData.subItem}
-                          </span>
+                          </Badge>
                         </>
                       )}
                       {isSpecialSubcategory && (
-                        <span className="text-[8px] font-black text-purple-600 bg-purple-100 px-2 py-1 rounded-lg">
+                        <Badge className="text-purple-600 bg-purple-100">
                           {formData.subcategory}
-                        </span>
+                        </Badge>
                       )}
                     </div>
                   </div>
@@ -1016,10 +984,10 @@ const CreateTicket = () => {
 
               {/* ✅ Only show person dropdown if NOT client */}
               {shouldShowPersonDropdown() && !isSpecialSubcategory && !isClient && (
-                <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="min-w-0 bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
                     <Users size={18} className="text-blue-600" />
-                    <label className="text-sm font-semibold text-slate-700">
+                    <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-slate-700">
                       {/* e.g. "Assign to Development Team Member *" or, for Sales on Feasibility, "Assign to Project Manager *" */}
                       Assign to {assigneeFieldLabel} <span className="text-red-500">*</span>
                     </label>
@@ -1038,7 +1006,7 @@ const CreateTicket = () => {
                       setFormData(prev => ({ ...prev, assignedTo: e.target.value }));
                     }}
                     disabled={departmentUsers.length === 0 || loadingDepartmentUsers}
-                    className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="input cursor-pointer"
                   >
                     <option value="">
                       {loadingDepartmentUsers 
@@ -1056,14 +1024,14 @@ const CreateTicket = () => {
                   
                   {selectedPerson && departmentUsers.length > 0 && (
                     <div className="mt-3 p-3 bg-white rounded-lg border border-blue-200 flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
+                      <div className="w-8 h-8 shrink-0 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
                         {getSelectedPersonName()?.charAt(0) || '?'}
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-700">
                           {getSelectedPersonName() || 'Selected'}
                         </p>
-                        <p className="text-[10px] text-slate-500">
+                        <p className="meta">
                           {getSelectedPersonRole() || ''} • Will be assigned to this ticket
                         </p>
                       </div>
@@ -1078,17 +1046,17 @@ const CreateTicket = () => {
                     </div>
                   )}
                   
-                  <p className="text-[8px] text-slate-400 mt-2">
+                  <p className="meta mt-2">
                     This ticket will be assigned to the selected {assigneeNoun}
                   </p>
                 </div>
               )}
 
               {isSpecialSubcategory && (
-                <div className="bg-purple-50/80 rounded-xl p-5 border-2 border-purple-200/50">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="bg-purple-50/80 rounded-xl p-4 sm:p-5 border border-purple-200">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
                     <UserCheck size={18} className="text-purple-600" />
-                    <label className="text-sm font-semibold text-purple-700">
+                    <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-purple-700">
                       Assign {poolTitle} <span className="text-red-500">*</span>
                     </label>
                   </div>
@@ -1097,7 +1065,7 @@ const CreateTicket = () => {
                     required
                     value={formData.assignedTo}
                     onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                    className="w-full px-4 py-2.5 bg-white border-2 border-purple-200 rounded-xl focus:ring-2 focus:ring-purple-500/20 focus:border-purple-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
+                    className="input border-purple-200 focus:border-purple-500 focus:ring-purple-100 cursor-pointer"
                   >
                     <option value="">
                       Select a {poolNoun} for {formData.subcategory.toLowerCase()} request
@@ -1123,18 +1091,18 @@ const CreateTicket = () => {
                     </div>
                   )}
                   
-                  <p className="text-[8px] text-purple-500 mt-2">
+                  <p className="text-xs text-purple-600 mt-2">
                     Select a {poolNoun} who will handle this {formData.subcategory.toLowerCase()} request
                   </p>
                 </div>
               )}
 
               {!isSpecialSubcategory && canSeeProjectFeed && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-                    <div className="flex items-center gap-2 mb-3">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                  <div className="min-w-0 bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                       <Briefcase size={18} className="text-blue-600" />
-                      <label className="text-sm font-semibold text-slate-700">
+                      <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-slate-700">
                         Project {isClient ? <span className="text-red-500">*</span> : <span className="font-normal text-slate-400">(Optional)</span>}
                       </label>
                     </div>
@@ -1146,7 +1114,7 @@ const CreateTicket = () => {
                         setFormData({ ...formData, projectId: e.target.value, feedId: '' });
                         fetchFeeds(e.target.value);
                       }}
-                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer"
+                      className="input cursor-pointer"
                     >
                       <option value="">Select a project {isClient ? '*' : '(optional)'}</option>
                       {filteredProjects.length === 0 && isClient ? (
@@ -1171,14 +1139,14 @@ const CreateTicket = () => {
                     )}
                   </div>
 
-                  <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-                    <div className="flex items-center gap-2 mb-3">
+                  <div className="min-w-0 bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200">
+                    <div className="flex flex-wrap items-center gap-2 mb-3">
                       <Hash size={18} className="text-blue-600" />
-                      <label className="text-sm font-semibold text-slate-700">
+                      <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-slate-700">
                         Related Feed <span className="font-normal text-slate-400">(Optional)</span>
                       </label>
                       {formData.projectId && (
-                        <span className="text-[8px] text-slate-400 ml-auto">
+                        <span className="meta ml-auto">
                           {feeds.length > 0 ? `${feeds.length} option(s)` : 'No feeds available'}
                         </span>
                       )}
@@ -1188,7 +1156,7 @@ const CreateTicket = () => {
                       value={formData.feedId}
                       onChange={(e) => setFormData({ ...formData, feedId: e.target.value })}
                       disabled={!formData.projectId}
-                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-slate-700 text-sm cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="input cursor-pointer"
                     >
                       <option value="">Select a feed (optional)</option>
                       {feeds.length === 0 ? (
@@ -1208,9 +1176,9 @@ const CreateTicket = () => {
                     
                     {formData.feedId === 'general' && (
                       <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200 animate-in fade-in duration-200">
-                        <p className="text-[10px] text-blue-700 flex items-center gap-1.5">
-                          <Info size={12} className="text-blue-500" />
-                          This ticket will apply to the <strong>entire project</strong>, not a specific feed.
+                        <p className="text-xs text-blue-700 flex items-start gap-1.5">
+                          <Info size={14} className="text-blue-500 shrink-0" />
+                          <span>This ticket will apply to the <strong>entire project</strong>, not a specific feed.</span>
                         </p>
                       </div>
                     )}
@@ -1220,7 +1188,7 @@ const CreateTicket = () => {
 
               {isSpecialSubcategory && (
                 <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 flex items-center gap-3">
-                  <div className="p-2 bg-purple-200 rounded-lg">
+                  <div className="p-2 bg-purple-200 rounded-lg shrink-0">
                     <Building2 size={16} className="text-purple-700" />
                   </div>
                   <div>
@@ -1235,7 +1203,7 @@ const CreateTicket = () => {
               {formData.ticketType && (
                 <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
                   <div className="flex items-center gap-3">
-                    <div className="p-1.5 bg-green-200 rounded-lg">
+                    <div className="p-2 bg-green-200 rounded-lg shrink-0">
                       <Tag size={16} className="text-green-700" />
                     </div>
                     <div>
@@ -1250,13 +1218,13 @@ const CreateTicket = () => {
                   WATCHERS SECTION WITH SEARCH
                   ============================================ */}
               {shouldShowWatchers() && (
-                <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-                  <div className="flex items-center gap-2 mb-3">
+                <div className="min-w-0 bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200">
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
                     <UserPlus size={18} className="text-blue-600" />
-                    <label className="text-sm font-semibold text-slate-700">
+                    <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-slate-700">
                       Watchers <span className="font-normal text-slate-400">(Optional - users who will follow this ticket)</span>
                     </label>
-                    <span className="text-[8px] text-slate-400 ml-auto">
+                    <span className="meta ml-auto">
                       {selectedWatchers.length} watcher{selectedWatchers.length !== 1 ? 's' : ''}
                     </span>
                   </div>
@@ -1267,16 +1235,18 @@ const CreateTicket = () => {
                       {selectedWatchers.map(watcherId => {
                         const watcher = allUsers.find(u => u._id === watcherId);
                         return (
-                          <span key={watcherId} className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-[10px] font-bold">
-                            <UserCheck size={12} />
-                            {watcher?.name || 'Unknown'}
-                            <span className="text-[8px] text-blue-500">({watcher?.role || 'User'})</span>
+                          <span key={watcherId} className="badge max-md:py-0 max-md:pr-0 bg-blue-100 text-blue-700">
+                            <UserCheck size={14} className="shrink-0" />
+                            <span className="min-w-0">
+                              {watcher?.name || 'Unknown'} <span className="font-normal text-blue-600">({watcher?.role || 'User'})</span>
+                            </span>
                             <button
                               type="button"
                               onClick={() => removeWatcher(watcherId)}
-                              className="hover:text-red-500 transition-colors ml-0.5"
+                              aria-label={`Remove ${watcher?.name || 'watcher'}`}
+                              className="flex items-center justify-center shrink-0 hover:text-red-500 transition-colors"
                             >
-                              <X size={12} />
+                              <X size={14} />
                             </button>
                           </span>
                         );
@@ -1289,10 +1259,10 @@ const CreateTicket = () => {
                     <button
                       type="button"
                       onClick={() => setShowWatcherDropdown(!showWatcherDropdown)}
-                      className="w-full px-4 py-2.5 bg-white border-2 border-slate-200 rounded-xl text-left text-sm text-slate-500 hover:border-blue-400 transition-all flex items-center justify-between"
+                      className="input flex items-center justify-between gap-2 text-left !text-slate-500 hover:border-blue-400"
                     >
-                      <span className="flex items-center gap-2">
-                        <Users size={16} className="text-slate-400" />
+                      <span className="flex items-center gap-2 min-w-0">
+                        <Users size={16} className="text-slate-400 shrink-0" />
                         {selectedWatchers.length > 0 
                           ? `${selectedWatchers.length} watcher(s) selected` 
                           : 'Add watchers to this ticket...'}
@@ -1301,9 +1271,9 @@ const CreateTicket = () => {
                     </button>
                     
                     {showWatcherDropdown && (
-                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-60 overflow-y-auto">
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-72 overflow-y-auto">
                         {/* Search Bar inside dropdown */}
-                        <div className="sticky top-0 bg-white p-2 border-b border-slate-100">
+                        <div className="sticky top-0 z-10 bg-white p-2 border-b border-slate-100">
                           <div className="relative">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                             <input
@@ -1312,20 +1282,21 @@ const CreateTicket = () => {
                               placeholder="Search by name, email, or role..."
                               value={watcherSearchTerm}
                               onChange={(e) => setWatcherSearchTerm(e.target.value)}
-                              className="w-full pl-9 pr-3 py-1.5 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+                              className="input pl-9 pr-10 bg-slate-50"
                               onClick={(e) => e.stopPropagation()}
                             />
                             {watcherSearchTerm && (
                               <button
                                 type="button"
                                 onClick={() => setWatcherSearchTerm('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                                aria-label="Clear search"
+                                className="btn-icon absolute right-0 md:right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
                               >
-                                <X size={12} />
+                                <X size={16} />
                               </button>
                             )}
                           </div>
-                          <p className="text-[8px] text-slate-400 mt-1 px-1">
+                          <p className="meta mt-1 px-1">
                             {filteredWatcherUsers.length} user{filteredWatcherUsers.length !== 1 ? 's' : ''} found
                           </p>
                         </div>
@@ -1354,13 +1325,13 @@ const CreateTicket = () => {
                                 className={`flex items-center justify-between p-3 cursor-pointer transition-all hover:bg-blue-50 border-b border-slate-50 last:border-0 ${isSelected ? 'bg-blue-50' : ''}`}
                               >
                                 <div className="flex items-center gap-3 min-w-0">
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
                                     {user.name?.charAt(0) || '?'}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-bold text-slate-800 truncate">{user.name}</p>
-                                    <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
-                                    <p className="text-[8px] text-slate-400">{user.role}</p>
+                                    <p className="meta truncate">{user.email}</p>
+                                    <p className="meta truncate">{user.role}</p>
                                   </div>
                                 </div>
                                 <div className="flex-shrink-0 ml-2">
@@ -1374,19 +1345,19 @@ const CreateTicket = () => {
                     )}
                   </div>
                   
-                  <p className="text-[8px] text-slate-400 mt-2">
+                  <p className="meta mt-2">
                     Watchers will receive notifications and can view this ticket in their bucket
                   </p>
                 </div>
               )}
 
-              <div className="bg-slate-50/80 rounded-xl p-5 border-2 border-slate-200/50">
-                <div className="flex items-center gap-2 mb-3">
+              <div className="min-w-0 bg-slate-50/80 rounded-xl p-4 sm:p-5 border border-slate-200">
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   <Paperclip size={18} className="text-blue-600" />
-                  <label className="text-sm font-semibold text-slate-700">
+                  <label className="min-w-0 flex-1 basis-40 text-sm font-semibold text-slate-700">
                     Attachments <span className="font-normal text-slate-400">(Optional)</span>
                   </label>
-                  <span className="text-[8px] text-slate-400 ml-auto">
+                  <span className="meta ml-auto">
                     Max: 5MB per image, 50MB per file
                   </span>
                 </div>
@@ -1394,30 +1365,30 @@ const CreateTicket = () => {
                 {filePreviews.length > 0 && (
                   <div className="mb-3 flex flex-wrap gap-2 p-3 bg-white rounded-lg border border-slate-200">
                     {filePreviews.map((preview, idx) => (
-                      <div key={preview.id || idx} className="relative group">
-                        <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                          <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500">
-                            {preview.file.type?.startsWith('image/') || isImageFile(preview.name) ? (
-                              <img 
-                                src={preview.preview || URL.createObjectURL(preview.file)} 
-                                alt={preview.name}
-                                className="w-full h-full object-cover rounded-lg"
-                              />
-                            ) : (
-                              getFileIcon(preview.file)
-                            )}
-                          </div>
-                          <div className="min-w-0 max-w-[120px]">
-                            <p className="text-[10px] font-semibold text-slate-700 truncate">{preview.name}</p>
-                            <p className="text-[8px] text-slate-400">{formatFileSize(preview.size)}</p>
-                          </div>
+                      <div key={preview.id || idx} className="flex items-center gap-2 pl-2 py-1 bg-white rounded-lg border border-slate-200 shadow-sm max-w-full min-w-0">
+                        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-500 overflow-hidden">
+                          {isImageFile(preview.name) ? (
+                            <img
+                              src={preview.preview || URL.createObjectURL(preview.file)}
+                              alt={preview.name}
+                              className="w-full h-full object-cover rounded-lg"
+                            />
+                          ) : (
+                            getFileIcon(preview.file)
+                          )}
+                        </div>
+                        <div className="min-w-0 max-w-[160px]">
+                          <p className="text-xs font-semibold text-slate-700 truncate" title={preview.name}>{preview.name}</p>
+                          <p className="meta">{formatFileSize(preview.size)}</p>
                         </div>
                         <button
                           type="button"
                           onClick={() => removeFile(idx)}
-                          className="absolute -top-1 -right-1 p-0.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-md opacity-0 group-hover:opacity-100"
+                          aria-label={`Remove ${preview.name}`}
+                          title="Remove file"
+                          className="btn-icon text-red-500 hover:bg-red-50 hover:text-red-600"
                         >
-                          <X size={10} />
+                          <X size={16} />
                         </button>
                       </div>
                     ))}
@@ -1425,7 +1396,7 @@ const CreateTicket = () => {
                 )}
                 
                 <div
-                  className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-all ${
+                  className={`relative border-2 border-dashed rounded-xl p-4 sm:p-6 text-center transition-all ${
                     isDragging 
                       ? 'border-blue-500 bg-blue-50/80' 
                       : 'border-slate-300 bg-white hover:border-blue-400'
@@ -1447,10 +1418,10 @@ const CreateTicket = () => {
                     <p className="text-sm font-medium text-slate-600">
                       {isDragging ? 'Drop files here...' : 'Drag & drop files here, or click to select'}
                     </p>
-                    <p className="text-[8px] text-slate-400">
+                    <p className="meta">
                       Supports images, documents, archives, code, and media files
                     </p>
-                    <p className="text-[7px] text-slate-300">
+                    <p className="text-xs text-slate-400">
                       {filePreviews.length} file(s) selected
                     </p>
                   </div>
@@ -1458,10 +1429,10 @@ const CreateTicket = () => {
               </div>
 
               <div className="pt-4 border-t border-slate-200">
-                <button
+                <Button
                   type="submit"
                   disabled={loading || (isSpecialSubcategory && !formData.assignedTo)}
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold rounded-xl transition-all shadow-lg shadow-blue-200/50 hover:shadow-xl hover:shadow-blue-300/50 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full !h-auto min-h-11 py-2 !whitespace-normal flex-wrap !font-semibold shadow-lg shadow-blue-200/50"
                 >
                   {loading ? (
                     <>
@@ -1476,7 +1447,7 @@ const CreateTicket = () => {
                       {selectedWatchers.length > 0 && ` 👁 ${selectedWatchers.length} watcher${selectedWatchers.length > 1 ? 's' : ''}`}
                     </>
                   )}
-                </button>
+                </Button>
                 
                 {/* ✅ Client-specific messages */}
                 {isClient && !formData.projectId && (

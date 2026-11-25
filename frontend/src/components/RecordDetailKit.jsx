@@ -69,10 +69,10 @@ export function useSalesUsers() {
 export function DetailShell({
   onBack, backLabel, icon: Icon, title, subtitle, badges,
   tags, onAddTags, onRemoveTag, canEdit, editing, saving, onEdit, onCancel, onSave, extraActions,
-  isCollapsed, children,
+  children,
 }) {
   return (
-    <div className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       <button
         onClick={onBack}
         className="flex items-center gap-2 text-sm font-semibold text-slate-500 hover:text-slate-800 mb-4"
@@ -80,8 +80,8 @@ export function DetailShell({
         <ArrowLeft size={16} /> {backLabel}
       </button>
 
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm p-5 mb-5">
-        <div className="flex flex-col md:flex-row md:items-start gap-4">
+      <div className="card mb-5">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-3 sm:gap-4">
           <div className="flex items-start gap-4 flex-1 min-w-0">
             {Icon && (
               <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
@@ -89,7 +89,7 @@ export function DetailShell({
               </div>
             )}
             <div className="min-w-0">
-              <h1 className="text-2xl font-black text-slate-800 break-words">{title}</h1>
+              <h1 className="page-title break-words">{title}</h1>
               {subtitle && <div className="text-sm text-slate-500 mt-0.5">{subtitle}</div>}
               {badges && <div className="flex flex-wrap items-center gap-2 mt-2">{badges}</div>}
 
@@ -99,21 +99,21 @@ export function DetailShell({
                 {onAddTags && (
                   <button
                     onClick={onAddTags}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-full border border-dashed border-slate-300 text-[11px] font-bold text-slate-500 hover:border-blue-400 hover:text-blue-600"
+                    className="btn btn-sm border border-dashed border-slate-300 text-slate-500 hover:border-blue-400 hover:text-blue-600 rounded-full"
                   >
-                    <TagIcon size={11} /> Add Tags
+                    <TagIcon size={12} /> Add Tags
                   </button>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 lg:shrink-0">
             {extraActions}
             {canEdit && !editing && (
               <button
                 onClick={onEdit}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 shadow-sm"
+                className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
               >
                 <Pencil size={14} /> Edit
               </button>
@@ -123,14 +123,14 @@ export function DetailShell({
                 <button
                   onClick={onCancel}
                   disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-semibold hover:bg-slate-50 disabled:opacity-50"
+                  className="btn btn-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   <X size={14} /> Cancel
                 </button>
                 <button
                   onClick={onSave}
                   disabled={saving}
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-blue-600 text-white text-sm font-bold hover:bg-blue-700 disabled:opacity-60 shadow-sm"
+                  className="btn btn-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60 shadow-sm"
                 >
                   {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save
                 </button>
@@ -148,11 +148,11 @@ export function DetailShell({
 export function DetailSection({ title, right, children, className = '' }) {
   return (
     <section className={`bg-white border border-slate-200 rounded-xl shadow-sm mb-5 ${className}`}>
-      <div className="flex items-center justify-between px-5 pt-4 pb-2">
-        <h2 className="text-sm font-black uppercase tracking-wider text-slate-600">{title}</h2>
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 sm:px-5 pt-4 pb-2">
+        <h2 className="section-title text-slate-600">{title}</h2>
         {right}
       </div>
-      <div className="px-5 pb-5">{children}</div>
+      <div className="px-4 sm:px-5 pb-4 sm:pb-5">{children}</div>
     </section>
   );
 }
@@ -163,8 +163,7 @@ export function DetailSection({ title, right, children, className = '' }) {
 //   type: text | email | phone | url | number | date | select | textarea | checkbox
 //   options (select): ['A','B'] or [{ value, label }]
 // ============================================
-const inputCls =
-  'w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition';
+const inputCls = 'input';
 
 const optList = (options) => (options || []).map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
 
@@ -178,7 +177,7 @@ function ViewValue({ field, value, values }) {
   if (field.type === 'url') {
     return (
       <a href={withHttp(value)} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline break-all inline-flex items-center gap-1">
-        {value} <ExternalLink size={11} />
+        {value} <ExternalLink size={12} />
       </a>
     );
   }
@@ -227,19 +226,19 @@ function EditValue({ field, value, onChange }) {
 
 export function FieldGrid({ fields, values, editing, onChange }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-x-10">
       {fields.map((f) => {
         const editable = editing && !f.readOnly;
         return (
           <div
             key={f.key}
-            className={`grid grid-cols-[150px_1fr] items-start gap-3 py-2.5 border-b border-slate-100 ${f.wide ? 'md:col-span-2' : ''}`}
+            className={`grid grid-cols-1 sm:grid-cols-[150px_1fr] items-start gap-x-3 gap-y-1 py-2.5 border-b border-slate-100 ${f.wide ? 'xl:col-span-2' : ''}`}
           >
-            <span className="text-[13px] text-slate-500 pt-2 leading-tight">
+            <span className="text-xs sm:text-sm text-slate-500 sm:pt-2 leading-tight">
               {f.label}
               {editable && f.required && <span className="text-red-500 ml-0.5">*</span>}
             </span>
-            <div className={`text-sm font-medium text-slate-800 min-w-0 ${editable ? '' : 'pt-2'}`}>
+            <div className={`text-sm font-medium text-slate-800 min-w-0 ${editable ? '' : 'sm:pt-2'}`}>
               {editable
                 ? <EditValue field={f} value={values[f.key]} onChange={(v) => onChange(f.key, v)} />
                 : <ViewValue field={f} value={values[f.key]} values={values} />}
@@ -273,12 +272,12 @@ export const customFieldDefs = (defs) =>
 export function RelatedTable({ columns, rows, onRowClick, empty = 'Nothing here yet.' }) {
   if (!rows.length) return <p className="text-sm text-slate-400 py-3">{empty}</p>;
   return (
-    <div className="overflow-x-auto border border-slate-200 rounded-lg">
-      <table className="w-full text-left text-sm">
+    <div className="table-scroll table-sticky-first overflow-x-auto border border-slate-200 rounded-lg">
+      <table className="w-full text-left text-sm min-w-[480px]">
         <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
             {columns.map((c) => (
-              <th key={c.key} className="px-4 py-2.5 text-[10px] font-black uppercase tracking-wider text-slate-500 whitespace-nowrap">
+              <th key={c.key} className="th">
                 {c.label}
               </th>
             ))}
@@ -292,7 +291,7 @@ export function RelatedTable({ columns, rows, onRowClick, empty = 'Nothing here 
               className={onRowClick ? 'hover:bg-blue-50/50 cursor-pointer' : ''}
             >
               {columns.map((c) => (
-                <td key={c.key} className="px-4 py-2.5 text-slate-700">{c.render ? c.render(r) : r[c.key] ?? '—'}</td>
+                <td key={c.key} className="td">{c.render ? c.render(r) : r[c.key] ?? '—'}</td>
               ))}
             </tr>
           ))}
@@ -302,9 +301,9 @@ export function RelatedTable({ columns, rows, onRowClick, empty = 'Nothing here 
   );
 }
 
-export function DetailLoading({ isCollapsed, message = 'Loading...' }) {
+export function DetailLoading({ message = 'Loading...' }) {
   return (
-    <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50 flex items-center justify-center">
       <div className="flex flex-col items-center gap-3 text-slate-400">
         <Loader2 size={30} className="animate-spin text-blue-600" />
         <span className="text-sm font-semibold">{message}</span>

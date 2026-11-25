@@ -395,6 +395,8 @@ if __name__ == "__main__":
 });
 
 /**
+ * @deprecated No longer used by the UI: feed progress now comes live from FeedStatus
+ *             (GET /api/feeds/live-progress). Kept so the existing completionHistory data stays valid.
  * @route   POST /api/dev/complete-feed
  * @desc    Mark a feed as completed by the developer for today
  * @access  Private (Developer)

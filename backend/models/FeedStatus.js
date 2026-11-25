@@ -2,23 +2,22 @@
 const mongoose = require('mongoose');
 
 // Get the feed status database URI from environment
-const FEED_STATUS_DB_URI = process.env.FEED_STATUS_MONGO_URI || process.env.CLIENT_FEED_DB_URI;
+const FEED_STATUS_DB_URI = process.env.FEED_STATUS_MONGO_URI || process.env.MONGO_URI;
 
-// Create a separate connection for feed status data
+// Use separate connection ONLY when FEED_STATUS_MONGO_URI is set and different from MONGO_URI
 let feedStatusConnection;
 
-if (FEED_STATUS_DB_URI) {
-  feedStatusConnection = mongoose.createConnection(FEED_STATUS_DB_URI);
+if (process.env.FEED_STATUS_MONGO_URI && process.env.FEED_STATUS_MONGO_URI !== process.env.MONGO_URI) {
+  feedStatusConnection = mongoose.createConnection(process.env.FEED_STATUS_MONGO_URI);
 
   feedStatusConnection.on('connected', () => {
-    console.log('✅ Connected to Feed Status Database:', FEED_STATUS_DB_URI);
+    console.log('✅ Connected to Feed Status Database (separate):', process.env.FEED_STATUS_MONGO_URI);
   });
 
   feedStatusConnection.on('error', (err) => {
     console.error('❌ Feed Status Database connection error:', err);
   });
 } else {
-  console.warn('⚠️ FEED_STATUS_MONGO_URI not found, using main connection for FeedStatus');
   feedStatusConnection = mongoose;
 }
 
@@ -215,7 +214,7 @@ feedStatusSchema.statics.getProjectFeedsWithFileInfo = async function(project, d
 };
 
 // Create the model on the appropriate connection
-const FeedStatus = feedStatusConnection.model('FeedStatus', feedStatusSchema);
+const FeedStatus = feedStatusConnection.models.FeedStatus || feedStatusConnection.model('FeedStatus', feedStatusSchema);
 
 // Ensure collection exists when connection is ready
 if (feedStatusConnection && feedStatusConnection !== mongoose) {
@@ -232,7 +231,7 @@ if (feedStatusConnection && feedStatusConnection !== mongoose) {
   });
 } else {
   // Main connection - wait for it to be ready
-  mongoose.connection.once('open', async () => {
+  const verifyCollection = async () => {
     try {
       await FeedStatus.createCollection();
       console.log('✅ FeedStatus collection verified on main connection');
@@ -241,7 +240,13 @@ if (feedStatusConnection && feedStatusConnection !== mongoose) {
         console.error('⚠️ FeedStatus collection creation warning:', err.message);
       }
     }
-  });
+  };
+
+  if (mongoose.connection.readyState === 1) {
+    verifyCollection();
+  } else {
+    mongoose.connection.once('open', verifyCollection);
+  }
 }
 
 module.exports = FeedStatus;

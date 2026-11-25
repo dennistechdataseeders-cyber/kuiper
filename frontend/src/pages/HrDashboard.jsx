@@ -23,7 +23,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { useSidebar } from '../context/SidebarContext';
 import {
   Users, UserCheck, UserX, Clock, Calendar, FileText, CheckCircle, XCircle,
   AlertCircle, TrendingUp, Building2, Search, ChevronDown, ChevronUp,
@@ -42,7 +41,6 @@ import { isPMRole } from '../utils/roles';
 // HrDashboard
 // ============================================
 const HrDashboard = () => {
-  const { isCollapsed } = useSidebar();
   const navigate = useNavigate();
   const token = localStorage.getItem('token');
 
@@ -689,9 +687,7 @@ const HrDashboard = () => {
   if (loading) {
     return (
       <div
-        className={`min-h-screen bg-slate-50 flex items-center justify-center ${
-          isCollapsed ? 'ml-20' : 'ml-64'
-        }`}
+        className="page bg-slate-50 flex items-center justify-center"
       >
         <div className="text-center">
           <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
@@ -714,94 +710,92 @@ const HrDashboard = () => {
 
   return (
     <div
-      className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
-        isCollapsed ? 'ml-20' : 'ml-64'
-      }`}
+      className="page bg-slate-50"
     >
       {/* Header */}
-      <div className="mb-8">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+      <div className="mb-4 sm:mb-6">
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3 sm:gap-4">
           <div>
-            <h1 className="text-3xl font-black bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+            <h1 className="page-title">
               HR Dashboard
             </h1>
-            <p className="text-slate-500 mt-1">
+            <p className="text-sm text-slate-500 mt-1">
               Manage employee attendance, leaves, and corrections
             </p>
           </div>
-          <div className="flex flex-col items-end gap-3">
+          <div className="flex flex-col items-start xl:items-end gap-3 xl:shrink-0">
             <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl shadow-sm border border-slate-200">
               <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-[9px] font-black text-slate-500 uppercase">
+              <span className="text-xs font-semibold text-slate-500 uppercase">
                 Live
               </span>
             </div>
-            <div className="sticky top-12 w-auto bg-white rounded-xl border border-slate-200 shadow-lg p-4">
-              <div className="flex items-center gap-4 flex-wrap">
+            <div className="card w-full xl:w-auto">
+              <div className="grid grid-cols-2 sm:grid-cols-3 xl:flex xl:items-center gap-3">
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                  <span className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
                     Attendance
                   </span>
-                  <span className="text-base font-black text-blue-600">
+                  <span className="text-base font-bold text-blue-600">
                     {stats.attendanceRate}%
                   </span>
                 </div>
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="hidden xl:block w-px h-8 bg-slate-200" />
                 <div className="flex items-center gap-2">
                   <Users size={15} className="text-blue-600" />
                   <div>
-                    <span className="text-[10px] font-bold text-blue-700 block leading-none">
+                    <span className="text-xs font-semibold text-blue-700 block leading-none">
                       Total
                     </span>
-                    <span className="text-sm font-black text-blue-700 block leading-tight">
+                    <span className="text-sm font-semibold text-blue-700 block leading-tight">
                       {stats.totalEmployees}
                     </span>
                   </div>
                 </div>
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="hidden xl:block w-px h-8 bg-slate-200" />
                 <div className="flex items-center gap-2">
                   <UserCheck size={15} className="text-emerald-600" />
                   <div>
-                    <span className="text-[10px] font-bold text-emerald-700 block leading-none">
+                    <span className="text-xs font-semibold text-emerald-700 block leading-none">
                       Present
                     </span>
-                    <span className="text-sm font-black text-emerald-700 block leading-tight">
+                    <span className="text-sm font-semibold text-emerald-700 block leading-tight">
                       {presentCount}
                     </span>
                   </div>
                 </div>
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="hidden xl:block w-px h-8 bg-slate-200" />
                 <div className="flex items-center gap-2">
                   <Clock size={15} className="text-amber-600" />
                   <div>
-                    <span className="text-[10px] font-bold text-amber-700 block leading-none">
+                    <span className="text-xs font-semibold text-amber-700 block leading-none">
                       Late
                     </span>
-                    <span className="text-sm font-black text-amber-700 block leading-tight">
+                    <span className="text-sm font-semibold text-amber-700 block leading-tight">
                       {lateCount}
                     </span>
                   </div>
                 </div>
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="hidden xl:block w-px h-8 bg-slate-200" />
                 <div className="flex items-center gap-2">
                   <UserX size={15} className="text-red-600" />
                   <div>
-                    <span className="text-[10px] font-bold text-red-700 block leading-none">
+                    <span className="text-xs font-semibold text-red-700 block leading-none">
                       Absent
                     </span>
-                    <span className="text-sm font-black text-red-700 block leading-tight">
+                    <span className="text-sm font-semibold text-red-700 block leading-tight">
                       {absentCount}
                     </span>
                   </div>
                 </div>
-                <div className="w-px h-8 bg-slate-200" />
+                <div className="hidden xl:block w-px h-8 bg-slate-200" />
                 <div className="flex items-center gap-2">
                   <Calendar size={15} className="text-purple-600" />
                   <div>
-                    <span className="text-[10px] font-bold text-purple-700 block leading-none">
+                    <span className="text-xs font-semibold text-purple-700 block leading-none">
                       On Leave
                     </span>
-                    <span className="text-sm font-black text-purple-700 block leading-tight">
+                    <span className="text-sm font-semibold text-purple-700 block leading-tight">
                       {onLeaveCount}
                     </span>
                   </div>
@@ -813,7 +807,7 @@ const HrDashboard = () => {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-1 mb-6 flex gap-1 overflow-x-auto">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-1 flex gap-1 overflow-x-auto mb-4 sm:mb-6">
         {[
           { id: 'dashboard', icon: <BarChart3 size={14} />, label: 'Dashboard' },
           {
@@ -839,7 +833,7 @@ const HrDashboard = () => {
               setSelectedTab(tab.id);
               if (tab.id === 'probation') fetchProbationEmployees();
             }}
-            className={`flex-1 py-2.5 rounded-lg text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap flex items-center justify-center gap-2 ${
+            className={`btn btn-md flex-1 ${
               selectedTab === tab.id
                 ? 'bg-blue-600 text-white shadow-md'
                 : 'text-slate-500 hover:bg-slate-50'
@@ -852,11 +846,11 @@ const HrDashboard = () => {
 
       {/* Dashboard Tab */}
       {selectedTab === 'dashboard' && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h3 className="text-sm font-black text-slate-700 mb-4 flex items-center gap-2">
+        <div className="card">
+          <h3 className="section-title mb-4 flex items-center gap-2">
             <Users size={16} className="text-blue-600" /> Today's Overview
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
             {[
               {
                 key: 'present',
@@ -912,11 +906,11 @@ const HrDashboard = () => {
                     {key === 'onLeave' && (
                       <Calendar size={14} className={`text-${color}-600`} />
                     )}
-                    <span className={`text-xs font-black text-${color}-700`}>
+                    <span className={`text-xs font-bold text-${color}-700`}>
                       {label}
                     </span>
                   </div>
-                  <span className={`text-sm font-black text-${color}-700`}>
+                  <span className={`text-sm font-bold text-${color}-700`}>
                     {count}
                   </span>
                 </div>
@@ -929,7 +923,7 @@ const HrDashboard = () => {
                       />
                     </div>
                   ) : data.length === 0 ? (
-                    <p className="text-center text-[11px] text-slate-400 py-6">
+                    <p className="text-center text-xs text-slate-400 py-6">
                       No employees
                     </p>
                   ) : (
@@ -940,7 +934,7 @@ const HrDashboard = () => {
                       >
                         <span className="truncate">{emp.name}</span>
                         {key === 'late' && (
-                          <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded flex-shrink-0">
+                          <span className="badge text-amber-600 bg-amber-50 flex-shrink-0">
                             {emp.lateMinutes ? `+${emp.lateMinutes}m` : 'Late'}
                           </span>
                         )}
@@ -958,8 +952,8 @@ const HrDashboard = () => {
       {selectedTab === 'leaves' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 basis-56">
                 <Search
                   size={16}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -969,17 +963,17 @@ const HrDashboard = () => {
                   placeholder="Search by employee or leave type..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:border-blue-400"
+                  className="input pl-10"
                 />
               </div>
-              <span className="text-xs font-bold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500">
                 {filteredLeaves.length} pending
               </span>
             </div>
           </div>
           {currentLeaves.length === 0 ? (
             <div className="p-12 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
                 <CheckCircle size={28} className="text-slate-300" />
               </div>
               <p className="text-sm font-bold text-slate-500">
@@ -993,9 +987,9 @@ const HrDashboard = () => {
                   key={leave._id}
                   className="p-4 hover:bg-slate-50/50 transition-all"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 basis-56">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
                         {leave.employeeId?.name?.charAt(0) || '?'}
                       </div>
                       <div>
@@ -1019,7 +1013,7 @@ const HrDashboard = () => {
                         setShowLeaveModal(true);
                         setRejectionReason('');
                       }}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition-all flex items-center gap-1"
+                      className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"
                     >
                       <Eye size={12} /> Review
                     </button>
@@ -1037,7 +1031,7 @@ const HrDashboard = () => {
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                  className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronLeft size={14} />
                 </button>
@@ -1046,7 +1040,7 @@ const HrDashboard = () => {
                     setCurrentPage((p) => Math.min(totalLeavePages, p + 1))
                   }
                   disabled={currentPage === totalLeavePages}
-                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                  className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -1060,8 +1054,8 @@ const HrDashboard = () => {
       {selectedTab === 'corrections' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100">
-            <div className="flex items-center gap-4">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 basis-56">
                 <Search
                   size={16}
                   className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
@@ -1071,17 +1065,17 @@ const HrDashboard = () => {
                   placeholder="Search by employee..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg outline-none text-sm focus:border-blue-400"
+                  className="input pl-10"
                 />
               </div>
-              <span className="text-xs font-bold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500">
                 {filteredCorrections.length} pending
               </span>
             </div>
           </div>
           {currentCorrections.length === 0 ? (
             <div className="p-12 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
                 <CheckCircle size={28} className="text-slate-300" />
               </div>
               <p className="text-sm font-bold text-slate-500">
@@ -1095,9 +1089,9 @@ const HrDashboard = () => {
                   key={correction._id}
                   className="p-4 hover:bg-slate-50/50 transition-all"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1 basis-56">
+                      <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm shrink-0">
                         {correction.employeeId?.name?.charAt(0) || '?'}
                       </div>
                       <div>
@@ -1121,7 +1115,7 @@ const HrDashboard = () => {
                         setSelectedCorrection(correction);
                         setShowCorrectionModal(true);
                       }}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 transition-all flex items-center gap-1"
+                      className="btn btn-md bg-purple-600 text-white hover:bg-purple-700"
                     >
                       <Eye size={12} /> Review
                     </button>
@@ -1139,7 +1133,7 @@ const HrDashboard = () => {
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                   disabled={currentPage === 1}
-                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                  className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronLeft size={14} />
                 </button>
@@ -1148,7 +1142,7 @@ const HrDashboard = () => {
                     setCurrentPage((p) => Math.min(totalCorrectionPages, p + 1))
                   }
                   disabled={currentPage === totalCorrectionPages}
-                  className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                  className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronRight size={14} />
                 </button>
@@ -1161,13 +1155,13 @@ const HrDashboard = () => {
       {/* Edit Paid Leaves Tab */}
       {selectedTab === 'editLeaves' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-            <div className="flex items-center gap-2">
+          <div className="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Pencil size={18} className="text-blue-600" />
-              <h3 className="text-sm font-black text-slate-700">
+              <h3 className="section-title">
                 Edit Paid Leave Balances
               </h3>
-              <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+              <span className="badge rounded-full text-slate-400 bg-slate-100">
                 {filteredEditEmployees.length} employees
               </span>
             </div>
@@ -1177,7 +1171,7 @@ const HrDashboard = () => {
                 setEditLeaveCurrentPage(1);
                 fetchAllEmployeesForEdit();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all"
+              className="btn btn-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
             >
               <RefreshCw size={14} /> Refresh
             </button>
@@ -1196,7 +1190,7 @@ const HrDashboard = () => {
                   setEmployeeSearchTerm(e.target.value);
                   setEditLeaveCurrentPage(1);
                 }}
-                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none text-sm focus:border-blue-400 bg-slate-50"
+                className="input pl-10 bg-slate-50"
               />
             </div>
             {employeesForEditLoading ? (
@@ -1210,23 +1204,23 @@ const HrDashboard = () => {
                 <p className="text-xs mt-1">Try adjusting your search</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="table-scroll table-sticky-first overflow-x-auto">
+                <table className="w-full min-w-[600px]">
                   <thead className="bg-slate-50/80 border-b border-slate-200">
                     <tr>
-                      <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase text-slate-500">
+                      <th className="th">
                         Employee
                       </th>
-                      <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase text-slate-500">
+                      <th className="th">
                         Code
                       </th>
-                      <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase text-slate-500">
+                      <th className="th">
                         Role
                       </th>
-                      <th className="px-4 py-2.5 text-left text-[9px] font-black uppercase text-slate-500">
+                      <th className="th">
                         Paid Leave
                       </th>
-                      <th className="px-4 py-2.5 text-right text-[9px] font-black uppercase text-slate-500">
+                      <th className="th text-right">
                         Action
                       </th>
                     </tr>
@@ -1240,29 +1234,29 @@ const HrDashboard = () => {
                           key={emp._id}
                           className="border-b border-slate-100 hover:bg-slate-50/60 transition-all"
                         >
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <div className="flex items-center gap-2">
-                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                              <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold shrink-0">
                                 {emp.name?.charAt(0)}
                               </div>
                               <div>
                                 <p className="text-sm font-bold text-slate-800">
                                   {emp.name}
                                 </p>
-                                <p className="text-[10px] text-slate-500 truncate max-w-[150px]">
+                                <p className="text-xs text-slate-500 truncate max-w-[150px]">
                                   {emp.email}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <span className="text-xs font-mono text-slate-500">
                               {emp.employeeCode || 'N/A'}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <span
-                              className={`inline-flex px-2 py-0.5 rounded-full text-[8px] font-black ${
+                              className={`badge rounded-full ${
                                 emp.role === 'Developer'
                                   ? 'bg-blue-100 text-blue-700'
                                   : emp.role === 'Team Lead'
@@ -1277,23 +1271,23 @@ const HrDashboard = () => {
                               {emp.role || 'N/A'}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="td">
                             <span className="text-sm font-bold text-blue-600">
                               {balance}
                             </span>
-                            <span className="text-[9px] text-slate-400 ml-1">
+                            <span className="text-xs text-slate-400 ml-1">
                               days
                             </span>
                             {emp.isProbationary && (
-                              <span className="ml-2 inline-flex px-1.5 py-0.5 rounded-full text-[8px] font-black bg-amber-100 text-amber-700">
+                              <span className="badge rounded-full ml-2 bg-amber-100 text-amber-700">
                                 Probation
                               </span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-right">
+                          <td className="td text-right">
                             <button
                               onClick={() => openEditLeaveModal(item)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all"
+                              className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700"
                             >
                               <Edit size={12} /> Edit Balance
                             </button>
@@ -1307,7 +1301,7 @@ const HrDashboard = () => {
             )}
             {editTotalPages > 1 && (
               <div className="mt-4 flex justify-between items-center">
-                <span className="text-[9px] text-slate-400">
+                <span className="text-xs text-slate-400">
                   Showing{' '}
                   {editLeaveCurrentPage * editLeaveItemsPerPage -
                     editLeaveItemsPerPage +
@@ -1325,7 +1319,7 @@ const HrDashboard = () => {
                       setEditLeaveCurrentPage((p) => Math.max(1, p - 1))
                     }
                     disabled={editLeaveCurrentPage === 1}
-                    className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                    className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                   >
                     <ChevronLeft size={14} />
                   </button>
@@ -1336,7 +1330,7 @@ const HrDashboard = () => {
                       )
                     }
                     disabled={editLeaveCurrentPage === editTotalPages}
-                    className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50 disabled:opacity-40"
+                    className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                   >
                     <ChevronRight size={14} />
                   </button>
@@ -1350,13 +1344,13 @@ const HrDashboard = () => {
       {/* Probation Tab */}
       {selectedTab === 'probation' && (
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="p-4 border-b border-slate-100 flex justify-between items-center">
-            <div className="flex items-center gap-2">
+          <div className="p-4 border-b border-slate-100 flex flex-wrap justify-between items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               <UserCog size={18} className="text-blue-600" />
-              <h3 className="text-sm font-black text-slate-700">
+              <h3 className="section-title">
                 Probation Management
               </h3>
-              <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+              <span className="badge rounded-full text-slate-400 bg-slate-100">
                 {probationEmployees.filter((e) => e.isProbationary).length} on probation
               </span>
             </div>
@@ -1365,7 +1359,7 @@ const HrDashboard = () => {
                 fetchProbationEmployees();
                 toast.success('Probation data refreshed');
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all"
+              className="btn btn-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
             >
               <RefreshCw size={14} /> Refresh
             </button>
@@ -1380,26 +1374,26 @@ const HrDashboard = () => {
               <p className="text-sm font-medium">No employees found</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
+            <div className="table-scroll table-sticky-first overflow-x-auto">
+              <table className="w-full min-w-[720px]">
                 <thead className="bg-slate-50/80 border-b border-slate-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase text-slate-500">
+                    <th className="th">
                       Employee
                     </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase text-slate-500">
+                    <th className="th">
                       Code
                     </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase text-slate-500">
+                    <th className="th">
                       Joining Date
                     </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase text-slate-500">
+                    <th className="th">
                       Probation Status
                     </th>
-                    <th className="px-4 py-3 text-left text-[10px] font-bold uppercase text-slate-500">
+                    <th className="th">
                       Days Remaining
                     </th>
-                    <th className="px-4 py-3 text-right text-[10px] font-bold uppercase text-slate-500">
+                    <th className="th text-right">
                       Actions
                     </th>
                   </tr>
@@ -1413,9 +1407,9 @@ const HrDashboard = () => {
                         key={emp._id}
                         className="border-b border-slate-100 hover:bg-slate-50/60 transition-all"
                       >
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold shrink-0">
                               {emp.name?.charAt(0)}
                             </div>
                             <span className="text-sm font-bold text-slate-800">
@@ -1423,32 +1417,32 @@ const HrDashboard = () => {
                             </span>
                           </div>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <span className="text-xs font-mono text-slate-500">
                             {emp.employeeCode || 'N/A'}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <span className="text-xs text-slate-600">
                             {emp.dateOfJoining ? formatDate(emp.dateOfJoining) : 'N/A'}
                           </span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="td">
                           <span
-                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold ${status.color}`}
+                            className={`badge rounded-full ${status.color}`}
                           >
                             {status.icon} {status.label}
                           </span>
                           {emp.isProbationary && emp.probationEndDate && (
-                            <span className="text-[8px] text-slate-400 block mt-0.5">
+                            <span className="text-xs text-slate-400 block mt-0.5">
                               Ends: {formatDate(emp.probationEndDate)}
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="td">
                           {emp.isProbationary ? (
                             <span
-                              className={`text-xs font-bold ${
+                              className={`text-xs font-semibold ${
                                 daysRemaining !== null && daysRemaining > 0
                                   ? 'text-amber-700'
                                   : 'text-emerald-700'
@@ -1460,19 +1454,19 @@ const HrDashboard = () => {
                             <span className="text-xs text-slate-400">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right">
+                        <td className="td text-right">
                           <div className="flex items-center justify-end gap-1.5">
                             {emp.isProbationary ? (
                               <>
                                 <button
                                   onClick={() => handleCompleteProbation(emp)}
-                                  className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-[10px] font-bold hover:bg-emerald-700 transition-all"
+                                  className="btn btn-sm bg-emerald-600 text-white hover:bg-emerald-700"
                                 >
                                   Complete
                                 </button>
                                 <button
                                   onClick={() => openProbationModal(emp)}
-                                  className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all"
+                                  className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700"
                                 >
                                   Edit
                                 </button>
@@ -1480,7 +1474,7 @@ const HrDashboard = () => {
                             ) : (
                               <button
                                 onClick={() => openProbationModal(emp)}
-                                className="px-3 py-1.5 bg-amber-600 text-white rounded-lg text-[10px] font-bold hover:bg-amber-700 transition-all"
+                                className="btn btn-sm bg-amber-600 text-white hover:bg-amber-700"
                               >
                                 Start Probation
                               </button>
@@ -1499,11 +1493,11 @@ const HrDashboard = () => {
 
       {/* Leave Review Modal */}
       {showLeaveModal && selectedLeave && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800">
+                <h2 className="section-title">
                   Review Leave Request
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
@@ -1512,15 +1506,15 @@ const HrDashboard = () => {
               </div>
               <button
                 onClick={() => setShowLeaveModal(false)}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="modal-body space-y-4">
               <div className="bg-slate-50 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg">
+                  <div className="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-lg shrink-0">
                     {selectedLeave.employeeId?.name?.charAt(0) || '?'}
                   </div>
                   <div>
@@ -1534,7 +1528,7 @@ const HrDashboard = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       Leave Type
                     </p>
                     <p className="font-bold text-slate-700">
@@ -1542,15 +1536,15 @@ const HrDashboard = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       Status
                     </p>
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">
+                    <span className="badge rounded-full bg-amber-100 text-amber-700">
                       Pending
                     </span>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       From
                     </p>
                     <p className="font-bold text-slate-700">
@@ -1558,7 +1552,7 @@ const HrDashboard = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       To
                     </p>
                     <p className="font-bold text-slate-700">
@@ -1567,13 +1561,13 @@ const HrDashboard = () => {
                   </div>
                 </div>
                 {selectedLeave.isHalfDay && (
-                  <div className="mt-2 text-xs font-bold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg inline-block">
+                  <div className="mt-2 text-xs font-semibold text-blue-600 bg-blue-50 px-2 py-1 rounded-lg inline-block">
                     Half Day
                   </div>
                 )}
                 <LeaveBreakdown leave={selectedLeave} className="mt-3 pt-3 border-t border-slate-200" />
                 <div className="mt-3 pt-3 border-t border-slate-200">
-                  <p className="text-[10px] font-black text-slate-400 uppercase">
+                  <p className="text-xs font-semibold text-slate-400 uppercase">
                     Reason
                   </p>
                   <p className="text-sm text-slate-700 mt-1">
@@ -1585,7 +1579,7 @@ const HrDashboard = () => {
               <LeaveBalanceEditor leave={selectedLeave} />
 
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1">
+                <label className="label block mb-1.5">
                   Rejection Reason (if rejecting)
                 </label>
                 <textarea
@@ -1593,14 +1587,14 @@ const HrDashboard = () => {
                   rows={2}
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
-                  className="w-full p-3 bg-slate-50 rounded-lg border border-slate-200 outline-none text-sm focus:border-red-400 transition-colors"
+                  className="input bg-slate-50"
                 />
               </div>
               <div className="flex gap-3 pt-4 border-t border-slate-100">
                 <button
                   onClick={() => handleRejectLeave(selectedLeave._id)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="btn btn-md flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
                 >
                   {processing ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1612,7 +1606,7 @@ const HrDashboard = () => {
                 <button
                   onClick={() => handleApproveLeave(selectedLeave._id)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="btn btn-md flex-1 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                 >
                   {processing ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1629,11 +1623,11 @@ const HrDashboard = () => {
 
       {/* Correction Review Modal */}
       {showCorrectionModal && selectedCorrection && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="modal-backdrop">
+          <div className="modal-panel max-w-lg">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800">
+                <h2 className="section-title">
                   Review Correction Request
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
@@ -1642,15 +1636,15 @@ const HrDashboard = () => {
               </div>
               <button
                 onClick={() => setShowCorrectionModal(false)}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="modal-body space-y-4">
               <div className="bg-slate-50 rounded-xl p-4">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-lg">
+                  <div className="w-12 h-12 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-lg shrink-0">
                     {selectedCorrection.employeeId?.name?.charAt(0) || '?'}
                   </div>
                   <div>
@@ -1664,7 +1658,7 @@ const HrDashboard = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       Type
                     </p>
                     <p className="font-bold text-slate-700">
@@ -1672,7 +1666,7 @@ const HrDashboard = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       Date
                     </p>
                     <p className="font-bold text-slate-700">
@@ -1680,7 +1674,7 @@ const HrDashboard = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       Expected Time
                     </p>
                     <p className="font-bold text-slate-700">
@@ -1688,16 +1682,16 @@ const HrDashboard = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase">
+                    <p className="text-xs font-semibold text-slate-400 uppercase">
                       Status
                     </p>
-                    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-100 text-amber-700">
+                    <span className="badge rounded-full bg-amber-100 text-amber-700">
                       Pending
                     </span>
                   </div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-200">
-                  <p className="text-[10px] font-black text-slate-400 uppercase">
+                  <p className="text-xs font-semibold text-slate-400 uppercase">
                     Reason
                   </p>
                   <p className="text-sm text-slate-700 mt-1">
@@ -1709,7 +1703,7 @@ const HrDashboard = () => {
                 <button
                   onClick={() => handleRejectCorrection(selectedCorrection._id)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="btn btn-md flex-1 bg-red-600 hover:bg-red-700 text-white disabled:opacity-50"
                 >
                   {processing ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1721,7 +1715,7 @@ const HrDashboard = () => {
                 <button
                   onClick={() => handleApproveCorrection(selectedCorrection._id)}
                   disabled={processing}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="btn btn-md flex-1 bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
                 >
                   {processing ? (
                     <Loader2 size={14} className="animate-spin" />
@@ -1738,9 +1732,9 @@ const HrDashboard = () => {
 
       {/* Employee List Modal */}
       {showEmployeeListModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[250] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+        <div className="modal-backdrop z-[250]">
+          <div className="modal-panel max-w-2xl">
+            <div className="modal-header">
               <div className="flex items-center gap-3">
                 <div className={`p-2 rounded-xl ${getModalColor()}`}>
                   {modalType === 'present' && <UserCheck size={20} />}
@@ -1749,7 +1743,7 @@ const HrDashboard = () => {
                   {modalType === 'onLeave' && <Calendar size={20} />}
                 </div>
                 <div>
-                  <h2 className="text-xl font-black text-slate-800">
+                  <h2 className="section-title">
                     {getModalTitle()}
                   </h2>
                   <p className="text-xs text-slate-500">
@@ -1760,12 +1754,12 @@ const HrDashboard = () => {
               </div>
               <button
                 onClick={() => setShowEmployeeListModal(false)}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <XIcon size={16} />
               </button>
             </div>
-            <div className="p-6">
+            <div className="modal-body">
               <div className="relative mb-4">
                 <Search
                   size={16}
@@ -1779,7 +1773,7 @@ const HrDashboard = () => {
                     setModalSearchTerm(e.target.value);
                     setModalCurrentPage(1);
                   }}
-                  className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl outline-none text-sm focus:border-blue-400 bg-slate-50"
+                  className="input pl-10 bg-slate-50"
                 />
               </div>
               {modalLoading ? (
@@ -1788,7 +1782,7 @@ const HrDashboard = () => {
                 </div>
               ) : modalEmployees.length === 0 ? (
                 <div className="text-center py-12">
-                  <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mx-auto mb-4">
+                  <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center mx-auto mb-4 shrink-0">
                     <Users size={28} className="text-slate-300" />
                   </div>
                   <p className="text-sm font-bold text-slate-500">
@@ -1801,23 +1795,23 @@ const HrDashboard = () => {
                     {modalCurrentEmployees.map((emp) => (
                       <div
                         key={emp._id}
-                        className="p-4 hover:bg-slate-50/60 transition-all flex items-center justify-between"
+                        className="py-3 sm:px-2 hover:bg-slate-50/60 transition-all flex flex-wrap items-center justify-between gap-3"
                       >
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm">
+                        <div className="flex items-center gap-3 min-w-0 flex-1 basis-56">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white font-bold text-sm shrink-0">
                             {emp.name?.charAt(0) || '?'}
                           </div>
                           <div>
                             <p className="font-bold text-slate-800">{emp.name}</p>
-                            <p className="text-xs text-slate-500">{emp.email}</p>
-                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <p className="meta break-all">{emp.email}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
                               {emp.employeeCode && (
-                                <span className="text-[8px] font-mono bg-slate-100 px-1.5 py-0.5 rounded text-slate-500">
+                                <span className="badge bg-slate-100 text-slate-500">
                                   {emp.employeeCode}
                                 </span>
                               )}
                               <span
-                                className={`text-[8px] font-black px-1.5 py-0.5 rounded-full ${getStatusBadge(
+                                className={`badge rounded-full ${getStatusBadge(
                                   modalType
                                 )}`}
                               >
@@ -1832,11 +1826,11 @@ const HrDashboard = () => {
                                   : ''}
                               </span>
                               {/* Informational only — the current shift, NOT used for late-ness */}
-                              <span className="text-[8px] font-bold text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded">
+                              <span className="badge text-slate-400 bg-slate-50">
                                 Shift: {formatShift(emp)}
                               </span>
                               {modalType === 'late' && emp.lateMinutes !== undefined && (
-                                <span className="text-[8px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">
+                                <span className="badge text-amber-700 bg-amber-50">
                                   +{emp.lateMinutes}m late
                                 </span>
                               )}
@@ -1850,7 +1844,7 @@ const HrDashboard = () => {
                               state: { userId: emp._id }
                             });
                           }}
-                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-bold hover:bg-blue-700 transition-all"
+                          className="btn btn-sm bg-blue-600 text-white hover:bg-blue-700"
                         >
                           View Details
                         </button>
@@ -1859,7 +1853,7 @@ const HrDashboard = () => {
                   </div>
                   {modalTotalPages > 1 && (
                     <div className="mt-4 flex justify-between items-center">
-                      <span className="text-[10px] text-slate-500">
+                      <span className="text-xs text-slate-500">
                         Page {modalCurrentPage} of {modalTotalPages}
                       </span>
                       <div className="flex gap-1">
@@ -1868,7 +1862,7 @@ const HrDashboard = () => {
                             setModalCurrentPage((p) => Math.max(1, p - 1))
                           }
                           disabled={modalCurrentPage === 1}
-                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                          className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                         >
                           <ChevronLeft size={14} />
                         </button>
@@ -1879,7 +1873,7 @@ const HrDashboard = () => {
                             )
                           }
                           disabled={modalCurrentPage === modalTotalPages}
-                          className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40 transition-all"
+                          className="btn-icon border border-slate-200 text-slate-500 hover:bg-slate-50 disabled:opacity-40"
                         >
                           <ChevronRight size={14} />
                         </button>
@@ -1895,11 +1889,11 @@ const HrDashboard = () => {
 
       {/* Probation Modal */}
       {showProbationModal && selectedProbationEmployee && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[300] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="modal-backdrop z-[300]">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <UserCog size={20} className="text-blue-600" /> Manage Probation
                 </h2>
                 <p className="text-xs text-slate-500">
@@ -1912,38 +1906,38 @@ const HrDashboard = () => {
                   setShowProbationModal(false);
                   setSelectedProbationEmployee(null);
                 }}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
-            <form onSubmit={handleProbationUpdate} className="p-6 space-y-4">
+            <form onSubmit={handleProbationUpdate} className="modal-body space-y-4">
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Info size={16} className="text-blue-600" />
-                  <p className="text-[10px] font-bold text-slate-700">
+                  <p className="text-xs font-semibold text-slate-700">
                     Current Status
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   {selectedProbationEmployee.isProbationary ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">
+                    <span className="badge rounded-full bg-amber-100 text-amber-700">
                       <Clock size={12} /> On Probation
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                    <span className="badge rounded-full bg-emerald-100 text-emerald-700">
                       <CheckCircle size={12} /> Completed
                     </span>
                   )}
                   {selectedProbationEmployee.isProbationary &&
                     selectedProbationEmployee.probationEndDate && (
-                      <span className="text-[9px] text-slate-500">
+                      <span className="text-xs text-slate-500">
                         Ends: {formatDate(selectedProbationEmployee.probationEndDate)}
                       </span>
                     )}
                 </div>
                 {selectedProbationEmployee.dateOfJoining && (
-                  <p className="text-[9px] text-slate-400 mt-2">
+                  <p className="text-xs text-slate-400 mt-2">
                     Joined: {formatDate(selectedProbationEmployee.dateOfJoining)}
                   </p>
                 )}
@@ -1977,7 +1971,7 @@ const HrDashboard = () => {
               </div>
               {probationForm.isProbationary && (
                 <div>
-                  <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">
+                  <label className="label block mb-1.5">
                     Probation End Date *
                   </label>
                   <input
@@ -1990,7 +1984,7 @@ const HrDashboard = () => {
                         probationEndDate: e.target.value
                       })
                     }
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm focus:border-blue-400 transition-all"
+                    className="input bg-slate-50"
                   />
                   <div className="flex gap-2 mt-2">
                     <button
@@ -2006,7 +2000,7 @@ const HrDashboard = () => {
                           probationMonths: 3
                         }));
                       }}
-                      className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all"
+                      className="btn btn-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
                     >
                       3 Months
                     </button>
@@ -2023,12 +2017,12 @@ const HrDashboard = () => {
                           probationMonths: 6
                         }));
                       }}
-                      className="px-3 py-1 bg-slate-100 text-slate-600 rounded-lg text-[10px] font-bold hover:bg-slate-200 transition-all"
+                      className="btn btn-sm bg-slate-100 text-slate-600 hover:bg-slate-200"
                     >
                       6 Months
                     </button>
                   </div>
-                  <p className="text-[8px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                     Based on joining date:{' '}
                     {selectedProbationEmployee.dateOfJoining
                       ? formatDate(selectedProbationEmployee.dateOfJoining)
@@ -2038,7 +2032,7 @@ const HrDashboard = () => {
               )}
               {!probationForm.isProbationary && (
                 <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200">
-                  <p className="text-[10px] text-emerald-700 font-medium flex items-center gap-1.5">
+                  <p className="text-xs text-emerald-700 font-medium flex items-center gap-1.5">
                     <CheckCircle size={14} /> Probation will be marked as
                     completed
                   </p>
@@ -2047,7 +2041,7 @@ const HrDashboard = () => {
               <button
                 type="submit"
                 disabled={submittingProbation}
-                className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                className="btn btn-md w-full bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
               >
                 {submittingProbation ? (
                   <>
@@ -2066,11 +2060,11 @@ const HrDashboard = () => {
 
       {/* Edit Paid Leave Modal */}
       {showEditLeaveModal && selectedEditEmployee && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[350] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+        <div className="modal-backdrop z-[350]">
+          <div className="modal-panel max-w-md">
+            <div className="modal-header">
               <div>
-                <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+                <h2 className="section-title flex items-center gap-2">
                   <Pencil size={20} className="text-blue-600" /> Edit Paid Leave
                   Balance
                 </h2>
@@ -2086,35 +2080,35 @@ const HrDashboard = () => {
                   setEditLeaveBalance(0);
                   setEditLeaveReason('');
                 }}
-                className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
+                className="btn-icon bg-slate-100 hover:bg-slate-200"
               >
                 <X size={16} />
               </button>
             </div>
-            <form onSubmit={handleEditLeaveSubmit} className="p-6 space-y-4">
+            <form onSubmit={handleEditLeaveSubmit} className="modal-body space-y-4">
               <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                 <div className="flex items-center gap-2 mb-2">
                   <Info size={16} className="text-blue-600" />
-                  <p className="text-[10px] font-bold text-slate-700">
+                  <p className="text-xs font-semibold text-slate-700">
                     Current Balance
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-2xl font-black text-blue-600">
+                  <span className="text-2xl font-bold text-blue-600">
                     {getPaidLeaveBalance(selectedEditEmployee)}
                   </span>
                   <span className="text-sm text-slate-500">days</span>
                 </div>
                 {selectedEditEmployee.employee.isProbationary && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-2 flex items-center gap-1">
-                    <AlertCircle size={11} /> On probation — can only use Unpaid
+                  <p className="text-xs text-amber-600 font-semibold mt-2 flex items-center gap-1">
+                    <AlertCircle size={12} /> On probation — can only use Unpaid
                     Leave, but the Paid Leave balance still accrues/can be
                     adjusted.
                   </p>
                 )}
               </div>
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">
+                <label className="label block mb-1.5">
                   New Balance (days) *
                 </label>
                 <div className="relative">
@@ -2127,7 +2121,7 @@ const HrDashboard = () => {
                     onChange={(e) =>
                       setEditLeaveBalance(parseFloat(e.target.value) || 0)
                     }
-                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none font-bold text-sm text-slate-700 focus:border-blue-400 transition-all"
+                    className="input bg-slate-50"
                   />
                   <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1">
                     <button
@@ -2135,7 +2129,7 @@ const HrDashboard = () => {
                       onClick={() =>
                         setEditLeaveBalance(Math.max(0, editLeaveBalance - 0.5))
                       }
-                      className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                      className="btn-icon bg-slate-200 text-slate-600 hover:bg-slate-300"
                     >
                       <Minus size={12} />
                     </button>
@@ -2144,19 +2138,19 @@ const HrDashboard = () => {
                       onClick={() =>
                         setEditLeaveBalance(editLeaveBalance + 0.5)
                       }
-                      className="p-1 rounded-lg bg-slate-200 text-slate-600 hover:bg-slate-300 transition-colors"
+                      className="btn-icon bg-slate-200 text-slate-600 hover:bg-slate-300"
                     >
                       <Plus size={12} />
                     </button>
                   </div>
                 </div>
-                <p className="text-[7px] text-slate-400 mt-1">
+                <p className="text-xs text-slate-400 mt-1">
                   Half-day increments (0.5 days). Set below current balance to
                   penalize, above to reward.
                 </p>
               </div>
               <div>
-                <label className="text-[10px] font-black uppercase tracking-wider text-slate-500 block mb-1.5">
+                <label className="label block mb-1.5">
                   Reason for Change *
                 </label>
                 <textarea
@@ -2165,7 +2159,7 @@ const HrDashboard = () => {
                   placeholder="e.g., Reward for extra hours worked, Penalty for unapproved absence, Carry forward balance, etc."
                   value={editLeaveReason}
                   onChange={(e) => setEditLeaveReason(e.target.value)}
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 outline-none text-sm text-slate-700 focus:border-blue-400 transition-all resize-none"
+                  className="input bg-slate-50 resize-none"
                 />
               </div>
               <div className="flex gap-3 pt-4 border-t border-slate-100">
@@ -2177,14 +2171,14 @@ const HrDashboard = () => {
                     setEditLeaveBalance(0);
                     setEditLeaveReason('');
                   }}
-                  className="flex-1 py-2.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider hover:bg-slate-200 transition-colors"
+                  className="btn btn-md flex-1 bg-slate-100 text-slate-600 hover:bg-slate-200"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={editLeaveSubmitting}
-                  className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl font-black text-xs uppercase tracking-wider hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="btn btn-md flex-1 bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                 >
                   {editLeaveSubmitting ? (
                     <>

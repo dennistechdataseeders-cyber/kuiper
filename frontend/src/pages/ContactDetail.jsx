@@ -7,7 +7,6 @@ import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { User, Building2, Star } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 import { useCustomFields, validateCustomFields, buildCustomFieldsPayload } from '../components/CustomFieldsSection';
 import useRecordTags from '../utils/useRecordTags';
 import { TagDialogs, useTagDialogs } from '../components/RecordTags';
@@ -35,7 +34,6 @@ const toDraft = (c) => ({
 export default function ContactDetail() {
   const { accountId, pocId } = useParams();
   const navigate = useNavigate();
-  const { isCollapsed } = useSidebar();
   const canEdit = canEditSales();
   const customDefs = useCustomFields('Contacts');
   const tagsApi = useRecordTags('Contacts');
@@ -66,12 +64,12 @@ export default function ContactDetail() {
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return <DetailLoading isCollapsed={isCollapsed} message="Loading contact..." />;
+  if (loading) return <DetailLoading message="Loading contact..." />;
 
   const contact = (account?.pointsOfContact || []).find((p) => String(p._id) === String(pocId));
   if (!contact) {
     return (
-      <DetailShell isCollapsed={isCollapsed} onBack={() => navigate('/sales/contacts')} backLabel="Back to Contacts" title="Contact not found" />
+      <DetailShell onBack={() => navigate('/sales/contacts')} backLabel="Back to Contacts" title="Contact not found" />
     );
   }
 
@@ -126,15 +124,14 @@ export default function ContactDetail() {
 
   return (
     <DetailShell
-      isCollapsed={isCollapsed}
       onBack={() => navigate('/sales/contacts')}
       backLabel="Back to Contacts"
       icon={User}
       title={contact.pocName}
       subtitle={<>{contact.title ? `${contact.title} · ` : ''}{account.companyName}</>}
       badges={contact.isPrimary && (
-        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-amber-100 text-amber-700">
-          <Star size={10} fill="currentColor" /> Primary
+        <span className="badge rounded-full bg-amber-100 text-amber-700">
+          <Star size={12} fill="currentColor" /> Primary
         </span>
       )}
       tags={tagsApi.tagsOf(recordId)}

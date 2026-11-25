@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import axios from 'axios';
 import { accessStatus } from '../components/AccessBlockModal';
-import { useSidebar } from '../context/SidebarContext';
 import AttendanceCombined from '../components/AttendanceCombined';
 import EmployeeLeave from '../components/EmployeeLeave';
 
@@ -118,7 +117,6 @@ const formatShortDateWithYear = (dateStr) => {
 // ============================================
 
 const EmployeeDashboard = () => {
-  const { isCollapsed } = useSidebar();
 
   const token = localStorage.getItem('token');
   const userId = localStorage.getItem('userId');
@@ -440,7 +438,7 @@ const EmployeeDashboard = () => {
   // ============================================
   if (loading) {
     return (
-      <div className={`min-h-screen bg-slate-50 flex items-center justify-center ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+      <div className="page bg-slate-50 flex items-center justify-center">
         <div className="text-center">
           <Loader2 size={48} className="text-blue-600 animate-spin mx-auto mb-4" />
           <p className="text-slate-500 font-medium">Loading your dashboard...</p>
@@ -453,47 +451,47 @@ const EmployeeDashboard = () => {
   // MAIN UI
   // ============================================
   return (
-    <div className={`min-h-screen bg-slate-50 p-4 md:p-6 transition-all duration-300 ${isCollapsed ? 'ml-20' : 'ml-64'}`}>
+    <div className="page bg-slate-50">
       {/* HEADER */}
       <div className="mb-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Dashboard</h1>
+            <h1 className="page-title">Dashboard</h1>
             <p className="text-slate-500 text-sm mt-0.5">Manage your attendance and leaves</p>
           </div>
         </div>
       </div>
 
       {/* MAIN 2-COLUMN LAYOUT */}
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] gap-4 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[1fr_280px] items-start gap-3 sm:gap-4">
 
         {/* LEFT: MAIN CONTENT */}
         <div className="min-w-0">
 
           {/* TOP ROW: Status · Tabs */}
-          <div className="flex flex-col md:flex-row gap-3 mb-5 items-stretch">
+          <div className="flex flex-col lg:flex-row gap-3 mb-5 items-stretch">
 
-            <div className={`flex-1 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br ${inOutStatus.color}`}>
-              <div className="flex items-center justify-between h-full">
+            <div className={`flex-1 rounded-xl p-4 text-white shadow-lg bg-gradient-to-br ${inOutStatus.color}`}>
+              <div className="flex flex-wrap items-center justify-between gap-3 h-full">
                 <div>
-                  <p className="text-[9px] font-semibold uppercase tracking-wider opacity-80">Status:</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Status:</p>
                   <p className="text-xl font-bold mt-0.5">{inOutStatus.label}</p>
                 </div>
                 <div className="h-9 w-px bg-white/25 mx-2 hidden sm:block" />
                 <div>
-                  <p className="text-[9px] font-semibold uppercase tracking-wider opacity-80">Check In:</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide opacity-80">Check In:</p>
                   <p className="text-xl font-bold mt-0.5">{inOutStatus.time}</p>
                 </div>
-                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-4 border-blue-300 text-blue-600 font-black text-lg">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center bg-white border-4 border-blue-300 text-blue-600 font-bold text-lg shrink-0">
                   {inOutStatus.displayText}
                 </div>
               </div>
             </div>
 
-            <div className="md:w-64 flex-shrink-0 bg-white rounded-2xl border border-slate-200 shadow-sm p-1 flex gap-1">
+            <div className="md:w-64 flex-shrink-0 bg-white rounded-xl border border-slate-200 shadow-sm p-1 flex gap-1">
               <button
                 onClick={() => setActiveTab('attendance')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                className={`btn btn-md flex-1 ${
                   activeTab === 'attendance'
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-500 hover:bg-slate-50'
@@ -504,7 +502,7 @@ const EmployeeDashboard = () => {
               </button>
               <button
                 onClick={() => setActiveTab('leave')}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 whitespace-nowrap ${
+                className={`btn btn-md flex-1 ${
                   activeTab === 'leave'
                     ? 'bg-blue-600 text-white shadow-md'
                     : 'text-slate-500 hover:bg-slate-50'
@@ -523,17 +521,17 @@ const EmployeeDashboard = () => {
 
         {/* RIGHT: TEAM & CULTURE + NEW FEATURES */}
         <div className="h-full min-h-0">
-          <div className="space-y-3 xl:sticky xl:top-4">
+          <div className="space-y-3">
 
             {/* =========================================
                 🆕 EMPLOYEE STATUS SEARCH BAR
             ========================================= */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
               <div className="flex items-center gap-2 mb-2">
-                <div className="w-6 h-6 rounded-md bg-blue-100 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-md bg-blue-100 flex items-center justify-center shrink-0">
                   <SearchIcon size={12} className="text-blue-600" />
                 </div>
-                <h3 className="text-xs font-black uppercase tracking-wide text-slate-800">
+                <h3 className="label uppercase text-slate-800">
                   Who's In / Out
                 </h3>
               </div>
@@ -545,12 +543,12 @@ const EmployeeDashboard = () => {
                   value={employeeSearchQuery}
                   onChange={(e) => setEmployeeSearchQuery(e.target.value)}
                   placeholder="Search employee by name…"
-                  className="w-full pl-8 pr-7 py-2 text-xs font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-400 transition-colors"
+                  className="input pl-8 bg-slate-50"
                 />
                 {employeeSearchQuery && (
                   <button
                     onClick={() => setEmployeeSearchQuery('')}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                    className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
                   >
                     <X size={12} />
                   </button>
@@ -561,7 +559,7 @@ const EmployeeDashboard = () => {
               {employeeSearchQuery.trim() && (
                 <div className="mt-2 max-h-[260px] overflow-y-auto space-y-1.5 pr-1">
                   {searchResults.length === 0 ? (
-                    <p className="text-[11px] text-slate-400 italic text-center py-3">
+                    <p className="text-xs text-slate-400 italic text-center py-3">
                       No matching employee
                     </p>
                   ) : (
@@ -576,31 +574,31 @@ const EmployeeDashboard = () => {
                         >
                           <div className="flex items-center gap-2">
                             {/* Avatar */}
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
                               {emp.name?.charAt(0)?.toUpperCase() || '?'}
                             </div>
 
                             <div className="min-w-0 flex-1">
-                              <p className="text-xs font-bold text-slate-800 truncate leading-tight">
+                              <p className="text-xs font-semibold text-slate-800 truncate leading-tight">
                                 {emp.name}
                               </p>
-                              <p className="text-[10px] text-slate-500 leading-tight truncate">
+                              <p className="text-xs text-slate-500 leading-tight truncate">
                                 {emp.role} • Shift {formatShift(emp)}
                               </p>
                             </div>
 
                             {/* IN / OUT pill */}
                             {showLeave ? (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-indigo-100 text-indigo-700 border-indigo-200">
+                              <span className="badge rounded-full border bg-indigo-100 text-indigo-700 border-indigo-200">
                                 On Leave
                               </span>
                             ) : isIn ? (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200 flex items-center gap-1">
-                                <LogIn size={10} /> IN
+                              <span className="badge rounded-full border bg-emerald-100 text-emerald-700 border-emerald-200">
+                                <LogIn size={12} /> IN
                               </span>
                             ) : (
-                              <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full border bg-rose-100 text-rose-700 border-rose-200 flex items-center gap-1">
-                                <LogOut size={10} /> OUT
+                              <span className="badge rounded-full border bg-rose-100 text-rose-700 border-rose-200">
+                                <LogOut size={12} /> OUT
                               </span>
                             )}
                           </div>
@@ -610,24 +608,24 @@ const EmployeeDashboard = () => {
                             {!showLeave && (
                               <>
                                 {emp.punchInUTC && (
-                                  <span className="text-[9px] text-slate-500">
+                                  <span className="text-xs text-slate-500">
                                     In: {formatTimeUTC(emp.punchInUTC)}
                                   </span>
                                 )}
                                 {emp.punchOutUTC && (
-                                  <span className="text-[9px] text-slate-500">
+                                  <span className="text-xs text-slate-500">
                                     Out: {formatTimeUTC(emp.punchOutUTC)}
                                   </span>
                                 )}
                                 {!emp.punchInUTC && (
-                                  <span className="text-[9px] text-slate-400 italic">
+                                  <span className="text-xs text-slate-400 italic">
                                     No punch today
                                   </span>
                                 )}
                               </>
                             )}
                             {showLeave && emp.leaveType && (
-                              <span className="text-[9px] text-indigo-600 font-semibold">
+                              <span className="text-xs text-indigo-600 font-semibold">
                                 {emp.leaveType}
                                 {emp.isHalfDay && emp.halfDayType
                                   ? ` (${emp.halfDayType === 'first' ? 'First Half' : 'Second Half'})`
@@ -635,7 +633,7 @@ const EmployeeDashboard = () => {
                               </span>
                             )}
                             <span
-                              className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded border ${getStatusPillStyle(
+                              className={`badge border ${getStatusPillStyle(
                                 emp.status
                               )}`}
                             >
@@ -653,7 +651,7 @@ const EmployeeDashboard = () => {
               )}
 
               {!employeeSearchQuery.trim() && (
-                <p className="text-[10px] text-slate-400 italic text-center mt-2">
+                <p className="text-xs text-slate-400 italic text-center mt-2">
                   Type a name to check IN/OUT status
                 </p>
               )}
@@ -668,14 +666,14 @@ const EmployeeDashboard = () => {
                   <CalendarDays size={14} className="text-indigo-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-black text-black leading-tight">
+                  <p className="text-sm font-semibold text-black leading-tight">
                     On Leave Today
                   </p>
-                  <p className="text-[10px] font-medium text-black/70 leading-tight mt-0.5">
+                  <p className="text-xs font-medium text-black/70 leading-tight mt-0.5">
                     Employees on approved leave
                   </p>
                 </div>
-                <span className="ml-auto text-[11px] font-bold text-indigo-800 bg-indigo-100 px-1.5 py-0.5 rounded-full">
+                <span className="badge rounded-full ml-auto text-indigo-800 bg-indigo-100">
                   {onLeaveToday.length}
                 </span>
               </div>
@@ -685,7 +683,7 @@ const EmployeeDashboard = () => {
                   <Loader2 size={14} className="text-indigo-500 animate-spin" />
                 </div>
               ) : onLeaveToday.length === 0 ? (
-                <p className="text-[11px] font-medium text-black/70 pl-8 py-1">
+                <p className="text-xs font-medium text-black/70 pl-8 py-1">
                   No one is on leave today
                 </p>
               ) : (
@@ -695,14 +693,14 @@ const EmployeeDashboard = () => {
                       key={emp._id}
                       className="flex items-center gap-2 p-1.5 rounded-lg hover:bg-slate-50 transition-colors"
                     >
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-[11px] font-bold text-indigo-700 flex-shrink-0">
+                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-semibold text-indigo-700 flex-shrink-0">
                         {emp.name?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-black leading-tight truncate">
+                        <p className="text-xs font-semibold text-black leading-tight truncate">
                           {emp.name}
                         </p>
-                        <p className="text-[10px] font-medium text-slate-600 leading-tight mt-0.5 truncate">
+                        <p className="text-xs font-medium text-slate-600 leading-tight mt-0.5 truncate">
                           {emp.leaveType || 'Leave'}
                           {emp.isHalfDay && emp.halfDayType
                             ? ` • ${emp.halfDayType === 'first' ? '1st Half' : '2nd Half'}`
@@ -717,25 +715,25 @@ const EmployeeDashboard = () => {
 
             {/* EXISTING: TEAM & CULTURE */}
             <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-3">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-black uppercase tracking-wide text-black">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h3 className="section-title text-black">
                   Team &amp; Culture
                 </h3>
                 <div className="flex items-center gap-1.5">
                   <button
                     onClick={() => setShowYearlyHolidayModal(true)}
                     title="View yearly holiday list"
-                    className="h-6 px-2 rounded-md bg-indigo-50 hover:bg-indigo-100 flex items-center justify-center gap-1 flex-shrink-0 transition-colors"
+                    className="btn btn-sm !px-2 bg-indigo-50 hover:bg-indigo-100 flex-shrink-0"
                   >
                     <CalendarDays size={12} className="text-indigo-600" />
-                    <span className="text-[9px] font-bold text-indigo-700 uppercase tracking-wide">
+                    <span className="text-xs font-semibold text-indigo-700">
                       Holiday List
                     </span>
                   </button>
                   <button
                     onClick={() => setShowActivityModal(true)}
                     title="View all activities"
-                    className="w-6 h-6 rounded-md bg-blue-50 hover:bg-blue-100 flex items-center justify-center flex-shrink-0 transition-colors"
+                    className="btn-icon bg-blue-50 hover:bg-blue-100 flex-shrink-0"
                   >
                     <Calendar size={13} className="text-blue-600" />
                   </button>
@@ -750,12 +748,12 @@ const EmployeeDashboard = () => {
                       <HolidayIcon size={14} className="text-amber-600" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-black leading-tight">Upcoming Holidays</p>
-                      <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">
+                      <p className="text-sm font-semibold text-black leading-tight">Upcoming Holidays</p>
+                      <p className="text-xs font-medium text-black/80 leading-tight mt-0.5">
                         Next few holidays
                       </p>
                     </div>
-                    <span className="ml-auto text-[11px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                    <span className="badge rounded-full ml-auto text-amber-800 bg-amber-100">
                       {holidays.filter(h => new Date(h.date) >= new Date()).length}
                     </span>
                   </div>
@@ -776,17 +774,17 @@ const EmployeeDashboard = () => {
                         })
                         .slice(0, 4);
                       if (upcoming.length === 0) {
-                        return <p className="text-[11px] font-medium text-black/70 pl-8">No upcoming holidays</p>;
+                        return <p className="text-xs font-medium text-black/70 pl-8">No upcoming holidays</p>;
                       }
                       return (
                         <ul className="space-y-1.5 pl-8">
                           {upcoming.map((h) => (
-                            <li key={h._id} className="flex items-center gap-1.5 text-[11px] text-black leading-tight flex-wrap">
+                            <li key={h._id} className="flex items-center gap-1.5 text-xs text-black leading-tight flex-wrap">
                               <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
                               <span className="font-semibold">{formatShortDate(h.date)}:</span>
                               <span className="font-medium">{h.name}</span>
                               {h.isOptional && (
-                                <span className="text-[10px] text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded ml-0.5 font-semibold">
+                                <span className="badge text-amber-800 bg-amber-100 ml-0.5">
                                   Optional
                                 </span>
                               )}
@@ -805,8 +803,8 @@ const EmployeeDashboard = () => {
                       <Cake size={14} className="text-pink-600" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-black leading-tight">Upcoming Birthdays</p>
-                      <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">This month</p>
+                      <p className="text-sm font-semibold text-black leading-tight">Upcoming Birthdays</p>
+                      <p className="text-xs font-medium text-black/80 leading-tight mt-0.5">This month</p>
                     </div>
                   </div>
 
@@ -815,12 +813,12 @@ const EmployeeDashboard = () => {
                       <Loader2 size={14} className="text-pink-500 animate-spin" />
                     </div>
                   ) : teamCulture.birthdays.length === 0 ? (
-                    <p className="text-[11px] font-medium text-black/70 pl-8">No birthdays this month</p>
+                    <p className="text-xs font-medium text-black/70 pl-8">No birthdays this month</p>
                   ) : (
                     <ul className="space-y-1.5 pl-8">
                       {teamCulture.birthdays.slice(0, 4).map((b) => (
-                        <li key={b._id} className="flex items-center gap-1.5 text-[11px] text-black leading-tight">
-                          <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-[10px] font-bold text-pink-700 flex-shrink-0">
+                        <li key={b._id} className="flex items-center gap-1.5 text-xs text-black leading-tight">
+                          <div className="w-6 h-6 rounded-full bg-pink-100 flex items-center justify-center text-xs font-semibold text-pink-700 flex-shrink-0">
                             {b.name?.charAt(0) || '?'}
                           </div>
                           <span>
@@ -840,8 +838,8 @@ const EmployeeDashboard = () => {
                       <Trophy size={14} className="text-amber-600" />
                     </div>
                     <div className="min-w-0">
-                      <p className="text-sm font-black text-black leading-tight">Work Anniversaries</p>
-                      <p className="text-[10px] font-medium text-black/80 leading-tight mt-0.5">This month</p>
+                      <p className="text-sm font-semibold text-black leading-tight">Work Anniversaries</p>
+                      <p className="text-xs font-medium text-black/80 leading-tight mt-0.5">This month</p>
                     </div>
                   </div>
 
@@ -850,12 +848,12 @@ const EmployeeDashboard = () => {
                       <Loader2 size={14} className="text-amber-500 animate-spin" />
                     </div>
                   ) : teamCulture.anniversaries.length === 0 ? (
-                    <p className="text-[11px] font-medium text-black/70 pl-8">No anniversaries this month</p>
+                    <p className="text-xs font-medium text-black/70 pl-8">No anniversaries this month</p>
                   ) : (
                     <ul className="space-y-1.5 pl-8">
                       {teamCulture.anniversaries.slice(0, 4).map((a) => (
-                        <li key={a._id} className="flex items-center gap-1.5 text-[11px] text-black leading-tight">
-                          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-[10px] font-bold text-amber-700 flex-shrink-0">
+                        <li key={a._id} className="flex items-center gap-1.5 text-xs text-black leading-tight">
+                          <div className="w-6 h-6 rounded-full bg-amber-100 flex items-center justify-center text-xs font-semibold text-amber-700 flex-shrink-0">
                             {a.name?.charAt(0) || '?'}
                           </div>
                           <span>
@@ -878,33 +876,33 @@ const EmployeeDashboard = () => {
       ======================================== */}
       {showActivityModal && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="modal-backdrop"
           onClick={() => setShowActivityModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden"
+            className="modal-panel max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
+            <div className="modal-header">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
                   <Calendar size={16} className="text-blue-600" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">All Activities</h3>
-                  <p className="text-[10px] text-slate-500 leading-tight">
+                  <h3 className="section-title">All Activities</h3>
+                  <p className="text-xs text-slate-500 leading-tight">
                     Holidays, birthdays &amp; anniversaries
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowActivityModal(false)}
-                className="w-7 h-7 rounded-md hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
+                className="btn-icon hover:bg-slate-100 flex-shrink-0"
               >
                 <X size={16} className="text-slate-500" />
               </button>
             </div>
-            <div className="overflow-y-auto px-4 py-3 flex-1">
+            <div className="modal-body">
               {/* combine everything */}
               {(() => {
                 const all = [
@@ -937,9 +935,9 @@ const EmployeeDashboard = () => {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-xs font-semibold text-slate-900 leading-tight truncate">{item.title}</p>
-                            <p className="text-[10px] text-slate-500 leading-tight mt-0.5">{item.subtitle}</p>
+                            <p className="text-xs text-slate-500 leading-tight mt-0.5">{item.subtitle}</p>
                           </div>
-                          <span className="text-[10px] font-semibold text-slate-600 flex-shrink-0">
+                          <span className="text-xs font-semibold text-slate-600 flex-shrink-0">
                             {formatShortDate(item.date)}
                           </span>
                         </li>
@@ -958,35 +956,35 @@ const EmployeeDashboard = () => {
       ======================================== */}
       {showYearlyHolidayModal && (
         <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4"
+          className="modal-backdrop"
           onClick={() => setShowYearlyHolidayModal(false)}
         >
           <div
-            className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden"
+            className="modal-panel max-w-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 flex-shrink-0">
+            <div className="modal-header">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
                   <CalendarDays size={16} className="text-indigo-600" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 leading-tight">
+                  <h3 className="section-title">
                     Yearly Holiday List — {new Date().getFullYear()}
                   </h3>
-                  <p className="text-[10px] text-slate-500 leading-tight">
+                  <p className="text-xs text-slate-500 leading-tight">
                     All holidays for the current year
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowYearlyHolidayModal(false)}
-                className="w-7 h-7 rounded-md hover:bg-slate-100 flex items-center justify-center flex-shrink-0"
+                className="btn-icon hover:bg-slate-100 flex-shrink-0"
               >
                 <X size={16} className="text-slate-500" />
               </button>
             </div>
-            <div className="overflow-y-auto px-4 py-3 flex-1">
+            <div className="modal-body">
               {(() => {
                 const yr = new Date().getFullYear();
                 const list = holidays.filter(h => {
@@ -1003,13 +1001,13 @@ const EmployeeDashboard = () => {
                       return (
                         <li key={h._id} className="flex items-center gap-3 p-2.5 rounded-lg border border-slate-100 hover:bg-slate-50">
                           <div className="w-14 flex-shrink-0 text-center">
-                            <p className="text-[9px] font-bold uppercase text-indigo-600">
+                            <p className="text-xs font-semibold uppercase text-indigo-600">
                               {monthNames[d.getUTCMonth()].substring(0, 3)}
                             </p>
-                            <p className="text-lg font-black text-slate-800 leading-none">
+                            <p className="text-lg font-bold text-slate-800 leading-none">
                               {d.getUTCDate()}
                             </p>
-                            <p className="text-[8px] font-bold text-slate-400 uppercase">
+                            <p className="text-xs font-semibold text-slate-400 uppercase">
                               {['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getUTCDay()]}
                             </p>
                           </div>
@@ -1017,13 +1015,13 @@ const EmployeeDashboard = () => {
                             <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-sm font-bold text-slate-800 leading-tight">{h.name}</p>
                               {h.isOptional && (
-                                <span className="text-[8px] font-bold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                                <span className="badge rounded-full text-amber-700 bg-amber-100">
                                   Optional
                                 </span>
                               )}
                             </div>
                             {h.description && (
-                              <p className="text-[10px] text-slate-500 leading-tight mt-1">{h.description}</p>
+                              <p className="text-xs text-slate-500 leading-tight mt-1">{h.description}</p>
                             )}
                           </div>
                         </li>

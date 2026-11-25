@@ -5,14 +5,12 @@ import {
   ChevronRight, ChevronDown, ChevronUp, Zap 
 } from 'lucide-react';
 import API_BASE_URL from '../config';
-import { useSidebar } from '../context/SidebarContext';
 const ViewAnalytics = () => {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [expandedLog, setExpandedLog] = useState(null);
-  const { isCollapsed } = useSidebar();
   const fetchLogs = async (page) => {
     setLoading(true);
     try {
@@ -47,44 +45,42 @@ const ViewAnalytics = () => {
 
   return (
     <div
-        className={`min-h-screen bg-slate-50 p-6 transition-all duration-300 ${
-          isCollapsed ? 'ml-20' : 'ml-64'
-        }`}
+        className="page bg-slate-50"
       >
       <div className="max-w-4xl mx-auto">
         {/* Header Section */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 sm:mb-6">
           <div>
-            <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <h1 className="page-title flex items-center gap-2">
               <Activity size={24} className="text-blue-600" /> Timeline
             </h1>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">Audit Logs & Activity</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mt-1">Audit Logs & Activity</p>
           </div>
-          <div className="bg-white px-4 py-2 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-2">
+          <div className="bg-white px-4 py-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-2">
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">Live Updates</span>
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Live Updates</span>
           </div>
         </div>
 
         {/* Timeline Container */}
         <div className="space-y-4">
           {loading && logs.length === 0 ? (
-            <div className="p-20 text-center bg-white rounded-[2rem] border border-slate-100">
+            <div className="p-10 sm:p-20 text-center bg-white rounded-xl border border-slate-100">
                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
                <p className="text-sm font-bold text-slate-400 uppercase">Syncing Activity...</p>
             </div>
           ) : logs.length === 0 ? (
-            <div className="p-20 text-center bg-white rounded-[2rem] border border-slate-100">
+            <div className="p-10 sm:p-20 text-center bg-white rounded-xl border border-slate-100">
                <Zap size={40} className="mx-auto text-slate-200 mb-4" />
                <p className="text-sm font-bold text-slate-400 uppercase">No logs recorded</p>
             </div>
           ) : (
             logs.map((log) => (
-              <div key={log._id} className="flex gap-4 items-start group">
+              <div key={log._id} className="flex flex-col sm:flex-row gap-1 sm:gap-4 sm:items-start group">
                 {/* External Time Column */}
-              <div className="w-32 pt-4 flex-shrink-0"> {/* Increased width to fit everything on one line */}
-                <span className="flex items-center justify-end gap-1.5 text-[10px] font-black text-slate-900 tabular-nums whitespace-nowrap">
-                  <Clock size={11} className="text-slate-900" />
+              <div className="sm:w-40 sm:pt-4 flex-shrink-0"> {/* Increased width to fit everything on one line */}
+                <span className="flex items-center sm:justify-end gap-1.5 text-xs font-semibold text-slate-900 tabular-nums whitespace-nowrap">
+                  <Clock size={12} className="text-slate-900" />
                   <span>{new Date(log.timestamp).toLocaleDateString([], { day: '2-digit', month: 'short',year:'numeric' })}</span>
                   <span className="text-slate-300 mx-0.5">|</span>
                   <span className="text-slate-900">
@@ -95,36 +91,34 @@ const ViewAnalytics = () => {
 
                 {/* Log Card */}
                 <div 
-                  className={`flex-1 bg-white border transition-all duration-200 overflow-hidden ${
+                  className={`w-full min-w-0 sm:flex-1 bg-white border transition-all duration-200 overflow-hidden ${
                     expandedLog === log._id 
-                    ? 'rounded-[1.5rem] border-blue-200 shadow-md ring-4 ring-blue-50/50' 
+                    ? 'rounded-xl border-blue-200 shadow-md ring-4 ring-blue-50/50' 
                     : 'rounded-xl border-slate-100 hover:border-slate-200 shadow-sm'
                   }`}
                 >
                   {/* Card Header */}
                   <div 
                     onClick={() => toggleExpand(log._id)}
-                    className="px-5 py-3 flex items-center justify-between cursor-pointer"
+                    className="px-4 sm:px-5 py-3 flex items-center justify-between gap-2 cursor-pointer"
                   >
-                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 flex-1 min-w-0">
                     <div className={`
-                      text-[7px] font-black px-2 py-0.5 rounded-md border uppercase 
-                      tracking-[0.15em] whitespace-nowrap flex-shrink-0 
-                      backdrop-blur-md transition-all duration-300
+                      text-xs font-semibold px-2 py-0.5 rounded-md border uppercase tracking-wide whitespace-nowrap flex-shrink-0 backdrop-blur-md transition-all duration-300
                       ${getBadgeColor(log.actionType)}
                     `}>
                       {log.actionType?.replace('_', ' ')}
                     </div>
                     
-                    <h4 className={`text-sm font-bold truncate transition-colors ${expandedLog === log._id ? 'text-blue-600' : 'text-slate-600'}`}>
+                    <h4 className={`text-sm font-semibold min-w-0 break-words sm:truncate transition-colors ${expandedLog === log._id ? 'text-blue-600' : 'text-slate-600'}`}>
                       {log.details}
                     </h4>
                   </div>
 
-                    <div className="flex items-center gap-4">
-                      <div className="hidden sm:flex items-center gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
+                    <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+                      <div className="flex items-center gap-1 sm:gap-2 opacity-60 group-hover:opacity-100 transition-opacity">
                         <UserIcon size={12} className="text-slate-400" />
-                        <span className="text-[10px] font-black text-slate-500 uppercase">{log.performerId?.name?.split(' ')[0] || "Sys"}</span>
+                        <span className="text-xs font-semibold text-slate-500 uppercase">{log.performerId?.name?.split(' ')[0] || "Sys"}</span>
                       </div>
                       {expandedLog === log._id ? <ChevronUp size={16} className="text-blue-500" /> : <ChevronDown size={16} className="text-slate-300" />}
                     </div>
@@ -133,25 +127,25 @@ const ViewAnalytics = () => {
                   {/* Expanded Body */}
                   {expandedLog === log._id && (
                     <div className="px-5 pb-5 pt-2 bg-blue-50/30 border-t border-blue-50 animate-in slide-in-from-top-2 duration-300">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div className="bg-white p-3 rounded-xl border border-blue-100/50 shadow-sm">
-                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Full Description</p>
+                          <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Full Description</p>
                           <p className="text-sm font-bold text-slate-700 leading-relaxed">{log.details}</p>
                         </div>
                         <div className="bg-white p-3 rounded-xl border border-blue-100/50 shadow-sm">
-                          <p className="text-[9px] font-black text-slate-400 uppercase mb-1">Performer Context</p>
+                          <p className="text-xs font-semibold text-slate-400 uppercase mb-1">Performer Context</p>
                           <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-[10px] font-bold text-white uppercase">
+                              <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs font-semibold text-white uppercase shrink-0">
                                 {log.performerId?.name?.charAt(0) || 'S'}
                               </div>
                               <div>
-                                <p className="text-xs font-bold text-slate-700">{log.performerId?.name || "System Process"}</p>
-                                <p className="text-[10px] font-bold text-blue-500 uppercase">{log.performerId?.role || "Automated"}</p>
+                                <p className="text-xs font-semibold text-slate-700">{log.performerId?.name || "System Process"}</p>
+                                <p className="text-xs font-semibold text-blue-500 uppercase">{log.performerId?.role || "Automated"}</p>
                               </div>
                           </div>
                         </div>
                       </div>
-                      <div className="mt-3 px-1 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      <div className="mt-3 px-1 flex flex-wrap gap-x-3 justify-between items-center text-xs font-semibold text-slate-400 uppercase tracking-wide">
                         <span>Date: {new Date(log.timestamp).toLocaleDateString()}</span>
                         <span>ID: {log._id.slice(-6)}</span>
                       </div>
@@ -165,23 +159,23 @@ const ViewAnalytics = () => {
 
         {/* Minimalist Pagination */}
         {totalPages > 1 && (
-          <div className="mt-8 flex items-center justify-between px-2 pl-20"> {/* Added padding-left to align with cards */}
+          <div className="mt-6 sm:mt-8 flex items-center justify-between px-2 sm:pl-20"> {/* Added padding-left to align with cards */}
             <button 
               disabled={currentPage === 1}
               onClick={() => setCurrentPage(prev => prev - 1)}
-              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 disabled:opacity-30 transition-all shadow-sm"
+              className="btn-icon bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 disabled:opacity-30 shadow-sm"
             >
               <ChevronLeft size={20} />
             </button>
             <div className="flex items-center gap-4">
-              <span className="text-[10px] font-black text-slate-900 uppercase tracking-[0.2em]">
+              <span className="text-xs font-semibold text-slate-900 uppercase tracking-wide">
                 Page : {currentPage} <span className="mx-0 text-slate-900">/</span>{totalPages}
               </span>
             </div>
             <button 
               disabled={currentPage === totalPages}
               onClick={() => setCurrentPage(prev => prev + 1)}
-              className="p-2 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 disabled:opacity-30 transition-all shadow-sm"
+              className="btn-icon bg-white border border-slate-200 text-slate-400 hover:text-blue-600 hover:border-blue-200 disabled:opacity-30 shadow-sm"
             >
               <ChevronRight size={20} />
             </button>
