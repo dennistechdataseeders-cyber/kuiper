@@ -9,7 +9,7 @@ const Project = require('../models/Project');
 const Feed = require('../models/Feed'); // Added for Developer role check
 const FeedStatus = require('../models/FeedStatus');
 const feedStatusService = require('../services/feedStatusService');
-const { createStatusMatcher } = require('../utils/feedStatusMatch');
+const { describeRun, getPreviousRun, getProjectRuns } = require('../utils/feedRunStatus');
 
 // ============================================
 // GET /api/client/projects
@@ -52,8 +52,8 @@ router.get('/projects', protect, async (req, res) => {
       // Team Leads: projects where they are the team lead
       query = tlProjectFilter(userId);
       
-    } else if (userRole === 'Admin') {
-      // Admins: all projects
+    } else if (userRole === 'Admin' || userRole === 'Super Admin') {
+      // Admins and Super Admins: all projects
       query = {};
       
     } else {
@@ -76,6 +76,49 @@ router.get('/projects', protect, async (req, res) => {
   }
 });
 
+// Who may see a project's feed status
+async function canViewProjectFeeds(project, user) {
+  const userId = user._id;
+  const userRole = user.role;
+  const userOrganizationId = user.organizationId;
+
+  let hasAccess = false;
+
+  // Role-based access check
+  if (userRole === 'Admin' || userRole === 'Super Admin') {
+    hasAccess = true;
+    
+  } else if (userRole === 'Client') {
+    // Check if client is assigned directly or through organization
+    const isClient = project.clients.some(id => id.toString() === userId.toString());
+    const isOrgClient = userOrganizationId && project.organizations.some(id => id.toString() === userOrganizationId.toString());
+    hasAccess = isClient || isOrgClient;
+    
+  } else if (userRole === 'Developer') {
+    // Check if developer is assigned to any feed in this project
+    const feedCount = await Feed.countDocuments({
+      projectId: project._id,
+      assignedDevelopers: userId
+    });
+    hasAccess = feedCount > 0;
+    
+  } else if (isPMRole(userRole)) {
+    // Check if PM manages this project OR is the team lead
+    const isPM = isProjectPM(project, userId);
+    const isTeamLead = isProjectTL(project, userId);
+    hasAccess = isPM || isTeamLead;
+    
+  } else if (userRole === 'Team Lead') {
+    // Check if Team Lead is assigned to this project
+    hasAccess = isProjectTL(project, userId);
+    
+  } else {
+    hasAccess = false;
+  }
+
+  return hasAccess;
+}
+
 // ============================================
 // GET /api/client/projects/:projectId/feeds
 // ✅ Reads from FeedStatus table - Role Aware
@@ -83,9 +126,6 @@ router.get('/projects', protect, async (req, res) => {
 router.get('/projects/:projectId/feeds', protect, async (req, res) => {
   try {
     const { projectId } = req.params;
-    const userId = req.user._id;
-    const userRole = req.user.role;
-    const userOrganizationId = req.user.organizationId;
 
     // First, get the project to check access
     const project = await Project.findById(projectId);
@@ -94,39 +134,7 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
       return res.status(404).json({ error: 'Project not found' });
     }
 
-    let hasAccess = false;
-
-    // Role-based access check
-    if (userRole === 'Admin') {
-      hasAccess = true;
-      
-    } else if (userRole === 'Client') {
-      // Check if client is assigned directly or through organization
-      const isClient = project.clients.some(id => id.toString() === userId.toString());
-      const isOrgClient = userOrganizationId && project.organizations.some(id => id.toString() === userOrganizationId.toString());
-      hasAccess = isClient || isOrgClient;
-      
-    } else if (userRole === 'Developer') {
-      // Check if developer is assigned to any feed in this project
-      const feedCount = await Feed.countDocuments({
-        projectId: projectId,
-        assignedDevelopers: userId
-      });
-      hasAccess = feedCount > 0;
-      
-    } else if (isPMRole(userRole)) {
-      // Check if PM manages this project OR is the team lead
-      const isPM = isProjectPM(project, userId);
-      const isTeamLead = isProjectTL(project, userId);
-      hasAccess = isPM || isTeamLead;
-      
-    } else if (userRole === 'Team Lead') {
-      // Check if Team Lead is assigned to this project
-      hasAccess = isProjectTL(project, userId);
-      
-    } else {
-      hasAccess = false;
-    }
+    const hasAccess = await canViewProjectFeeds(project, req.user);
 
     if (!hasAccess) {
       return res.status(403).json({ error: 'Access denied to this project' });
@@ -135,83 +143,37 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
     // Get today's date
     const today = new Date().toISOString().split('T')[0];
     
-    // ✅ Query FeedStatus table in client_feed_dashboard DB
-    // (same project matching rule as the live progress dashboards)
-    const matcher = await createStatusMatcher([project]);
-    const ofThisProject = async (records) => (await matcher.assign(records)).map((m) => m.record);
-    const feedStatuses = await ofThisProject(await FeedStatus.find({
-      project: { $in: matcher.projectValues },
-      date: today
-    }));
-
-    // If no feed statuses found, try without date filter
-    let allFeeds = feedStatuses;
-    if (allFeeds.length === 0) {
-      const allStatuses = await ofThisProject(await FeedStatus.find({
-        project: { $in: matcher.projectValues }
-      }).sort({ date: -1 }));
-      
-      // Get the most recent status for each feed
-      const feedMap = new Map();
-      allStatuses.forEach(status => {
-        const key = status.feed_name;
-        if (!feedMap.has(key) || status.date > feedMap.get(key).date) {
-          feedMap.set(key, status);
-        }
-      });
-      
-      allFeeds = Array.from(feedMap.values());
-    }
-
-    // If still no feeds, return empty array
-    if (!allFeeds || allFeeds.length === 0) {
-      return res.status(200).json([]);
-    }
+    // One entry per feed: today's run, else its most recent run, else "No run yet"
+    const runs = await getProjectRuns(project, today);
 
     // Enrich feeds with project data
-    const enrichedFeeds = allFeeds.map(feed => {
-      // Calculate progress from stages
-      let progress = feed.progress || 0;
-      let status = feed.status || 'Pending';
-      
-      if (feed.stages && typeof feed.stages === 'object') {
-        const totalStages = 5;
-        const completedStages = Object.values(feed.stages).filter(
-          s => s && s.completed === true
-        ).length;
-        progress = feed.progress !== undefined ? feed.progress : Math.round((completedStages / totalStages) * 100);
-        
-        if (feed.failed) {
-          status = 'Failed';
-        } else if (progress === 100) {
-          status = 'Completed';
-        } else if (progress > 0) {
-          status = 'In Progress';
-        } else {
-          status = 'Pending';
-        }
-      }
-      
+    const enrichedFeeds = runs.map(({ name, record, feed: feedDoc }) => {
+      const run = describeRun(record, today);
+      const feed = record || {};
+      // older field: only the values it always had
+      const status = run.isStalled ? 'In Progress' : (record ? run.displayStatus : 'Pending');
+      const feedType = feed.feed_type || feedDoc?.feedType || 'Daily';
+
       return {
-        feed_name: feed.feed_name,
-        _id: feed._id,
+        feed_name: name,
+        _id: feed._id || feedDoc._id,
         status: status,
-        progress: progress,
         stages: feed.stages || {},
         failed: feed.failed || false,
         error_message: feed.error_message || '',
-        updated_at: feed.updated_at || new Date(),
-        date: feed.date || today,
-        project: feed.project,
+        updated_at: record ? feed.updated_at || new Date() : null,
+        date: record ? feed.date || today : null,
+        project: record ? feed.project : project.projectCustomId,
         client: feed.client,
-        feed_type: feed.feed_type || 'Daily',
+        feed_type: feedType,
         projectId: project._id,
         projectName: project.name,
         projectCustomId: project.projectCustomId,
         feedStatus: status,
-        feedType: feed.feed_type || 'Daily',
+        feedType: feedType,
         output_path: feed.output_path || null,
-        record_count: feed.record_count !== undefined && feed.record_count !== null ? feed.record_count : null
+        record_count: feed.record_count !== undefined && feed.record_count !== null ? feed.record_count : null,
+        ...run
       };
     });
 
@@ -220,6 +182,40 @@ router.get('/projects/:projectId/feeds', protect, async (req, res) => {
   } catch (error) {
     console.error('❌ Error fetching project feeds:', error);
     res.status(500).json({ error: 'Failed to fetch feeds', details: error.message });
+  }
+});
+
+// ============================================================
+// GET /api/client/projects/:projectId/feeds/previous-run?feed=<name>&before=YYYY-MM-DD
+// The run of one feed just before a date. Same access rules as the list above.
+// ============================================================
+router.get('/projects/:projectId/feeds/previous-run', protect, async (req, res) => {
+  try {
+    const { feed, before } = req.query;
+    if (typeof feed !== 'string' || !feed.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(before)) {
+      return res.status(400).json({ error: 'feed and before (YYYY-MM-DD) are required' });
+    }
+    const project = await Project.findById(req.params.projectId);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!(await canViewProjectFeeds(project, req.user))) {
+      return res.status(403).json({ error: 'Access denied to this project' });
+    }
+
+    const today = new Date().toISOString().split('T')[0];
+    const record = await getPreviousRun(project, feed, before);
+    res.json({
+      run: record && {
+        ...describeRun(record, today),
+        feed_name: record.feed_name,
+        stages: record.stages || {},
+        error_message: record.error_message || '',
+        output_path: record.output_path || null,
+        record_count: record.record_count ?? null,
+      },
+    });
+  } catch (error) {
+    console.error('❌ Error fetching previous run:', error);
+    res.status(500).json({ error: 'Failed to fetch the previous run' });
   }
 });
 
@@ -234,7 +230,10 @@ router.get('/feeds/status/:feedName', async (req, res) => {
     const feed = await FeedStatus.findOne({ feed_name: feedName, date });
 
     if (!feed) {
+      // No run today: the existing fields stay as they were; the extra ones describe the latest run
+      const latest = await FeedStatus.findOne({ feed_name: feedName }).sort({ date: -1, updated_at: -1 }).lean();
       return res.json({
+        ...describeRun(latest, date),
         feed_name: feedName,
         date,
         status: 'Pending',
@@ -254,6 +253,7 @@ router.get('/feeds/status/:feedName', async (req, res) => {
     ).length;
 
     res.json({
+      ...describeRun(await FeedStatus.findById(feed._id).lean(), date),
       feed_name: feedName,
       date,
       status: feed.status,

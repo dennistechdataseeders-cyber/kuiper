@@ -7,7 +7,7 @@ import { Plus, Ticket, Clock, CheckCircle, AlertCircle, Users, Lock, Globe, Tag,
 import io from 'socket.io-client';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
-import notificationManager from '../utils/notifications';
+import notificationManager, { getNotificationPermission } from '../utils/notifications';
 import { PM_ROLES, isPMRole } from '../utils/roles';
 import useIsMobile from '../utils/useIsMobile';
 import { Badge, Button, Card, PageHeader, ResponsiveTable, StatCard } from '../components/ui';
@@ -71,7 +71,7 @@ const TicketDashboard = () => {
       ));
       fetchStats();
 
-      toast.info(`Ticket ${formatTicketNumber(updatedTicket.ticketNumber)} status updated to ${updatedTicket.status}`);
+      toast(`Ticket ${formatTicketNumber(updatedTicket.ticketNumber)} status updated to ${updatedTicket.status}`, { icon: '🔄' });
       
       if (oldTicket && oldTicket.status !== updatedTicket.status) {
         const shouldNotify = 
@@ -333,7 +333,7 @@ const TicketDashboard = () => {
                     'Track and manage all support requests'}
           actions={
             <>
-              {Notification.permission !== 'granted' && Notification.permission !== 'denied' && (
+              {getNotificationPermission() === 'default' && (
                 <Button
                   variant="plain"
                   onClick={() => notificationManager.requestPermission()}

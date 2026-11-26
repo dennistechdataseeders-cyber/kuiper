@@ -146,7 +146,7 @@ const GitManager = () => {
         }
       }
     } else {
-      toast.info('No Git repository linked to this project');
+      toast('No Git repository linked to this project', { icon: 'ℹ️' });
       setRepoContents([]);
       setInviteLink(null);
     }
@@ -199,7 +199,7 @@ const GitManager = () => {
         setDirectInviteEmail('');
         await fetchCollaborators(selectedProject._id);
       } else if (res.data.inviteLink) {
-        toast.info(`Could not auto-invite ${directInviteEmail}. Please share this invite link with them.`);
+        toast(`Could not auto-invite ${directInviteEmail}. Please share this invite link with them.`, { icon: 'ℹ️' });
         await navigator.clipboard.writeText(res.data.inviteLink);
         toast.success('Invite link copied to clipboard!');
       } else {

@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocat
 import PageLayout from './components/PageLayout';
 import { pageLoaders } from './pageLoaders';
 import PageLoader from './components/PageLoader';
+import ErrorBoundary from './components/ErrorBoundary';
 const ViewAnalytics = lazy(pageLoaders.ViewAnalytics);
 const UserManagement = lazy(pageLoaders.UserManagement);
 const ProjectManagement = lazy(pageLoaders.ProjectManagement);
@@ -295,7 +296,7 @@ function AppContent() {
       
       // Show toast if ticket is assigned to current user
       if (ticket.assignedTo?._id === userId || ticket.assignedTo === userId) {
-        toast.info(`📋 Ticket assigned to you: ${ticket.ticketNumber} - ${ticket.title}`, {
+        toast(`📋 Ticket assigned to you: ${ticket.ticketNumber} - ${ticket.title}`, {
           duration: 5000,
           icon: '📋'
         });
@@ -341,7 +342,7 @@ function AppContent() {
     socket.on('feed_assigned', (data) => {
       console.log('📋 Feed assigned in App:', data.feed?.name);
       if (data.message) {
-        toast.info(`📋 ${data.message}`, {
+        toast(`📋 ${data.message}`, {
           duration: 5000,
           icon: '📋'
         });
@@ -401,6 +402,8 @@ function AppContent() {
           <Route path="/*" element={
             <ProtectedRoute>
               <PageLayout>
+                  {/* A crash in one page shows its message here; the sidebar keeps working. Cleared on route change. */}
+                  <ErrorBoundary inline resetKey={location.pathname}>
                   <Suspense fallback={<PageLoader />}>
                   <Routes key={location.pathname}>
                     <Route path="/" element={<Navigate to={landingPath} replace />} />
@@ -677,6 +680,7 @@ function AppContent() {
                     <Route path="*" element={<Navigate to={landingPath} replace />} />
                   </Routes>
                   </Suspense>
+                  </ErrorBoundary>
                                 </PageLayout>
             </ProtectedRoute>
           } />

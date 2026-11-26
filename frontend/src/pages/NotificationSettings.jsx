@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Volume2, VolumeX, CheckCircle } from 'lucide-react';
-import notificationManager from '../utils/notifications';
+import notificationManager, { getNotificationPermission } from '../utils/notifications';
 import toast from 'react-hot-toast';
 
 const NotificationSettings = () => {
@@ -14,7 +14,7 @@ const NotificationSettings = () => {
   });
 
   useEffect(() => {
-  setPermission(Notification.permission);
+  setPermission(getNotificationPermission());
   try {
     const saved = localStorage.getItem('notificationSettings');
     if (saved) {
@@ -73,15 +73,17 @@ const NotificationSettings = () => {
               <div>
                 <h3 className="font-semibold text-gray-900">Desktop Notifications</h3>
                 <p className="text-sm text-gray-500">
-                  {permission === 'granted' 
-                    ? 'Notifications are enabled' 
+                  {permission === 'granted'
+                    ? 'Notifications are enabled'
+                    : permission === 'unsupported'
+                    ? 'Not available in this browser. On iPhone, add KUIPER to your Home Screen to get them. In-app alerts and sounds still work.'
                     : permission === 'denied'
                     ? 'Notifications are blocked by your browser'
                     : 'Click enable to receive desktop alerts'}
                 </p>
               </div>
             </div>
-            {permission !== 'granted' && (
+            {permission !== 'granted' && permission !== 'unsupported' && (
               <button
                 onClick={enableNotifications}
                 className="btn btn-md bg-blue-600 text-white hover:bg-blue-700"

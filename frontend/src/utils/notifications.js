@@ -2,10 +2,24 @@
 // Location: frontend/src/utils/notifications.js
 import toast from 'react-hot-toast';
 
+// iOS Safari/Chrome have no window.Notification unless the app runs from the Home Screen:
+// reading Notification.permission there throws. Always go through these two helpers.
+export const isNotificationSupported = () => typeof window !== 'undefined' && 'Notification' in window;
+
+// 'granted' | 'denied' | 'default', or 'unsupported' when the browser has no Notification API
+export const getNotificationPermission = () => {
+  if (!isNotificationSupported()) return 'unsupported';
+  try {
+    return window.Notification.permission;
+  } catch {
+    return 'unsupported';
+  }
+};
+
 class NotificationManager {
   constructor() {
     this.permission = null;
-    this.isSupported = 'Notification' in window;
+    this.isSupported = isNotificationSupported();
     this.audioContext = null;
     // Use absolute path for custom icon - make sure this file exists
     this.customIcon = `${window.location.origin}/images/login_img_192.png`;
@@ -19,15 +33,16 @@ class NotificationManager {
       return false;
     }
 
-    if (Notification.permission === 'granted') {
+    const current = getNotificationPermission();
+    if (current === 'granted') {
       this.permission = 'granted';
       toast.success('Notifications are already enabled!');
       return true;
     }
 
-    if (Notification.permission !== 'denied') {
+    if (current !== 'denied') {
       try {
-        const permission = await Notification.requestPermission();
+        const permission = await window.Notification.requestPermission();
         this.permission = permission;
         
         if (permission === 'granted') {
@@ -57,9 +72,10 @@ class NotificationManager {
 
   // Check if we can send notifications
   canNotify() {
-    const can = this.isSupported && Notification.permission === 'granted';
+    const permission = getNotificationPermission();
+    const can = permission === 'granted';
     if (!can) {
-      console.log('Cannot send notification - permission:', Notification.permission);
+      console.log('Cannot send notification - permission:', permission);
     }
     return can;
   }
@@ -149,7 +165,7 @@ class NotificationManager {
       if (tag) notificationOptions.tag = tag;
       if (data) notificationOptions.data = data;
 
-      const notification = new Notification(title, notificationOptions);
+      const notification = new window.Notification(title, notificationOptions);
       console.log('✅ Notification sent:', title);
 
       // Handle click

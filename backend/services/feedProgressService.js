@@ -7,7 +7,8 @@ require('../models/Project');
 require('../models/User');
 const FeedStatus = require('../models/FeedStatus');
 const { getServerTimestamp } = require('../utils/serverTime');
-const { createStatusMatcher, feedKey, effectiveStatus } = require('../utils/feedStatusMatch');
+const { createStatusMatcher, feedKey } = require('../utils/feedStatusMatch');
+const { describeRun, getLatestRuns } = require('../utils/feedRunStatus');
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -55,10 +56,11 @@ function isDueToday(feed, group, periods) {
   return false;
 }
 
-const toRun = (r) => r && ({
+// status, progress and stage fields come from the rules shared with the Feed Status page
+const toRun = (r, today) => r && ({
+  ...describeRun(r, today),
   date: r.date,
-  status: effectiveStatus(r),
-  progress: Math.round(r.progress || 0),
+  status: describeRun(r, today).displayStatus,
   failed: !!r.failed,
   error_message: r.error_message || '',
   stages: r.stages || {},
@@ -105,6 +107,9 @@ async function getLiveProgress(feedFilter, date) {
   // same date: a run that carries the project stays ahead of one matched by name only
   for (const runs of runsByFeed.values()) runs.sort((a, b) => b.date.localeCompare(a.date));
 
+  // A due feed without a run today shows its previous run (same query as the Feed Status page)
+  const latestRuns = matcher ? await getLatestRuns(matcher, date, date) : new Map();
+
   const result = [];
   for (const feed of feeds) {
     const group = getGroup(feed.feedType);
@@ -116,7 +121,7 @@ async function getLiveProgress(feedFilter, date) {
     if (group === 'monthly') period = runs.find((r) => r.date >= periods.monthStart) || null;
     if (group === 'adhoc') {
       // No schedule: shown only with a run today, or while its latest run is still in progress
-      if (!today && !(runs[0] && effectiveStatus(runs[0]) === 'In Progress')) continue;
+      if (!today && !(runs[0] && ['In Progress', 'Stalled'].includes(describeRun(runs[0], date).displayStatus))) continue;
       period = today || runs[0];
     }
 
@@ -132,8 +137,9 @@ async function getLiveProgress(feedFilter, date) {
       dueToday: isDueToday(feed, group, periods),
       project: { _id: feed.projectId._id, name: feed.projectId.name, projectCustomId: feed.projectId.projectCustomId },
       developers: (feed.assignedDevelopers || []).filter(Boolean).map((d) => ({ _id: d._id, name: d.name })),
-      today: toRun(today),
-      period: toRun(period),
+      today: toRun(today, date),
+      latest: toRun(today || latestRuns.get(feedKey(feed.projectId._id, feed.name)) || null, date),
+      period: toRun(period, date),
     });
   }
 

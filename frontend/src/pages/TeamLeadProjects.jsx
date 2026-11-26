@@ -156,7 +156,7 @@ const TeamLeadProjects = () => {
         toast.success(`✅ ${response.data.created} feed(s) created successfully! ${response.data.failed || 0} failed.`);
         if (response.data.errors && response.data.errors.length > 0) {
           console.warn('Bulk feed import errors:', response.data.errors);
-          toast.warning(`${response.data.errors.length} feed(s) had issues. Check console for details.`);
+          toast(`${response.data.errors.length} feed(s) had issues. Check console for details.`, { icon: '⚠️' });
         }
         setShowBulkFeedModal(false);
         setBulkFeedFile(null);

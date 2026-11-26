@@ -4,14 +4,11 @@ import axios from 'axios';
 import { useLocation } from 'react-router-dom';
 
 import {
-  Search,
   Hash,
   ChevronLeft,
   ChevronRight,
   Activity,
-  Filter,
   Edit3,
-  Users,
   Clock,
   Send,
   X,
@@ -41,7 +38,11 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
 import CommentSection from '../components/CommentSection';
+import DeveloperPicker from '../components/DeveloperPicker';
+import AssignDevelopersCell from '../components/AssignDevelopersCell';
+import FeedFilterBar from '../components/FeedFilterBar';
 import { isProjectManagerOf } from '../utils/projectAccess';
+import useFeedFilters, { assignedPeople, countFeedsByDeveloper, feedTypeLabel } from '../utils/useFeedFilters';
 import useIsMobile from '../utils/useIsMobile';
 
 const weekDays = [
@@ -61,13 +62,12 @@ const ProjectFeeds = () => {
   const location = useLocation();
   const isMobile = useIsMobile();
 
-  // FILTERS
-  const [feedTypeFilter, setFeedTypeFilter] = useState('ALL');
-  const [selectedProject, setSelectedProject] = useState('ALL');
-  const [searchTerm, setSearchTerm] = useState('');
-
-  // PAGINATION
-  const [currentPage, setCurrentPage] = useState(1);
+  // FILTERS + PAGE (kept in the URL; a project can also come from Project Management)
+  const {
+    filters, setFilter, clearFilters, isFiltered,
+    filteredFeeds: matchingFeeds,
+    page, setPage: setCurrentPage
+  } = useFeedFilters(feeds, projects, location.state?.selectedProjectId);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
   // EDIT MODAL
@@ -124,25 +124,9 @@ const ProjectFeeds = () => {
     }
   };
 
-  // Get developer names by IDs
-  const getDeveloperNames = (developerList) => {
-    if (!developerList || developerList.length === 0) return [];
-    
-    return developerList.map(dev => {
-      if (dev && typeof dev === 'object' && dev.name) {
-        return dev.name;
-      }
-      if (dev && typeof dev === 'object' && dev._id) {
-        const found = developers.find(d => d._id === dev._id);
-        return found ? found.name : dev._id.substring(0, 8);
-      }
-      if (typeof dev === 'string') {
-        const found = developers.find(d => d._id === dev);
-        return found ? found.name : dev.substring(0, 8);
-      }
-      return 'Unknown';
-    });
-  };
+  // For the developer pickers: how many of these feeds each developer has, and who is on them
+  const feedCounts = useMemo(() => countFeedsByDeveloper(feeds), [feeds]);
+  const knownPeople = useMemo(() => assignedPeople(feeds), [feeds]);
 
   // Get schedule display text for feed
   const getScheduleDisplay = (feed) => {
@@ -367,23 +351,6 @@ const ProjectFeeds = () => {
     fetchFeedStatusOptions();
   }, []);
 
-  useEffect(() => {
-    if (projects.length > 0 && location.state?.selectedProjectId) {
-      const projectExists = projects.some(p => p._id === location.state.selectedProjectId);
-      if (projectExists) {
-        setSelectedProject(location.state.selectedProjectId);
-        window.history.replaceState({}, document.title);
-      } else {
-        setSelectedProject('ALL');
-      }
-    }
-  }, [projects, location.state]);
-
-  // RESET PAGE
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedProject, searchTerm, feedTypeFilter, itemsPerPage]);
-  
  // frontend/src/pages/ProjectFeeds.jsx - UPDATED fetchData
 
 const fetchData = async () => {
@@ -436,30 +403,7 @@ const fetchData = async () => {
 // frontend/src/pages/ProjectFeeds.jsx - UPDATED filteredFeeds
 
 const filteredFeeds = useMemo(() => {
-  let result = [...feeds];
-
-  // ✅ FIX: For Super Admin and Admin, show ALL projects in dropdown
-  // The project filter dropdown will still work, but now shows all projects
-  if (selectedProject !== 'ALL') {
-    result = result.filter(
-      feed => feed.projectId === selectedProject
-    );
-  }
-
-  if (feedTypeFilter !== 'ALL') {
-    result = result.filter(
-      feed => feed.feedType === feedTypeFilter
-    );
-  }
-
-  if (searchTerm.trim()) {
-    const search = searchTerm.toLowerCase();
-    result = result.filter(feed =>
-      feed.name?.toLowerCase().includes(search) ||
-      feed.projectCustomId?.toLowerCase().includes(search) ||
-      feed.webDomain?.toLowerCase().includes(search)
-    );
-  }
+  const result = [...matchingFeeds];
 
   result.sort((a, b) =>
     (a.projectCustomId || '').localeCompare(
@@ -470,12 +414,34 @@ const filteredFeeds = useMemo(() => {
   );
 
   return result;
-}, [feeds, selectedProject, searchTerm, feedTypeFilter]);
+}, [matchingFeeds]);
   // PAGINATION
+  const totalPages = Math.ceil(filteredFeeds.length / itemsPerPage);
+  // the last page can disappear when an assignment moves a feed out of the filters
+  const currentPage = Math.min(page, Math.max(totalPages, 1));
   const indexOfLastFeed = currentPage * itemsPerPage;
   const indexOfFirstFeed = indexOfLastFeed - itemsPerPage;
   const currentFeeds = filteredFeeds.slice(indexOfFirstFeed, indexOfLastFeed);
-  const totalPages = Math.ceil(filteredFeeds.length / itemsPerPage);
+
+  // ASSIGN DEVELOPERS FROM THE TABLE: saves only the developers and updates only this row
+  const handleAssignDevelopers = async (feed, developerIds) => {
+    try {
+      const res = await axios.put(
+        `${ADMIN_BASE}/feeds/${feed._id}`,
+        { assignedDevelopers: developerIds },
+        authHeader
+      );
+      setFeeds(prev => prev.map(f =>
+        f._id === feed._id ? { ...f, assignedDevelopers: res.data.assignedDevelopers } : f
+      ));
+      toast.success(`Developers updated for ${feed.name}`);
+      return true;
+    } catch (err) {
+      console.error('Error assigning developers:', err);
+      toast.error(err.response?.data?.error || 'Failed to update developers');
+      return false;
+    }
+  };
 
   // EDIT FEED
   const handleEditClick = (feed) => {
@@ -553,53 +519,20 @@ const filteredFeeds = useMemo(() => {
               </p>
             </div>
 
-            {/* FILTERS SECTION - Responsive grid */}
-            <div className="card !p-3 sm:!p-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
-              {/* Project Select */}
-              <div className="relative">
-                <Briefcase size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <select
-                  value={selectedProject}
-                  onChange={(e) => setSelectedProject(e.target.value)}
-                  className="input pl-8 bg-slate-50 cursor-pointer"
-                >
-                  <option value="ALL">All Projects</option>
-                  {projects.slice(0, 20).map(project => (
-                    <option key={project._id} value={project._id}>
-                      {project.projectCustomId}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Type Filter */}
-              <div className="relative">
-                <Filter size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <select
-                  value={feedTypeFilter}
-                  onChange={(e) => setFeedTypeFilter(e.target.value)}
-                  className="input pl-8 bg-slate-50 cursor-pointer"
-                >
-                  <option value="ALL">All Types</option>
-                  <option value="Daily">Daily</option>
-                  <option value="Weekly">Weekly</option>
-                  <option value="Monthly">Monthly</option>
-                  <option value="Once off">Once off</option>
-                </select>
-              </div>
-
-              {/* Search */}
-              <div className="relative">
-                <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Search feeds..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="input pl-8 bg-slate-50"
-                />
-              </div>
-            </div>
+            {/* FILTERS SECTION */}
+            <FeedFilterBar
+              filters={filters}
+              setFilter={setFilter}
+              clearFilters={clearFilters}
+              isFiltered={isFiltered}
+              projects={projects}
+              statuses={feedStatuses}
+              developers={developers}
+              feedCounts={feedCounts}
+              knownPeople={knownPeople}
+              shown={filteredFeeds.length}
+              total={feeds.length}
+            />
           </div>
         </div>
 
@@ -631,7 +564,6 @@ const filteredFeeds = useMemo(() => {
               {currentFeeds.length > 0 ? (
                 currentFeeds.map((feed) => {
                   const isExpanded = expandedFeedId === feed._id;
-                  const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
                   const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                   const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
                   const lastUpdated = feed.gitLastUpdated; // stored in DB, synced weekly
@@ -668,7 +600,7 @@ const filteredFeeds = useMemo(() => {
                           </span>
                           <span className={`badge border ${getFeedTypeColor(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
-                            {feed.feedType}
+                            {feedTypeLabel(feed.feedType)}
                           </span>
                           {isExpanded ? <ChevronUp size={16} className="text-slate-400 ml-auto" /> : <ChevronDown size={16} className="text-slate-400 ml-auto" />}
                         </div>
@@ -696,19 +628,14 @@ const filteredFeeds = useMemo(() => {
                       </div>
 
                       {/* Developers */}
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                        {developerNames.slice(0, 3).map((devName, idx) => (
-                          <span key={idx} className="badge bg-blue-50 text-blue-700">
-                            <Users size={12} />
-                            {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
-                          </span>
-                        ))}
-                        {developerNames.length > 3 && (
-                          <span className="text-xs font-semibold text-blue-500">+{developerNames.length - 3}</span>
-                        )}
-                        {developerNames.length === 0 && (
-                          <span className="text-xs font-semibold text-slate-400 italic">Unassigned</span>
-                        )}
+                      <div className="mt-1.5">
+                        <AssignDevelopersCell
+                          feed={feed}
+                          developers={developers}
+                          feedCounts={feedCounts}
+                          onSave={handleAssignDevelopers}
+                          maxNames={3}
+                        />
                       </div>
 
                       {/* Actions */}
@@ -817,7 +744,7 @@ const filteredFeeds = useMemo(() => {
                     <th className="th">Type</th>
                     <th className="th">Status</th>
                     <th className="th">Git Last Updated</th>
-                    <th className="th">Developers</th>
+                    <th className="th">Assigned Developers</th>
                     <th className="th">Git Repository</th>
                     <th className="th text-right">Actions</th>
                   </tr>
@@ -826,9 +753,6 @@ const filteredFeeds = useMemo(() => {
                   {currentFeeds.length > 0 ? (
                     currentFeeds.map((feed, idx) => {
                       const isExpanded = expandedFeedId === feed._id;
-                      const developerNames = getDeveloperNames(feed.assignedDevelopers || []);
-                      const displayDevelopers = developerNames.slice(0, 2);
-                      const hasMoreDevelopers = developerNames.length > 2;
                       const gitUrl = feed.gitRepoUrl || feed.projectId?.gitRepoUrl;
                       const gitName = feed.gitRepoName || feed.projectId?.gitRepoName;
                       const lastUpdated = feed.gitLastUpdated; // stored in DB, synced weekly
@@ -862,7 +786,7 @@ const filteredFeeds = useMemo(() => {
                             <td className="td">
                               <span className={`badge border whitespace-nowrap ${getFeedTypeColor(feed.feedType)}`}>
                                 {getFeedTypeIcon(feed.feedType)}
-                                {feed.feedType}
+                                {feedTypeLabel(feed.feedType)}
                               </span>
                             </td>
 
@@ -900,28 +824,13 @@ const filteredFeeds = useMemo(() => {
                               )}
                             </td>
 
-                            <td className="td">
-                              <div className="space-y-1">
-                                <div className="flex flex-wrap items-center gap-1">
-                                  {displayDevelopers.map((devName, devIdx) => (
-                                    <span
-                                      key={devIdx}
-                                      className="badge bg-blue-50 text-blue-700 whitespace-nowrap"
-                                    >
-                                      <Users size={12} />
-                                      {devName.length > 12 ? devName.substring(0, 10) + '..' : devName}
-                                    </span>
-                                  ))}
-                                </div>
-                                {hasMoreDevelopers && (
-                                  <span className="text-xs font-semibold text-blue-500 whitespace-nowrap">
-                                    +{developerNames.length - 2} more
-                                  </span>
-                                )}
-                                {developerNames.length === 0 && (
-                                  <span className="text-xs font-semibold text-slate-400 italic whitespace-nowrap">Unassigned</span>
-                                )}
-                              </div>
+                            <td className="td" onClick={(e) => e.stopPropagation()}>
+                              <AssignDevelopersCell
+                                feed={feed}
+                                developers={developers}
+                                feedCounts={feedCounts}
+                                onSave={handleAssignDevelopers}
+                              />
                             </td>
 
                             <td className="td">
@@ -1095,7 +1004,7 @@ const filteredFeeds = useMemo(() => {
             <div className="flex items-center gap-1 sm:gap-2">
               <button
                 disabled={currentPage === 1}
-                onClick={() => setCurrentPage(prev => prev - 1)}
+                onClick={() => setCurrentPage(currentPage - 1)}
                 className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
                 <ChevronLeft size={16} />
@@ -1143,7 +1052,7 @@ const filteredFeeds = useMemo(() => {
 
               <button
                 disabled={currentPage === totalPages}
-                onClick={() => setCurrentPage(prev => prev + 1)}
+                onClick={() => setCurrentPage(currentPage + 1)}
                 className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
               >
                 <ChevronRight size={16} />
@@ -1292,31 +1201,13 @@ const filteredFeeds = useMemo(() => {
                     <UserCheck size={12} />
                     Assign Developers
                   </label>
-                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                    {developers.map(dev => (
-                      <label
-                        key={dev._id}
-                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${
-                          feedForm.assignedDevelopers.includes(dev._id)
-                            ? 'border-blue-500 bg-blue-50 shadow-sm'
-                            : 'border-slate-200 hover:bg-slate-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={feedForm.assignedDevelopers.includes(dev._id)}
-                          onChange={(e) => {
-                            const updated = e.target.checked
-                              ? [...feedForm.assignedDevelopers, dev._id]
-                              : feedForm.assignedDevelopers.filter(id => id !== dev._id);
-                            setFeedForm({ ...feedForm, assignedDevelopers: updated });
-                          }}
-                          className="w-3 h-3 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="text-xs font-semibold text-slate-700 truncate">{dev.name}</span>
-                      </label>
-                    ))}
-                  </div>
+                  <DeveloperPicker
+                    developers={developers}
+                    value={feedForm.assignedDevelopers}
+                    onChange={(ids) => setFeedForm({ ...feedForm, assignedDevelopers: ids })}
+                    feedCounts={feedCounts}
+                    knownPeople={knownPeople}
+                  />
                 </div>
 
                 <button

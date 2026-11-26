@@ -7,6 +7,7 @@ import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
 import developerTips from '../data/developerTips';
 import io from 'socket.io-client';
+import { getNotificationPermission } from '../utils/notifications';
 import useLiveFeedProgress, { dueTodayFeeds } from '../utils/useLiveFeedProgress';
 import LiveFeedProgress from '../components/LiveFeedProgress';
 
@@ -125,12 +126,12 @@ const DeveloperDashboard = () => {
       });
       
       // Show desktop notification
-      if (Notification.permission === 'granted') {
-        const notificationBody = data.githubInviteSent 
+      if (getNotificationPermission() === 'granted') {
+        const notificationBody = data.githubInviteSent
           ? `${data.message}\nGitHub invitation has been sent to your email!`
           : `${data.message}\nCheck with your PM for GitHub access.`;
-        
-        new Notification('New Feed Assignment', {
+
+        new window.Notification('New Feed Assignment', {
           body: notificationBody,
           icon: '/images/tab_logo_192.png',
           tag: `feed-${data.feed._id}`
@@ -152,13 +153,13 @@ const DeveloperDashboard = () => {
     
     // Listen for task assignments
     newSocket.on('new_task', (task) => {
-      toast.info(`New task assigned: ${task.name || 'Development Task'}`, {
+      toast(`New task assigned: ${task.name || 'Development Task'}`, {
         duration: 5000,
         icon: '📝'
       });
       
-      if (Notification.permission === 'granted') {
-        new Notification('New Task Assigned', {
+      if (getNotificationPermission() === 'granted') {
+        new window.Notification('New Task Assigned', {
           body: task.details?.substring(0, 100) || 'You have a new task in your bucket',
           icon: '/images/tab_logo_192.png'
         });

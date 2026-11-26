@@ -1,12 +1,11 @@
 // frontend/src/pages/TeamLeadFeeds.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import {
   Activity,
   Users,
   UserPlus,
-  Search,
   X,
   ChevronDown,
   ChevronUp,
@@ -19,9 +18,7 @@ import {
   Calendar,
   GitFork,
   CheckCircle,
-  AlertCircle,
   RefreshCw,
-  Filter,
   Loader2,
   User,
   MessageSquare,
@@ -38,7 +35,11 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import toast from 'react-hot-toast';
+import DeveloperPicker from '../components/DeveloperPicker';
+import AssignDevelopersCell from '../components/AssignDevelopersCell';
+import FeedFilterBar from '../components/FeedFilterBar';
 import { isPMRole } from '../utils/roles';
+import useFeedFilters, { assignedPeople, countFeedsByDeveloper, feedTypeLabel } from '../utils/useFeedFilters';
 
 const TeamLeadFeeds = () => {
   const location = useLocation();
@@ -47,16 +48,23 @@ const TeamLeadFeeds = () => {
   const [projects, setProjects] = useState([]);
   const [feeds, setFeeds] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProject, setSelectedProject] = useState('ALL');
   const [selectedFeed, setSelectedFeed] = useState(null);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [developers, setDevelopers] = useState([]);
-  const [selectedDeveloper, setSelectedDeveloper] = useState(null);
+  const [selectedDevelopers, setSelectedDevelopers] = useState([]);
   const [assigning, setAssigning] = useState(false);
   const [expandedFeed, setExpandedFeed] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
+
+  // Filters + page (kept in the URL; a project can also come from the Projects page)
+  const {
+    filters, setFilter, clearFilters, isFiltered, filteredFeeds,
+    page, setPage: setCurrentPage
+  } = useFeedFilters(feeds, projects, location.state?.selectedProject);
+
+  // For the developer pickers: how many of these feeds each developer has, and who is on them
+  const feedCounts = useMemo(() => countFeedsByDeveloper(feeds), [feeds]);
+  const knownPeople = useMemo(() => assignedPeople(feeds), [feeds]);
 
   // ============================================
   // 🆕 FEED STATUS STATE
@@ -630,14 +638,6 @@ const TeamLeadFeeds = () => {
   // ============================================
 
   useEffect(() => {
-    const projectIdFromState = location.state?.selectedProject;
-    const projectNameFromState = location.state?.selectedProjectName;
-
-    if (projectIdFromState) {
-      console.log(`🔍 Filtering feeds for project: ${projectNameFromState || projectIdFromState}`);
-      setSelectedProject(projectIdFromState);
-    }
-
     fetchData();
     fetchFeedStatusOptions();
   }, []);
@@ -677,37 +677,36 @@ const TeamLeadFeeds = () => {
 
   const openAssignModal = (feed) => {
     setSelectedFeed(feed);
-    const currentDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0
-      ? feed.assignedDevelopers[0]._id || feed.assignedDevelopers[0]
-      : null;
-    setSelectedDeveloper(currentDev);
+    setSelectedDevelopers((feed.assignedDevelopers || []).filter(Boolean).map(d => d._id || d));
     setShowAssignModal(true);
   };
 
-  const handleAssignDeveloper = async () => {
-    if (!selectedFeed) return;
-    setAssigning(true);
+  // Saves the feed's developers and updates only its row. Used by the dialog and the table cell.
+  const handleAssignDevelopers = async (feed, developerIds) => {
     try {
-      const developerIds = selectedDeveloper ? [selectedDeveloper] : [];
-      await axios.patch(
-        `${API_BASE_URL}/api/teamlead/feeds/${selectedFeed._id}/assign-developers`,
-        { developerIds: developerIds },
+      const res = await axios.patch(
+        `${API_BASE_URL}/api/teamlead/feeds/${feed._id}/assign-developers`,
+        { developerIds },
         authHeader
       );
-
-      const developerName = selectedDeveloper
-        ? developers.find(d => d._id === selectedDeveloper)?.name || 'Developer'
-        : 'No developer';
-
-      toast.success(`Feed assigned to ${developerName} successfully!`);
-      setShowAssignModal(false);
-      fetchData();
+      setFeeds(prev => prev.map(f =>
+        f._id === feed._id ? { ...f, assignedDevelopers: res.data.feed.assignedDevelopers } : f
+      ));
+      toast.success(`Developers updated for ${feed.name}`);
+      return true;
     } catch (err) {
-      console.error('Error assigning developer:', err);
-      toast.error(err.response?.data?.error || 'Failed to assign developer');
-    } finally {
-      setAssigning(false);
+      console.error('Error assigning developers:', err);
+      toast.error(err.response?.data?.error || 'Failed to update developers');
+      return false;
     }
+  };
+
+  const handleAssignFromModal = async () => {
+    if (!selectedFeed) return;
+    setAssigning(true);
+    const saved = await handleAssignDevelopers(selectedFeed, selectedDevelopers);
+    setAssigning(false);
+    if (saved) setShowAssignModal(false);
   };
 
   const getFeedTypeStyle = (type) => {
@@ -728,15 +727,9 @@ const TeamLeadFeeds = () => {
     }
   };
 
-  const filteredFeeds = feeds.filter(feed => {
-    const matchesSearch =
-      feed.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      feed.projectCustomId?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesProject = selectedProject === 'ALL' || feed.projectId === selectedProject;
-    return matchesSearch && matchesProject;
-  });
-
   const totalPages = Math.ceil(filteredFeeds.length / itemsPerPage);
+  // the last page can disappear when an assignment moves a feed out of the filters
+  const currentPage = Math.min(page, Math.max(totalPages, 1));
   const currentFeeds = filteredFeeds.slice(
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
@@ -771,16 +764,13 @@ const TeamLeadFeeds = () => {
             </div>
           </div>
 
-          {location.state?.selectedProjectName && selectedProject !== 'ALL' && (
+          {location.state?.selectedProjectName && filters.project === location.state.selectedProject && (
             <div className="flex items-center gap-2 px-4 py-2 bg-indigo-50 border border-indigo-200 rounded-xl">
               <span className="text-xs font-semibold text-indigo-600 uppercase tracking-wide">
                 Filtered: {location.state.selectedProjectName}
               </span>
               <button
-                onClick={() => {
-                  setSelectedProject('ALL');
-                  window.history.replaceState({}, document.title);
-                }}
+                onClick={() => setFilter('project', 'ALL')}
                 className="btn-icon text-indigo-400 hover:text-indigo-600"
               >
                 <X size={14} />
@@ -832,45 +822,20 @@ const TeamLeadFeeds = () => {
       </div>
 
       {/* Filters */}
-      <div className="card mb-4 sm:mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search feeds by name or project..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="input pl-10"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="btn-icon absolute top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 right-0 md:right-1"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-
-          <div className="relative">
-            <Filter size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="input pl-10 cursor-pointer appearance-none"
-            >
-              <option value="ALL">All Projects</option>
-              {projects.map(project => (
-                <option key={project._id} value={project._id}>
-                  {project.projectCustomId}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          </div>
-        </div>
-      </div>
+      <FeedFilterBar
+        className="mb-4 sm:mb-6"
+        filters={filters}
+        setFilter={setFilter}
+        clearFilters={clearFilters}
+        isFiltered={isFiltered}
+        projects={projects}
+        statuses={feedStatusOptions}
+        developers={developers}
+        feedCounts={feedCounts}
+        knownPeople={knownPeople}
+        shown={filteredFeeds.length}
+        total={feeds.length}
+      />
 
       {/* Feeds Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
@@ -882,7 +847,7 @@ const TeamLeadFeeds = () => {
                 <th className="th">Project</th>
                 <th className="th">Type</th>
                 <th className="th">Status</th>
-                <th className="th">Assigned Developer</th>
+                <th className="th">Assigned Developers</th>
                 <th className="th">Comments</th>
                 <th className="th text-right">Actions</th>
               </tr>
@@ -901,10 +866,8 @@ const TeamLeadFeeds = () => {
               ) : (
                 currentFeeds.map((feed) => {
                   const isExpanded = expandedFeed === feed._id;
-                  const assignedDev = feed.assignedDevelopers && feed.assignedDevelopers.length > 0
-                    ? feed.assignedDevelopers[0]
-                    : null;
-                  const assignedDevName = assignedDev?.name || 'Unassigned';
+                  const assignedDevs = (feed.assignedDevelopers || []).filter(Boolean);
+                  const isAssigned = assignedDevs.length > 0;
 
                   return (
                     <React.Fragment key={feed._id}>
@@ -912,7 +875,7 @@ const TeamLeadFeeds = () => {
                         <td className="td">
                           <div className="flex items-center gap-3">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm shrink-0 ${
-                              assignedDev
+                              isAssigned
                                 ? 'bg-gradient-to-br from-emerald-500 to-emerald-600 text-white'
                                 : 'bg-slate-200 text-slate-500'
                             }`}>
@@ -923,7 +886,7 @@ const TeamLeadFeeds = () => {
                               <div className="flex items-center gap-2 mt-1">
                                 <span className={`badge border ${getFeedTypeStyle(feed.feedType)}`}>
                                   {getFeedTypeIcon(feed.feedType)}
-                                  {feed.feedType}
+                                  {feedTypeLabel(feed.feedType)}
                                 </span>
                               </div>
                             </div>
@@ -940,7 +903,7 @@ const TeamLeadFeeds = () => {
                         <td className="td">
                           <span className={`badge border ${getFeedTypeStyle(feed.feedType)}`}>
                             {getFeedTypeIcon(feed.feedType)}
-                            {feed.feedType}
+                            {feedTypeLabel(feed.feedType)}
                           </span>
                         </td>
 
@@ -972,19 +935,12 @@ const TeamLeadFeeds = () => {
                         </td>
 
                         <td className="td">
-                          {assignedDev ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-xs font-semibold shrink-0">
-                                {assignedDevName.charAt(0).toUpperCase()}
-                              </div>
-                              <span className="text-sm font-semibold text-slate-700">{assignedDevName}</span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-slate-400 italic flex items-center gap-1.5">
-                              <AlertCircle size={12} />
-                              Unassigned
-                            </span>
-                          )}
+                          <AssignDevelopersCell
+                            feed={feed}
+                            developers={developers}
+                            feedCounts={feedCounts}
+                            onSave={handleAssignDevelopers}
+                          />
                         </td>
 
                         <td className="td">
@@ -1012,7 +968,7 @@ const TeamLeadFeeds = () => {
                               className="btn btn-sm bg-indigo-50 text-indigo-600 hover:bg-indigo-600 hover:text-white"
                             >
                               <UserPlus size={12} />
-                              {assignedDev ? 'Reassign' : 'Assign'}
+                              {isAssigned ? 'Reassign' : 'Assign'}
                             </button>
                             <button
                               onClick={() => setExpandedFeed(isExpanded ? null : feed._id)}
@@ -1041,7 +997,7 @@ const TeamLeadFeeds = () => {
                                   </div>
                                   <div className="flex justify-between">
                                     <span className="text-slate-500">Type</span>
-                                    <span className="font-medium text-slate-700">{feed.feedType}</span>
+                                    <span className="font-medium text-slate-700">{feedTypeLabel(feed.feedType)}</span>
                                   </div>
                                   {feed.feedType === 'Weekly' && feed.weekDay && (
                                     <div className="flex justify-between">
@@ -1073,25 +1029,27 @@ const TeamLeadFeeds = () => {
                               <div className="card">
                                 <h4 className="text-sm font-semibold text-slate-500 mb-3 flex items-center gap-2">
                                   <User size={12} />
-                                  Assigned Developer
+                                  Assigned Developers
                                 </h4>
-                                {assignedDev ? (
+                                {isAssigned ? (
                                   <div className="space-y-3">
-                                    <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
-                                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
-                                        {assignedDevName.charAt(0).toUpperCase()}
+                                    {assignedDevs.map((dev) => (
+                                      <div key={dev._id} className="flex items-center gap-3 p-3 bg-slate-50 rounded-lg">
+                                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-bold shrink-0">
+                                          {dev.name?.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="min-w-0">
+                                          <p className="font-bold text-slate-800 break-words">{dev.name}</p>
+                                          <p className="text-xs text-slate-500 break-all">{dev.email}</p>
+                                          {dev.githubLinked && dev.githubUsername && (
+                                            <p className="flex items-center gap-1 text-xs text-green-600">
+                                              <GitFork size={12} />
+                                              GitHub: {dev.githubUsername}
+                                            </p>
+                                          )}
+                                        </div>
                                       </div>
-                                      <div>
-                                        <p className="font-bold text-slate-800">{assignedDevName}</p>
-                                        <p className="text-xs text-slate-500">{assignedDev.email}</p>
-                                      </div>
-                                    </div>
-                                    {assignedDev.githubLinked && assignedDev.githubUsername && (
-                                      <div className="flex items-center gap-2 text-xs text-green-600 bg-green-50 px-3 py-1.5 rounded-lg">
-                                        <GitFork size={12} />
-                                        <span className="font-medium">GitHub: {assignedDev.githubUsername}</span>
-                                      </div>
-                                    )}
+                                    ))}
                                   </div>
                                 ) : (
                                   <div className="text-center py-6 text-slate-400">
@@ -1124,7 +1082,7 @@ const TeamLeadFeeds = () => {
         <div className="mt-6 flex justify-center items-center gap-2">
           <button
             disabled={currentPage === 1}
-            onClick={() => setCurrentPage(p => p - 1)}
+            onClick={() => setCurrentPage(currentPage - 1)}
             className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
           >
             <ChevronLeft size={14} />
@@ -1164,7 +1122,7 @@ const TeamLeadFeeds = () => {
 
           <button
             disabled={currentPage === totalPages}
-            onClick={() => setCurrentPage(p => p + 1)}
+            onClick={() => setCurrentPage(currentPage + 1)}
             className="btn-icon bg-white border border-slate-200 text-slate-500 hover:text-blue-600 hover:border-blue-200 disabled:opacity-40"
           >
             <ChevronRight size={14} />
@@ -1279,7 +1237,7 @@ const TeamLeadFeeds = () => {
           <div className="modal-panel max-w-lg animate-in fade-in zoom-in duration-200">
             <div className="modal-header">
               <div>
-                <h2 className="section-title">Assign Developer</h2>
+                <h2 className="section-title">Assign Developers</h2>
                 <p className="text-xs text-slate-500">
                   Feed: <span className="font-bold text-indigo-600">{selectedFeed.name}</span>
                 </p>
@@ -1294,69 +1252,19 @@ const TeamLeadFeeds = () => {
 
             <div className="modal-body space-y-4">
               <div>
-                <label className="label block mb-1.5">
-                  Select Developer {selectedDeveloper ? `(Current: ${developers.find(d => d._id === selectedDeveloper)?.name || 'None'})` : ''}
-                </label>
-                <div className="max-h-60 overflow-y-auto space-y-2 border border-slate-200 rounded-xl p-2">
-                  <div
-                    className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                      selectedDeveloper === null
-                        ? 'border-indigo-500 bg-indigo-50'
-                        : 'border-slate-200 hover:bg-slate-50'
-                    }`}
-                    onClick={() => setSelectedDeveloper(null)}
-                  >
-                    <input
-                      type="radio"
-                      checked={selectedDeveloper === null}
-                      onChange={() => setSelectedDeveloper(null)}
-                      className="w-4 h-4 rounded-full border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-slate-800">Unassigned</p>
-                      <p className="text-xs text-slate-500">Remove current assignment</p>
-                    </div>
-                  </div>
-
-                  {developers.length === 0 ? (
-                    <p className="text-sm text-slate-400 text-center py-4">No developers found</p>
-                  ) : (
-                    developers.map(dev => (
-                      <div
-                        key={dev._id}
-                        className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
-                          selectedDeveloper === dev._id
-                            ? 'border-indigo-500 bg-indigo-50'
-                            : 'border-slate-200 hover:bg-slate-50'
-                        }`}
-                        onClick={() => setSelectedDeveloper(dev._id)}
-                      >
-                        <input
-                          type="radio"
-                          checked={selectedDeveloper === dev._id}
-                          onChange={() => setSelectedDeveloper(dev._id)}
-                          className="w-4 h-4 rounded-full border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-sm font-bold text-slate-800">{dev.name}</p>
-                            {dev.githubLinked && dev.githubUsername && (
-                              <span className="badge rounded-full text-green-600 bg-green-50">
-                                <GitFork size={12} />
-                                GitHub
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-xs text-slate-500 break-words">{dev.email}</p>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                <p className="label mb-1.5">Select developers</p>
+                <DeveloperPicker
+                  developers={developers}
+                  value={selectedDevelopers}
+                  onChange={setSelectedDevelopers}
+                  disabled={assigning}
+                  feedCounts={feedCounts}
+                  knownPeople={knownPeople}
+                />
               </div>
 
               <button
-                onClick={handleAssignDeveloper}
+                onClick={handleAssignFromModal}
                 disabled={assigning}
                 className="btn btn-md w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-700 hover:to-purple-700 shadow-md disabled:opacity-50"
               >
@@ -1368,13 +1276,13 @@ const TeamLeadFeeds = () => {
                 ) : (
                   <>
                     <UserPlus size={16} />
-                    {selectedDeveloper ? 'Assign Developer' : 'Remove Assignment'}
+                    {selectedDevelopers.length > 0 ? 'Save Assignment' : 'Remove Assignment'}
                   </>
                 )}
               </button>
 
               <p className="text-xs text-slate-400 text-center">
-                Only one developer can be assigned per feed. Select a developer or choose "Unassigned" to remove.
+                Only newly added developers are notified. Remove everyone to leave the feed unassigned.
               </p>
             </div>
           </div>

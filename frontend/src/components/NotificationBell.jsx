@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 import { Bell, BellOff, MessageSquare, CheckCircle, AlertCircle, X, Clock, Megaphone, Volume2, VolumeX } from 'lucide-react';
 import axios from 'axios';
 import API_BASE_URL from '../config';
-import notificationManager from '../utils/notifications';
+import notificationManager, { getNotificationPermission, isNotificationSupported } from '../utils/notifications';
 import useIsMobile from '../utils/useIsMobile';
 import toast from 'react-hot-toast';
 import { useNavigate } from 'react-router-dom';
@@ -33,10 +33,11 @@ const NotificationBell = () => {
 
   // Initialize notification permission
   useEffect(() => {
-    setIsSupported('Notification' in window);
-    setPermission(Notification.permission);
-    
-    if (Notification.permission === 'granted') {
+    const current = getNotificationPermission();
+    setIsSupported(isNotificationSupported());
+    setPermission(current);
+
+    if (current === 'granted') {
       notificationManager.permission = 'granted';
     }
     

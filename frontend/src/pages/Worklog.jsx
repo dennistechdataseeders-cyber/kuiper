@@ -341,7 +341,7 @@ const Worklog = () => {
     const hasRunningTickets = ticketLogs.some(item => item.worklog?.isRunning);
 
     if (!hasRunningFeeds && !hasRunningTickets) {
-      toast.info('No running timers to stop');
+      toast('No running timers to stop', { icon: 'ℹ️' });
       return;
     }
 
@@ -407,7 +407,7 @@ const Worklog = () => {
               data: { feedId: item.feed._id, type: 'worklog' }
             });
 
-            toast.warning(`Working on "${feedName}" for ${hours}h ${minutes}m. Time for a break?`, {
+            toast(`Working on "${feedName}" for ${hours}h ${minutes}m. Time for a break?`, {
               duration: 5000,
               icon: '☕'
             });
@@ -444,7 +444,7 @@ const Worklog = () => {
               data: { ticketId: item.ticket._id, type: 'ticket' }
             });
 
-            toast.warning(`Working on ticket "${ticketTitle}" for ${hours}h ${minutes}m. Time for a break?`, {
+            toast(`Working on ticket "${ticketTitle}" for ${hours}h ${minutes}m. Time for a break?`, {
               duration: 5000,
               icon: '☕'
             });

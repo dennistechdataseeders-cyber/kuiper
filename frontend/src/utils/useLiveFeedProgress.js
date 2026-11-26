@@ -43,12 +43,15 @@ export default function useLiveFeedProgress(scope) {
 export const NO_RUN = 'No run yet';
 export const runStatus = (run) => run?.status || NO_RUN;
 
-// Feeds with no run yet are still to be done, so they count as Pending
+// Feeds with no run yet are still to be done, so they count as Pending; a stalled run is still open,
+// so it counts as In Progress
+export const countedStatus = (status) =>
+  status === NO_RUN ? 'Pending' : status === 'Stalled' ? 'In Progress' : status;
+
 export function countRuns(runs) {
   const counts = { total: runs.length, Completed: 0, 'In Progress': 0, Pending: 0, Failed: 0 };
   runs.forEach((run) => {
-    const status = runStatus(run);
-    counts[status === NO_RUN ? 'Pending' : status] += 1;
+    counts[countedStatus(runStatus(run))] += 1;
   });
   return counts;
 }

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import API_BASE_URL from '../config';
 import useIsMobile from '../utils/useIsMobile';
+import PreviousRuns from '../components/PreviousRuns';
 import toast from 'react-hot-toast';
 import io from 'socket.io-client';
 
@@ -19,7 +20,8 @@ const getStatusColor = (status) => {
     case 'Completed': return 'bg-green-100 text-green-700';
     case 'In Progress': return 'bg-blue-100 text-blue-700';
     case 'Failed': return 'bg-red-100 text-red-700';
-    case 'Not Started': return 'bg-slate-100 text-slate-600';
+    case 'Stalled': return 'bg-amber-100 text-amber-800';
+    case 'No run yet': return 'bg-slate-100 text-slate-600';
     default: return 'bg-gray-100 text-gray-700';
   }
 };
@@ -39,7 +41,82 @@ const DISPLAY_STAGES = [
   ...STAGES
 ];
 
-const STATUS_FILTERS = ['All', 'Pending', 'In Progress', 'Completed', 'Failed', 'Not Started'];
+const STATUS_FILTERS = ['All', 'Pending', 'In Progress', 'Stalled', 'Completed', 'Failed', 'No run yet'];
+
+const normalizeName = (v) => String(v ?? '').trim().replace(/\s+/g, ' ').toLowerCase();
+
+const getStatusBar = (status) => {
+  switch (status) {
+    case 'Completed': return 'bg-green-500';
+    case 'In Progress': return 'bg-blue-500';
+    case 'Stalled': return 'bg-amber-500';
+    case 'Failed': return 'bg-red-500';
+    default: return 'bg-gray-300';
+  }
+};
+
+// 'YYYY-MM-DD' -> '24 Nov 2026' (plain text, no date conversion)
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const formatRunDate = (date) => {
+  const [y, m, d] = String(date || '').split('-');
+  return MONTHS[m - 1] ? `${d} ${MONTHS[m - 1]} ${y}` : date;
+};
+
+// Same display timezone as formatISTTime below, with the day added
+const formatRunTime = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true
+  });
+};
+
+// done | current | stalled | failed | pending, worked out from the fields the server sends
+const getStageState = (feed, stage) => {
+  if (stage.virtual) return feed.status === 'Pending' ? 'pending' : 'done';
+  if (feed.stages?.[stage.key]?.completed === true) return 'done';
+  if (feed.currentStage !== stage.key) return 'pending';
+  return feed.status === 'Failed' ? 'failed' : feed.status === 'Stalled' ? 'stalled' : 'current';
+};
+const STAGE_DOT = {
+  done: 'bg-green-500 border-green-500 text-white',
+  current: 'bg-blue-500 border-blue-500 text-white',
+  stalled: 'bg-amber-500 border-amber-500 text-white',
+  failed: 'bg-red-500 border-red-500 text-white',
+  pending: 'bg-white border-gray-300 text-gray-300',
+};
+const STAGE_TEXT = {
+  done: 'text-green-700', current: 'text-blue-600', stalled: 'text-amber-700', failed: 'text-red-600', pending: 'text-gray-500',
+};
+
+// Which run this is, and when it was delivered / last updated / why it failed
+const RunInfo = ({ feed }) => (
+  <div className="mt-1 space-y-0.5 text-xs text-slate-500 break-words">
+    {feed.isPreviousRun && (
+      <span className="badge bg-violet-100 text-violet-700">Previous run · {formatRunDate(feed.runDate)}</span>
+    )}
+    {feed.status === 'Completed' && feed.deliveredAt && (
+      <p>{feed.isPreviousRun ? 'Last delivered' : 'Delivered'} {formatRunTime(feed.deliveredAt)}</p>
+    )}
+    {(feed.status === 'In Progress' || feed.status === 'Stalled') && feed.currentStageLabel && (
+      <p>Current stage: {feed.currentStageLabel}</p>
+    )}
+    {feed.status === 'Stalled' && feed.lastUpdatedAt && (
+      <p className="text-amber-700">Last update {formatRunTime(feed.lastUpdatedAt)}</p>
+    )}
+    {feed.status === 'Failed' && (
+      <>
+        <p className="text-red-700">{feed.error_message || 'No error message was sent'}</p>
+        <p>Last completed stage: {feed.lastCompletedStageLabel || 'none'}</p>
+      </>
+    )}
+    {feed.stageWarnings?.length > 0 && (
+      <p className="text-amber-700">
+        Out of order: {STAGES.filter((s) => feed.stageWarnings.includes(s.key)).map((s) => s.label).join(', ')}
+      </p>
+    )}
+  </div>
+);
 
 // ============================================
 // Helper function to extract file info from feed
@@ -131,11 +208,9 @@ const ProjectFeedStatus = () => {
   const [totalProjectFeeds, setTotalProjectFeeds] = useState(0);
   const [loadingTotal, setLoadingTotal] = useState(true);
   
-  // ============================================
-  // NEW: State for Not Started feeds
-  // ============================================
-  const [notStartedFeeds, setNotStartedFeeds] = useState([]);
-  const [allProjectFeeds, setAllProjectFeeds] = useState([]);
+  // Live updates: names on this page, and the timer that groups a burst of events into one refresh
+  const feedNamesRef = useRef(new Set());
+  const refreshTimerRef = useRef(null);
 
   // Get user role for determining navigation
   const userRole = localStorage.getItem('role');
@@ -298,100 +373,14 @@ const ProjectFeedStatus = () => {
           }
         });
 
-        newSocket.on('feed_status_updated', (data) => {
-          setFeeds(prevFeeds => {
-            return prevFeeds.map(feed => {
-              const feedName = feed.feed_name || feed.name;
-              const dataFeedName = data.feed_name || data.feedName;
-              const matchesName = feedName === dataFeedName;
-              const matchesId = feed._id === data.feed_id || feed._id === data.feedId || feed._id === dataFeedName;
-              
-              if (matchesName || matchesId) {
-                const stages = data.stages || feed.stages || {};
-                const totalStages = STAGES.length;
-                const completedStages = STAGES.filter(stage => stages[stage.key]?.completed === true).length;
-                const calculatedProgress = data.progress !== undefined ? data.progress : Math.round((completedStages / totalStages) * 100);
-                
-                let calculatedStatus = data.status || feed.status || 'Pending';
-                if (data.failed === true) {
-                  calculatedStatus = 'Failed';
-                } else if (calculatedProgress === 100) {
-                  calculatedStatus = 'Completed';
-                } else if (calculatedProgress > 0) {
-                  calculatedStatus = 'In Progress';
-                } else {
-                  calculatedStatus = 'Pending';
-                }
-
-                const inboundCount = data.record_count !== undefined ? data.record_count : (data.count !== undefined ? data.count : null);
-                
-                return {
-                  ...feed,
-                  status: calculatedStatus,
-                  progress: calculatedProgress,
-                  stages: stages,
-                  failed: data.failed || false,
-                  error_message: data.error_message || '',
-                  updated_at: unpackDate(data.updated_at) || new Date().toISOString(),
-                  feed_name: data.feed_name || feed.feed_name,
-                  date: data.date || feed.date,
-                  project: data.project || feed.project,
-                  client: data.client || feed.client,
-                  feed_type: data.feed_type || feed.feed_type,
-                  output_path: data.path !== undefined ? data.path : (data.output_path !== undefined ? data.output_path : feed.output_path || null),
-                  record_count: inboundCount !== null ? inboundCount : feed.record_count
-                };
-              }
-              return feed;
-            });
-          });
-        });
-
-        newSocket.on('feed_stage_updated', (data) => {
-          setFeeds(prevFeeds => {
-            return prevFeeds.map(feed => {
-              const feedName = feed.feed_name || feed.name;
-              const dataFeedName = data.feed_name || data.feedName;
-              const matchesName = feedName === dataFeedName;
-              const matchesId = feed._id === data.feed_id || feed._id === data.feedId;
-              if (matchesName || matchesId) {
-                const updatedStages = { ...(feed.stages || {}) };
-                if (data.stage && data.completed !== undefined) {
-                  updatedStages[data.stage] = {
-                    completed: data.completed,
-                    completed_at: unpackDate(data.timestamp || data.completed_at) || new Date().toISOString()
-                  };
-                }
-                
-                const totalStages = STAGES.length;
-                const completedStages = STAGES.filter(stage => updatedStages[stage.key]?.completed === true).length;
-                const calculatedProgress = Math.round((completedStages / totalStages) * 100);
-                
-                let calculatedStatus = feed.status || 'Pending';
-                if (calculatedProgress === 100) {
-                  calculatedStatus = 'Completed';
-                } else if (calculatedProgress > 0) {
-                  calculatedStatus = 'In Progress';
-                } else {
-                  calculatedStatus = 'Pending';
-                }
-
-                const inboundCount = data.record_count !== undefined ? data.record_count : (data.count !== undefined ? data.count : null);
-                
-                return {
-                  ...feed,
-                  stages: updatedStages,
-                  progress: calculatedProgress,
-                  status: calculatedStatus,
-                  output_path: data.path !== undefined ? data.path : (data.output_path !== undefined ? data.output_path : feed.output_path || null),
-                  record_count: inboundCount !== null ? inboundCount : feed.record_count,
-                  updated_at: new Date().toISOString()
-                };
-              }
-              return feed;
-            });
-          });
-        });
+        // The server works out status, progress and stages: an update only asks for the new result
+        const refreshOnUpdate = (data) => {
+          if (!feedNamesRef.current.has(normalizeName(data.feed_name || data.feedName))) return;
+          clearTimeout(refreshTimerRef.current);
+          refreshTimerRef.current = setTimeout(() => fetchFeeds(actualProjectId), 500);
+        };
+        newSocket.on('feed_status_updated', refreshOnUpdate);
+        newSocket.on('feed_stage_updated', refreshOnUpdate);
 
       } catch (error) {
         setIsSocketConnected(false);
@@ -404,6 +393,7 @@ const ProjectFeedStatus = () => {
 
     return () => {
       clearTimeout(initialConnectTimer);
+      clearTimeout(refreshTimerRef.current);
       if (socketRef.current) {
         socketRef.current.emit('leave-project-room', actualProjectId);
         socketRef.current.disconnect();
@@ -442,7 +432,7 @@ const ProjectFeedStatus = () => {
   }, [projectId, location]);
 
   // ============================================
-  // NEW: Fetch total project feeds and not-started feeds from main Feed table
+  // NEW: Fetch total project feeds from main Feed table
   // ============================================
   const fetchProjectFeedsFromMainTable = async () => {
     setLoadingTotal(true);
@@ -460,7 +450,6 @@ const ProjectFeedStatus = () => {
       if (project) {
         // Get all feeds from the main Feed table
         const allFeeds = project.feeds || [];
-        setAllProjectFeeds(allFeeds);
         
         // Filter out On Hold (all types) and Closed feeds for total count
         const activeFeeds = allFeeds.filter(feed => {
@@ -469,34 +458,8 @@ const ProjectFeedStatus = () => {
         });
         setTotalProjectFeeds(activeFeeds.length);
         
-        // ============================================
-        // NEW: Find feeds that are "Not Started"
-        // A feed is "Not Started" if it:
-        // 1. Has NO entry in the FeedStatus collection for today
-        // 2. OR has status 'Pending' with no progress
-        // ============================================
-        const feedStatusNames = new Set(feeds.map(f => f.feed_name));
-        
-        const notStarted = allFeeds.filter(feed => {
-          const status = feed.feedStatus || '';
-          // Skip if feed is Closed or On Hold
-          if (status === 'Closed' || status.includes('ON hold')) return false;
-          
-          // Check if this feed has any status data in the current feeds array
-          // (feeds array contains data from FeedStatus collection)
-          const hasStatusData = feedStatusNames.has(feed.name);
-          
-          // If no status data, it's not started
-          return !hasStatusData;
-        });
-        
-        setNotStartedFeeds(notStarted);
-        
-        console.log(`📊 Total feeds: ${allFeeds.length}, Active: ${activeFeeds.length}, Not Started: ${notStarted.length}`);
       } else {
         setTotalProjectFeeds(0);
-        setNotStartedFeeds([]);
-        setAllProjectFeeds([]);
       }
     } catch (error) {
       console.error('Error fetching project feeds from main table:', error);
@@ -507,8 +470,6 @@ const ProjectFeedStatus = () => {
       } else {
         setTotalProjectFeeds(0);
       }
-      setNotStartedFeeds([]);
-      setAllProjectFeeds([]);
     } finally {
       setLoadingTotal(false);
     }
@@ -520,13 +481,6 @@ const ProjectFeedStatus = () => {
       fetchProjectFeedsFromMainTable();
     }
   }, [actualProjectId]);
-
-  // Also fetch when feeds data changes (to detect not-started feeds)
-  useEffect(() => {
-    if (actualProjectId && feeds.length > 0) {
-      fetchProjectFeedsFromMainTable();
-    }
-  }, [feeds]);
 
   const fetchFeeds = async (id) => {
     if (!id) {
@@ -547,21 +501,8 @@ const ProjectFeedStatus = () => {
       const transformedFeeds = res.data.map((feed, index) => {
         const feedId = feed.feed_name || feed._id || feed.id || `feed_${index}_${Date.now()}`;
         const stages = feed.stages || {};
-        const totalStages = STAGES.length;
-        const completedStages = STAGES.filter(stage => stages[stage.key]?.completed === true).length;
-        const calculatedProgress = feed.progress !== undefined ? feed.progress : Math.round((completedStages / totalStages) * 100);
-        
-        let calculatedStatus = feed.status || feed.feedStatus || 'Pending';
-        if (feed.failed) {
-          calculatedStatus = 'Failed';
-        } else if (calculatedProgress === 100) {
-          calculatedStatus = 'Completed';
-        } else if (calculatedProgress > 0) {
-          calculatedStatus = 'In Progress';
-        } else {
-          calculatedStatus = 'Pending';
-        }
-        
+        const status = feed.displayStatus || feed.status || 'Pending';
+
         const parsedUpdatedAt = unpackDate(feed.updated_at || feed.updatedAt || feed.created_at || feed.createdAt);
 
         let recordCount = null;
@@ -575,10 +516,7 @@ const ProjectFeedStatus = () => {
           feed_name: feed.feed_name || feed.name || 'Unnamed Feed',
           _id: feedId,
           id: feedId,
-          status: calculatedStatus,
-          progress: calculatedProgress,
           stages: stages,
-          failed: feed.failed || false,
           error_message: feed.error_message || '',
           updated_at: parsedUpdatedAt,
           date: feed.date || new Date().toISOString().split('T')[0],
@@ -591,11 +529,16 @@ const ProjectFeedStatus = () => {
           projectId: feed.projectId || feed.project || id,
           output_path: feed.output_path || feed.path || null,
           record_count: recordCount,
-          ...feed
+          ...feed,
+          // the shared server status drives every badge, count and icon on this page
+          status,
+          failed: status === 'Failed',
+          isNotStarted: status === 'No run yet'
         };
       });
       
       setFeeds(transformedFeeds);
+      feedNamesRef.current = new Set(transformedFeeds.map(f => normalizeName(f.feed_name)));
       
       if (transformedFeeds.length > 0) {
         setProjectName(transformedFeeds[0].projectCustomId || transformedFeeds[0].project || 'Project');
@@ -626,9 +569,7 @@ const ProjectFeedStatus = () => {
   };
 
   const getProgressColor = (feed) => {
-    if (feed.failed) return 'bg-red-500';
-    if (feed.progress === 100) return 'bg-green-500';
-    return 'bg-blue-500';
+    return getStatusBar(feed.status);
   };
 
   // Get navigation path based on role
@@ -643,35 +584,9 @@ const ProjectFeedStatus = () => {
     }
   };
 
-  // Filter feeds including Not Started
   const getFilteredFeeds = () => {
     if (statusFilter === 'All') {
       return feeds;
-    }
-    if (statusFilter === 'Not Started') {
-      // Return the not-started feeds from the main table
-      return notStartedFeeds.map(feed => ({
-        feed_name: feed.name,
-        _id: feed._id,
-        id: feed._id,
-        status: 'Not Started',
-        progress: 0,
-        stages: {},
-        failed: false,
-        error_message: '',
-        date: new Date().toISOString().split('T')[0],
-        project: projectName,
-        client: 'Client',
-        feed_type: feed.feedType || 'Daily',
-        feedType: feed.feedType || 'Daily',
-        projectName: projectName,
-        projectCustomId: projectName,
-        projectId: actualProjectId,
-        output_path: null,
-        record_count: null,
-        isNotStarted: true,
-        feedStatus: feed.feedStatus || 'New'
-      }));
     }
     return feeds.filter(feed => feed.status === statusFilter);
   };
@@ -684,15 +599,18 @@ const ProjectFeedStatus = () => {
 
   useEffect(() => { setCurrentPage(1); }, [statusFilter]);
 
-  // Update stats to include Not Started count
+  // Every feed counts once, by the status of the run shown (today's or the previous one)
+  const countOf = (status) => feeds.filter(f => f.status === status).length;
+  const withRun = feeds.length - countOf('No run yet');
   const stats = {
-    total: feeds.length,
-    completed: feeds.filter(f => f.status === 'Completed').length,
-    inProgress: feeds.filter(f => f.status === 'In Progress').length,
-    failed: feeds.filter(f => f.failed).length,
-    pending: feeds.filter(f => f.status === 'Pending' || !f.status).length,
-    notStarted: notStartedFeeds.length,
-    completionPercentage: feeds.length > 0 ? Math.round((feeds.filter(f => f.status === 'Completed').length / feeds.length) * 100) : 0
+    total: withRun,
+    completed: countOf('Completed'),
+    inProgress: countOf('In Progress'),
+    stalled: countOf('Stalled'),
+    failed: countOf('Failed'),
+    pending: countOf('Pending'),
+    notStarted: countOf('No run yet'),
+    completionPercentage: withRun > 0 ? Math.round((countOf('Completed') / withRun) * 100) : 0
   };
 
   const toggleExpand = (feedId) => {
@@ -736,15 +654,8 @@ const ProjectFeedStatus = () => {
           <div className="flex items-center gap-0.5 bg-white rounded-lg border border-slate-200 shadow-sm px-2 py-1 max-w-full">
             <Filter size={14} className="text-slate-400 flex-shrink-0 mr-0.5 sm:mr-1" />
             <div className="flex flex-wrap items-center gap-1">
-              {STATUS_FILTERS.slice(0, 6).map(filter => {
-                let count = 0;
-                if (filter === 'All') {
-                  count = feeds.length + notStartedFeeds.length;
-                } else if (filter === 'Not Started') {
-                  count = notStartedFeeds.length;
-                } else {
-                  count = feeds.filter(f => f.status === filter).length;
-                }
+              {STATUS_FILTERS.map(filter => {
+                const count = countOf(filter);
                 return (
                   <button
                     key={filter}
@@ -790,7 +701,7 @@ const ProjectFeedStatus = () => {
       </div>
 
       {/* Stats Row - Clickable cards with filter functionality */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-2 sm:gap-3 mb-4 sm:mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-9 gap-2 sm:gap-3 mb-4 sm:mb-6">
         {/* Total Feeds in Project - Shows all feeds from the main Feed table */}
         <div 
           className="bg-white rounded-xl border p-3 text-center shadow-sm"
@@ -801,28 +712,28 @@ const ProjectFeedStatus = () => {
           </p>
         </div>
 
-        {/* Not Started */}
-        <div 
-          onClick={() => setStatusFilter('Not Started')}
+        {/* No run yet */}
+        <div
+          onClick={() => setStatusFilter('No run yet')}
           className={`bg-white rounded-xl border p-3 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
-            statusFilter === 'Not Started' ? 'border-slate-500 ring-1 sm:ring-2 ring-slate-200' : 'border-slate-200'
+            statusFilter === 'No run yet' ? 'border-slate-500 ring-1 sm:ring-2 ring-slate-200' : 'border-slate-200'
           }`}
         >
           <p className="text-xs font-semibold uppercase text-slate-500">
             <Hourglass size={12} className="inline mr-0.5" />
-            Not Started
+            No run yet
           </p>
           <p className="text-sm sm:text-base font-semibold text-slate-600">{stats.notStarted}</p>
         </div>
 
-        {/* Total - Shows all feeds from today's FeedStatus */}
+        {/* Feeds with a run: today's, or their most recent one */}
         <div 
           onClick={() => setStatusFilter('All')}
           className={`bg-white rounded-xl border p-3 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
             statusFilter === 'All' ? 'border-blue-500 ring-1 sm:ring-2 ring-blue-200' : 'border-slate-200'
           }`}
         >
-          <p className="text-xs font-semibold uppercase text-slate-400">Today</p>
+          <p className="text-xs font-semibold uppercase text-slate-500">With a run</p>
           <p className="text-sm sm:text-base font-semibold text-slate-800">{stats.total}</p>
         </div>
 
@@ -848,8 +759,30 @@ const ProjectFeedStatus = () => {
           <p className="text-sm sm:text-base font-semibold text-blue-600">{stats.inProgress}</p>
         </div>
 
+        {/* Stalled */}
+        <div
+          onClick={() => setStatusFilter('Stalled')}
+          className={`bg-white rounded-xl border p-3 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'Stalled' ? 'border-amber-500 ring-1 sm:ring-2 ring-amber-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-xs font-semibold uppercase text-amber-600">Stalled</p>
+          <p className="text-sm sm:text-base font-semibold text-amber-700">{stats.stalled}</p>
+        </div>
+
+        {/* Pending */}
+        <div
+          onClick={() => setStatusFilter('Pending')}
+          className={`bg-white rounded-xl border p-3 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
+            statusFilter === 'Pending' ? 'border-slate-500 ring-1 sm:ring-2 ring-slate-200' : 'border-slate-200'
+          }`}
+        >
+          <p className="text-xs font-semibold uppercase text-slate-500">Pending</p>
+          <p className="text-sm sm:text-base font-semibold text-slate-600">{stats.pending}</p>
+        </div>
+
         {/* Failed */}
-        <div 
+        <div  
           onClick={() => setStatusFilter('Failed')}
           className={`bg-white rounded-xl border p-3 text-center shadow-sm cursor-pointer hover:shadow-md transition-all ${
             statusFilter === 'Failed' ? 'border-red-500 ring-1 sm:ring-2 ring-red-200' : 'border-slate-200'
@@ -900,17 +833,9 @@ const ProjectFeedStatus = () => {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <div className={`w-1.5 h-5 rounded-full flex-shrink-0 ${
-                            isNotStarted ? 'bg-slate-300' :
-                            feed.failed ? 'bg-red-500' : 
-                            feed.status === 'Completed' ? 'bg-green-500' : 
-                            feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'
-                          }`} />
+                          <div className={`w-1.5 h-5 rounded-full flex-shrink-0 ${getStatusBar(feed.status)}`} />
                           <span className="text-sm font-semibold text-slate-800 min-w-0 break-words">
                             {feed.feed_name || feed.name}
-                            {isNotStarted && (
-                              <span className="badge ml-1 text-slate-400 bg-slate-100">Not Started</span>
-                            )}
                           </span>
                         </div>
                         {hasRecordCount && (
@@ -919,6 +844,8 @@ const ProjectFeedStatus = () => {
                             {Number(feed.record_count).toLocaleString('en-IN')} records
                           </span>
                         )}
+                        <RunInfo feed={feed} />
+                        {feed.runDate && <PreviousRuns key={feed.runDate} projectId={actualProjectId} feedName={feed.feed_name} before={feed.runDate} />}
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <span className={`badge md:whitespace-nowrap ${getStatusColor(feed.status)}`}>
@@ -1012,28 +939,26 @@ const ProjectFeedStatus = () => {
                         {!isNotStarted ? (
                           <>
                             {/* Stages */}
-                            <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap">
-                              {DISPLAY_STAGES.map((stage, idx) => {
-                                const stageData = stage.virtual ? null : feed.stages?.[stage.key];
-                                const isCompleted = stage.virtual ? true : stageData?.completed === true;
-                                const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
-                                
+                            <ul className="space-y-1.5">
+                              {DISPLAY_STAGES.map((stage) => {
+                                const state = getStageState(feed, stage);
+                                const completedAt = stage.virtual ? null : feed.stages?.[stage.key]?.completed_at;
+                                const isWarning = feed.stageWarnings?.includes(stage.key);
+
                                 return (
-                                  <React.Fragment key={`${feed._id || feed.feed_name}-mobile-${stage.key}`}>
-                                    <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all shrink-0 ${
-                                      isCompleted ? 'bg-green-500 border-green-500 text-white' : 
-                                      isFailed ? 'bg-red-500 border-red-500 text-white' : 
-                                      'bg-white border-gray-300 text-gray-300'
-                                    }`}>
-                                      {isCompleted ? <CheckCircle size={12} /> : isFailed ? <XCircle size={12} /> : null}
-                                    </div>
-                                    {idx < DISPLAY_STAGES.length - 1 && (
-                                      <div className={`w-3 h-0.5 ${isCompleted ? 'bg-green-400' : 'bg-gray-300'}`} />
-                                    )}
-                                  </React.Fragment>
+                                  <li key={`${feed._id || feed.feed_name}-mobile-${stage.key}`} className="flex items-center gap-2 text-xs">
+                                    <span className={`w-5 h-5 rounded-full flex items-center justify-center border shrink-0 ${STAGE_DOT[state]}`}>
+                                      {state === 'done' ? <CheckCircle size={12} /> : state === 'failed' ? <XCircle size={12} /> : null}
+                                    </span>
+                                    <span className={`font-semibold ${STAGE_TEXT[state]}`}>{stage.label}</span>
+                                    {isWarning && <AlertCircle size={12} className="text-amber-600" />}
+                                    <span className="ml-auto text-slate-500">
+                                      {state === 'done' ? (completedAt ? formatISTTime(completedAt) : '') : state === 'pending' ? 'Pending' : state === 'failed' ? 'Failed here' : 'Current'}
+                                    </span>
+                                  </li>
                                 );
                               })}
-                            </div>
+                            </ul>
 
                             {/* File Details in Expanded View */}
                             {hasFileInfo && fileInfo.files.length > 0 && (
@@ -1076,7 +1001,7 @@ const ProjectFeedStatus = () => {
                         ) : (
                           <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-center">
                             <Hourglass size={24} className="text-slate-400 mx-auto mb-1" />
-                            <p className="text-xs font-semibold text-slate-500">Feed not started yet</p>
+                            <p className="text-xs font-semibold text-slate-500">No run yet</p>
                             <p className="text-xs text-slate-400">No status data has been recorded for this feed</p>
                           </div>
                         )}
@@ -1109,9 +1034,6 @@ const ProjectFeedStatus = () => {
               <tbody>
                 {currentFeeds.length > 0 ? (
                   currentFeeds.map((feed) => {
-                    const totalStages = STAGES.length;
-                    const completedStages = STAGES.filter(stage => feed.stages?.[stage.key]?.completed === true).length;
-                    const calculatedProgress = Math.round((completedStages / totalStages) * 100);
                     const isExpanded = expandedFeed === (feed._id || feed.feed_name);
                     const isNotStarted = feed.isNotStarted || false;
                     
@@ -1120,14 +1042,12 @@ const ProjectFeedStatus = () => {
                     const normalizedPaths = getNormalizedPaths(feed.output_path);
                     const hasPaths = normalizedPaths.length > 0;
 
-                    const stageStates = DISPLAY_STAGES.map((stage) => {
-                      const isVirtual = !!stage.virtual;
-                      const stageData = isVirtual ? null : feed.stages?.[stage.key];
-                      return { isCompleted: isVirtual ? true : stageData?.completed === true, completedAt: stageData?.completed_at };
-                    });
-                    const currentStageIndex = stageStates.reduce((acc, s, idx) => (s.isCompleted ? idx : acc), -1);
-                    const activeStageIndex = feed.status === 'Completed' ? DISPLAY_STAGES.length - 1 : Math.min(currentStageIndex + 1, DISPLAY_STAGES.length - 1);
-                    const failedStageIndex = feed.failed ? activeStageIndex : -1;
+                    const stageStates = DISPLAY_STAGES.map((stage) => ({
+                      state: getStageState(feed, stage),
+                      completedAt: stage.virtual ? null : feed.stages?.[stage.key]?.completed_at,
+                      isWarning: !!feed.stageWarnings?.includes(stage.key),
+                    }));
+                    const lastDoneIndex = stageStates.reduce((acc, s, idx) => (s.state === 'done' ? idx : acc), -1);
                     
                     const hasRecordCount = feed.record_count !== null && feed.record_count !== undefined;
                     
@@ -1142,18 +1062,10 @@ const ProjectFeedStatus = () => {
                         >
                           <td className="td">
                             <div className="flex items-center gap-2">
-                              <div className={`w-1.5 h-6 rounded-full ${
-                                isNotStarted ? 'bg-slate-300' :
-                                feed.failed ? 'bg-red-500' : 
-                                feed.status === 'Completed' ? 'bg-green-500' : 
-                                feed.status === 'In Progress' ? 'bg-blue-500' : 'bg-gray-300'
-                              }`}></div>
+                              <div className={`w-1.5 h-6 rounded-full ${getStatusBar(feed.status)}`}></div>
                               <div className="flex flex-col">
                                 <div className="flex items-center gap-1">
                                   <span className="text-xs font-semibold text-slate-800 truncate">{feed.feed_name || feed.name}</span>
-                                  {isNotStarted && (
-                                    <span className="badge rounded-full text-slate-400 bg-slate-100">Not Started</span>
-                                  )}
                                 </div>
                                 {hasRecordCount && (
                                   <span className="text-xs font-mono font-semibold text-emerald-600 mt-0.5 flex items-center gap-1">
@@ -1169,22 +1081,19 @@ const ProjectFeedStatus = () => {
                             {isNotStarted ? (
                               <div className="flex items-center gap-1 text-slate-400">
                                 <Hourglass size={14} />
-                                <span className="text-xs font-medium">Not started</span>
+                                <span className="text-xs font-medium">No run yet</span>
                               </div>
                             ) : (
                               <div className="flex items-center">
                                 {DISPLAY_STAGES.map((stage, idx) => {
-                                  const isVirtual = !!stage.virtual;
-                                  const { isCompleted, completedAt } = stageStates[idx];
-                                  const isInProgress = isVirtual ? false : (!isCompleted && (idx - 1) <= completedStages);
-                                  const isFailed = feed.failed && idx === DISPLAY_STAGES.length - 1 && !isCompleted;
+                                  const { state, completedAt, isWarning } = stageStates[idx];
                                   const timeStr = completedAt ? formatISTTime(completedAt) : null;
                                   
                                   return (
                                     <React.Fragment key={`${feed._id || feed.feed_name}-stage-${stage.key}`}>
                                       <div className="relative group flex items-center">
-                                        <div className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all cursor-default shrink-0 ${isCompleted ? 'bg-green-500 border-green-500 text-white' : isFailed ? 'bg-red-500 border-red-500 text-white' : isInProgress ? 'bg-blue-500 border-blue-500 text-white' : 'bg-white border-gray-300 text-gray-300'}`}>
-                                          {isCompleted ? <CheckCircle size={12} /> : isFailed ? <XCircle size={12} /> : isInProgress ? <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div> : <div className="w-1.5 h-1.5 bg-gray-300 rounded-full"></div>}
+                                        <div title={`${stage.label}: ${state}${isWarning ? ' (out of order)' : ''}`} className={`w-5 h-5 rounded-full flex items-center justify-center border transition-all cursor-default shrink-0 ${STAGE_DOT[state]} ${isWarning ? 'ring-2 ring-amber-400' : ''}`}>
+                                          {state === 'done' ? <CheckCircle size={12} /> : state === 'failed' ? <XCircle size={12} /> : state === 'pending' ? <div className="w-1.5 h-1.5 bg-gray-300 rounded-full"></div> : <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>}
                                         </div>
                                         {timeStr && (
                                           <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none z-10">
@@ -1193,7 +1102,7 @@ const ProjectFeedStatus = () => {
                                           </div>
                                         )}
                                       </div>
-                                      {idx < DISPLAY_STAGES.length - 1 && <div className={`w-4 h-0.5 mx-0.5 ${isCompleted ? 'bg-green-400' : isInProgress ? 'bg-blue-300' : 'bg-gray-300'}`}></div>}
+                                      {idx < DISPLAY_STAGES.length - 1 && <div className={`w-4 h-0.5 mx-0.5 ${state === 'done' ? 'bg-green-400' : 'bg-gray-300'}`}></div>}
                                     </React.Fragment>
                                   );
                                 })}
@@ -1213,9 +1122,9 @@ const ProjectFeedStatus = () => {
                             ) : (
                               <div className="flex items-center gap-2">
                                 <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} style={{ width: `${Math.min(calculatedProgress, 100)}%` }} />
+                                  <div className={`h-full rounded-full transition-all duration-500 ${getProgressColor(feed)}`} style={{ width: `${Math.min(feed.progress, 100)}%` }} />
                                 </div>
-                                <span className="text-xs font-semibold text-slate-700 min-w-[30px]">{calculatedProgress}%</span>
+                                <span className="text-xs font-semibold text-slate-700 min-w-[30px]">{feed.progress}%</span>
                               </div>
                             )}
                           </td>
@@ -1226,6 +1135,10 @@ const ProjectFeedStatus = () => {
                                 {feed.status || 'Pending'}
                               </span>
                               {feed.failed && <AlertCircle size={12} className="text-red-500" />}
+                            </div>
+                            <div className="max-w-[240px]">
+                              <RunInfo feed={feed} />
+                              {feed.runDate && <PreviousRuns key={feed.runDate} projectId={actualProjectId} feedName={feed.feed_name} before={feed.runDate} />}
                             </div>
                           </td>
 
@@ -1317,20 +1230,20 @@ const ProjectFeedStatus = () => {
                                   {isNotStarted ? (
                                     <div className="flex flex-col items-center justify-center py-6">
                                       <Hourglass size={32} className="text-slate-300 mb-2" />
-                                      <p className="text-sm font-bold text-slate-500">Not Started</p>
-                                      <p className="text-xs text-slate-400">This feed has not been started yet</p>
-                                      <p className="text-xs text-slate-400 mt-1">Status: {feed.feedStatus || 'New'}</p>
+                                      <p className="text-sm font-bold text-slate-500">No run yet</p>
+                                      <p className="text-xs text-slate-400">No status data has been recorded for this feed</p>
                                     </div>
                                   ) : (
                                     <div className="relative px-2">
                                       <div className="absolute top-3 left-4 right-4 h-1 bg-gray-200 rounded-full" />
-                                      <div className="absolute top-3 left-4 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500" style={{ width: `calc(${Math.min((Math.max(currentStageIndex, 0) / (DISPLAY_STAGES.length - 1)) * 100, 100)}% - 8px)` }} />
+                                      <div className="absolute top-3 left-4 h-1 bg-gradient-to-r from-green-500 to-green-400 rounded-full transition-all duration-500" style={{ width: `calc(${Math.min((Math.max(lastDoneIndex, 0) / (DISPLAY_STAGES.length - 1)) * 100, 100)}% - 8px)` }} />
 
                                       <div className="flex justify-between items-start relative">
                                         {DISPLAY_STAGES.map((stage, idx) => {
-                                          const { isCompleted, completedAt } = stageStates[idx];
-                                          const isCurrent = !isCompleted && idx === activeStageIndex && (feed.status !== 'Pending' || stage.virtual);
-                                          const isFailed = failedStageIndex === idx && !isCompleted;
+                                          const { state, completedAt, isWarning } = stageStates[idx];
+                                          const isCompleted = state === 'done';
+                                          const isFailed = state === 'failed';
+                                          const isCurrent = state === 'current' || state === 'stalled';
                                           const timeStr = completedAt ? formatISTTime(completedAt) : null;
 
                                           return (
@@ -1342,7 +1255,10 @@ const ProjectFeedStatus = () => {
                                               </div>
                                               <div className="mt-2 text-center min-h-[28px] flex flex-col items-center">
                                                 <p className={`text-xs font-semibold leading-tight transition-colors ${isCompleted ? 'text-green-700' : isFailed ? 'text-red-600' : 'text-gray-400'} ${isCurrent ? 'text-blue-600' : ''}`}>{stage.label}</p>
-                                                {isCurrent && <span className="mt-0.5 text-xs font-semibold text-blue-600 uppercase tracking-wide animate-pulse">● Current</span>}
+                                                {timeStr && <span className="mt-0.5 text-xs text-slate-500">{timeStr}</span>}
+                                                {isWarning && <span className="mt-0.5 text-xs font-semibold text-amber-700">Out of order</span>}
+                                                {isFailed && <span className="mt-0.5 text-xs font-semibold text-red-600">Failed here</span>}
+                                                {isCurrent && <span className={`mt-0.5 text-xs font-semibold ${state === 'stalled' ? 'text-amber-700' : 'text-blue-600'}`}>{state === 'stalled' ? '● Stalled' : '● Current'}</span>}
                                               </div>
                                             </div>
                                           );

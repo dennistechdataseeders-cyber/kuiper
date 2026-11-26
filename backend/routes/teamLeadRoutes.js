@@ -1,6 +1,7 @@
 // backend/routes/teamLeadRoutes.js
 const express = require('express');
 const { tlProjectFilter } = require('../utils/projectAccess');
+const { listActiveDevelopers, checkDeveloperIds } = require('../utils/feedDevelopers');
 const router = express.Router();
 const mongoose = require('mongoose');
 
@@ -10,7 +11,6 @@ const Feed = require('../models/Feed');
 const Ticket = require('../models/Ticket');
 const Task = require('../models/Task');
 const Log = require('../models/Log');
-const User = require('../models/User');
 
 // Import Middleware
 const { protect } = require('../middleware/authMiddleware');
@@ -49,7 +49,6 @@ router.get('/my-projects',  authorize('Team Lead'), async (req, res) => {
 // ============================================
 router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async (req, res) => {
   try {
-    const { developerIds } = req.body;
     const feed = await Feed.findById(req.params.feedId).populate('projectId');
 
     if (!feed) {
@@ -57,7 +56,7 @@ router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async 
     }
 
     // Check if this feed belongs to a project assigned to this Team Lead
-    const project = await Project.findOne({
+    const project = feed.projectId && await Project.findOne({
       _id: feed.projectId._id,
       ...tlProjectFilter(req.user._id)
     });
@@ -66,25 +65,19 @@ router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async 
       return res.status(403).json({ error: 'Not authorized to manage this feed' });
     }
 
-    // Validate developers exist and have Developer role
-    const developers = await User.find({
-      _id: { $in: developerIds },
-      role: 'Developer'
-    });
-
-    if (developers.length !== developerIds.length) {
-      return res.status(400).json({ 
-        error: 'One or more developers not found or not valid Developer role' 
-      });
+    // 0, 1 or many developers. Newly added ones must be active developers.
+    const { ids: developerIds, added, error } = await checkDeveloperIds(req.body?.developerIds, feed.assignedDevelopers);
+    if (error) {
+      return res.status(400).json({ error });
     }
 
     // Update feed with assigned developers
     feed.assignedDevelopers = developerIds;
     await feed.save();
 
-    // Create tasks for each developer
+    // Create tasks for each newly added developer (not for those already assigned)
     const tasks = [];
-    for (const developerId of developerIds) {
+    for (const developerId of added) {
       const task = await Task.create({
         name: `Feed Assignment: ${feed.name}`,
         details: `You have been assigned to feed "${feed.name}" in project ${project.projectCustomId || project.name}.`,
@@ -100,7 +93,7 @@ router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async 
     // Send socket notifications
     const io = req.app.get('io');
     if (io) {
-      for (const developerId of developerIds) {
+      for (const developerId of added) {
         io.to(developerId.toString()).emit('feed_assigned', {
           feed,
           project,
@@ -123,6 +116,9 @@ router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async 
       timestamp: new Date()
     });
 
+    // Names for the page's table row
+    await feed.populate('assignedDevelopers', 'name email');
+
     res.json({
       success: true,
       message: `${developerIds.length} developer(s) assigned to feed`,
@@ -141,8 +137,7 @@ router.patch('/feeds/:feedId/assign-developers',  authorize('Team Lead'), async 
 // ============================================
 router.get('/developers',  authorize('Team Lead'), async (req, res) => {
   try {
-    const developers = await User.find({ role: 'Developer' })
-      .select('name email githubUsername githubLinked _id');
+    const developers = await listActiveDevelopers();
     res.json({ success: true, developers });
   } catch (err) {
     console.error('Error fetching developers:', err);

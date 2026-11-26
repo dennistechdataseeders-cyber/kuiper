@@ -926,7 +926,7 @@ const handleProductionSubmit = async (e) => {
 
   const openFeasibilityModal = (lead) => {
     if (lead.feasibilityDate) {
-      toast.info("This lead already has a feasibility date set.");
+      toast("This lead already has a feasibility date set.", { icon: 'ℹ️' });
       return;
     }
     setSelectedLeadForFeasibility(lead);

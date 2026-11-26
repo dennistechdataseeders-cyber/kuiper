@@ -302,7 +302,8 @@ const ProjectManagement = () => {
       } catch (fallbackErr) {
         console.error("Fallback error fetching organizations:", fallbackErr);
         setOrganizations([]);
-        toast.warning("Unable to load organizations. You can still create projects by selecting existing clients or creating new organizations.", {
+        toast("Unable to load organizations. You can still create projects by selecting existing clients or creating new organizations.", {
+          icon: '⚠️',
           duration: 5000
         });
       }
@@ -850,7 +851,7 @@ const ProjectManagement = () => {
         toast.success(`✅ ${response.data.created} feed(s) created successfully! ${response.data.failed || 0} failed.`);
         if (response.data.errors && response.data.errors.length > 0) {
           console.warn('Bulk feed import errors:', response.data.errors);
-          toast.warning(`${response.data.errors.length} feed(s) had issues. Check console for details.`);
+          toast(`${response.data.errors.length} feed(s) had issues. Check console for details.`, { icon: '⚠️' });
         }
         setShowBulkFeedModal(false);
         setBulkFeedFile(null);

@@ -4,16 +4,18 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Calendar, RefreshCw, User, ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
-import { NO_RUN, runStatus, countRuns, dueTodayFeeds } from '../utils/useLiveFeedProgress';
+import PreviousRuns from './PreviousRuns';
+import { NO_RUN, runStatus, countedStatus, countRuns, dueTodayFeeds } from '../utils/useLiveFeedProgress';
 
 const STATUS_STYLE = {
   Completed: { badge: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500', card: 'bg-emerald-50 text-emerald-700 hover:border-emerald-300' },
   'In Progress': { badge: 'bg-blue-100 text-blue-700', bar: 'bg-blue-500', card: 'bg-blue-50 text-blue-700 hover:border-blue-300' },
   Pending: { badge: 'bg-amber-100 text-amber-700', bar: 'bg-amber-500', card: 'bg-amber-50 text-amber-700 hover:border-amber-300' },
+  Stalled: { badge: 'bg-amber-100 text-amber-800', bar: 'bg-amber-500' },
   Failed: { badge: 'bg-red-100 text-red-700', bar: 'bg-red-500', card: 'bg-red-50 text-red-700 hover:border-red-300' },
   [NO_RUN]: { badge: 'bg-slate-100 text-slate-600', bar: 'bg-slate-300' },
 };
-const STATUS_ORDER = ['Failed', 'In Progress', 'Pending', NO_RUN, 'Completed'];
+const STATUS_ORDER = ['Failed', 'Stalled', 'In Progress', 'Pending', NO_RUN, 'Completed'];
 const COUNTED = ['Completed', 'In Progress', 'Pending', 'Failed'];
 
 const GROUPS = [
@@ -79,8 +81,13 @@ const FeedRow = ({ feed, run, linkBase, showRunDate }) => {
             <div className={`h-full rounded-full transition-all duration-500 ${style.bar}`} style={{ width: `${progress}%` }} />
           </div>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-1 text-xs text-slate-500">
+            {run?.isPreviousRun && !showRunDate && (
+              <span className="badge bg-violet-100 text-violet-700">Previous run · {formatDay(run.date)}</span>
+            )}
             {run && showRunDate && <span>Run: {formatDay(run.date)}</span>}
-            {run?.updated_at && <span>Updated {formatTime(run.updated_at)}</span>}
+            {run?.isPreviousRun && run.deliveredAt
+              ? <span>Last delivered {formatTime(run.deliveredAt)}</span>
+              : run?.updated_at && <span>Updated {formatTime(run.updated_at)}</span>}
             {run && run.record_count !== null && <span>{Number(run.record_count).toLocaleString()} records</span>}
           </div>
         </div>
@@ -103,6 +110,8 @@ const FeedRow = ({ feed, run, linkBase, showRunDate }) => {
           )}
         </div>
       )}
+
+      {run && <PreviousRuns key={run.date} projectId={feed.project._id} feedName={feed.name} before={run.date} />}
     </li>
   );
 };
@@ -125,20 +134,19 @@ const LiveFeedProgress = ({ live, linkBase, title = "Today's Progress" }) => {
   const [periodView, setPeriodView] = useState({ weekly: false, monthly: false });
   const [expanded, setExpanded] = useState(null); // summary card: 'Total' or a status
 
-  const due = dueTodayFeeds(data).map((feed) => ({ feed, run: feed.today }));
+  // feed.latest is today's run, or the previous one when there is none today
+  const due = dueTodayFeeds(data).map((feed) => ({ feed, run: feed.latest }));
+  const previousRuns = due.filter((i) => i.run?.isPreviousRun).length;
   const totals = countRuns(due.map((i) => i.run));
   const percentage = totals.total ? Math.round((totals.Completed / totals.total) * 100) : 0;
 
   const itemsOf = (key) => {
     const feeds = (data?.feeds || []).filter((f) => f.group === key);
     if (key === 'adhoc' || periodView[key]) return feeds.map((feed) => ({ feed, run: feed.period }));
-    return feeds.filter((f) => f.dueToday).map((feed) => ({ feed, run: feed.today }));
+    return feeds.filter((f) => f.dueToday).map((feed) => ({ feed, run: feed.latest }));
   };
 
-  const inCard = (card) => (card === 'Total' ? due : due.filter(({ run }) => {
-    const status = runStatus(run);
-    return (status === NO_RUN ? 'Pending' : status) === card;
-  }));
+  const inCard = (card) => (card === 'Total' ? due : due.filter(({ run }) => countedStatus(runStatus(run)) === card));
 
   const active = GROUPS.find((g) => g.key === group);
   const activeItems = itemsOf(group);
@@ -187,7 +195,10 @@ const LiveFeedProgress = ({ live, linkBase, title = "Today's Progress" }) => {
           {/* Completion rate of the feeds due today */}
           <div className="mb-4">
             <div className="flex justify-between text-xs font-semibold text-slate-500 mb-1">
-              <span>Completion rate (due today)</span>
+              <span>
+                Completion rate (due today)
+                {previousRuns > 0 && <span className="font-normal"> · counts {previousRuns} previous run{previousRuns > 1 ? 's' : ''}</span>}
+              </span>
               <span>{percentage}%</span>
             </div>
             <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">

@@ -75,12 +75,4 @@ async function createStatusMatcher(projects) {
 
 const feedKey = (projectId, feedName) => `${projectId}|${normalize(feedName)}`;
 
-// Failed beats everything (same as the Feed Status page), then Completed, then In Progress
-function effectiveStatus(record) {
-  if (record.failed || record.status === 'Failed') return 'Failed';
-  if (record.status === 'Completed' || record.progress >= 100) return 'Completed';
-  if (record.status === 'In Progress' || record.progress > 0) return 'In Progress';
-  return 'Pending';
-}
-
-module.exports = { normalize, createStatusMatcher, feedKey, effectiveStatus };
+module.exports = { NO_PROJECT, normalize, createStatusMatcher, feedKey };

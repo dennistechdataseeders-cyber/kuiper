@@ -1,6 +1,7 @@
 const express = require('express');
-const { pmProjectFilter, tlProjectFilter, isProjectPM, idOf, TEAM_EDIT_ROLES, TEAM_FIELDS, isTeamAdmin, canEditProjectTeam } = require('../utils/projectAccess');
-const { PM_ROLES, isPMRole } = require('../utils/roles');
+const { pmProjectFilter, tlProjectFilter, isProjectPM, isProjectTL, PROJECT_ACCESS_FIELDS, idOf, TEAM_EDIT_ROLES, TEAM_FIELDS, isTeamAdmin, canEditProjectTeam } = require('../utils/projectAccess');
+const { PM_ROLES, isPMRole, DEVELOPER_ROLES } = require('../utils/roles');
+const { activeDeveloperFilter, listActiveDevelopers, checkDeveloperIds } = require('../utils/feedDevelopers');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto'); 
@@ -1180,11 +1181,18 @@ router.get('/projects/:id/repo-contents', authorize('Super Admin', 'Admin', ...P
 // FEED MANAGEMENT ROUTES
 // ============================================
 
+// Who may save feeds (and their developers) of a project: Super Admin / Admin, a PM or Coordinator
+// of that project, or one of its Team Leads. Which roles reach a route is still up to authorize().
+const canSaveProjectFeeds = (user, project) =>
+  isTeamAdmin(user) ||
+  (isPMRole(user.role) && isProjectPM(project, user._id)) ||
+  (user.role === 'Team Lead' && isProjectTL(project, user._id));
+const NOT_YOUR_PROJECT = 'You can only manage feeds of your own projects.';
+
 router.post('/feeds', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req, res) => {
   try {
     const {
       name,
-      assignedDevelopers,
       projectId,
       feedType,
       weekDay,
@@ -1192,6 +1200,14 @@ router.post('/feeds', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req
       feedPlatform,
       webDomain
     } = req.body;
+
+    const ownProject = projectId ? await Project.findById(projectId).select(PROJECT_ACCESS_FIELDS) : null;
+    if (!canSaveProjectFeeds(req.user, ownProject)) {
+      return res.status(403).json({ error: NOT_YOUR_PROJECT });
+    }
+
+    const { ids: assignedDevelopers, error } = await checkDeveloperIds(req.body.assignedDevelopers || []);
+    if (error) return res.status(400).json({ error });
 
     const newFeed = await Feed.create({
       name,
@@ -1219,9 +1235,9 @@ router.post('/feeds', authorize('Super Admin', 'Admin', ...PM_ROLES), async (req
       // Get developer details
       const developers = await User.find({ 
         _id: { $in: assignedDevelopers },
-        role: 'Developer'
+        role: { $in: DEVELOPER_ROLES }
       });
-      
+
       for (const developer of developers) {
         try {
           // Check if developer has GitHub linked
@@ -1365,20 +1381,38 @@ router.put('/feeds/:id', authorize('Super Admin', 'Admin', ...PM_ROLES), async (
       webDomain
     } = req.body;
 
+    const feed = await Feed.findById(req.params.id).select('projectId assignedDevelopers');
+    if (!feed) return res.status(404).json({ error: 'Feed not found' });
+
+    const ownProject = await Project.findById(feed.projectId).select(PROJECT_ACCESS_FIELDS);
+    if (!canSaveProjectFeeds(req.user, ownProject)) {
+      return res.status(403).json({ error: NOT_YOUR_PROJECT });
+    }
+
+    // Only the fields that were sent change, so the table can save just the developers
+    const update = {};
+    if (name !== undefined) update.name = name;
+    if (feedType !== undefined) {
+      update.feedType = feedType;
+      update.weekDay = feedType === 'Weekly' ? weekDay : null;
+      update.monthDay = feedType === 'Monthly' ? monthDay : null;
+    }
+    if (feedPlatform !== undefined) {
+      update.feedPlatform = feedPlatform || null;
+      update.webDomain = (feedPlatform === 'Web' || feedPlatform === 'Both') ? webDomain : null;
+    }
+    if (assignedDevelopers !== undefined) {
+      const { ids, error } = await checkDeveloperIds(assignedDevelopers, feed.assignedDevelopers);
+      if (error) return res.status(400).json({ error });
+      update.assignedDevelopers = ids;
+    }
+
     const updatedFeed = await Feed.findByIdAndUpdate(
       req.params.id,
-      {
-        name,
-        assignedDevelopers,
-        feedType,
-        weekDay: feedType === 'Weekly' ? weekDay : null,
-        monthDay: feedType === 'Monthly' ? monthDay : null,
-        feedPlatform: feedPlatform || null,
-        webDomain: (feedPlatform === 'Web' || feedPlatform === 'Both') ? webDomain : null
-      },
+      update,
       { new: true, runValidators: true }
-    );
-    
+    ).populate('assignedDevelopers', 'name email');
+
     res.json(updatedFeed);
   } catch (err) {
     console.error('Feed update error:', err);
@@ -1445,8 +1479,7 @@ router.post('/tasks/create', authorize('Super Admin', 'Admin', ...PM_ROLES), asy
 
 router.get('/users/developers', authorize('Super Admin','HR', 'Admin', ...PM_ROLES, 'Team Lead'), async (req, res) => {
   try {
-    const developers = await User.find({ role: 'Developer' })
-      .select('name email _id githubUsername githubLinked');
+    const developers = await listActiveDevelopers();
     res.json(developers);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1815,7 +1848,10 @@ router.post('/feeds/bulk', authorize('Super Admin', 'Admin', ...PM_ROLES,'Team L
     if (!project) {
       return res.status(404).json({ error: 'Project not found' });
     }
-    
+    if (!canSaveProjectFeeds(req.user, project)) {
+      return res.status(403).json({ error: NOT_YOUR_PROJECT });
+    }
+
     const createdFeeds = [];
     const errors = [];
     
@@ -1838,7 +1874,7 @@ router.post('/feeds/bulk', authorize('Super Admin', 'Admin', ...PM_ROLES,'Team L
               { name: { $in: devNames } },
               { email: { $in: devNames } }
             ],
-            role: 'Developer'
+            ...activeDeveloperFilter()
           }).select('_id');
           assignedDeveloperIds = foundDevs.map(d => d._id);
           
